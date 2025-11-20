@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
+    Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.sliceworkz</groupId>
+		<artifactId>sliceworkz-eventmodeling</artifactId>
+		<version>0.1.0-SNAPSHOT</version>
+		<relativePath>../</relativePath>
+	</parent>
+
+	<name>${project.artifactId}</name>
+	<description>An opinionated Event Modeling framework in Java</description>
+	<url>https://sliceworkz.github.io/eventmodeling</url>
+
+	<artifactId>sliceworkz-eventmodeling-parent-pom</artifactId>
+	<packaging>pom</packaging>
+
+	<properties>
+		<slf4j.version>2.0.17</slf4j.version>
+		<junit-jupiter.version>6.0.1</junit-jupiter.version>
+		<postgresql.jdbc.version>42.7.8</postgresql.jdbc.version>
+		
+		<testcontainers.postgresql.version>1.21.3</testcontainers.postgresql.version>
+		<archunit.version>1.4.1</archunit.version>
+
+		<maven.maven-surefire-plugin.version>3.5.4</maven.maven-surefire-plugin.version>
+		<maven.maven-compiler-plugin.version>3.14.1</maven.maven-compiler-plugin.version>
+		<maven.maven-source-plugin.version>3.3.1</maven.maven-source-plugin.version>
+		<maven.maven-javadoc-plugin.version>3.12.0</maven.maven-javadoc-plugin.version>
+		<maven.maven-jar-plugin.version>3.4.2</maven.maven-jar-plugin.version>
+		<maven.maven-assembly-plugin.version>3.7.1</maven.maven-assembly-plugin.version>
+		
+	</properties>
+	
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+			<groupId>org.sliceworkz</groupId>
+				<artifactId>sliceworkz-eventmodeling-bom</artifactId>
+				<version>${project.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.sliceworkz</groupId>
+				<artifactId>sliceworkz-eventstore-bom</artifactId>
+				<version>${sliceworkz.eventstore.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			
+			<!-- SLF4J -->
+			<dependency>
+			    <groupId>org.slf4j</groupId>
+			    <artifactId>slf4j-api</artifactId>
+			    <version>${slf4j.version}</version>
+			</dependency>
+			<dependency>
+			    <groupId>org.slf4j</groupId>
+			    <artifactId>slf4j-simple</artifactId>
+			    <version>${slf4j.version}</version>
+			</dependency>
+			
+			<!-- JUnit Testing -->
+			<dependency>
+				<groupId>org.junit.jupiter</groupId>
+				<artifactId>junit-jupiter-api</artifactId>
+				<version>${junit-jupiter.version}</version>
+				<scope>test</scope>
+			</dependency>
+			
+			<!-- PostgreSQL -->
+			<dependency>
+			    <groupId>org.postgresql</groupId>
+			    <artifactId>postgresql</artifactId>
+			    <version>${postgresql.jdbc.version}</version>
+			    <scope>provided</scope>
+			</dependency>
+			<dependency>
+			    <groupId>org.testcontainers</groupId>
+			    <artifactId>postgresql</artifactId>
+			    <version>${testcontainers.postgresql.version}</version>
+			    <scope>test</scope>
+			</dependency>
+			
+			<!-- ArchUnit Testing -->
+			<dependency>
+			    <groupId>com.tngtech.archunit</groupId>
+			    <artifactId>archunit-junit5</artifactId>
+			    <version>${archunit.version}</version>
+			    <scope>test</scope>
+			</dependency>
+			
+		</dependencies>
+	</dependencyManagement>
+
+	<dependencies>
+	
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter-api</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+		    <groupId>org.slf4j</groupId>
+		    <artifactId>slf4j-api</artifactId>
+		</dependency>
+		<dependency>
+		    <groupId>org.slf4j</groupId>
+		    <artifactId>slf4j-simple</artifactId>
+		    <scope>test</scope>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>${maven.maven-surefire-plugin.version}</version>
+			</plugin>
+			<plugin>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<version>${maven.maven-surefire-plugin.version}</version>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<version>${maven.maven-assembly-plugin.version}</version>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>${maven.maven-compiler-plugin.version}</version>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-source-plugin</artifactId>
+				<version>${maven.maven-source-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>attach-javadocs</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>jar-no-fork</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>	
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<version>${maven.maven-javadoc-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>attach-javadocs</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

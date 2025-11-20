@@ -1,0 +1,34 @@
+/*
+ * Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
+ * Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.sliceworkz.eventmodeling.readmodels;
+
+import org.sliceworkz.eventmodeling.events.Tracing;
+
+public interface ReadModelCapability<DOMAIN_EVENT_TYPE> {
+
+	<T> T read ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tx, Object... params );
+
+	<T> T read ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass,  Object... params );
+
+	// TODO how to hide these from other clients than the Dashboard?
+	
+	<T> T readUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tx, Object... params );
+
+	<T> T readUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass,  Object... params );
+
+}

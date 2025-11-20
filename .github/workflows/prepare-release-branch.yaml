@@ -1,5 +1,4 @@
 name: prepare-release-branch - create release branch and bump develop
-
 run-name: "prepare-release-branch - create release branch and bump develop"
 
 on:

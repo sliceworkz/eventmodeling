@@ -1,5 +1,4 @@
 name: build-and-deploy-from-release-tag
-
 run-name: "build-and-deploy-from-release-tag [${{ github.ref_name }}]"
 
 on:

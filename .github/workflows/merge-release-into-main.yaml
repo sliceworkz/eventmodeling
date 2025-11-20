@@ -1,5 +1,4 @@
 name: update main with release version tag
-
 run-name: update main with release ${{ inputs.release_tag }}
 
 on:

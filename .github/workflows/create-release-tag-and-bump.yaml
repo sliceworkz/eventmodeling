@@ -1,5 +1,4 @@
 name: create-release-tag-and-bump - on release/<major>.<micro>
-
 run-name: "create-release-tag-and-bump on [${{ github.ref_name }}]"
 
 on:

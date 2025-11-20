@@ -115,6 +115,7 @@
 			    <extensions>true</extensions>
 			    <configuration>
 				<publishingServerId>central</publishingServerId>
+				<deploymentName>eventmodeling-${project.version}</deploymentName>				
 			    </configuration>
 			</plugin>
       		

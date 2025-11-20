@@ -117,16 +117,16 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		return new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery, lastEventReference);
 	}
 	
-	private Event<? extends CONSUMED_EVENT_TYPE> offerEventToDecisionModels ( Event<? extends CONSUMED_EVENT_TYPE> e, List<DecisionModel<CONSUMED_EVENT_TYPE>> decisionModels ) {
+	private Event<? extends CONSUMED_EVENT_TYPE> offerEventToDecisionModels ( Event<CONSUMED_EVENT_TYPE> e, List<DecisionModel<CONSUMED_EVENT_TYPE>> decisionModels ) {
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> decisionModel: decisionModels ) {
 			offerEventToDecisionModel(e, decisionModel);
 		}
 		return e;
 	}
 
-	private void offerEventToDecisionModel ( Event<? extends CONSUMED_EVENT_TYPE> e, DecisionModel<CONSUMED_EVENT_TYPE> p ) {
+	private void offerEventToDecisionModel ( Event<CONSUMED_EVENT_TYPE> e, DecisionModel<CONSUMED_EVENT_TYPE> p ) {
 		if ( p.eventQuery().matches(e) ) {
-			p.when(e.data());
+			p.when(e);
 		}
 	}
 

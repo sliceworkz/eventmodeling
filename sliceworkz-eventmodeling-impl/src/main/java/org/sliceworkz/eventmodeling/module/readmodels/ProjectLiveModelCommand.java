@@ -28,6 +28,7 @@ import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent.Metrics;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
@@ -41,7 +42,7 @@ class ProjectLiveModelCommand<DOMAIN_EVENT_TYPE> implements Command<KernelEvent>
 	private Object[] constructorParams;
 	private EventSource<DOMAIN_EVENT_TYPE> eventSource;
 	
-	private ReadModel<DOMAIN_EVENT_TYPE> readModel;
+	private ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel;
 	
 	public ProjectLiveModelCommand ( EventSource<DOMAIN_EVENT_TYPE> eventSource, Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... constructorParams ) {
 		this.eventSource = eventSource;
@@ -49,7 +50,7 @@ class ProjectLiveModelCommand<DOMAIN_EVENT_TYPE> implements Command<KernelEvent>
 		this.constructorParams = constructorParams;
 	}
 	
-	public ReadModel<DOMAIN_EVENT_TYPE> readModel ( ) {
+	public ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel ( ) {
 		return readModel;
 	}
 	
@@ -59,7 +60,7 @@ class ProjectLiveModelCommand<DOMAIN_EVENT_TYPE> implements Command<KernelEvent>
 		long start = System.currentTimeMillis();
 		CommandResult<KernelEvent,KernelEvent> result = context.noDecisionModels();
 		try {
-			readModel = (ReadModel<DOMAIN_EVENT_TYPE>) selectConstructor(readModelClass, constructorParams).newInstance(constructorParams);
+			readModel = (ReadModelWithMetaData) selectConstructor(readModelClass, constructorParams).newInstance(constructorParams);
 			Projector<DOMAIN_EVENT_TYPE> projector = Projector.from(eventSource).towards(readModel).build();
 			ProjectorMetrics projectorMetrics = projector.run();
 			long finish = System.currentTimeMillis();

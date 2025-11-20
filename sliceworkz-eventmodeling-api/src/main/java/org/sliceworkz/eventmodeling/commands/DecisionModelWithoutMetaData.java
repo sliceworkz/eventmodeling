@@ -17,8 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.commands;
 
-import org.sliceworkz.eventstore.projection.Projection;
+import org.sliceworkz.eventstore.projection.ProjectionWithoutMetaData;
 
-public interface DecisionModel<DOMAIN_EVENT_TYPE> extends Projection<DOMAIN_EVENT_TYPE> {
-
+public interface DecisionModelWithoutMetaData<DOMAIN_EVENT_TYPE> extends DecisionModel<DOMAIN_EVENT_TYPE>, ProjectionWithoutMetaData<DOMAIN_EVENT_TYPE> {
+	
 }

@@ -118,7 +118,6 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 		}
 		
 		while ( instanceMode != ProcessorInstanceMode.TERMINATING ) {
-			synchronized(this) { // TODO check whether this is still strictly necessary
 			try {
 	
 				// if instance is running ...
@@ -200,7 +199,6 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 			} catch ( Throwable t ) {
 				Throwable rootCause = ThrowableAndEventReference.determineRootCause(t).throwable();
 				LOGGER.error("unexpected throwable during processor run: " + rootCause.getMessage() , rootCause);
-			}
 			}
 				
 		}

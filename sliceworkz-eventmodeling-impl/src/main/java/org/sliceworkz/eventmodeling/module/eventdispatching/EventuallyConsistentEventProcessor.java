@@ -49,9 +49,10 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 	private ProcessorMode processorMode;
 	private EventWithMetaDataHandler<EVENT_TYPE> eventHandler;
 	private EventuallyConsistentProcessorIdentification processorIdentification;
+	private boolean potentiallyNewEventsAppended;
 	
-	private volatile EventReference lastReference;
-	private volatile ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER; // TOOD implement leader selection on processors
+	private EventReference lastReference;
+	private ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER; // TOOD implement leader selection on processors
 	private Instance instance;
 	
 	public EventuallyConsistentEventProcessor ( EventuallyConsistentProcessorIdentification processorIdentification, EventSource<EVENT_TYPE> eventSource, EventQuery eventQuery, EventWithMetaDataHandler<EVENT_TYPE> eventHandler, ProcessorMode processorMode, Instance instance ) {
@@ -97,6 +98,7 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 			// might be new interesting events.  in case we're wait()-ing, let's continue and query immediately to check!
 			LOGGER.debug("might be new interesting events, querying them immediately!");
 			synchronized ( this ) {
+				potentiallyNewEventsAppended = true;
 				this.notify();
 			}
 		} else {
@@ -155,9 +157,14 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 								// no events handled
 								LOGGER.debug("not directly querying again, waiting for {} seconds", (WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS/1000));
 								try {
+									// once we enter the synchronized block, any .notify() will work correctly.  however, notif on eventappends could have been given since last read by now ... 
 									synchronized ( this ) {
-										this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS);
-										LOGGER.debug("done waiting, or notified that new events could be present");
+										if ( ! potentiallyNewEventsAppended ) {
+											// ... therefore we only wait() if we didn't got a notification before entering the synchronized block 
+											this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS);
+											LOGGER.debug("done waiting, or notified that new events could be present");
+										}
+										potentiallyNewEventsAppended = false;
 									}
 								} catch (InterruptedException e) {
 									LOGGER.debug("interrupted while waiting");

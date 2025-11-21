@@ -175,7 +175,7 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 		
 		try {
 			// Let the eventually consistent read models keep up
-			Thread.sleep(250);
+			Thread.sleep(500);
 		} catch (InterruptedException e) {
 			// no problem
 		}

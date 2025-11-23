@@ -38,6 +38,7 @@
 		<slf4j.version>2.0.17</slf4j.version>
 		<junit-jupiter.version>6.0.1</junit-jupiter.version>
 		<postgresql.jdbc.version>42.7.8</postgresql.jdbc.version>
+		<micrometer.version>1.16.0</micrometer.version>
 		
 		<testcontainers.postgresql.version>1.21.3</testcontainers.postgresql.version>
 		<archunit.version>1.4.1</archunit.version>
@@ -110,6 +111,14 @@
 			    <scope>test</scope>
 			</dependency>
 			
+			<!-- micrometer -->
+			<dependency>
+			    <groupId>io.micrometer</groupId>
+			    <artifactId>micrometer-core</artifactId>
+			    <version>${micrometer.version}</version>
+			    <optional>true</optional>
+			</dependency>
+			
 		</dependencies>
 	</dependencyManagement>
 
@@ -130,7 +139,14 @@
 		    <artifactId>slf4j-simple</artifactId>
 		    <scope>test</scope>
 		</dependency>
-
+		
+		<!-- micrometer -->
+		<dependency>
+		    <groupId>io.micrometer</groupId>
+		    <artifactId>micrometer-core</artifactId>
+		    <optional>true</optional>
+		</dependency>
+		
 	</dependencies>
 
 	<build>

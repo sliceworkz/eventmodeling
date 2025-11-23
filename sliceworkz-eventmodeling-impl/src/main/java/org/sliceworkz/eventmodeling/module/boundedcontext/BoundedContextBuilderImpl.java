@@ -55,6 +55,9 @@ import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Metrics;
+
 public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> implements BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
 
 	static {
@@ -76,6 +79,8 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	private Class<DOMAIN_EVENT_TYPE> domainEventRootType;
 	private Class<INBOUND_EVENT_TYPE> inboundEventRootType;
 	private Class<OUTBOUND_EVENT_TYPE> outboundEventRootType;
+	
+	private MeterRegistry meterRegistry = Metrics.globalRegistry;
 	
 	private EventStorage eventStorage;
 	
@@ -105,6 +110,12 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		return this;
 	}
 	
+	@Override
+	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> meterRegistry ( MeterRegistry meterRegistry ) {
+		this.meterRegistry = meterRegistry;
+		return this;
+	}
+
 	@Override
 	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> rootPackage ( Package rootPackage ) {
 		this.rootPackage = rootPackage;
@@ -213,7 +224,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream;
 		EventStream<KernelEvent> observabilityEventStream; 
 		
-		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage);
+		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage, meterRegistry);
 		domainEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("domain"), domainEventRootType);
 		inboundEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("inbound"), inboundEventRootType);
 		outboundEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("outbound"), outboundEventRootType);

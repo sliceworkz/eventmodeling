@@ -34,6 +34,10 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+
 public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(DCBModule.class);
@@ -46,12 +50,22 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	
 	private BoundedContextFunctions kernelFunctions;
 	
-	public DCBModule ( String boundedContext, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, boolean kernelMode ) {
+	private Counter meterCommand;
+	private Timer timerCommand;
+	
+	public DCBModule ( String boundedContext, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, boolean kernelMode, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
 		this.readModelModule = readModelModule;
 		this.domainEventStream = domainEventStream;
 		this.outboundEventStream = outboundEventStream;
 		this.kernelMode = kernelMode;
+		
+		io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
+				.of("context", boundedContext);
+
+		this.meterCommand = meterRegistry.counter("sliceworkz.eventmodeling.command.execute", tags);
+		this.timerCommand = meterRegistry.timer("sliceworkz.eventmodeling.command.duration", tags);
+
 	}
 	
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
@@ -83,16 +97,23 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 				result = Optional.empty();
 			}
 			
-		} else {
-			@SuppressWarnings({ "unchecked", "rawtypes" })
-			ExecuteCommandCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> cmd = new ExecuteCommandCommand(boundedContext, readModelModule, domainEventStream, targetEventStream, command);
-			kernelFunctions.executeKernelCommand(cmd, tracing);
+			return result;
 			
-			// return the last application event reference rather than the observability event 
-			result = cmd.getLastAppendedEventReference();
+		} else {
+
+			// count the "wrapped" commands
+			meterCommand.increment();
+			
+			return timerCommand.record(()->{
+			
+				@SuppressWarnings({ "unchecked", "rawtypes" })
+				ExecuteCommandCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> cmd = new ExecuteCommandCommand(boundedContext, readModelModule, domainEventStream, targetEventStream, command);
+				kernelFunctions.executeKernelCommand(cmd, tracing);
+			
+				// return the last application event reference rather than the observability event 
+				return cmd.getLastAppendedEventReference();
+			});
 		}
-		
-		return result;
 	}
 
 	public void kernelFunctions ( BoundedContextFunctions kernelFunctions ) {

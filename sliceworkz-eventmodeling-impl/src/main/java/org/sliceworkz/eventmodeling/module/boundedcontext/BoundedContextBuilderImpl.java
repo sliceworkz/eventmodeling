@@ -264,11 +264,11 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		
 		AutomationModule<DOMAIN_EVENT_TYPE> am = new AutomationModule<>(name, domainEventStream, automations, instance);
 		
-		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelClasses, consistentReadModels, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance);
-		DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcb = new DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, rmm, domainEventStream, outboundEventStream, false);
+		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelClasses, consistentReadModels, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
+		DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcb = new DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, rmm, domainEventStream, outboundEventStream, false, meterRegistry);
 
 		BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> bc = 
-				new BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, deployedFeatureSlices, undeployedFeatureSlices, domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, rmm, am, im, om, instance);
+				new BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, deployedFeatureSlices, undeployedFeatureSlices, domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, rmm, am, im, om, instance, meterRegistry);
 		
 				
 		bc.start();

@@ -46,6 +46,8 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, ConsistentEventProcessor<DOMAIN_EVENT_TYPE>, BoundedContextFunctions {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(BoundedContextImpl.class);
@@ -65,7 +67,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private String name;
 	private Instance instance;
 	
-	public BoundedContextImpl ( String name, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, EventStream<KernelEvent> kernelLoggingEventStream, DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule, ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule, AutomationModule<DOMAIN_EVENT_TYPE> automationModule, InboundModule<INBOUND_EVENT_TYPE> inboundModule, OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule, Instance instance ) {
+	public BoundedContextImpl ( String name, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, EventStream<KernelEvent> kernelLoggingEventStream, DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule, ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule, AutomationModule<DOMAIN_EVENT_TYPE> automationModule, InboundModule<INBOUND_EVENT_TYPE> inboundModule, OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule, Instance instance, MeterRegistry meterRegistry ) {
 		this.name = name;
 		this.instance = instance;
 		this.deployedFeatureSlices = deployedFeatureSlices;
@@ -79,7 +81,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.dcbDomainModule = dcbModule;
 		this.automationModule = automationModule;
 		
-		this.dcbKernelModule = new DCBModule<KernelEvent,KernelEvent>(name, null, kernelLoggingEventStream, kernelLoggingEventStream, true);
+		this.dcbKernelModule = new DCBModule<KernelEvent,KernelEvent>(name, null, kernelLoggingEventStream, kernelLoggingEventStream, true, meterRegistry);
 		
 		// pass reference to self
 		this.readmodelModule.kernelFunctions(this);

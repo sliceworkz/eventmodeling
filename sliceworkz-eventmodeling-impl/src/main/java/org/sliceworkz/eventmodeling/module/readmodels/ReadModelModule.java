@@ -36,6 +36,10 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+
 public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	
 	private static Logger LOGGER = LoggerFactory.getLogger(ReadModelModule.class);
@@ -53,6 +57,10 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private String boundedContext;
 	private Instance instance;
 	
+	private Counter meterLiveModel;
+	private Timer timerLiveModel;
+	
+	
 	public ReadModelModule (
 			String boundedContext,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
@@ -62,7 +70,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels, 
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels,
-			Instance instance
+			Instance instance,
+			MeterRegistry meterRegistry
 		) {
 		
 		this.domainEventStream = domainEventStream;
@@ -95,6 +104,12 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		this.eventuallyConsistentReadModelThreadManagers = createEventuallyConsistentEventProcessors(eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels);
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>("readmodel", this.eventuallyConsistentReadModelThreadManagers);
 		
+		io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
+				.of("context", boundedContext);
+
+		this.meterLiveModel = meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags);
+		this.timerLiveModel = meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags);
+		
 		LOGGER.info("live readmodels: %s".formatted(liveModelClasses));
 	}
 
@@ -115,9 +130,14 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public <T> T liveModel ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tx, Object... constructorParams) {
 		if ( liveModels.contains(readModelClass)) {
-			ProjectLiveModelCommand cmd = new ProjectLiveModelCommand(domainEventStream, readModelClass, constructorParams);
-			kernelFunctions.executeKernelCommand(cmd, tx);
-			return (T) cmd.readModel();
+			meterLiveModel.increment();
+			
+			return timerLiveModel.record(()->{
+				ProjectLiveModelCommand cmd = new ProjectLiveModelCommand(domainEventStream, readModelClass, constructorParams);
+				kernelFunctions.executeKernelCommand(cmd, tx);
+				return (T) cmd.readModel();
+			});
+			
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
 		}
@@ -126,9 +146,13 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public <T> T liveModelUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
 		if ( liveModels.contains(readModelClass)) {
-			ProjectLiveModelUnboundedCommand cmd = new ProjectLiveModelUnboundedCommand(allInStorageEventStream, readModelClass, constructorParams);
-			kernelFunctions.executeKernelCommand(cmd, tracing);
-			return (T) cmd.readModel();
+			meterLiveModel.increment();
+
+			return timerLiveModel.record(()->{
+				ProjectLiveModelUnboundedCommand cmd = new ProjectLiveModelUnboundedCommand(allInStorageEventStream, readModelClass, constructorParams);
+				kernelFunctions.executeKernelCommand(cmd, tracing);
+				return (T) cmd.readModel();
+			});
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
 		}

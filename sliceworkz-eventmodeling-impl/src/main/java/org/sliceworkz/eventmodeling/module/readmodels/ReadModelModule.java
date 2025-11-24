@@ -133,7 +133,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			meterLiveModel.increment();
 			
 			return timerLiveModel.record(()->{
-				ProjectLiveModelCommand cmd = new ProjectLiveModelCommand(domainEventStream, readModelClass, constructorParams);
+				ProjectLiveModelCommand cmd = new ProjectLiveModelCommand(boundedContext, instance, domainEventStream, readModelClass, constructorParams);
 				kernelFunctions.executeKernelCommand(cmd, tx);
 				return (T) cmd.readModel();
 			});
@@ -149,7 +149,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			meterLiveModel.increment();
 
 			return timerLiveModel.record(()->{
-				ProjectLiveModelUnboundedCommand cmd = new ProjectLiveModelUnboundedCommand(allInStorageEventStream, readModelClass, constructorParams);
+				ProjectLiveModelUnboundedCommand cmd = new ProjectLiveModelUnboundedCommand(boundedContext, instance, allInStorageEventStream, readModelClass, constructorParams);
 				kernelFunctions.executeKernelCommand(cmd, tracing);
 				return (T) cmd.readModel();
 			});

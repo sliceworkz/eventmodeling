@@ -22,8 +22,10 @@ import java.lang.reflect.InvocationTargetException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
+import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent.Metrics;
+import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Tags;
@@ -36,10 +38,14 @@ public class ProjectLiveModelUnboundedCommand <DOMAIN_EVENT_TYPE> implements Com
 	private Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass;
 	private Object[] constructorParams;
 	private EventSource<DOMAIN_EVENT_TYPE> eventSource;
+	private String boundedContext;
+	private Instance instance;
 	
 	private ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel;
 	
-	public ProjectLiveModelUnboundedCommand ( EventSource<DOMAIN_EVENT_TYPE> eventSource, Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... constructorParams ) {
+	public ProjectLiveModelUnboundedCommand ( String boundedContext, Instance instance, EventSource<DOMAIN_EVENT_TYPE> eventSource, Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... constructorParams ) {
+		this.boundedContext = boundedContext;
+		this.instance = instance;
 		this.eventSource = eventSource;
 		this.readModelClass = readModelClass;
 		this.constructorParams = constructorParams;
@@ -57,10 +63,12 @@ public class ProjectLiveModelUnboundedCommand <DOMAIN_EVENT_TYPE> implements Com
 		try {
 			readModel = (ReadModelWithMetaData<DOMAIN_EVENT_TYPE>) readModelClass.getDeclaredConstructors()[0].newInstance(constructorParams);
 			Projector<DOMAIN_EVENT_TYPE> projector = Projector.from(eventSource).towards(readModel).build();
-			ProjectorMetrics metrics = projector.run();
+			ProjectorMetrics projectorMetrics = projector.run();
 			long finish = System.currentTimeMillis();
 			long duration = finish - start;
-			return result.raiseEvent(new KernelEvent.LiveModelProjected(readModelClass, new Metrics(duration, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference()), projector.eventQuery()), Tags.none()); 
+			Metrics metrics = new Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+			PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("readmodel.live").readmodel(readModel.readmodelName()).log();
+			return result.raiseEvent(new KernelEvent.LiveModelProjected(readModelClass, metrics, projector.eventQuery()), Tags.none()); 
 		} catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
 			throw new RuntimeException(e);
 		}

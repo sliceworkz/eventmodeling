@@ -25,8 +25,10 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
+import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent.Metrics;
+import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Tags;
@@ -41,10 +43,14 @@ class ProjectLiveModelCommand<DOMAIN_EVENT_TYPE> implements Command<KernelEvent>
 	private Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass;
 	private Object[] constructorParams;
 	private EventSource<DOMAIN_EVENT_TYPE> eventSource;
+	private String boundedContext;
+	private Instance instance;
 	
 	private ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel;
 	
-	public ProjectLiveModelCommand ( EventSource<DOMAIN_EVENT_TYPE> eventSource, Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... constructorParams ) {
+	public ProjectLiveModelCommand ( String boundedContext, Instance instance, EventSource<DOMAIN_EVENT_TYPE> eventSource, Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... constructorParams ) {
+		this.boundedContext = boundedContext;
+		this.instance = instance;
 		this.eventSource = eventSource;
 		this.readModelClass = readModelClass;
 		this.constructorParams = constructorParams;
@@ -65,7 +71,9 @@ class ProjectLiveModelCommand<DOMAIN_EVENT_TYPE> implements Command<KernelEvent>
 			ProjectorMetrics projectorMetrics = projector.run();
 			long finish = System.currentTimeMillis();
 			long duration = finish - start;
-			return result.raiseEvent(new KernelEvent.LiveModelProjected(readModelClass, map(duration, projectorMetrics), projector.eventQuery()), Tags.none()); 
+			Metrics metrics = map(duration, projectorMetrics);
+			PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("readmodel.live").readmodel(readModel.readmodelName()).log();
+			return result.raiseEvent(new KernelEvent.LiveModelProjected(readModelClass, metrics, projector.eventQuery()), Tags.none()); 
 		} catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
 			LOGGER.error(e.getMessage(), e);
 			throw new RuntimeException(e);

@@ -26,6 +26,7 @@ import org.sliceworkz.eventmodeling.commands.AbstractCommand;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
+import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextFunctions;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
@@ -43,6 +44,8 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	private static final Logger LOGGER = LoggerFactory.getLogger(DCBModule.class);
 	
 	private String boundedContext;
+	private Instance instance;
+	
 	private ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule;
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 	private EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream;
@@ -53,8 +56,9 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	private Counter meterCommand;
 	private Timer timerCommand;
 	
-	public DCBModule ( String boundedContext, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, boolean kernelMode, MeterRegistry meterRegistry ) {
+	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, boolean kernelMode, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
+		this.instance = instance;
 		this.readModelModule = readModelModule;
 		this.domainEventStream = domainEventStream;
 		this.outboundEventStream = outboundEventStream;
@@ -107,7 +111,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			return timerCommand.record(()->{
 			
 				@SuppressWarnings({ "unchecked", "rawtypes" })
-				ExecuteCommandCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> cmd = new ExecuteCommandCommand(boundedContext, readModelModule, domainEventStream, targetEventStream, command);
+				ExecuteCommandCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> cmd = new ExecuteCommandCommand(boundedContext, instance, readModelModule, domainEventStream, targetEventStream, command);
 				kernelFunctions.executeKernelCommand(cmd, tracing);
 			
 				// return the last application event reference rather than the observability event 

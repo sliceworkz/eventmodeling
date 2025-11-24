@@ -19,6 +19,10 @@ package org.sliceworkz.eventmodeling.commands;
 
 public sealed interface AbstractCommand<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> permits Command, OutboundCommand {
 
+	default String commandName ( ) {
+		return this.getClass().getSimpleName();
+	}
+	
 	CommandResult<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> execute ( CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> context );
 
 }

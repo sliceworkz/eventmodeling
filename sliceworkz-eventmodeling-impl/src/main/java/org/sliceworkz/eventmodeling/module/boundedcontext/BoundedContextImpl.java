@@ -81,7 +81,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.dcbDomainModule = dcbModule;
 		this.automationModule = automationModule;
 		
-		this.dcbKernelModule = new DCBModule<KernelEvent,KernelEvent>(name, null, kernelLoggingEventStream, kernelLoggingEventStream, true, meterRegistry);
+		this.dcbKernelModule = new DCBModule<KernelEvent,KernelEvent>(name, instance, null, kernelLoggingEventStream, kernelLoggingEventStream, true, meterRegistry);
 		
 		// pass reference to self
 		this.readmodelModule.kernelFunctions(this);

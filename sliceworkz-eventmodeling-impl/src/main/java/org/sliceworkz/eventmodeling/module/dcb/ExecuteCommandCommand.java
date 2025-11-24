@@ -23,8 +23,10 @@ import org.sliceworkz.eventmodeling.commands.AbstractCommand;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
+import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent.Metrics;
+import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
@@ -36,6 +38,7 @@ import org.sliceworkz.eventstore.stream.EventStream;
 public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> implements Command<KernelEvent> {
 
 	private String boundedContext;
+	private Instance instance;
 	private ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule;
 	private AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command;
 	private EventStream<DOMAIN_EVENT_TYPE> queryEventStream;
@@ -45,8 +48,9 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 	
 	private ReadModel<DOMAIN_EVENT_TYPE> readModel;
 	
-	public ExecuteCommandCommand ( String boundedContext, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command ) {
+	public ExecuteCommandCommand ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command ) {
 		this.boundedContext = boundedContext;
+		this.instance = instance;
 		this.readModelModule = readModelModule;
 		this.queryEventStream = queryEventStream;
 		this.targetEventStream = targetEventStream;
@@ -75,8 +79,10 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 		
 		long finish = System.currentTimeMillis();
 		long duration = finish - start;
-		ProjectorMetrics metrics = commandContext.projectorMetrics();
-		return kernelCommandResult.raiseEvent(new KernelEvent.CommandExecuted(command.getClass(), new Metrics(duration, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference()), commandContext.projector().eventQuery()), Tags.none()); 
+		ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
+		Metrics metrics = new Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+		PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("command.execute").command(command.commandName()).log();
+		return kernelCommandResult.raiseEvent(new KernelEvent.CommandExecuted(command.getClass(), new Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference()), commandContext.projector().eventQuery()), Tags.none()); 
 	}
 	
 	public Optional<EventReference> getLastAppendedEventReference ( ) {

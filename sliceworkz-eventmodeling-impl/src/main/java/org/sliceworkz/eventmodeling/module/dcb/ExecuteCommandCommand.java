@@ -25,13 +25,12 @@ import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent;
-import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent.Metrics;
 import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
+import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger.Metrics;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
 
@@ -82,7 +81,7 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 		ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
 		Metrics metrics = new Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
 		PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("command.execute").command(command.commandName()).log();
-		return kernelCommandResult.raiseEvent(new KernelEvent.CommandExecuted(command.getClass(), new Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference()), commandContext.projector().eventQuery()), Tags.none()); 
+		return kernelCommandResult;  
 	}
 	
 	public Optional<EventReference> getLastAppendedEventReference ( ) {

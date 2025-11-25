@@ -19,24 +19,14 @@ package org.sliceworkz.eventmodeling.module.boundedcontext;
 
 import java.util.Set;
 
-import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.query.EventQuery;
-
 public sealed interface KernelEvent {
 	
 	record BoundedContextStarted ( String boundedContext, String logical, String physical, String process, Set<FeatureSlice> enabledFeatures, Set<FeatureSlice> disabledFeatures ) implements KernelEvent { }
 
-	record LiveModelProjected ( Class<?> readModelClass, Metrics metrics, EventQuery eventQuery ) implements KernelEvent { }
-	
-	record CommandExecuted ( Class<?> commandClass, Metrics metrics, EventQuery eventQuery ) implements KernelEvent { }
-	
-	
 	/*
 	 * Value objects used by Events
 	 */
 	
 	record FeatureSlice ( String name, String type, String context, String chapter, Set<String> tags ) { }
 	
-	record Metrics ( long durationMs, long queriesDone, long eventStreamed, long eventsHandled, EventReference until ) { }
-
 }

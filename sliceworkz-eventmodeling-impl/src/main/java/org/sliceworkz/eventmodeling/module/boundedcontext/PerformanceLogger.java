@@ -23,7 +23,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.events.Instance;
-import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent.Metrics;
+import org.sliceworkz.eventstore.events.EventReference;
 
 public class PerformanceLogger {
 	
@@ -109,5 +109,9 @@ public class PerformanceLogger {
 	private void add ( String key, long value ) {
 		keyValues.put(key, Long.toString(value));
 	}
+	
+	public record Metrics ( long durationMs, long queriesDone, long eventStreamed, long eventsHandled, EventReference until ) { }
+
+
 	
 }

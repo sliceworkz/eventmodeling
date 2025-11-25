@@ -27,11 +27,10 @@ import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent;
-import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent.Metrics;
 import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
+import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger.Metrics;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventSource;
@@ -73,7 +72,7 @@ class ProjectLiveModelCommand<DOMAIN_EVENT_TYPE> implements Command<KernelEvent>
 			long duration = finish - start;
 			Metrics metrics = map(duration, projectorMetrics);
 			PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("readmodel.live").readmodel(readModel.readmodelName()).log();
-			return result.raiseEvent(new KernelEvent.LiveModelProjected(readModelClass, metrics, projector.eventQuery()), Tags.none()); 
+			return result; 
 		} catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
 			LOGGER.error(e.getMessage(), e);
 			throw new RuntimeException(e);

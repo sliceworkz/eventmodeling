@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.module.inbound;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -30,9 +31,13 @@ import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistent
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
+import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 public class InboundModule<INBOUND_EVENT_TYPE> implements LifecycleCapability {
 	
@@ -60,10 +65,23 @@ public class InboundModule<INBOUND_EVENT_TYPE> implements LifecycleCapability {
 		return result;
 	}
 
-
-	public void incoming (INBOUND_EVENT_TYPE event, Tracing tracing ) {
+	public void incoming (INBOUND_EVENT_TYPE event, Tag idemPotencyTag, Tracing tracing ) {
 		// just append to the inbound-stream and let the eventually consistent processors do their thing...
-		inboundEventStream.append(AppendCriteria.none(), Collections.singletonList(tracing.storeOn(Event.of(event, Tags.none()))));
+		
+		Tags tags = Tags.none();
+		AppendCriteria appendCriteria = AppendCriteria.none();
+		
+		if ( idemPotencyTag != null ) {
+			tags = Tags.of(idemPotencyTag);
+			// assume no events with this tag already exist in inbound stream
+			appendCriteria = AppendCriteria.of(EventQuery.forEvents(EventTypesFilter.any(), tags), Optional.empty());
+		}
+		
+		try {
+			inboundEventStream.append(appendCriteria, Collections.singletonList(tracing.storeOn(Event.of(event, tags))));
+		} catch (OptimisticLockingException e) {
+			// idempotency check kicked in.  assume we already know this event
+		}
 	}
 	
 	@Override

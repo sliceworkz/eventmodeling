@@ -42,6 +42,7 @@ import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -205,7 +206,17 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public void incoming(INBOUND_EVENT_TYPE event, Tracing tracing ) {
-		inboundModule.incoming ( event, tracing );
+		this.incoming ( event, null, tracing );
+	}
+
+	@Override
+	public void incoming(INBOUND_EVENT_TYPE event, Tag idempotencyTag ) {
+		this.incoming ( event, idempotencyTag, Tracing.init(instance) );
+	}
+
+	@Override
+	public void incoming(INBOUND_EVENT_TYPE event, Tag idempotencyTag, Tracing tracing ) {
+		inboundModule.incoming ( event, idempotencyTag, tracing );
 	}
 
 	/*

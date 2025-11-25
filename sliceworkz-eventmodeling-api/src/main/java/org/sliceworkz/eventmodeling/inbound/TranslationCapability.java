@@ -18,11 +18,16 @@
 package org.sliceworkz.eventmodeling.inbound;
 
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventstore.events.Tag;
 
 public interface TranslationCapability<INBOUND_EVENT_TYPE> {
 	
 	void incoming ( INBOUND_EVENT_TYPE event );
 	
 	void incoming ( INBOUND_EVENT_TYPE event, Tracing tracing );
+
+	void incoming ( INBOUND_EVENT_TYPE event, Tag idempotencyTag );
+
+	void incoming ( INBOUND_EVENT_TYPE event, Tag idempotencyTag, Tracing tracing );
 
 }

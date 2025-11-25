@@ -35,6 +35,8 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockBoundedContext;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockCommand;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.ThirdDomainEvent;
@@ -215,8 +217,8 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 			Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentSharedReadModels,
 			Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentLocalReadModels ) {
 		
-		BoundedContextBuilder<MockDomainEvent, Object, Object> builder =
-				BoundedContext.newBuilder(MockDomainEvent.class, Object.class, Object.class)
+		BoundedContextBuilder<MockDomainEvent, MockInboundEvent, MockOutboundEvent> builder =
+				BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
 				.name("UnitTestBoundedContext")
 				.eventStorage(eventStorage)
 				.instance(InstanceFactory.determine("unittests"));

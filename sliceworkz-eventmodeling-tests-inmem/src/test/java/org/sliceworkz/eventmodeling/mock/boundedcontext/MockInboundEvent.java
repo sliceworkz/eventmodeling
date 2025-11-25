@@ -17,8 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.mock.boundedcontext;
 
-import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
-
-public interface MockBoundedContext extends BoundedContext<MockDomainEvent, MockInboundEvent, MockOutboundEvent> {
+public sealed interface MockInboundEvent {
+	
+	public record SomeInboundEvent ( String someValue ) implements MockInboundEvent { }
 
 }

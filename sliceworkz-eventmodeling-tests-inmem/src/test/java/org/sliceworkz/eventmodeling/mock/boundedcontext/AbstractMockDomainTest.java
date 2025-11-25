@@ -19,9 +19,9 @@ package org.sliceworkz.eventmodeling.mock.boundedcontext;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 
-public abstract class AbstractMockDomainTest extends AbstractBoundedContextTest<MockDomainEvent,Object,Object> {
+public abstract class AbstractMockDomainTest extends AbstractBoundedContextTest<MockDomainEvent,MockInboundEvent,MockOutboundEvent> {
 	
-	protected MockBoundedContext buildBoundedContext ( BoundedContextBuilder<MockDomainEvent, Object, Object> boundedContextBuilder ) {
+	protected MockBoundedContext buildBoundedContext ( BoundedContextBuilder<MockDomainEvent, MockInboundEvent, MockOutboundEvent> boundedContextBuilder ) {
 		MockBoundedContext result = boundedContextBuilder.build(MockBoundedContext.class);
 		this.boundedContext = result;
 		this.boundedContext.start();
@@ -34,13 +34,13 @@ public abstract class AbstractMockDomainTest extends AbstractBoundedContextTest<
 	}
 
 	@Override
-	public Class<Object> inboundEventType() {
-		return Object.class;
+	public Class<MockInboundEvent> inboundEventType() {
+		return MockInboundEvent.class;
 	}
 
 	@Override
-	public Class<Object> outboundEventType() {
-		return Object.class;
+	public Class<MockOutboundEvent> outboundEventType() {
+		return MockOutboundEvent.class;
 	}
 	
 }

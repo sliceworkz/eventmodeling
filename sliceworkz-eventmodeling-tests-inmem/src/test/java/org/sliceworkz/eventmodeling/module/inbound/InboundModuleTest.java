@@ -15,15 +15,10 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.module.readmodels;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.time.Instant;
+package org.sliceworkz.eventmodeling.module.inbound;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -32,13 +27,10 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockBoundedContext;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
-import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
-import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
-public class RenderLiveModelTest extends AbstractMockDomainTest {
+public class InboundModuleTest  extends AbstractMockDomainTest {
 	
 	private EventStorage rawEventStorage;
 	private InvocationCountingEventStorage eventStorage;
@@ -63,61 +55,15 @@ public class RenderLiveModelTest extends AbstractMockDomainTest {
 	public void destroyEventStorage ( EventStorage storage ) {
 		
 	}
+
 	
-	@Test
-	void testProjectLiveModel1 ( ) {
-		MockBoundedContext boundedContext = domainWithLiveModel(MockReadModel.class);
-		testLiveModelWithDifferentNumberOfEvents( boundedContext, 1);
-	}
-
-	@Test
-	void testProjectLiveModel2 ( ) {
-		MockBoundedContext boundedContext = domainWithLiveModel(MockReadModel.class);
-		testLiveModelWithDifferentNumberOfEvents( boundedContext, 2);
-	}
-
-	@Test
-	void testProjectLiveModel250 ( ) {
-		MockBoundedContext boundedContext = domainWithLiveModel(MockReadModel.class);
-		testLiveModelWithDifferentNumberOfEvents( boundedContext, 250);
-	}
-	
-	@Test
-	void testProjectLiveModel1000 ( ) {
-		MockBoundedContext boundedContext = domainWithLiveModel(MockReadModel.class);
-		testLiveModelWithDifferentNumberOfEvents( boundedContext, 10000);
-	}
-
-	private void testLiveModelWithDifferentNumberOfEvents ( MockBoundedContext boundedContext, int eventCount ) {
-		int expectedQueries = (eventCount+Projector.Builder.DEFAULT_MAX_EVENTS_PER_QUERY)/Projector.Builder.DEFAULT_MAX_EVENTS_PER_QUERY;
-		
-//		System.out.println("assuming "  + expectedQueries + " queries for " + eventCount + " events");
-		
-		for ( int i = 0; i < eventCount; i++ ) {
-			// throw in an external event		
-			boundedContext.event(new MockDomainEvent.FirstDomainEvent("test " + i));
-		}
-		long start = Instant.now().toEpochMilli();
-		MockReadModel m = boundedContext.read(MockReadModel.class, "someLiveModel");
-		long stop = Instant.now().toEpochMilli();
-		long time = stop - start;
-		
-		assertEquals(eventCount, m.eventCount(), "live model should have seen all events");
-		assertEquals(expectedQueries, eventStorage.queriesDone());
-
-//		System.out.println(time + " ms for " + eventCount + " events in " + expectedQueries + " queries in readmodel");
-	}
-	
-	MockBoundedContext domainWithLiveModel ( Class<? extends ReadModel<MockDomainEvent>> liveModelClass ) {
+	MockBoundedContext createBoundedContext( ) {
 		
 		var builder = BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
 			.name("UnitTestBoundedContext")
 			.eventStorage(eventStorage)
 			.instance(InstanceFactory.determine("unittests"));
 
-		builder.readmodel(liveModelClass).live();
-		
 		return buildBoundedContext ( builder );
 	}
-
 }

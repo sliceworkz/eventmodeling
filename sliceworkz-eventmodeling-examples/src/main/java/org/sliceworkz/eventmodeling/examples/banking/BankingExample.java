@@ -77,12 +77,13 @@ public class BankingExample {
 					private EventReference lastSeen;
 					
 					@Override
-					public void eventsAppended(EventReference atLeastUntil) {
+					public EventReference eventsAppended(EventReference atLeastUntil) {
 						List<Event<BankingDomainEvent>> events = eventStream.query(EventQuery.matchAll(), lastSeen).toList();
 						events.forEach(System.out::println);
 						if ( events.size() > 0 ) {
 							lastSeen = events.getLast().reference();
 						}
+						return lastSeen;
 					}
 				}
 			);

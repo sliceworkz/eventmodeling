@@ -92,7 +92,7 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 	}
 
 	@Override
-	public void eventsAppended(EventReference atLeastUntil) {
+	public EventReference eventsAppended(EventReference atLeastUntil) {
 		LOGGER.debug("eventually consistent event processor notified of updates until at least {}", atLeastUntil);
 		if ( lastReference == null || (atLeastUntil.position() > lastReference.position()) ) {
 			// might be new interesting events.  in case we're wait()-ing, let's continue and query immediately to check!
@@ -101,9 +101,11 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 				potentiallyNewEventsAppended = true;
 				this.notify();
 			}
+			return atLeastUntil;
 		} else {
 			// nothing new to discover, we're already at this position in the stream with our processing
 			LOGGER.debug("nothing new to process based on this update, already at {}", lastReference);
+			return lastReference;
 		}
 	}
 	

@@ -79,5 +79,10 @@ public class InvocationCountingEventStorage implements EventStorage {
 	public void bookmark(String reader, EventReference eventReference, Tags tags ) {
 		wrapped.bookmark(reader, eventReference, tags);
 	}
+
+	@Override
+	public void removeBookmark(String reader) {
+		wrapped.removeBookmark(reader);
+	}
 	
 }

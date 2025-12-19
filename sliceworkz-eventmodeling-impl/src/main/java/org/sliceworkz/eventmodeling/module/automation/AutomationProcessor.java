@@ -27,6 +27,7 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamEventuallyConsistentBookmarkListener;
@@ -35,7 +36,7 @@ public class AutomationProcessor<EVENT_TYPE, TODO_ITEM_TYPE> implements EventStr
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(AutomationProcessor.class);
 	
-	private static final int MAX_BATCH_SIZE = 10; // TODO this should be configurable via a builder, avoid direct ctr
+	private static final Limit MAX_BATCH_SIZE = Limit.to(50); // TODO this should be configurable via a builder, avoid direct ctr
 	private static final long WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS = 10000;
 	private static final long WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS = 30000;
 	
@@ -142,14 +143,14 @@ public class AutomationProcessor<EVENT_TYPE, TODO_ITEM_TYPE> implements EventStr
 									LOGGER.debug("starting processing of max {} items at a time", MAX_BATCH_SIZE);
 		
 									Counter counter = new Counter();
-									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems().limit(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(automation::handle).flatMap(Optional::stream).reduce((first,second)->second);
+									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(automation::handle).flatMap(Optional::stream).reduce((first,second)->second);
 		
 									if ( lastProducedEvent.isPresent() ) {
 										// set our position to the last event we produced, we won't do a new run until the readmodel has been updated
 										eventSource.placeBookmark(processorIdentification.toString(), lastProducedEvent.get(), processorIdentification.toTags(instance));
 									}
 		
-									if ( counter.get() < MAX_BATCH_SIZE ) {
+									if ( counter.get() < MAX_BATCH_SIZE.value() ) {
 										LOGGER.debug("no new todo items to handle");
 										LOGGER.debug("not directly querying again, waiting for {} seconds", (WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS/1000));
 										try {

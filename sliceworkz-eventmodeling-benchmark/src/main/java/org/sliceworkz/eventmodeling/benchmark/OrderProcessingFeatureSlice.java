@@ -15,18 +15,17 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.inbound;
+package org.sliceworkz.eventmodeling.benchmark;
 
-import org.sliceworkz.eventmodeling.events.Tracing;
+import javax.sql.DataSource;
 
-public interface TranslationCapability<INBOUND_EVENT_TYPE> {
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
+import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
+
+public interface OrderProcessingFeatureSlice extends FeatureSliceConfiguration<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> {
+
+	void configure ( OrderProcessingBoundedContext boundedContext, DataSource dataSource, boolean initializeDatabase );
 	
-	void incoming ( INBOUND_EVENT_TYPE event );
-	
-	void incoming ( INBOUND_EVENT_TYPE event, Tracing tracing );
-
-	void incoming ( INBOUND_EVENT_TYPE event, String idempotencyKey );
-
-	void incoming ( INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing );
-
 }

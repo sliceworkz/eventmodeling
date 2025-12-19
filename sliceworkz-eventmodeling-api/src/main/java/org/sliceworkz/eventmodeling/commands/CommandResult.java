@@ -23,4 +23,6 @@ public interface CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
 	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags );
 	
+	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags, String idempotencyKey );
+
 }

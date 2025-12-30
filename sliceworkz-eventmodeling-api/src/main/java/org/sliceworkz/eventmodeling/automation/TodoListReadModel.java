@@ -20,9 +20,10 @@ package org.sliceworkz.eventmodeling.automation;
 import java.util.stream.Stream;
 
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.query.Limit;
 
 public interface TodoListReadModel<EVENT_TYPE, TODO_ITEM_TYPE> extends ReadModel<EVENT_TYPE> {
 
-	Stream<TODO_ITEM_TYPE> streamItems ( ); 
+	Stream<TODO_ITEM_TYPE> streamItems ( Limit limit ); 
 	
 }

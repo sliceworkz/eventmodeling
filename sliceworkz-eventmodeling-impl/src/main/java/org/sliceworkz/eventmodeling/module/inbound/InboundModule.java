@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.module.inbound;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -31,10 +30,7 @@ import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistent
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
@@ -61,24 +57,30 @@ public class InboundModule<INBOUND_EVENT_TYPE> implements LifecycleCapability {
 	Collection<EventuallyConsistentEventProcessor<INBOUND_EVENT_TYPE>> createEventuallyConsistentEventProcessors ( Collection<Translator<INBOUND_EVENT_TYPE>> integrations ) {
 		Collection<EventuallyConsistentEventProcessor<INBOUND_EVENT_TYPE>> result = new ArrayList<>();
 		
-		integrations.forEach(t->result.add(new EventuallyConsistentEventProcessor<INBOUND_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).translator().name(t).shared().build(), (EventStream<INBOUND_EVENT_TYPE>)inboundEventStream, t.eventQuery(), t, ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance)));
+		integrations.forEach(t->result.add(
+				new EventuallyConsistentEventProcessor<INBOUND_EVENT_TYPE>(
+						EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder
+							.newBuilder(instance)
+								.context(boundedContext)
+								.translator()
+								.name(t)
+								.shared()
+								.build(), 
+							inboundEventStream, 
+							t.eventQuery(), 
+							t, 
+							ProcessorMode.RUNNING_ON_SINGLE_LEADER, 
+							instance)
+			));
 		return result;
 	}
 
-	public void incoming (INBOUND_EVENT_TYPE event, Tag idemPotencyTag, Tracing tracing ) {
+	public void incoming (INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
 		// just append to the inbound-stream and let the eventually consistent processors do their thing...
 		
-		Tags tags = Tags.none();
 		AppendCriteria appendCriteria = AppendCriteria.none();
-		
-		if ( idemPotencyTag != null ) {
-			tags = Tags.of(idemPotencyTag);
-			// assume no events with this tag already exist in inbound stream
-			appendCriteria = AppendCriteria.of(EventQuery.forEvents(EventTypesFilter.any(), tags), Optional.empty());
-		}
-		
 		try {
-			inboundEventStream.append(appendCriteria, Collections.singletonList(tracing.storeOn(Event.of(event, tags))));
+			inboundEventStream.append(appendCriteria, Collections.singletonList(tracing.storeOn(Event.of(event, Tags.none()).withIdempotencyKey(idempotencyKey))));
 		} catch (OptimisticLockingException e) {
 			// idempotency check kicked in.  assume we already know this event
 		}

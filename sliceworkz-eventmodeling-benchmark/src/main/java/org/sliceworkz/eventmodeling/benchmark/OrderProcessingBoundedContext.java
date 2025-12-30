@@ -15,18 +15,13 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.inbound;
+package org.sliceworkz.eventmodeling.benchmark;
 
-import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 
-public interface TranslationCapability<INBOUND_EVENT_TYPE> {
-	
-	void incoming ( INBOUND_EVENT_TYPE event );
-	
-	void incoming ( INBOUND_EVENT_TYPE event, Tracing tracing );
-
-	void incoming ( INBOUND_EVENT_TYPE event, String idempotencyKey );
-
-	void incoming ( INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing );
+public interface OrderProcessingBoundedContext extends BoundedContext<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> {
 
 }

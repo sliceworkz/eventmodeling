@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.module.threading.Processor;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventWithMetaDataHandler;
+import org.sliceworkz.eventstore.projection.BatchAwareProjection;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventSource;
@@ -39,7 +40,7 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(EventuallyConsistentEventProcessor.class);
 	
-	private static final Limit MAX_BATCH_SIZE = Limit.to(10); // TODO this should be configurable via builder, avoid direct ctr
+	private static final Limit MAX_BATCH_SIZE = Limit.to(100); // TODO this should be configurable via builder, avoid direct ctr
 	private static final long WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS = 10000;
 	private static final long WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS = 30000;
 	
@@ -60,7 +61,7 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 		this.eventQuery = eventQuery;
 		this.eventHandler = eventHandler;
 		this.originalProcessorMode = processorMode;
-		this.processorMode = processorMode;
+		this.processorMode = ProcessorMode.STOPPED;
 		this.processorIdentification = processorIdentification;
 		this.instance = instance;
 		
@@ -215,8 +216,30 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 	}
 	
 	private Optional<HandledEvent<EVENT_TYPE>> handle ( Stream<Event<EVENT_TYPE>> newEvents ) {
-		Counter counter = new Counter();
-		Optional<HandledEvent<EVENT_TYPE>> lastHandled = newEvents.map(e->handle(e, counter)).reduce((first,second)->second);
+		
+		Optional<HandledEvent<EVENT_TYPE>> lastHandled;
+		try {
+			if ( eventHandler instanceof BatchAwareProjection b ) {
+				b.beforeBatch();
+			}
+			
+			Counter counter = new Counter();
+			lastHandled = newEvents.map(e->handle(e, counter)).reduce((first,second)->second);
+
+			if ( eventHandler instanceof BatchAwareProjection<EVENT_TYPE> b ) {
+				if ( lastHandled.isPresent() ) {
+					b.afterBatch(Optional.of(lastHandled.get().event().reference()));
+				} else {
+					b.afterBatch(Optional.empty());
+				}
+			}
+		} catch (Exception e) {
+			if ( eventHandler instanceof BatchAwareProjection b ) {
+				b.cancelBatch();
+			}
+			throw e;
+		}
+
 		return lastHandled;
 	}
 	

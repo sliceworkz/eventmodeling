@@ -88,20 +88,20 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 		
 		var inboundEvent = new SomeInboundEvent("test");
 		
-		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "123"));
+		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "123").toString());
 		assertEquals(eventsBefore+1,inboundEvents.query(EventQuery.matchAll()).toList().size());
 		
-		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "456"));
+		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "456").toString());
 		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).toList().size());
 
 		// only duplicates from here, idempotency check should be applied and the events should be ignored
 		
 		// a duplicate key leads to silent ignore because of idempotency
-		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "123"));
+		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "123").toString());
 		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).toList().size());
 		
 		// a duplicate key leads to silent ignore because of idempotency
-		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "456"));
+		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "456").toString());
 		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).toList().size());
 
 	}
@@ -122,20 +122,20 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 		assertFalse(e2 == e4);
 		assertEquals(e2.hashCode(), e4.hashCode());
 
-		boundedContext().incoming(e1, Tag.of("hash", String.valueOf(e1.hashCode())));
+		boundedContext().incoming(e1, Tag.of("hash", String.valueOf(e1.hashCode())).toString());
 		assertEquals(eventsBefore+1,inboundEvents.query(EventQuery.matchAll()).toList().size());
 		
-		boundedContext().incoming(e2, Tag.of("hash", String.valueOf(e2.hashCode())));
+		boundedContext().incoming(e2, Tag.of("hash", String.valueOf(e2.hashCode())).toString());
 		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).toList().size());
 
 		// only duplicates from here, idempotency check should be applied and the events should be ignored
 		
 		// a duplicate key leads to silent ignore because of idempotency
-		boundedContext().incoming(e3, Tag.of("hash", String.valueOf(e3.hashCode())));
+		boundedContext().incoming(e3, Tag.of("hash", String.valueOf(e3.hashCode())).toString());
 		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).toList().size());
 		
 		// a duplicate key leads to silent ignore because of idempotency
-		boundedContext().incoming(e4, Tag.of("hash", String.valueOf(e4.hashCode())));
+		boundedContext().incoming(e4, Tag.of("hash", String.valueOf(e4.hashCode())).toString());
 		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).toList().size());
 
 	}

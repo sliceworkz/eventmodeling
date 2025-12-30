@@ -50,11 +50,16 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 	}
 	
 	@Override
-	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags ) {
-		events.add(tracing.storeOn(Event.of(event, tags)));
+	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
+		events.add(tracing.storeOn(Event.of(event, tags).withIdempotencyKey(idempotencyKey)));
 		return this;
 	}
 	
+	@Override
+	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags ) {
+		return raiseEvent(event, tags, null);
+	}
+
 	public List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> raisedEvents ( ) {
 		return events;
 	}

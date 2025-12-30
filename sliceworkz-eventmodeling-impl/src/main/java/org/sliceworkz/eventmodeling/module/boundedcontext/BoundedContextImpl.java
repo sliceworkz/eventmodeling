@@ -210,13 +210,13 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	}
 
 	@Override
-	public void incoming(INBOUND_EVENT_TYPE event, Tag idempotencyTag ) {
-		this.incoming ( event, idempotencyTag, Tracing.init(instance) );
+	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey ) {
+		this.incoming ( event, idempotencyKey, Tracing.init(instance) );
 	}
 
 	@Override
-	public void incoming(INBOUND_EVENT_TYPE event, Tag idempotencyTag, Tracing tracing ) {
-		inboundModule.incoming ( event, idempotencyTag, tracing );
+	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
+		inboundModule.incoming ( event, idempotencyKey, tracing );
 	}
 
 	/*

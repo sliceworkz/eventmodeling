@@ -15,22 +15,22 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.readmodels.postgres;
+package org.sliceworkz.eventmodeling.module.aggregates.postgres;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.sliceworkz.eventmodeling.module.readmodels.EventDispatchingToReadModelsTest;
+import org.sliceworkz.eventmodeling.module.aggregates.AggregateCapabilityTest;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorage;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorageImpl;
 import org.sliceworkz.eventstore.infra.postgres.util.PostgresContainer;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
-public class PostgresEventDispatchingToReadModelTest extends EventDispatchingToReadModelsTest {
+public class PostgresAggregateCapabilityTest extends AggregateCapabilityTest {
 	
 	@Override
 	public EventStorage createEventStorage ( ) {
 		return PostgresEventStorage.newBuilder().name("unit-test").dataSource(PostgresContainer.dataSource()).initializeDatabase().build();
-	}	
+	}
 	
 	@Override
 	public void destroyEventStorage ( EventStorage storage ) {
@@ -48,5 +48,5 @@ public class PostgresEventDispatchingToReadModelTest extends EventDispatchingToR
 		PostgresContainer.stop();
 		PostgresContainer.cleanup();
 	}
-	
+
 }

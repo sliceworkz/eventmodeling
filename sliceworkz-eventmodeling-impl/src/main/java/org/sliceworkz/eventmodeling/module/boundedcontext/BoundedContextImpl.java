@@ -25,11 +25,13 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
 import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent.BoundedContextStarted;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
@@ -42,7 +44,6 @@ import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -58,6 +59,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule;
 	private DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbDomainModule;
 	private DCBModule<KernelEvent, KernelEvent> dcbKernelModule;
+	private AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule;
 	private AutomationModule<DOMAIN_EVENT_TYPE> automationModule;
 	private InboundModule<INBOUND_EVENT_TYPE> inboundModule;
 	private OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule;
@@ -68,7 +70,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private String name;
 	private Instance instance;
 	
-	public BoundedContextImpl ( String name, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, EventStream<KernelEvent> kernelLoggingEventStream, DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule, ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule, AutomationModule<DOMAIN_EVENT_TYPE> automationModule, InboundModule<INBOUND_EVENT_TYPE> inboundModule, OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule, Instance instance, MeterRegistry meterRegistry ) {
+	public BoundedContextImpl ( String name, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, EventStream<KernelEvent> kernelLoggingEventStream, DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule, AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule, ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule, AutomationModule<DOMAIN_EVENT_TYPE> automationModule, InboundModule<INBOUND_EVENT_TYPE> inboundModule, OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule, Instance instance, MeterRegistry meterRegistry ) {
 		this.name = name;
 		this.instance = instance;
 		this.deployedFeatureSlices = deployedFeatureSlices;
@@ -83,6 +85,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.automationModule = automationModule;
 		
 		this.dcbKernelModule = new DCBModule<KernelEvent,KernelEvent>(name, instance, null, kernelLoggingEventStream, kernelLoggingEventStream, true, meterRegistry);
+
+		this.aggregateModule = aggregateModule;
 		
 		// pass reference to self
 		this.readmodelModule.kernelFunctions(this);
@@ -253,6 +257,17 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		return dcbKernelModule.execute(kernelCommand, tracing);
 	}
 
+	
+	/*
+	 * AGGREGATE SUPPORT
+	 */
+	@Override
+	public <T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate(Class<T> aggregateClass, Tags identity) {
+		return aggregateModule.aggregate(aggregateClass,identity);
+	}
+	
+	
+	
 	/*
 	 * EVENT DISPATCHING
 	 */

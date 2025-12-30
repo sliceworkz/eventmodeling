@@ -15,14 +15,24 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.boundedcontext;
+package org.sliceworkz.eventmodeling.aggregates;
 
-import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
+import java.util.List;
 
-public interface AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends 
-	CQRSCapabilities<DOMAIN_EVENT_TYPE>, 
-	DCBCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
-	AggregateCapability<DOMAIN_EVENT_TYPE>,
-	FeatureSliceCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+import org.sliceworkz.eventstore.events.Tags;
+
+public interface AggregateContext<DOMAIN_EVENT_TYPE> {
+	
+	Tags identity ( );
+	
+	void raiseEvent ( DOMAIN_EVENT_TYPE event );
+
+	void raiseEvent ( DOMAIN_EVENT_TYPE event, String idempotencyKey );
+
+	void raiseEvents ( List<DOMAIN_EVENT_TYPE> events );
+	
+	AggregateEventAppender<DOMAIN_EVENT_TYPE> eventAppender ( );
+	
+	void updateFromStream ( );
 
 }

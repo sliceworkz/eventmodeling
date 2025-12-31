@@ -19,8 +19,8 @@ package org.sliceworkz.eventmodeling.module.aggregates;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
-import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -39,19 +39,22 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 	private String boundedContext;
 	
-	public AggregateModule ( String boundedContext, Collection<Class<? extends Aggregate<DOMAIN_EVENT_TYPE>>> aggregateClasses, EventStream<DOMAIN_EVENT_TYPE> domainEventStream ) {
+	public AggregateModule ( String boundedContext, List<? extends AggregateSpecificationImpl<DOMAIN_EVENT_TYPE,?,?>> aggregateSpecifications, EventStream<DOMAIN_EVENT_TYPE> domainEventStream ) {
 		this.boundedContext = boundedContext;
 		this.domainEventStream = domainEventStream;
-		aggregateClasses.forEach(aggregateClass->{
+		aggregateSpecifications.forEach(spec->{
+			if ( aggregateClassesWithConstructor.containsKey(spec.aggregateClass()) ) {
+				throw new IllegalArgumentException("duplicate aggregate registration for '%s'".formatted(spec.aggregateClass()));
+			}
 			try {
-				aggregateClassesWithConstructor.put(aggregateClass, aggregateClass.getDeclaredConstructor(new Class[] {}));
+				aggregateClassesWithConstructor.put(spec.aggregateClass(), spec.aggregateClass().getDeclaredConstructor(new Class[] {}));
 			} catch (NoSuchMethodException | SecurityException e) {
 				LOGGER.error(e.getMessage(), e);
 				throw new RuntimeException(e);
 			}
 		});
 		
-		LOGGER.info("aggregates: %s".formatted(aggregateClasses));
+		LOGGER.info("aggregates: %s".formatted(aggregateClassesWithConstructor.keySet()));
 	}
 	
 	@SuppressWarnings("unchecked")

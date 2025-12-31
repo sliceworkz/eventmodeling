@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.boundedcontext;
 import java.util.function.Predicate;
 
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
+import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
@@ -51,7 +52,7 @@ public interface BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OU
 
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> rootPackage(Package rootPackage);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> aggregate(Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass);
+	AggregateSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> aggregate(Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass);
 
 	LiveModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readmodel(Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass);
 

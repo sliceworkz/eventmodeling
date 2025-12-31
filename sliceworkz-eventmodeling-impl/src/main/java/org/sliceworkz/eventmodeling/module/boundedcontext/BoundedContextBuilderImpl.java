@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -34,12 +33,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.Banner;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
+import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
+import org.sliceworkz.eventmodeling.module.aggregates.AggregateSpecificationImpl;
 import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
 import org.sliceworkz.eventmodeling.module.inbound.InboundModule;
@@ -78,7 +79,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	private List<Dispatcher<? extends OUTBOUND_EVENT_TYPE>> dispatcherSpecs = new ArrayList<>();
 	private List<Automation<DOMAIN_EVENT_TYPE,?>> automations = new ArrayList<>();
 	private Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> featureDeployFilter = (o)->true;
-	private Collection<Class<? extends Aggregate<DOMAIN_EVENT_TYPE>>> aggregateClasses = new HashSet<>();
+	private List<AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> aggregateSpecifications = new ArrayList<>();
 	
 	private Class<DOMAIN_EVENT_TYPE> domainEventRootType;
 	private Class<INBOUND_EVENT_TYPE> inboundEventRootType;
@@ -202,12 +203,15 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> aggregate(
+	public AggregateSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> aggregate(
 			Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass) {
-		if ( aggregateClass != null ) {
-			this.aggregateClasses.add(aggregateClass);
+		if ( aggregateClass == null ) {
+			throw new IllegalArgumentException();
 		}
-		return this;
+		var aggregateSpecification = new AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> (this, aggregateClass);
+		this.aggregateSpecifications.add(aggregateSpecification);
+		
+		return aggregateSpecification;
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -280,7 +284,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelClasses, consistentReadModels, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
 		DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcb = new DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, instance, rmm, domainEventStream, outboundEventStream, false, meterRegistry);
 		
-		AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule = new AggregateModule<>(name, aggregateClasses, domainEventStream);
+		AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule = new AggregateModule<DOMAIN_EVENT_TYPE>(name, aggregateSpecifications, domainEventStream);
 
 		BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> bc = 
 				new BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, deployedFeatureSlices, undeployedFeatureSlices, domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry);

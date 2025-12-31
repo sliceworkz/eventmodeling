@@ -24,7 +24,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +39,8 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
+import org.sliceworkz.eventmodeling.module.aggregates.MockAggregate.MockAggregateData;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
@@ -63,7 +64,9 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 	@AfterEach
 	protected void tearDown ( ) {
 		destroyEventStorage(eventStorage);
-		boundedContext().stop();
+		if (boundedContext()!= null) {
+			boundedContext().stop();
+		}
 	}
 	
 	public EventStorage createEventStorage ( ) {
@@ -79,7 +82,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		
 		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage).getEventStream(EventStreamId.anyContext().withPurpose("domain"));
 		
-		MockBoundedContext domain = domainWithAggregate(Collections.singleton(MockAggregate.class));
+		MockBoundedContext domain = domainWithAggregate(List.of(MockAggregate.class));
 		
 		MockAggregate bo123 = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
 		MockAggregate bo456 = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "456"));
@@ -106,6 +109,8 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		assertEquals(1,bo456.getCounter());
 		assertEquals(0,bo123Again.getCounter());
 		
+		MockAggregateData snapshot = bo123.takeSnapshot();
+		
 		bo123.doSomething();
 		
 		assertEquals(3,bo123.getCounter());
@@ -124,14 +129,20 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		bo123YetAgain.doSomething();
 		assertEquals(5, bo123YetAgain.getCounter());
 		
-		assertThrows(OptimisticLockingException.class, ()-> bo123.doSomething()); // this should now be behind
-		assertThrows(OptimisticLockingException.class, ()-> bo123Again.doSomething()); // this should now be behind
+		assertThrows(OptimisticLockingException.class, ()-> bo123.doSomething()); // this should be behind
+		assertThrows(OptimisticLockingException.class, ()-> bo123Again.doSomething()); // this should be behind
+		
+		
+		MockAggregate bo123FromSnapshot = new MockAggregate();
+		bo123FromSnapshot.fromSnapshot(snapshot);
+		assertEquals(2,bo123FromSnapshot.getCounter());
+		assertThrows(OptimisticLockingException.class, ()-> bo123.doSomething()); // this should be behind
 	}
 	
 	@Test
 	void testUnregisteredAggregate ( ) {
 		
-		MockBoundedContext domain = domainWithAggregate(Collections.emptySet());
+		MockBoundedContext domain = domainWithAggregate(Collections.emptyList());
 		
 		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class, ()->domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123")));
 		assertEquals(InvocationTargetException.class, e.getCause().getClass());
@@ -140,10 +151,16 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		assertEquals("aggregate class 'class org.sliceworkz.eventmodeling.module.aggregates.MockAggregate' not registered in bounded context 'UnitTestBoundedContext'", iae.getMessage());
 	}		
 
+	@Test
+	void testDuplicatedAggregate ( ) {
+		
+		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, ()->domainWithAggregate(List.of(MockAggregate.class, MockAggregate.class)));
+		assertEquals("duplicate aggregate registration for 'class org.sliceworkz.eventmodeling.module.aggregates.MockAggregate'", e.getMessage());
+	}		
 	
 	
 	MockBoundedContext domainWithAggregate ( 
-			Set<Class<? extends Aggregate<MockDomainEvent>>> aggregateClasses ) { 
+			List<Class<? extends Aggregate<MockDomainEvent>>> aggregateClasses ) { 
 		
 		BoundedContextBuilder<MockDomainEvent, MockInboundEvent, MockOutboundEvent> builder =
 				BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
@@ -158,10 +175,9 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 
 }
 
-class MockAggregate implements Aggregate<MockDomainEvent> {
+class MockAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<MockAggregateData> {
 
-	private int counter;
-	
+	private MockAggregateData data = new MockAggregateData();
 	private AggregateContext<MockDomainEvent> ctx;
 	
 	public void doSomething ( ) {
@@ -169,12 +185,12 @@ class MockAggregate implements Aggregate<MockDomainEvent> {
 	}
 	
 	public int getCounter ( ) {
-		return counter;
+		return data.counter;
 	}
 	
 	@Override
 	public void when(MockDomainEvent event) {
-		counter++;
+		data.counter++;
 	}
 
 	@Override
@@ -185,5 +201,30 @@ class MockAggregate implements Aggregate<MockDomainEvent> {
 	
 	void methodToUpdateFromStream ( ) {
 		ctx.updateFromStream();
+	}
+
+	
+	
+	@Override
+	public MockAggregateData takeSnapshot() {
+		return data.clone();
+	}
+
+	@Override
+	public void fromSnapshot(MockAggregateData snapshot) {
+		this.data = snapshot;
+	}
+	
+	
+	
+	
+	public static class MockAggregateData {
+		private int counter;
+		
+		public MockAggregateData clone ( ) {
+			MockAggregateData result = new MockAggregateData();
+			result.counter = this.counter;
+			return result;
+		}
 	}
 }

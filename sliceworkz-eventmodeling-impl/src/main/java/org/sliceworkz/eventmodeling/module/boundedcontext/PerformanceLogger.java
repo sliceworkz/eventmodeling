@@ -46,6 +46,11 @@ public class PerformanceLogger {
 		return this;
 	}
 
+	public PerformanceLogger aggregate ( String aggregate ) {
+		add("aggregate", aggregate);
+		return this;
+	}
+
 	public PerformanceLogger command ( String value ) {
 		add("command", value);
 		return this;

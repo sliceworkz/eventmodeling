@@ -17,19 +17,26 @@
  */
 package org.sliceworkz.eventmodeling.module.aggregates;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateContext;
 import org.sliceworkz.eventmodeling.aggregates.AggregateEventAppender;
+import org.sliceworkz.eventmodeling.events.Instance;
+import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
+import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger.Metrics;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.projection.Projector;
+import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext<DOMAIN_EVENT_TYPE> {
 
+	private String boundedContext;
+	private Instance instance;
 	private Tags identity;
 	private Aggregate<DOMAIN_EVENT_TYPE> aggregate;
 	private EventStream<DOMAIN_EVENT_TYPE> eventStream;
@@ -37,7 +44,9 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	private EventReference lastEventReference;
 	private AggregateEventAppender<DOMAIN_EVENT_TYPE> aggregateEventAppender;
 	
-	public AggregateContextImpl ( Tags identity, Aggregate<DOMAIN_EVENT_TYPE> aggregate, EventStream<DOMAIN_EVENT_TYPE> eventStream ) {
+	public AggregateContextImpl ( String boundedContext, Instance instance, Tags identity, Aggregate<DOMAIN_EVENT_TYPE> aggregate, EventStream<DOMAIN_EVENT_TYPE> eventStream ) {
+		this.boundedContext = boundedContext;
+		this.instance = instance;	
 		this.identity = identity;
 		this.aggregate = aggregate;
 		this.eventStream = eventStream;
@@ -74,8 +83,18 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 
 	@Override
 	public void updateFromStream() {
-		this.lastEventReference = Projector.from(eventStream).towards(projectionTowardsAggregate).startingAfter(lastEventReference).build().run().lastEventReference();
+		Instant start = Instant.now();
+		
+		
+		ProjectorMetrics projectorMetrics = Projector.from(eventStream).towards(projectionTowardsAggregate).startingAfter(lastEventReference).build().run();
+		this.lastEventReference = projectorMetrics.lastEventReference();
 		this.aggregateEventAppender = new AggregateEventAppenderImpl<>(eventStream, aggregate, identity, lastEventReference);
+		Instant finish = Instant.now();
+		
+		long duration = finish.toEpochMilli() - start.toEpochMilli();
+		Metrics metrics = new Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+		
+		PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("aggregate.load").aggregate(aggregate.getClass().getSimpleName()).log();
 	}
 	
 }

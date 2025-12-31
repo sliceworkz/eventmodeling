@@ -284,7 +284,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelClasses, consistentReadModels, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
 		DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcb = new DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, instance, rmm, domainEventStream, outboundEventStream, false, meterRegistry);
 		
-		AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule = new AggregateModule<DOMAIN_EVENT_TYPE>(name, aggregateSpecifications, domainEventStream);
+		AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule = new AggregateModule<DOMAIN_EVENT_TYPE>(name, instance, aggregateSpecifications, domainEventStream, meterRegistry);
 
 		BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> bc = 
 				new BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, deployedFeatureSlices, undeployedFeatureSlices, domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry);

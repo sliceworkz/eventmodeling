@@ -22,7 +22,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 public class ProjectionTowardsAggregate<DOMAIN_EVENT_TYPE> implements Projection<DOMAIN_EVENT_TYPE> {
 
@@ -41,7 +40,7 @@ public class ProjectionTowardsAggregate<DOMAIN_EVENT_TYPE> implements Projection
 
 	@Override
 	public EventQuery eventQuery() {
-		return EventQuery.forEvents(EventTypesFilter.any(), identity);
+		return aggregate.eventQuery(identity);
 	}
 
 }

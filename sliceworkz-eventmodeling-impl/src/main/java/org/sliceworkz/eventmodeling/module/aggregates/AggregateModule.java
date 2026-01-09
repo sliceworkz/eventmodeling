@@ -28,6 +28,9 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
+import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.EventStream;
 
@@ -43,13 +46,11 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 	private String boundedContext;
 	private Instance instance;
-	private MeterRegistry meterRegistry;
 	
 	public AggregateModule ( String boundedContext, Instance instance, List<? extends AggregateSpecificationImpl<DOMAIN_EVENT_TYPE,?,?>> aggregateSpecifications, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.domainEventStream = domainEventStream;
-		this.meterRegistry = meterRegistry;
 		
 		io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
 				.of("context", boundedContext);
@@ -62,10 +63,23 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 				
 				var aggregateTags = tags.and(io.micrometer.core.instrument.Tags.of("aggregate", spec.aggregateClass().getSimpleName())); 
 				
-				Counter counter = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.load.count", aggregateTags);
+				Counter counterLoad = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.load.count", aggregateTags);
+				Counter counterSnapshotRead = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.snapshot.read.count", aggregateTags);
+				Counter counterSnapshotWrite = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.snapshot.write.count", aggregateTags);
 				Timer timer = meterRegistry.timer("sliceworkz.eventmodeling.aggregate.load.duration", aggregateTags);
 				
-				AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo = new AggregateInfo<>(spec.aggregateClass().getDeclaredConstructor(new Class[] {}), counter, timer);
+				AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo = 
+						new AggregateInfo<>(
+								spec.aggregateClass().getSimpleName(),
+								spec.aggregateClass().getDeclaredConstructor(new Class[] {}),
+								spec.snapshotStorage(),
+								spec.readSnapshots(),
+								spec.writeSnapshots(),
+								spec.snapshotEventCountThreshold(),
+								counterLoad,
+								counterSnapshotRead,
+								counterSnapshotWrite,
+								timer);
 				
 				aggregateInfoByClass.put(spec.aggregateClass(), aggregateInfo);
 			} catch (NoSuchMethodException | SecurityException e) {
@@ -96,7 +110,30 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 				try {
 					result = (T) aggregateInfo.constructor().newInstance(new Object[] {});
 					
-					AggregateContextImpl<DOMAIN_EVENT_TYPE> aci = new AggregateContextImpl<DOMAIN_EVENT_TYPE> (boundedContext, instance, identity, result, domainEventStream);
+					EventReference lastEventReference = null;
+					
+					if ( aggregateInfo.readSnapshots() && result instanceof SnapshotCapable snapshotCapable ) {
+						String key = snapshotCapable.key(aggregateInfo.name(), identity);
+						String version = snapshotCapable.version();
+						var loadedSnapshot = aggregateInfo.snapshotStorage().load(key, version);
+						if ( loadedSnapshot.isPresent() ) {
+							aggregateInfo.counterSnapshotRead.increment();
+							snapshotCapable.fromSnapshot(loadedSnapshot.get().snapshot());
+							lastEventReference = loadedSnapshot.get().lastEventReference();
+						}
+					}
+					
+					AggregateContextImpl<DOMAIN_EVENT_TYPE> aci = new AggregateContextImpl<DOMAIN_EVENT_TYPE> (
+							boundedContext, 
+							instance, 
+							aggregateInfo.name(), 
+							identity,
+							result, 
+							domainEventStream, 
+							lastEventReference,
+							aggregateInfo.snapshotStorageForWrite(),
+							aggregateInfo.snapshotEventCountThreshold(),
+							aggregateInfo.counterSnapshotWrite);
 					result.setContext(aci);
 					aci.updateFromStream();
 					
@@ -114,9 +151,22 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 	}
 
 	public record AggregateInfo<DOMAIN_EVENT_TYPE> (
+				String name,
 				Constructor<? extends Aggregate<DOMAIN_EVENT_TYPE>> constructor,
+				SnapshotStorage<Object> snapshotStorage,
+				boolean readSnapshots,
+				boolean writeSnapshots,
+				int snapshotEventCountThreshold,
 				Counter counter,
+				Counter counterSnapshotRead,
+				Counter counterSnapshotWrite,
 				Timer timer
-			) { }
+			) {
+		
+		public SnapshotStorage<Object> snapshotStorageForWrite ( ) {
+			return writeSnapshots?snapshotStorage:null;
+		}
+		
+	}
 	
 }

@@ -23,7 +23,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,8 +45,10 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.module.aggregates.MockAggregate.MockAggregateData;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.query.EventQuery;
@@ -54,6 +60,8 @@ import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 	
 	private EventStorage eventStorage;
+	
+	private MockSnapshotStorage snapshotStorage = new MockSnapshotStorage();
 	
 	@BeforeEach
 	protected void setUp ( ) {
@@ -82,7 +90,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		
 		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage).getEventStream(EventStreamId.anyContext().withPurpose("domain"));
 		
-		MockBoundedContext domain = domainWithAggregate(List.of(MockAggregate.class));
+		MockBoundedContext domain = domainWithAggregate(List.of(MockAggregate.class), 0);
 		
 		MockAggregate bo123 = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
 		MockAggregate bo456 = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "456"));
@@ -140,9 +148,65 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 	}
 	
 	@Test
+	void testAggregateSnapshots ( ) {
+		MockBoundedContext domain = domainWithAggregate(List.of(MockAggregate.class), 5);
+		
+		MockAggregate a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
+		
+		assertEquals(0,a.getCounter());
+		for ( int i = 0; i < 500; i++ ) {			
+			assertEquals(i,a.getCounter());
+			a.doSomething(i);
+
+			assertEquals(i+1,a.getCounter());
+			a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
+
+			System.err.println(a.getCounterOnTopOfSnapshot());
+			assertEquals((i+1)%5, a.getCounterOnTopOfSnapshot()); // we expect only 1 to 4 events to be loaded each time on top of the snapshot, 1 with the first event (as there is no snapshot then)
+			
+			assertEquals(i+1,a.getCounter());
+		}
+		
+		assertEquals(500, a.getCounter());
+		assertEquals(100, snapshotStorage.getSaveInvokes());
+		assertEquals(0, a.getCounterOnTopOfSnapshot()); // last append should also trigger a saveSnapshot
+	}
+
+	@Test
+	void testAggregateSnapshotsChangingVersion ( ) {
+		MockBoundedContext domain = domainWithAggregate(List.of(MockAggregate.class), 5);
+		
+		MockAggregate a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
+		
+		assertEquals(0,a.getCounter());
+		for ( int i = 0; i < 500; i++ ) {
+			assertEquals(i,a.getCounter());
+			a.doSomething(i);
+
+			assertEquals(i+1,a.getCounter());
+
+			MockAggregate.VERSION = "v" + UUID.randomUUID().toString();  // change version before load, so the saved snapshot cannot be used 
+			a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
+
+			assertEquals(i+1, a.getCounterOnTopOfSnapshot()); // since the version of the aggregate data changes each time, no reuse is possible
+			
+			assertEquals(i+1,a.getCounter());
+		}
+		
+		assertEquals(500, a.getCounter());
+		assertEquals(497, snapshotStorage.getSaveInvokes()); // saving only started with 5th event, and then each time since the snapshot was never loaded (due to version)
+		assertEquals(500, a.getCounterOnTopOfSnapshot());
+		
+		a.doSomething(500); // one more time, without changing the version
+		a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
+		assertEquals(1, a.getCounterOnTopOfSnapshot()); // since the version didn't change now, we can load the latest one and reuse that
+		assertEquals(501,a.getCounter());
+	}
+
+	@Test
 	void testUnregisteredAggregate ( ) {
 		
-		MockBoundedContext domain = domainWithAggregate(Collections.emptyList());
+		MockBoundedContext domain = domainWithAggregate(Collections.emptyList(), 0);
 		
 		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class, ()->domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123")));
 		assertEquals(InvocationTargetException.class, e.getCause().getClass());
@@ -154,13 +218,13 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 	@Test
 	void testDuplicatedAggregate ( ) {
 		
-		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, ()->domainWithAggregate(List.of(MockAggregate.class, MockAggregate.class)));
+		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, ()->domainWithAggregate(List.of(MockAggregate.class, MockAggregate.class), 0));
 		assertEquals("duplicate aggregate registration for 'class org.sliceworkz.eventmodeling.module.aggregates.MockAggregate'", e.getMessage());
 	}		
 	
 	
 	MockBoundedContext domainWithAggregate ( 
-			List<Class<? extends Aggregate<MockDomainEvent>>> aggregateClasses ) { 
+			List<Class<? extends Aggregate<MockDomainEvent>>> aggregateClasses, int snapshotAfterEventCount ) { 
 		
 		BoundedContextBuilder<MockDomainEvent, MockInboundEvent, MockOutboundEvent> builder =
 				BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
@@ -168,7 +232,11 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 				.eventStorage(eventStorage)
 				.instance(InstanceFactory.determine("unittests"));
 
-		aggregateClasses.forEach(builder::aggregate);
+		if ( snapshotAfterEventCount == 0 ) {
+			aggregateClasses.forEach(aggregateClass->builder.aggregate(aggregateClass));
+		} else {
+			aggregateClasses.forEach(aggregateClass->builder.aggregate(aggregateClass).snapshots(snapshotStorage).eventCountThreshold(snapshotAfterEventCount).readAndWrite());
+		}
 		
 		return buildBoundedContext ( builder );
 	}
@@ -177,11 +245,19 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 
 class MockAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<MockAggregateData> {
 
+	public static String VERSION = "v1";
+
 	private MockAggregateData data = new MockAggregateData();
 	private AggregateContext<MockDomainEvent> ctx;
 	
+	private int counterOnTopOfSnapshot;
+	
 	public void doSomething ( ) {
-		ctx.raiseEvent(new FirstDomainEvent("test"));
+		doSomething(0);
+	}
+	
+	public void doSomething ( int number ) {
+		ctx.raiseEvent(new FirstDomainEvent("test " + number));
 	}
 	
 	public int getCounter ( ) {
@@ -190,6 +266,7 @@ class MockAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<MockA
 	
 	@Override
 	public void when(MockDomainEvent event) {
+		counterOnTopOfSnapshot++;
 		data.counter++;
 	}
 
@@ -204,6 +281,9 @@ class MockAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<MockA
 	}
 
 	
+	public int getCounterOnTopOfSnapshot ( ) {
+		return counterOnTopOfSnapshot;
+	}
 	
 	@Override
 	public MockAggregateData takeSnapshot() {
@@ -212,7 +292,7 @@ class MockAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<MockA
 
 	@Override
 	public void fromSnapshot(MockAggregateData snapshot) {
-		this.data = snapshot;
+		this.data = snapshot.clone();
 	}
 	
 	
@@ -221,10 +301,48 @@ class MockAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<MockA
 	public static class MockAggregateData {
 		private int counter;
 		
+		public MockAggregateData ( ) {
+			
+		}
+		
+		public MockAggregateData ( int counter ) {
+			this.counter = counter;
+		}
+		
 		public MockAggregateData clone ( ) {
 			MockAggregateData result = new MockAggregateData();
 			result.counter = this.counter;
 			return result;
 		}
 	}
+
+
+
+
+	@Override
+	public String version() {
+		return VERSION;
+	}
 }
+
+class MockSnapshotStorage implements SnapshotStorage<MockAggregateData> {
+
+	private int saveInvokes;
+	private Map<String,SnapshotRecord<MockAggregateData>> snapshots = new HashMap<>();
+	
+	@Override
+	public Optional<SnapshotRecord<MockAggregateData>> load(String key, String version) {
+		return Optional.ofNullable(snapshots.get(key + version));
+	}
+
+	@Override
+	public void save(String key, String version, MockAggregateData snapshot, EventReference lastEventReference) {
+		saveInvokes++;
+		snapshots.put(key + version, new SnapshotRecord(snapshot, lastEventReference));
+	}
+	
+	public int getSaveInvokes ( ) {
+		return saveInvokes;
+	}
+	
+};

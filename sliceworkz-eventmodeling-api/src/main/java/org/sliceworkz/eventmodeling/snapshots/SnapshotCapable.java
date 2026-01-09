@@ -17,10 +17,94 @@
  */
 package org.sliceworkz.eventmodeling.snapshots;
 
+import org.sliceworkz.eventstore.events.Tags;
+
+/**
+ * Marks an aggregate as capable of snapshotting for performance optimization.
+ * <p>
+ * Aggregates with long event histories can implement this interface to enable periodic
+ * snapshots of their state. When loading, the aggregate can be restored from the most
+ * recent snapshot and then replay only subsequent events, rather than replaying the
+ * entire event history from the beginning.
+ * <p>
+ * Snapshot versioning ensures that snapshots are only loaded if they match the current
+ * aggregate implementation version, preventing incompatibility issues when the aggregate
+ * structure changes.
+ *
+ * @param <SNAPSHOT_TYPE> the type representing the serialized snapshot state
+ */
 public interface SnapshotCapable<SNAPSHOT_TYPE> {
 
+	/**
+	 * Captures the current state of the aggregate as a snapshot.
+	 * <p>
+	 * The snapshot should contain all state necessary to restore the aggregate
+	 * to its current condition without replaying events.
+	 *
+	 * @return an immutable representation of the aggregate's current state
+	 */
 	SNAPSHOT_TYPE takeSnapshot ( );
-	
+
+	/**
+	 * Restores the aggregate's state from a previously captured snapshot.
+	 * <p>
+	 * This method is called before event replay begins, allowing the aggregate
+	 * to skip replaying events that occurred before the snapshot was taken.
+	 *
+	 * @param snapshot the snapshot containing the aggregate's previous state
+	 */
 	void fromSnapshot ( SNAPSHOT_TYPE snapshot );
-	
+
+	/**
+	 * Returns the version identifier for this aggregate's snapshot format.
+	 * <p>
+	 * The version should be changed whenever the snapshot structure is modified
+	 * in a way that makes old snapshots incompatible. Only snapshots with matching
+	 * versions will be loaded; mismatched snapshots are ignored and the aggregate
+	 * is rebuilt from events.
+	 *
+	 * @return a version identifier for snapshot compatibility checking
+	 */
+	String version ( );
+
+	/**
+	 * Generates a unique storage key for this aggregate's snapshot.
+	 * <p>
+	 * The key is generated in the format: "name/tag1-value1/tag2-value2" where tags
+	 * are sorted alphabetically by key to ensure deterministic key generation regardless
+	 * of tag insertion order. Null keys or values are represented as empty strings.
+	 * Implementations may override this to provide custom key generation logic.
+	 *
+	 * @param name the name of the aggregate class
+	 * @param identity the tags uniquely identifying this aggregate instance
+	 * @return a unique key for storing and retrieving this aggregate's snapshot
+	 */
+	default String key ( String name, Tags identity ) {
+		StringBuilder keyBuilder = new StringBuilder(name != null ? name : "");
+
+		if ( identity != null && identity.tags() != null ) {
+			identity.tags().stream()
+				.sorted((t1, t2) -> {
+					String k1 = t1.key() != null ? t1.key() : "";
+					String k2 = t2.key() != null ? t2.key() : "";
+					int keyCompare = k1.compareTo(k2);
+					if (keyCompare != 0) {
+						return keyCompare;
+					}
+					// If keys are equal (including both null), sort by value for deterministic ordering
+					String v1 = t1.value() != null ? t1.value() : "";
+					String v2 = t2.value() != null ? t2.value() : "";
+					return v1.compareTo(v2);
+				})
+				.forEach(tag -> {
+					keyBuilder.append("/");
+					keyBuilder.append(tag.key() != null ? tag.key() : "");
+					keyBuilder.append("-");
+					keyBuilder.append(tag.value() != null ? tag.value() : "");
+				});
+		}
+
+		return keyBuilder.toString();
+	}
+
 }

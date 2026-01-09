@@ -26,6 +26,8 @@ import org.sliceworkz.eventmodeling.aggregates.AggregateEventAppender;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
 import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger.Metrics;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projection;
@@ -33,10 +35,13 @@ import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
 
+import io.micrometer.core.instrument.Counter;
+
 public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext<DOMAIN_EVENT_TYPE> {
 
 	private String boundedContext;
 	private Instance instance;
+	private String aggregateName;
 	private Tags identity;
 	private Aggregate<DOMAIN_EVENT_TYPE> aggregate;
 	private EventStream<DOMAIN_EVENT_TYPE> eventStream;
@@ -44,14 +49,25 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	private EventReference lastEventReference;
 	private AggregateEventAppender<DOMAIN_EVENT_TYPE> aggregateEventAppender;
 	
-	public AggregateContextImpl ( String boundedContext, Instance instance, Tags identity, Aggregate<DOMAIN_EVENT_TYPE> aggregate, EventStream<DOMAIN_EVENT_TYPE> eventStream ) {
+	private SnapshotStorage<Object> snapshotStorage;
+	private int snapshotThresholdEventCount;
+	private Counter counterSnapshotWrite;
+	
+	private long eventsStreamedForLoading = 0;
+	
+	public AggregateContextImpl ( String boundedContext, Instance instance, String aggregateName, Tags identity, Aggregate<DOMAIN_EVENT_TYPE> aggregate, EventStream<DOMAIN_EVENT_TYPE> eventStream, EventReference lastEventReference, SnapshotStorage<Object> snapshotStorage, int snapshotThresholdEventCount, Counter counterSnapshotWrite ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;	
+		this.aggregateName = aggregateName;
 		this.identity = identity;
 		this.aggregate = aggregate;
 		this.eventStream = eventStream;
 		this.projectionTowardsAggregate = new ProjectionTowardsAggregate<>(aggregate, identity);
 		this.aggregateEventAppender = new AggregateEventAppenderImpl<>(eventStream, aggregate, identity, null);
+		this.lastEventReference = lastEventReference;
+		this.snapshotStorage = snapshotStorage;
+		this.snapshotThresholdEventCount = snapshotThresholdEventCount;
+		this.counterSnapshotWrite = counterSnapshotWrite;
 	}
 	
 	@Override
@@ -66,14 +82,25 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 
 	@Override
 	public void raiseEvent(DOMAIN_EVENT_TYPE event, String idempotencyKey) {
-		eventAppender().add(event, idempotencyKey).append();
+		EventReference lastEventReference = eventAppender().add(event, idempotencyKey).append();
+		saveSnapshotIfNeeded(lastEventReference, 1);
 	}
 
 	@Override
 	public void raiseEvents(List<DOMAIN_EVENT_TYPE> events) {
 		var eventAppender = eventAppender();
 		events.stream().map(eventAppender::add);
-		eventAppender.append();
+		EventReference lastEventReference = eventAppender.append();
+		saveSnapshotIfNeeded(lastEventReference, events.size());
+	}
+
+	private void saveSnapshotIfNeeded (EventReference lastEventReference, int appendedEvents) {
+		if ( lastEventReference != null ) {
+			if ( snapshotStorage != null && (eventsStreamedForLoading + appendedEvents) >= snapshotThresholdEventCount && aggregate instanceof SnapshotCapable<?> snapshotCapable) {
+				snapshotStorage.save(snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), lastEventReference);
+				counterSnapshotWrite.increment();
+			}
+		}
 	}
 
 	@Override
@@ -85,7 +112,6 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	public void updateFromStream() {
 		Instant start = Instant.now();
 		
-		
 		ProjectorMetrics projectorMetrics = Projector.from(eventStream).towards(projectionTowardsAggregate).startingAfter(lastEventReference).build().run();
 		this.lastEventReference = projectorMetrics.lastEventReference();
 		this.aggregateEventAppender = new AggregateEventAppenderImpl<>(eventStream, aggregate, identity, lastEventReference);
@@ -93,6 +119,13 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 		
 		long duration = finish.toEpochMilli() - start.toEpochMilli();
 		Metrics metrics = new Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+		
+		if ( snapshotStorage != null && metrics.eventStreamed() >= snapshotThresholdEventCount && aggregate instanceof SnapshotCapable<?> snapshotCapable) {
+			snapshotStorage.save(snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), metrics.until());
+			counterSnapshotWrite.increment();
+		} else {
+			eventsStreamedForLoading = projectorMetrics.eventsStreamed();
+		}
 		
 		PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("aggregate.load").aggregate(aggregate.getClass().getSimpleName()).log();
 	}

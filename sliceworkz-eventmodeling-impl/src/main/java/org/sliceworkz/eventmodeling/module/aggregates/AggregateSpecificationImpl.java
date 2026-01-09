@@ -20,12 +20,16 @@ package org.sliceworkz.eventmodeling.module.aggregates;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.module.snapshots.SnapshotSpecificationImpl;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotSpecification;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 
 public class AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> implements AggregateSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
 
 	private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> parent;
 	
 	private Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass;
+	private SnapshotSpecificationImpl<?,DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshotSpecification = new SnapshotSpecificationImpl<>(parent, null);
 
 	public AggregateSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> parent, Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass ) {
 		this.parent = parent;
@@ -39,6 +43,32 @@ public class AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, O
 	
 	public Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass ( ) {
 		return aggregateClass;
+	}
+	
+	public SnapshotStorage<Object> snapshotStorage ( ) {
+		return snapshotSpecification == null?null:(SnapshotStorage<Object>)snapshotSpecification.snapshotStorage();
+	}
+	
+	public boolean readSnapshots ( ) {
+		return snapshotSpecification == null?false:snapshotSpecification.readAndOrWrite().mustRead();
+	}
+	
+	public boolean writeSnapshots ( ) {
+		return snapshotSpecification == null?false:snapshotSpecification.readAndOrWrite().mustWrite();
+	}
+	
+	public int snapshotEventCountThreshold ( ) {
+		return snapshotSpecification == null?0:snapshotSpecification.eventCountThreshold();
+	}
+
+	@Override
+	public <SNAPSHOT_TYPE> SnapshotSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshots(
+			SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage) {
+		if ( snapshotStorage == null ) {
+			throw new IllegalArgumentException("snapshotStorage can not be null");
+		}
+		this.snapshotSpecification = new SnapshotSpecificationImpl<SNAPSHOT_TYPE,DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(parent,snapshotStorage);
+		return snapshotSpecification;
 	}
 	
 }

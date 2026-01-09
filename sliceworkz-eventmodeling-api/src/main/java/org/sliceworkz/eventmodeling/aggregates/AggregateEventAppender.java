@@ -17,12 +17,52 @@
  */
 package org.sliceworkz.eventmodeling.aggregates;
 
+import org.sliceworkz.eventstore.events.EventReference;
+
+/**
+ * Provides a fluent API for appending events to an aggregate's event stream.
+ * <p>
+ * This interface follows the builder pattern, allowing multiple events to be staged
+ * and then appended to the event stream in a single atomic operation. Events are
+ * appended with optimistic concurrency control to ensure consistency.
+ *
+ * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context
+ */
 public interface AggregateEventAppender<DOMAIN_EVENT_TYPE> {
-	
+
+	/**
+	 * Stages an event to be appended to the aggregate's event stream.
+	 * <p>
+	 * The event is not persisted until {@link #append()} is called.
+	 *
+	 * @param event the domain event to stage for appending
+	 * @return this appender for method chaining
+	 */
 	AggregateEventAppender<DOMAIN_EVENT_TYPE> add ( DOMAIN_EVENT_TYPE event );
-	
+
+	/**
+	 * Stages an event with an idempotency key to be appended to the aggregate's event stream.
+	 * <p>
+	 * The idempotency key ensures that if the same event is appended multiple times
+	 * (e.g., due to retries), only the first occurrence will be persisted.
+	 * The event is not persisted until {@link #append()} is called.
+	 *
+	 * @param event the domain event to stage for appending
+	 * @param idempotencyKey unique key to prevent duplicate event appends, may be null
+	 * @return this appender for method chaining
+	 */
 	AggregateEventAppender<DOMAIN_EVENT_TYPE> add ( DOMAIN_EVENT_TYPE event, String idempotencyKey );
 
-	void append ( );
-	
+	/**
+	 * Appends all staged events to the aggregate's event stream.
+	 * <p>
+	 * This operation is atomic - either all staged events are persisted successfully,
+	 * or none are. The append includes optimistic concurrency control to ensure the
+	 * aggregate's event stream hasn't been modified by another process since it was loaded.
+	 * After appending, the staged events list is cleared.
+	 *
+	 * @return reference to the last appended event, or null if no events were staged
+	 */
+	EventReference append ( );
+
 }

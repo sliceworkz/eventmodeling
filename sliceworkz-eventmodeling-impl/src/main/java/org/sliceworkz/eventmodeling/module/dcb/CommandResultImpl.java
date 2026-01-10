@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.module.dcb;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.events.Tracing;
@@ -31,12 +30,12 @@ import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
-public record CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventQuery eventQuery, Optional<EventReference> lastEventReference, List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> events ) 
+public record CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventQuery eventQuery, EventReference lastEventReference, List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> events ) 
 implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
 	// TODO add monitoring & debugging metadata? (models used, events seen, timings, correlation id, actor / acting user, channel, ...)
 	
-	public CommandResultImpl ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventQuery eventQuery, Optional<EventReference> lastEventReference, List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> events ) {
+	public CommandResultImpl ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventQuery eventQuery, EventReference lastEventReference, List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> events ) {
 		this.boundedContext = boundedContext;
 		this.targetStreamId = targetStreamId;
 		this.tracing = tracing;
@@ -45,7 +44,7 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 		this.events = events;
 	}
 
-	public CommandResultImpl ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventQuery eventQuery, Optional<EventReference> lastEventReference ) {
+	public CommandResultImpl ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventQuery eventQuery, EventReference lastEventReference ) {
 		this(boundedContext, targetStreamId, tracing, eventQuery, lastEventReference, new ArrayList<>());
 	}
 	

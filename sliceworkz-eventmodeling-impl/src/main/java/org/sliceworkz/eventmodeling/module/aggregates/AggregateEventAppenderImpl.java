@@ -61,7 +61,7 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 	@Override
 	public EventReference append() {
 		EventReference lastEvent = eventStream.append(
-				AppendCriteria.of(EventQuery.forEvents(EventTypesFilter.any(), identity), Optional.ofNullable(lastReference)),
+				AppendCriteria.of(EventQuery.forEvents(EventTypesFilter.any(), identity), lastReference),
 				events).stream().map(e->{this.lastReference=e.reference();return e;}).map(e->{aggregate.when(e);return e;}).map(Event::reference).reduce((one,two)->two).orElse(null);
 		events.clear();
 		return lastEvent;

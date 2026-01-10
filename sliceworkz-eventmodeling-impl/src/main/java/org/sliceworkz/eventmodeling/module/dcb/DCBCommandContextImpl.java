@@ -83,7 +83,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 		EventQuery combinedQuery = EventQuery.matchNone();
 		
-		Optional<EventReference> lastEventReference = Optional.empty();
+		EventReference lastEventReference = null;
 		
 		// loop over all decisionmodels
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
@@ -111,7 +111,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		
 		if  ( ! decisionModels.isEmpty()  ) {
 			projectorMetrics = this.projector.run();
-			lastEventReference = Optional.ofNullable(projectorMetrics.lastEventReference());
+			lastEventReference = projectorMetrics.lastEventReference();
 		}
 		
 		return new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery, lastEventReference);

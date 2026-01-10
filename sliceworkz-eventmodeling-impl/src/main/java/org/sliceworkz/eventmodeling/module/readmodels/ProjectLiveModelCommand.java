@@ -65,7 +65,7 @@ class ProjectLiveModelCommand<DOMAIN_EVENT_TYPE> implements Command<KernelEvent>
 		long start = System.currentTimeMillis();
 		CommandResult<KernelEvent,KernelEvent> result = context.noDecisionModels();
 		try {
-			readModel = (ReadModelWithMetaData) selectConstructor(readModelClass, constructorParams).newInstance(constructorParams);
+			readModel = (ReadModelWithMetaData<DOMAIN_EVENT_TYPE>) selectConstructor(readModelClass, constructorParams).newInstance(constructorParams);
 			Projector<DOMAIN_EVENT_TYPE> projector = Projector.from(eventSource).towards(readModel).build();
 			ProjectorMetrics projectorMetrics = projector.run();
 			long finish = System.currentTimeMillis();

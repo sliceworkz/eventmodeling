@@ -19,8 +19,6 @@ package org.sliceworkz.eventmodeling.module.readmodels;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.time.Instant;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -97,10 +95,7 @@ public class RenderLiveModelTest extends AbstractMockDomainTest {
 			// throw in an external event		
 			boundedContext.event(new MockDomainEvent.FirstDomainEvent("test " + i));
 		}
-		long start = Instant.now().toEpochMilli();
 		MockReadModel m = boundedContext.read(MockReadModel.class, "someLiveModel");
-		long stop = Instant.now().toEpochMilli();
-		long time = stop - start;
 		
 		assertEquals(eventCount, m.eventCount(), "live model should have seen all events");
 		assertEquals(expectedQueries, eventStorage.queriesDone());

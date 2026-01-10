@@ -45,6 +45,7 @@ public class AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, O
 		return aggregateClass;
 	}
 	
+	@SuppressWarnings("unchecked")
 	public SnapshotStorage<Object> snapshotStorage ( ) {
 		return snapshotSpecification == null?null:(SnapshotStorage<Object>)snapshotSpecification.snapshotStorage();
 	}

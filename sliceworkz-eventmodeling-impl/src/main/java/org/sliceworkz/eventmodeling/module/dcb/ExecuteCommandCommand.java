@@ -63,11 +63,11 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 	@Override
 	public CommandResult<KernelEvent,KernelEvent> execute(CommandContext<KernelEvent, KernelEvent> context) {
 		long start = System.currentTimeMillis();
-		CommandResultImpl<KernelEvent,KernelEvent> kernelCommandResult = (CommandResultImpl)context.noDecisionModels();
+		CommandResultImpl<KernelEvent,KernelEvent> kernelCommandResult = (CommandResultImpl<KernelEvent, KernelEvent>)context.noDecisionModels();
 
 		// execute command and get resulting events
 		DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>(boundedContext, readModelModule, queryEventStream, targetEventStream, ((DCBCommandContextImpl<KernelEvent,KernelEvent>)context).tracing());
-		CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> applicationCommandResult = (CommandResultImpl) command.execute(commandContext);
+		CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> applicationCommandResult = (CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>) command.execute(commandContext);
 
 		// TODO maybe catch optimistic locking exception somewhere, and retry command with incremental backoff and logging of this fact?
 

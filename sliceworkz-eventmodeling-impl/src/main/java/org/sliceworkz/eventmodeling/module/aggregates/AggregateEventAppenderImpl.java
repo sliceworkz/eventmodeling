@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.module.aggregates;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateEventAppender;

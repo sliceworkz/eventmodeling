@@ -112,9 +112,7 @@ public class BenchmarkApplication {
 		
 		bc.start();
 
-		EventStream<Object> inboundStream = EventStoreFactory.get().eventStore(eventStorage).getEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("inbound"));
 		EventStream<Object> domainStream = EventStoreFactory.get().eventStore(eventStorage).getEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("domain"));
-		EventStream<Object> outboundStream = EventStoreFactory.get().eventStore(eventStorage).getEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("outbound"));
 
 
 		ExecutorService executor = Executors.newFixedThreadPool(PARALLEL_PRODUCERS);
@@ -140,8 +138,6 @@ public class BenchmarkApplication {
 		}
 
 		executor.shutdown();
-		
-		int eventsIngested = 0;
 		
 		while ( !executor.isTerminated() ) {
 			System.err.println("events ingested  : %d".formatted(orderNumbering.get()));

@@ -108,9 +108,6 @@ public class PerformanceLogger {
 	private void add ( String key, String value ) {
 		keyValues.put(key, value);
 	}
-	private void add ( String key, int value ) {
-		keyValues.put(key, Integer.toString(value));
-	}
 	private void add ( String key, long value ) {
 		keyValues.put(key, Long.toString(value));
 	}

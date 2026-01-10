@@ -278,11 +278,13 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		readmodelModule.updateSharedConsistentModels(events.stream());
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
 	public <T extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> List<T> getDeployedFeatureSlices() {
 		return (List<T>)deployedFeatureSlices;
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
 	public <T extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> List<T> getUndeployedFeatureSlices() {
 		return (List<T>)undeployedFeatureSlices;

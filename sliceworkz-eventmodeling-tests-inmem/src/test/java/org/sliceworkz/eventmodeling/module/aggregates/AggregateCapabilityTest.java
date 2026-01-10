@@ -338,7 +338,7 @@ class MockSnapshotStorage implements SnapshotStorage<MockAggregateData> {
 	@Override
 	public void save(String key, String version, MockAggregateData snapshot, EventReference lastEventReference) {
 		saveInvokes++;
-		snapshots.put(key + version, new SnapshotRecord(snapshot, lastEventReference));
+		snapshots.put(key + version, new SnapshotRecord<>(snapshot, lastEventReference));
 	}
 	
 	public int getSaveInvokes ( ) {

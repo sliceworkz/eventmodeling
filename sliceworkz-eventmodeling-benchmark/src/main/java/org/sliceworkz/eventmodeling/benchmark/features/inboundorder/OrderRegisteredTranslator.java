@@ -17,34 +17,27 @@
  */
 package org.sliceworkz.eventmodeling.benchmark.features.inboundorder;
 
-import java.util.function.Supplier;
-
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderReceived;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent.OrderRegistered;
 import org.sliceworkz.eventmodeling.inbound.Translator;
+import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
-public class OrderRegisteredTranslator implements Translator<OrderProcessingInboundEvent> {
+public class OrderRegisteredTranslator implements Translator<OrderProcessingInboundEvent,OrderProcessingDomainEvent> {
 	
-	private Supplier<OrderProcessingBoundedContext> context;
-	
-	public OrderRegisteredTranslator ( Supplier<OrderProcessingBoundedContext> context ) {
-		this.context = context;
-	}
-
 	@Override
 	public EventQuery eventQuery() {
 		return EventQuery.forEvents(EventTypesFilter.of(OrderRegistered.class), Tags.none());
 	}
 
 	@Override
-	public void when(OrderProcessingInboundEvent event) {
+	public void translate(OrderProcessingInboundEvent event, TranslatorContext<OrderProcessingInboundEvent,OrderProcessingDomainEvent> context) {
 		switch(event) {
-			case OrderRegistered or -> context.get().event(new OrderReceived(or.orderId()));
+			case OrderRegistered or -> context.event(new OrderReceived(or.orderId()));
 			default -> { }
 		}
 		

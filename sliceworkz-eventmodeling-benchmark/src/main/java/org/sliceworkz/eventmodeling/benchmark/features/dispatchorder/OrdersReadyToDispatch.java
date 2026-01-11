@@ -23,7 +23,6 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import javax.sql.DataSource;
@@ -43,15 +42,15 @@ import org.sliceworkz.eventstore.query.Limit;
 
 public class OrdersReadyToDispatch implements TodoListReadModel<OrderProcessingDomainEvent,OrderReadyToDispatch>, BatchAwareProjection<OrderProcessingDomainEvent> {
 
-	private Supplier<DataSource> dataSource;
+	private DataSource dataSource;
 	private Connection connection;
 
-	public OrdersReadyToDispatch(Supplier<DataSource> dataSource) {
+	public OrdersReadyToDispatch(DataSource dataSource) {
 		this.dataSource = dataSource;
 	}
 
 	public void initialize() {
-		try (var connection = dataSource.get().getConnection();
+		try (var connection = dataSource.getConnection();
 			 var statement = connection.createStatement()) {
 			statement.execute("DROP TABLE IF EXISTS todo_orders_ready_to_dispatch");
 			statement.execute("""
@@ -107,7 +106,7 @@ public class OrdersReadyToDispatch implements TodoListReadModel<OrderProcessingD
 
 	@Override
 	public synchronized Stream<OrderReadyToDispatch> streamItems(Limit limit) {
-		try (var connection = dataSource.get().getConnection()) {
+		try (var connection = dataSource.getConnection()) {
 			String sql = limit.isSet()
 				? "SELECT order_id, packaged, announced FROM todo_orders_ready_to_dispatch WHERE packaged = TRUE AND announced = TRUE LIMIT ?"
 				: "SELECT order_id, packaged, announced FROM todo_orders_ready_to_dispatch WHERE packaged = TRUE AND announced = TRUE";
@@ -136,7 +135,7 @@ public class OrdersReadyToDispatch implements TodoListReadModel<OrderProcessingD
 	@Override
 	public void beforeBatch() {
 		try {
-			connection = dataSource.get().getConnection();
+			connection = dataSource.getConnection();
 			connection.setAutoCommit(false);
 		} catch (SQLException e) {
 			throw new RuntimeException("Failed to start transaction", e);

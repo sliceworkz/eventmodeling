@@ -106,9 +106,10 @@ public class BenchmarkApplication {
 				.instance(InstanceFactory.determine(BOUNDED_CONTEXT_NAME))
 				.eventStorage(eventStorage)
 				.rootPackage(BenchmarkApplication.class.getPackage())
+				.preConfigure(fs->((OrderProcessingFeatureSlice)fs).preConfigure(dataSource, finalInitializeDatabase))
 				.build(OrderProcessingBoundedContext.class);
 		
-		bc.<OrderProcessingFeatureSlice>getDeployedFeatureSlices().forEach(fs->fs.configure(bc, dataSource, finalInitializeDatabase));
+//		bc.<OrderProcessingFeatureSlice>getDeployedFeatureSlices().forEach(fs->fs.postConfigure(bc));
 		
 		bc.start();
 

@@ -18,24 +18,22 @@
 package org.sliceworkz.eventmodeling.benchmark.features.createshippinglabel;
 
 import java.util.Optional;
-import java.util.function.Supplier;
 
 import org.sliceworkz.eventmodeling.automation.Automation;
+import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.ShippingLabelCreated;
 import org.sliceworkz.eventmodeling.benchmark.features.createshippinglabel.RequiredShippingLabels.RequiredShippingLabel;
 import org.sliceworkz.eventstore.events.EventReference;
 
-public class CreateShippingLabelAutomation implements Automation<OrderProcessingDomainEvent,RequiredShippingLabel> {
+public class CreateShippingLabelAutomation implements Automation<RequiredShippingLabel,OrderProcessingDomainEvent,OrderProcessingOutboundEvent> {
 	
 	private RequiredShippingLabels requiredShippingLabels; 
-	private Supplier<OrderProcessingBoundedContext> context;
 	
-	public CreateShippingLabelAutomation ( RequiredShippingLabels requiredShippingLabels, Supplier<OrderProcessingBoundedContext> context ) {
+	public CreateShippingLabelAutomation ( RequiredShippingLabels requiredShippingLabels ) {
 		this.requiredShippingLabels = requiredShippingLabels;
-		this.context = context;
 	}
 	
 	
@@ -45,8 +43,8 @@ public class CreateShippingLabelAutomation implements Automation<OrderProcessing
 	}
 
 	@Override
-	public Optional<EventReference> handle(RequiredShippingLabel todoItem) {
-		return Optional.of(context.get().event(new ShippingLabelCreated(todoItem.orderId())).reference());
+	public Optional<EventReference> handle(RequiredShippingLabel todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context) {
+		return context.event(new ShippingLabelCreated(todoItem.orderId()));
 	}
 
 

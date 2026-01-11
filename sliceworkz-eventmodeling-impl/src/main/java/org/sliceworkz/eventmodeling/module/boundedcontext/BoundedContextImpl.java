@@ -60,8 +60,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbDomainModule;
 	private DCBModule<KernelEvent, KernelEvent> dcbKernelModule;
 	private AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule;
-	private AutomationModule<DOMAIN_EVENT_TYPE> automationModule;
-	private InboundModule<INBOUND_EVENT_TYPE> inboundModule;
+	private AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule;
+	private InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule;
 	private OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule;
 	
 	private List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices;
@@ -70,7 +70,22 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private String name;
 	private Instance instance;
 	
-	public BoundedContextImpl ( String name, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices, List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, EventStream<KernelEvent> kernelLoggingEventStream, DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule, AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule, ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule, AutomationModule<DOMAIN_EVENT_TYPE> automationModule, InboundModule<INBOUND_EVENT_TYPE> inboundModule, OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule, Instance instance, MeterRegistry meterRegistry ) {
+	public BoundedContextImpl ( 
+			String name, 
+			List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices, 
+			List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices, 
+			EventStream<DOMAIN_EVENT_TYPE> domainEventStream, 
+			EventStream<INBOUND_EVENT_TYPE> inboundEventStream, 
+			EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, 
+			EventStream<KernelEvent> kernelLoggingEventStream, 
+			DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule, 
+			AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule, 
+			ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule, 
+			AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule, 
+			InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule, 
+			OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule, 
+			Instance instance, 
+			MeterRegistry meterRegistry ) {
 		this.name = name;
 		this.instance = instance;
 		this.deployedFeatureSlices = deployedFeatureSlices;
@@ -178,25 +193,25 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 */
 
 	@Override
-	public Event<? extends DOMAIN_EVENT_TYPE> event(DOMAIN_EVENT_TYPE event) {
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event) {
 		return event(event, Tracing.init(instance));
 	}
 
 	@Override
-	public Event<? extends DOMAIN_EVENT_TYPE> event(DOMAIN_EVENT_TYPE event, Tracing tracing ) {
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tracing tracing ) {
 		return event(event, Tags.none(), tracing);
 	}
 
 	@Override
-	public Event<? extends DOMAIN_EVENT_TYPE> event(DOMAIN_EVENT_TYPE event, Tags tags ) {
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags ) {
 		return event(event, tags, Tracing.init(instance));
 	}
 
 	@Override
-	public Event<? extends DOMAIN_EVENT_TYPE> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
 		// store event, no append criteria as we don't have any context for it
 		List<? extends Event<? extends DOMAIN_EVENT_TYPE>> result = domainEventStream.append(AppendCriteria.none(), Collections.singletonList(tracing.storeOn(Event.of(event, tags))));
-		return result.stream().findFirst().get();
+		return result.stream().findFirst().map(Event::reference);
 	}
 
 	/*

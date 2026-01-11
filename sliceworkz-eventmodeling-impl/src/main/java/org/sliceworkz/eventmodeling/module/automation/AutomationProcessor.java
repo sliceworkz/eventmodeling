@@ -18,10 +18,12 @@
 package org.sliceworkz.eventmodeling.module.automation;
 
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.automation.Automation;
+import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
@@ -32,7 +34,7 @@ import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamEventuallyConsistentBookmarkListener;
 
-public class AutomationProcessor<EVENT_TYPE, TODO_ITEM_TYPE> implements EventStreamEventuallyConsistentBookmarkListener, Processor {
+public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements EventStreamEventuallyConsistentBookmarkListener, Processor {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(AutomationProcessor.class);
 	
@@ -40,17 +42,20 @@ public class AutomationProcessor<EVENT_TYPE, TODO_ITEM_TYPE> implements EventStr
 	private static final long WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS = 10000;
 	private static final long WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS = 30000;
 	
-	private EventSource<EVENT_TYPE> eventSource;
-	private Automation<EVENT_TYPE,TODO_ITEM_TYPE> automation;
+	private EventSource<DOMAIN_EVENT_TYPE> eventSource;
+	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation;
 	private ProcessorMode originalProcessorMode;
 	private ProcessorMode processorMode;
 	private EventuallyConsistentProcessorIdentification processorIdentification; // this is us
 	private EventuallyConsistentProcessorIdentification monitoredProcessorIdentification; // this is the readmodel-building processor we will shadow
 	
+	private Supplier<AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContext;
+	
 	private ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER; // TOOD implement leader selection on processors
 	private Instance instance;
 	
-	public AutomationProcessor ( EventuallyConsistentProcessorIdentification processorIdentification, EventuallyConsistentProcessorIdentification monitoredProcessorIdentification, EventStream<EVENT_TYPE> eventSource, Automation<EVENT_TYPE, TODO_ITEM_TYPE> automation, ProcessorMode processorMode, Instance instance ) {
+	public AutomationProcessor ( EventuallyConsistentProcessorIdentification processorIdentification, EventuallyConsistentProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Supplier<AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContext, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance ) {
+		this.automationContext = automationContext;
 		this.automation = automation;
 		this.originalProcessorMode = processorMode;
 		this.processorMode = processorMode;
@@ -143,7 +148,8 @@ public class AutomationProcessor<EVENT_TYPE, TODO_ITEM_TYPE> implements EventStr
 									LOGGER.debug("starting processing of max {} items at a time", MAX_BATCH_SIZE);
 		
 									Counter counter = new Counter();
-									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(automation::handle).flatMap(Optional::stream).reduce((first,second)->second);
+									
+									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(item->automation.handle(item,automationContext.get())).flatMap(Optional::stream).reduce((first,second)->second);
 		
 									if ( lastProducedEvent.isPresent() ) {
 										// set our position to the last event we produced, we won't do a new run until the readmodel has been updated

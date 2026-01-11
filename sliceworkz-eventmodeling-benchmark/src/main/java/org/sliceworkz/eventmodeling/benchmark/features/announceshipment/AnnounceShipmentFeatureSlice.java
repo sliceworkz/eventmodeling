@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.benchmark.features.announceshipment;
 
 import javax.sql.DataSource;
 
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
@@ -32,24 +31,20 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 public class AnnounceShipmentFeatureSlice implements OrderProcessingFeatureSlice{
 
 	private ShipmentsToBeAnounced shipmentsToBeAnounced;
-	private DataSource dataSource;
-	private OrderProcessingBoundedContext boundedContext;
+	
+	@Override
+	public void preConfigure(DataSource dataSource, boolean initializeDatabase) {
+		this.shipmentsToBeAnounced = new ShipmentsToBeAnounced(dataSource);
+		if ( initializeDatabase ) {
+			this.shipmentsToBeAnounced.initialize();
+		}
+	}
 	
 	@Override
 	public void configure(
 			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
-		this.shipmentsToBeAnounced = new ShipmentsToBeAnounced(()->dataSource);
 		builder.readmodel(shipmentsToBeAnounced);
-		builder.automation(new AnnounceShipmentAutomation(shipmentsToBeAnounced, ()->boundedContext));
-	}
-
-	@Override
-	public void configure(OrderProcessingBoundedContext boundedContext, DataSource dataSource, boolean initializeDatabase) {
-		this.dataSource = dataSource;
-		this.boundedContext = boundedContext;
-		if ( initializeDatabase ) {
-			this.shipmentsToBeAnounced.initialize();
-		}
+		builder.automation(new AnnounceShipmentAutomation(shipmentsToBeAnounced));
 	}
 
 }

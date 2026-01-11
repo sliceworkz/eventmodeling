@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.benchmark.features.dispatchorder;
 
 import javax.sql.DataSource;
 
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
@@ -32,24 +31,20 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 public class DispatchOrderFeatureSlice implements OrderProcessingFeatureSlice {
 	
 	private OrdersReadyToDispatch ordersReadyToDispatch;
-	private OrderProcessingBoundedContext context;
-	private DataSource dataSource;
-	
-	@Override
-	public void configure(
-			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
-		ordersReadyToDispatch = new OrdersReadyToDispatch(()->dataSource);
-		builder.readmodel(ordersReadyToDispatch);
-		builder.automation(new DispatchOrderAutomation(ordersReadyToDispatch, ()->context));
-	}
 
 	@Override
-	public void configure(OrderProcessingBoundedContext boundedContext, DataSource dataSource, boolean initializeDatabase) {
-		this.context = boundedContext;
-		this.dataSource = dataSource;
+	public void preConfigure(DataSource dataSource, boolean initializeDatabase) {
+		ordersReadyToDispatch = new OrdersReadyToDispatch(dataSource);
 		if (initializeDatabase) {
 			this.ordersReadyToDispatch.initialize();
 		}
+	}
+
+	@Override
+	public void configure(
+			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
+		builder.readmodel(ordersReadyToDispatch);
+		builder.automation(new DispatchOrderAutomation(ordersReadyToDispatch));
 	}
 
 }

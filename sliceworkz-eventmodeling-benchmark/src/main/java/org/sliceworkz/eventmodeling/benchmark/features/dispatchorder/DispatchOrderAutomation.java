@@ -18,24 +18,22 @@
 package org.sliceworkz.eventmodeling.benchmark.features.dispatchorder;
 
 import java.util.Optional;
-import java.util.function.Supplier;
 
 import org.sliceworkz.eventmodeling.automation.Automation;
+import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderDispatched;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.features.dispatchorder.OrdersReadyToDispatch.OrderReadyToDispatch;
 import org.sliceworkz.eventstore.events.EventReference;
 
-public class DispatchOrderAutomation implements Automation<OrderProcessingDomainEvent,OrderReadyToDispatch>{
+public class DispatchOrderAutomation implements Automation<OrderReadyToDispatch,OrderProcessingDomainEvent,OrderProcessingOutboundEvent>{
 
 	private OrdersReadyToDispatch ordersReadyToDispatch;
-	private Supplier<OrderProcessingBoundedContext> context;
 	
-	public DispatchOrderAutomation ( OrdersReadyToDispatch ordersReadyToDispatch, Supplier<OrderProcessingBoundedContext> context ) {
+	public DispatchOrderAutomation ( OrdersReadyToDispatch ordersReadyToDispatch ) {
 		this.ordersReadyToDispatch = ordersReadyToDispatch;
-		this.context = context;
 	}
 	
 	@Override
@@ -44,13 +42,13 @@ public class DispatchOrderAutomation implements Automation<OrderProcessingDomain
 	}
 
 	@Override
-	public Optional<EventReference> handle(OrderReadyToDispatch todoItem) {
+	public Optional<EventReference> handle(OrderReadyToDispatch todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context ) {
 
 		// first, execute the command (with idempotency)
-		context.get().execute(new RegisterOrderDispatched(todoItem.orderId()));
+		context.execute(new RegisterOrderDispatched(todoItem.orderId()));
 		
 		// then note down that this has happened as a domain event
-		return Optional.of(context.get().event(new OrderDispatched(todoItem.orderId())).reference());
+		return context.event(new OrderDispatched(todoItem.orderId()));
 	}
 
 }

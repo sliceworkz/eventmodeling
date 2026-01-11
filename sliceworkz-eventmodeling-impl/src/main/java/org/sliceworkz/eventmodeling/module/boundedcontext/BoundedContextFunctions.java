@@ -25,6 +25,6 @@ import org.sliceworkz.eventstore.events.EventReference;
 
 public interface BoundedContextFunctions {
 	
-	Optional<EventReference> executeKernelCommand(Command<KernelEvent> kernelCommand, Tracing tx );
+	Optional<EventReference> executeKernelCommand(Command<KernelEvent> kernelCommand, Tracing tracing );
 
 }

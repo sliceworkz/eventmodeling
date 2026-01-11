@@ -23,7 +23,6 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import javax.sql.DataSource;
@@ -42,15 +41,15 @@ import org.sliceworkz.eventstore.query.Limit;
 
 public class RequiredShippingLabels implements TodoListReadModel<OrderProcessingDomainEvent,RequiredShippingLabel>, BatchAwareProjection<OrderProcessingDomainEvent> {
 
-	private Supplier<DataSource> dataSource;
+	private DataSource dataSource;
 	private Connection connection;
 
-	public RequiredShippingLabels(Supplier<DataSource> dataSource) {
+	public RequiredShippingLabels(DataSource dataSource) {
 		this.dataSource = dataSource;
 	}
 
 	public void initialize() {
-		try (var connection = dataSource.get().getConnection();
+		try (var connection = dataSource.getConnection();
 			 var statement = connection.createStatement()) {
 			statement.execute("DROP TABLE IF EXISTS todo_required_shipping_labels");
 			statement.execute("""
@@ -95,7 +94,7 @@ public class RequiredShippingLabels implements TodoListReadModel<OrderProcessing
 
 	@Override
 	public synchronized Stream<RequiredShippingLabel> streamItems(Limit limit) {
-		try (var connection = dataSource.get().getConnection()) {
+		try (var connection = dataSource.getConnection()) {
 			String sql = limit.isSet()
 				? "SELECT order_id FROM todo_required_shipping_labels LIMIT ?"
 				: "SELECT order_id FROM todo_required_shipping_labels";
@@ -120,7 +119,7 @@ public class RequiredShippingLabels implements TodoListReadModel<OrderProcessing
 	@Override
 	public void beforeBatch() {
 		try {
-			connection = dataSource.get().getConnection();
+			connection = dataSource.getConnection();
 			connection.setAutoCommit(false);
 		} catch (SQLException e) {
 			throw new RuntimeException("Failed to start transaction", e);

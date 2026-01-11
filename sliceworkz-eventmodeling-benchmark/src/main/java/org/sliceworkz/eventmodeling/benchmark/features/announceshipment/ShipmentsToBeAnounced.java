@@ -42,15 +42,15 @@ import org.sliceworkz.eventstore.query.Limit;
 
 public class ShipmentsToBeAnounced implements TodoListReadModel<OrderProcessingDomainEvent,ShipmentToBeAnnounced>, BatchAwareProjection<OrderProcessingDomainEvent> {
 
-	private Supplier<DataSource> dataSource;
+	private DataSource dataSource;
 	private Connection connection;
 
-	public ShipmentsToBeAnounced ( Supplier<DataSource> dataSource ) {
+	public ShipmentsToBeAnounced ( DataSource dataSource ) {
 		this.dataSource = dataSource;
 	}
 
 	public void initialize() {
-		try (var connection = dataSource.get().getConnection();
+		try (var connection = dataSource.getConnection();
 			 var statement = connection.createStatement()) {
 			statement.execute("DROP TABLE IF EXISTS todo_shipments_to_be_announced");
 			statement.execute("""
@@ -95,7 +95,7 @@ public class ShipmentsToBeAnounced implements TodoListReadModel<OrderProcessingD
 
 	@Override
 	public synchronized Stream<ShipmentToBeAnnounced> streamItems(Limit limit) {
-		try (var connection = dataSource.get().getConnection()) {
+		try (var connection = dataSource.getConnection()) {
 			String sql = limit.isSet()
 				? "SELECT order_id FROM todo_shipments_to_be_announced LIMIT ?"
 				: "SELECT order_id FROM todo_shipments_to_be_announced";
@@ -120,7 +120,7 @@ public class ShipmentsToBeAnounced implements TodoListReadModel<OrderProcessingD
 	@Override
 	public void beforeBatch() {
 		try {
-			connection = dataSource.get().getConnection();
+			connection = dataSource.getConnection();
 			connection.setAutoCommit(false);
 		} catch (SQLException e) {
 			throw new RuntimeException("Failed to start transaction", e);

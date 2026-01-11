@@ -21,6 +21,16 @@ import java.util.ServiceLoader;
 
 public interface BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
 
+	/**
+	 * Returns the name of this bounded context.
+	 * <p>
+	 * The name is used for identifying the bounded context in logging, metrics,
+	 * and event stream organization.
+	 *
+	 * @return the bounded context name
+	 */
+	String name ( );
+
 	@SuppressWarnings("unchecked")
 	public static <DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> BoundedContextBuilder<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> newBuilder ( 
 			Class<DOMAIN_EVENT_TYPE> domainEventRootType,

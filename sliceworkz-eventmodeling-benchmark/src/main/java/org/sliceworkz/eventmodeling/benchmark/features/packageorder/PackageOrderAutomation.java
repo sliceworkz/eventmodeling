@@ -18,24 +18,22 @@
 package org.sliceworkz.eventmodeling.benchmark.features.packageorder;
 
 import java.util.Optional;
-import java.util.function.Supplier;
 
 import org.sliceworkz.eventmodeling.automation.Automation;
+import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderPackaged;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.features.packageorder.OrdersReadyToPackage.OrderReadyToPackage;
 import org.sliceworkz.eventstore.events.EventReference;
 
-public class PackageOrderAutomation implements Automation<OrderProcessingDomainEvent,OrderReadyToPackage> {
+public class PackageOrderAutomation implements Automation<OrderReadyToPackage,OrderProcessingDomainEvent,OrderProcessingOutboundEvent> {
 	
 	private OrdersReadyToPackage ordersReadyToPackage; 
-	private Supplier<OrderProcessingBoundedContext> context;
 	
-	public PackageOrderAutomation ( OrdersReadyToPackage ordersReadyToPackage, Supplier<OrderProcessingBoundedContext> context ) {
+	public PackageOrderAutomation ( OrdersReadyToPackage ordersReadyToPackage ) {
 		this.ordersReadyToPackage = ordersReadyToPackage;
-		this.context = context;
 	}
 	
 	
@@ -45,9 +43,8 @@ public class PackageOrderAutomation implements Automation<OrderProcessingDomainE
 	}
 
 	@Override
-	public Optional<EventReference> handle(OrderReadyToPackage todoItem) {
-		return Optional.of(context.get().event(new OrderPackaged(todoItem.orderId())).reference());
+	public Optional<EventReference> handle(OrderReadyToPackage todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context) {
+		return context.event(new OrderPackaged(todoItem.orderId()));
 	}
-
-
+	
 }

@@ -23,7 +23,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Consumer;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.commands.Command;
@@ -76,15 +75,6 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 			return this;
 		}
 
-		public TestDefinition event ( DOMAIN_EVENT_TYPE event, Tags tags, Consumer<Event<? extends DOMAIN_EVENT_TYPE>> resultFunction ) {
-			var e = kernel().event(event, tags);
-			if ( resultFunction != null ) {
-				resultFunction.accept(e);
-			}
-			return this;
-		}
-
-		
 		public TestDefinition when ( Command<DOMAIN_EVENT_TYPE> command ) {
 			try {
 				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), null, Limit.none()).reduce((first, second)->second).map(Event::reference).orElse(null);

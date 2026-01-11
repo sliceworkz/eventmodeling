@@ -128,13 +128,13 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	public <T> T liveModel ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tx, Object... constructorParams) {
+	public <T> T liveModel ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
 		if ( liveModels.contains(readModelClass)) {
 			meterLiveModel.increment();
 			
 			return timerLiveModel.record(()->{
 				ProjectLiveModelCommand cmd = new ProjectLiveModelCommand(boundedContext, instance, domainEventStream, readModelClass, constructorParams);
-				kernelFunctions.executeKernelCommand(cmd, tx);
+				kernelFunctions.executeKernelCommand(cmd, tracing);
 				return (T) cmd.readModel();
 			});
 			

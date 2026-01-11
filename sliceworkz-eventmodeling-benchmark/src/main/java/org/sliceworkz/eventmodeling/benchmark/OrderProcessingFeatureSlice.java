@@ -26,6 +26,6 @@ import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
 
 public interface OrderProcessingFeatureSlice extends FeatureSliceConfiguration<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> {
 
-	void configure ( OrderProcessingBoundedContext boundedContext, DataSource dataSource, boolean initializeDatabase );
+	void preConfigure ( DataSource dataSource, boolean initializeDatabase );
 	
 }

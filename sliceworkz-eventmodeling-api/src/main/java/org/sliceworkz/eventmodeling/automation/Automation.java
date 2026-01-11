@@ -21,10 +21,36 @@ import java.util.Optional;
 
 import org.sliceworkz.eventstore.events.EventReference;
 
-public interface Automation<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE> {
+/**
+ * Represents an automation process that handles todo items from a todo list.
+ * <p>
+ * Automations follow the Event Modeling automation pattern: events populate a todo list
+ * read model, and the automation processes items from that list by executing commands or
+ * providing events through the supplied context.
+ *
+ * @param <TODO_ITEM_TYPE> the type of items in the todo list
+ * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context
+ * @param <OUTBOUND_EVENT_TYPE> the base type of outbound events that can be published
+ */
+public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 
+	/**
+	 * Returns the todo list read model that provides items for this automation to process.
+	 *
+	 * @return the todo list read model
+	 */
 	TodoListReadModel<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE> getTodoList ( );
-	
-	Optional<EventReference> handle ( TODO_ITEM_TYPE todoItem );
-	
+
+	/**
+	 * Handles a single todo item from the todo list.
+	 * <p>
+	 * The automation processes the item by executing commands or providing events through
+	 * the supplied context. Processing should be idempotent to handle retries.
+	 *
+	 * @param todoItem the todo item to process
+	 * @param context the automation context providing command execution and event capabilities
+	 * @return reference to the last event generated during processing, or empty if no events were generated
+	 */
+	Optional<EventReference> handle ( TODO_ITEM_TYPE todoItem, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context );
+
 }

@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
@@ -59,19 +60,33 @@ public interface BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OU
 	LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readmodel(ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel);
 
 	<TODO_ITEM_TYPE> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> automation(
-			Automation<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE> automation);
+			Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation);
 
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> translator(
-			Translator<? extends INBOUND_EVENT_TYPE> translator);
+			Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator);
 
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> translator(
-			Class<? extends Translator<? extends INBOUND_EVENT_TYPE>> translatorClass);
+			Class<? extends Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translatorClass);
 
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dispatcher(
 			Dispatcher<? extends OUTBOUND_EVENT_TYPE> dispatcher);
 
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dispatcher(
 			Class<? extends Dispatcher<? extends OUTBOUND_EVENT_TYPE>> dispatcherClass);
+
+	/**
+	 * Registers a pre-configuration callback that will be invoked for each feature slice
+	 * before it is configured.
+	 * <p>
+	 * This allows customization of feature slice configurations before they are built into
+	 * the bounded context. The callback receives the feature slice configuration and can
+	 * modify its settings.
+	 *
+	 * @param preConfigure the callback to invoke for each feature slice configuration
+	 * @return this builder for method chaining
+	 */
+	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> preConfigure (
+			Consumer<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> preConfigure );
 
 	<T extends BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> T build( );
 

@@ -17,8 +17,39 @@
  */
 package org.sliceworkz.eventmodeling.inbound;
 
-import org.sliceworkz.eventstore.projection.ProjectionWithoutMetaData;
+import org.sliceworkz.eventstore.query.EventQuery;
 
-public interface Translator<INBOUND_EVENT_TYPE> extends ProjectionWithoutMetaData<INBOUND_EVENT_TYPE> {
+/**
+ * Translates inbound events from external systems into domain events or commands.
+ * <p>
+ * Translators follow the Event Modeling translation pattern: they receive events from
+ * external systems (integration events) and translate them into domain events or execute
+ * commands within the bounded context.
+ *
+ * @param <INBOUND_EVENT_TYPE> the base type of inbound events received from external systems
+ * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context
+ */
+public interface Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> {
+
+	/**
+	 * Returns the event query that determines which inbound events this translator handles.
+	 * <p>
+	 * The query is used to filter the inbound event stream and only deliver relevant events
+	 * to this translator.
+	 *
+	 * @return the event query for filtering inbound events
+	 */
+	EventQuery eventQuery();
+
+	/**
+	 * Translates an inbound event into domain events or commands.
+	 * <p>
+	 * The translator processes the inbound event and uses the supplied context to execute
+	 * commands or provide domain events. Translation should be idempotent to handle retries.
+	 *
+	 * @param event the inbound event to translate
+	 * @param context the translator context providing command execution and event capabilities
+	 */
+	void translate ( INBOUND_EVENT_TYPE event, TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> context );
 
 }

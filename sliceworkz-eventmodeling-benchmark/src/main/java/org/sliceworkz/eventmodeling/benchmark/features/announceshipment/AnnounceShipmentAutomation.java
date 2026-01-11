@@ -18,24 +18,22 @@
 package org.sliceworkz.eventmodeling.benchmark.features.announceshipment;
 
 import java.util.Optional;
-import java.util.function.Supplier;
 
 import org.sliceworkz.eventmodeling.automation.Automation;
+import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.ShipmentAnnounced;
 import org.sliceworkz.eventmodeling.benchmark.features.announceshipment.ShipmentsToBeAnounced.ShipmentToBeAnnounced;
 import org.sliceworkz.eventstore.events.EventReference;
 
-public class AnnounceShipmentAutomation implements Automation<OrderProcessingDomainEvent,ShipmentToBeAnnounced> {
+public class AnnounceShipmentAutomation implements Automation<ShipmentToBeAnnounced,OrderProcessingDomainEvent,OrderProcessingOutboundEvent> {
 	
 	private ShipmentsToBeAnounced shipmentsToBeAnounced; 
-	private Supplier<OrderProcessingBoundedContext> context;
 	
-	public AnnounceShipmentAutomation ( ShipmentsToBeAnounced shipmentsToBeAnounced, Supplier<OrderProcessingBoundedContext> context ) {
+	public AnnounceShipmentAutomation ( ShipmentsToBeAnounced shipmentsToBeAnounced ) {
 		this.shipmentsToBeAnounced = shipmentsToBeAnounced;
-		this.context = context;
 	}
 	
 	@Override
@@ -44,8 +42,8 @@ public class AnnounceShipmentAutomation implements Automation<OrderProcessingDom
 	}
 
 	@Override
-	public Optional<EventReference> handle(ShipmentToBeAnnounced todoItem) {
-		return Optional.of(context.get().event(new ShipmentAnnounced(todoItem.orderId())).reference());
+	public Optional<EventReference> handle(ShipmentToBeAnnounced todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context ) {
+		return context.event(new ShipmentAnnounced(todoItem.orderId()));
 	}
 
 

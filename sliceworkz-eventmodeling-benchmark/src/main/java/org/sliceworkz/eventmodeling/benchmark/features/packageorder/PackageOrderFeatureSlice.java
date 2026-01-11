@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.benchmark.features.packageorder;
 
 import javax.sql.DataSource;
 
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
@@ -32,24 +31,20 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 public class PackageOrderFeatureSlice implements OrderProcessingFeatureSlice{
 
 	private OrdersReadyToPackage ordersReadyToPackage;
-	private DataSource dataSource;
-	private OrderProcessingBoundedContext boundedContext;
+
+	@Override
+	public void preConfigure(DataSource dataSource, boolean initializeDatabase) {
+		ordersReadyToPackage = new OrdersReadyToPackage(dataSource);
+		if ( initializeDatabase ) {
+			this.ordersReadyToPackage.initialize();
+		}
+	}
 	
 	@Override
 	public void configure(
 			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
-		ordersReadyToPackage = new OrdersReadyToPackage(()->dataSource);
 		builder.readmodel(ordersReadyToPackage);
-		builder.automation(new PackageOrderAutomation(ordersReadyToPackage, ()->boundedContext));
-	}
-
-	@Override
-	public void configure(OrderProcessingBoundedContext boundedContext, DataSource dataSource, boolean initializeDatabase) {
-		this.dataSource = dataSource;
-		this.boundedContext = boundedContext;
-		if ( initializeDatabase ) {
-			this.ordersReadyToPackage.initialize();
-		}
+		builder.automation(new PackageOrderAutomation(ordersReadyToPackage));
 	}
 
 }

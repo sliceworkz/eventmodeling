@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -75,15 +76,17 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	
 	private List<LiveModelSpecificationImpl> liveModelSpecs = new ArrayList<>();
 	private List<LongLivedReadModelSpecificationImpl> longLivedReadModelSpecs = new ArrayList<>();
-	private List<Translator<? extends INBOUND_EVENT_TYPE>> translatorSpecs = new ArrayList<>();
+	private List<Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translatorSpecs = new ArrayList<>();
 	private List<Dispatcher<? extends OUTBOUND_EVENT_TYPE>> dispatcherSpecs = new ArrayList<>();
-	private List<Automation<DOMAIN_EVENT_TYPE,?>> automations = new ArrayList<>();
+	private List<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations = new ArrayList<>();
 	private Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> featureDeployFilter = (o)->true;
 	private List<AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> aggregateSpecifications = new ArrayList<>();
 	
 	private Class<DOMAIN_EVENT_TYPE> domainEventRootType;
 	private Class<INBOUND_EVENT_TYPE> inboundEventRootType;
 	private Class<OUTBOUND_EVENT_TYPE> outboundEventRootType;
+	
+	private Consumer<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> preConfigure;
 	
 	private MeterRegistry meterRegistry = Metrics.globalRegistry;
 	
@@ -148,13 +151,13 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 
 	@Override
-	public <TODO_ITEM_TYPE> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  automation ( Automation<DOMAIN_EVENT_TYPE,TODO_ITEM_TYPE> automation ) {
+	public <TODO_ITEM_TYPE> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  automation ( Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation ) {
 		automations.add(automation);
 		return this;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  translator ( Translator<? extends INBOUND_EVENT_TYPE> translator ) {
+	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  translator ( Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator ) {
 		translatorSpecs.add(translator);
 		return this;
 	}
@@ -167,7 +170,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  translator ( Class<? extends Translator<? extends INBOUND_EVENT_TYPE>> translatorClass ) {
+	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  translator ( Class<? extends Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translatorClass ) {
 		try {
 			return translator(translatorClass.getDeclaredConstructor(new Class[0]).newInstance());
 		} catch (InvocationTargetException e) {
@@ -213,6 +216,13 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		
 		return aggregateSpecification;
 	}
+
+	@Override
+	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> preConfigure(
+			Consumer<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> preConfigure) {
+		this.preConfigure = preConfigure;
+		return this;
+	}
 	
 	@SuppressWarnings("unchecked")
 	@Override
@@ -256,7 +266,12 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 					FeatureSlice.class,
 					rootPackage,
 					featureDeployFilter,
-					slice -> slice.configure(this));
+					slice -> {
+							if ( preConfigure != null ) {
+								preConfigure.accept(slice);
+							}
+							slice.configure(this);
+						});
 			
 			undeployedFeatureSlices = 
 			AnnotationBasedDiscoveryAndConfiguration.<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>>instantiateAndConfigure(
@@ -273,13 +288,13 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.EVENTUALLY_CONSISTENT&&s.isLocal()&&!s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.EVENTUALLY_CONSISTENT&&s.isLocal()&&s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 		
-		Collection<Translator<INBOUND_EVENT_TYPE>> translators = translatorSpecs.stream().map(i->(Translator<INBOUND_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
-		InboundModule<INBOUND_EVENT_TYPE> im = new InboundModule<>(name, inboundEventStream, translators, instance);
+		Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translators = translatorSpecs.stream().map(i->(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
+		InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> im = new InboundModule<>(name, inboundEventStream, translators, instance);
 
 		Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers = dispatcherSpecs.stream().map(i->(Dispatcher<OUTBOUND_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
 		OutboundModule<OUTBOUND_EVENT_TYPE> om = new OutboundModule<OUTBOUND_EVENT_TYPE>(name, outboundEventStream, dispatchers, instance);
 		
-		AutomationModule<DOMAIN_EVENT_TYPE> am = new AutomationModule<>(name, domainEventStream, automations, instance);
+		AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> am = new AutomationModule<>(name, domainEventStream, automations, instance);
 		
 		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelClasses, consistentReadModels, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
 		DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcb = new DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, instance, rmm, domainEventStream, outboundEventStream, false, meterRegistry);
@@ -289,6 +304,10 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> bc = 
 				new BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, deployedFeatureSlices, undeployedFeatureSlices, domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry);
 		
+		// this is only possible after creation
+		am.setCapabilitiesDelegate(bc);
+		im.setCapabilitiesDelegate(bc);
+				
 		if ( returnType.isInterface()) {
 			return proxy(bc, returnType);
 		} else {

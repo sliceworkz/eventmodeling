@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.benchmark.features.inboundorder;
 
 import javax.sql.DataSource;
 
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
@@ -31,17 +30,15 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 @FeatureSlice(type = Type.TRANSLATION)
 public class InboundOrderFeatureSlice implements OrderProcessingFeatureSlice {
 
-	private OrderProcessingBoundedContext boundedContext;
-	
+	@Override
+	public void preConfigure(DataSource dataSource, boolean initializeDatabase) {
+	} 
+
+
 	@Override
 	public void configure(
 			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
-		builder.translator(new OrderRegisteredTranslator(()->boundedContext));
+		builder.translator(new OrderRegisteredTranslator());
 	}
-
-	@Override
-	public void configure(OrderProcessingBoundedContext boundedContext, DataSource dataSource, boolean initializeDatabase) {
-		this.boundedContext = boundedContext;
-	} 
 
 }

@@ -26,10 +26,10 @@ public interface CommandExecutionCapability<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TY
 
 	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command );
 
-	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tx );
+	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing );
 
-	Optional<EventReference>  execute ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command );
+	Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command );
 
-	Optional<EventReference>  execute ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, Tracing tx );
+	Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, Tracing tracing );
 
 }

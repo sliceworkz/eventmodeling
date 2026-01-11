@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.benchmark.features.createshippinglabel;
 
 import javax.sql.DataSource;
 
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingBoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
@@ -32,24 +31,21 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 public class CreateShippingLabelFeatureSlice implements OrderProcessingFeatureSlice{
 
 	private RequiredShippingLabels requiredShippingLabels;
-	private OrderProcessingBoundedContext boundedContext;
-	private DataSource dataSource;
 	
 	@Override
-	public void configure(
-			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
-		requiredShippingLabels = new RequiredShippingLabels(()->dataSource);
-		builder.readmodel(requiredShippingLabels);
-		builder.automation(new CreateShippingLabelAutomation(requiredShippingLabels, ()->boundedContext));
-	}
-
-	@Override
-	public void configure(OrderProcessingBoundedContext boundedContext, DataSource dataSource, boolean initializeDatabase) {
-		this.dataSource = dataSource;
-		this.boundedContext = boundedContext;
+	public void preConfigure(DataSource dataSource, boolean initializeDatabase) {
+		requiredShippingLabels = new RequiredShippingLabels(dataSource);
 		if ( initializeDatabase ) {
 			this.requiredShippingLabels.initialize();
 		}
+	}
+
+
+	@Override
+	public void configure(
+			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
+		builder.readmodel(requiredShippingLabels);
+		builder.automation(new CreateShippingLabelAutomation(requiredShippingLabels));
 	}
 
 }

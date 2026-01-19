@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.module.dcb;
 
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,9 +53,10 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	private boolean kernelMode;
 	
 	private BoundedContextFunctions kernelFunctions;
-	
-	private Counter meterCommand;
-	private Timer timerCommand;
+
+	private MeterRegistry meterRegistry;
+	private ConcurrentHashMap<String, Counter> commandCounters = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<String, Timer> commandTimers = new ConcurrentHashMap<>();
 	
 	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, boolean kernelMode, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
@@ -63,13 +65,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		this.domainEventStream = domainEventStream;
 		this.outboundEventStream = outboundEventStream;
 		this.kernelMode = kernelMode;
-		
-		io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
-				.of("context", boundedContext);
-
-		this.meterCommand = meterRegistry.counter("sliceworkz.eventmodeling.command.execute", tags);
-		this.timerCommand = meterRegistry.timer("sliceworkz.eventmodeling.command.duration", tags);
-
+		this.meterRegistry = meterRegistry;
 	}
 	
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
@@ -105,10 +101,18 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			
 		} else {
 
-			// count the "wrapped" commands
-			meterCommand.increment();
-			
-			return timerCommand.record(()->{
+			String commandName = command.getClass().getSimpleName();
+
+			Counter counter = commandCounters.computeIfAbsent(commandName, name ->
+				meterRegistry.counter("sliceworkz.eventmodeling.command.execute",
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
+			counter.increment();
+
+			Timer timer = commandTimers.computeIfAbsent(commandName, name ->
+				meterRegistry.timer("sliceworkz.eventmodeling.command.duration",
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
+
+			return timer.record(()->{
 			
 				@SuppressWarnings({ "unchecked", "rawtypes" })
 				ExecuteCommandCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> cmd = new ExecuteCommandCommand(boundedContext, instance, readModelModule, domainEventStream, targetEventStream, command);

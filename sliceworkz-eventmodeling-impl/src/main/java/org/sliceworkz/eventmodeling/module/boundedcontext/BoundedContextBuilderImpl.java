@@ -120,7 +120,11 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	
 	@Override
 	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> meterRegistry ( MeterRegistry meterRegistry ) {
-		this.meterRegistry = meterRegistry;
+		if ( meterRegistry != null ) {
+			this.meterRegistry = meterRegistry;
+		} else {
+			this.meterRegistry = Metrics.globalRegistry;
+		}
 		return this;
 	}
 

@@ -30,7 +30,7 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 public class AccountDetailsFeatureSlice implements BankingFeatureSlice {
 
 	@Override
-	public void configure(
+	public void configureQuery(
 			BoundedContextBuilder<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> builder) {
 		builder.readmodel(AccountDetailsReadModel.class);
 	}

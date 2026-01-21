@@ -26,8 +26,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -38,6 +36,7 @@ import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
@@ -72,21 +71,19 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	private static final Logger LOGGER = LoggerFactory.getLogger(BoundedContextBuilderImpl.class);
 	
 	private String name;
-	private Package rootPackage;
 	
 	private List<LiveModelSpecificationImpl> liveModelSpecs = new ArrayList<>();
 	private List<LongLivedReadModelSpecificationImpl> longLivedReadModelSpecs = new ArrayList<>();
 	private List<Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translatorSpecs = new ArrayList<>();
 	private List<Dispatcher<? extends OUTBOUND_EVENT_TYPE>> dispatcherSpecs = new ArrayList<>();
 	private List<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations = new ArrayList<>();
-	private Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> featureDeployFilter = (o)->true;
 	private List<AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> aggregateSpecifications = new ArrayList<>();
 	
 	private Class<DOMAIN_EVENT_TYPE> domainEventRootType;
 	private Class<INBOUND_EVENT_TYPE> inboundEventRootType;
 	private Class<OUTBOUND_EVENT_TYPE> outboundEventRootType;
 	
-	private Consumer<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> preConfigure;
+	private FeaturesSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> featuresSpecification = new FeaturesSpecificationImpl<>(this);
 	
 	private MeterRegistry meterRegistry = Metrics.globalRegistry;
 	
@@ -113,11 +110,16 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 
 	@Override
+	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> features ( ) {
+		return featuresSpecification;
+	}
+	
+	@Override
 	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> instance ( Instance instance ) {
 		this.instance = instance;
 		return this;
 	}
-	
+
 	@Override
 	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> meterRegistry ( MeterRegistry meterRegistry ) {
 		if ( meterRegistry != null ) {
@@ -128,12 +130,6 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		return this;
 	}
 
-	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> rootPackage ( Package rootPackage ) {
-		this.rootPackage = rootPackage;
-		return this;
-	}
-	
 	@Override
 	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventStorage ( EventStorage eventStorage ) {
 		this.eventStorage = eventStorage;
@@ -163,13 +159,6 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	@Override
 	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  translator ( Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator ) {
 		translatorSpecs.add(translator);
-		return this;
-	}
-
-	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> featureDeployFilter(
-			Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> featureDeployFilter) {
-		this.featureDeployFilter = featureDeployFilter;
 		return this;
 	}
 
@@ -220,13 +209,6 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		
 		return aggregateSpecification;
 	}
-
-	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> preConfigure(
-			Consumer<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> preConfigure) {
-		this.preConfigure = preConfigure;
-		return this;
-	}
 	
 	@SuppressWarnings("unchecked")
 	@Override
@@ -264,25 +246,36 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 
 		List<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices = Collections.emptyList();
 		List<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices = Collections.emptyList();
-		if ( rootPackage != null ) {
+		
+		if ( featuresSpecification.rootPackage() != null ) {
 			deployedFeatureSlices = 
 			AnnotationBasedDiscoveryAndConfiguration.<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>>instantiateAndConfigure(
 					FeatureSlice.class,
-					rootPackage,
-					featureDeployFilter,
+					featuresSpecification.rootPackage(),
+					featuresSpecification.filter(),
 					slice -> {
-							if ( preConfigure != null ) {
-								preConfigure.accept(slice);
+							if ( featuresSpecification.preConfigure() != null ) {
+								featuresSpecification.preConfigure().accept(slice);
 							}
-							slice.configure(this);
+							if ( featuresSpecification.mustDeployCommands() ) {
+								slice.configureCommand(this);
+							}
+							if ( featuresSpecification.mustDeployQueries() ) {
+								slice.configureQuery(this);
+							}
+							if ( featuresSpecification.mustDeployAutomations() ) {
+								slice.configureAutomation(this);
+							}
 						});
 			
 			undeployedFeatureSlices = 
 			AnnotationBasedDiscoveryAndConfiguration.<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>>instantiateAndConfigure(
 					FeatureSlice.class,
-					rootPackage,
-					featureDeployFilter.negate(),
+					featuresSpecification.rootPackage(),
+					featuresSpecification.filter().negate(),
 					fs->{});
+		} else {
+			LOGGER.warn("no features rootPackage");
 		}
 		
 		Collection<Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>> liveModelClasses = liveModelSpecs.stream().map(LiveModelSpecificationImpl::readModelClass).collect(Collectors.toCollection(ArrayList::new));

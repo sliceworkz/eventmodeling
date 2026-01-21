@@ -58,7 +58,9 @@ public class BankingExample {
 			.name("banking")
 			.eventStorage(eventStorage)
 			.instance(instance)
-			.rootPackage(BankingExample.class.getPackage())
+			.features()
+				.rootPackage(BankingExample.class.getPackage())
+				.done()
 			.build(BankingBoundedContext.class);
 		
 		EventStream<BankingDomainEvent> eventStream = eventStore.getEventStream(EventStreamId.forContext("banking").withPurpose("domain"), BankingDomainEvent.class);

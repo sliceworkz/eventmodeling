@@ -41,7 +41,7 @@ public class AnnounceShipmentFeatureSlice implements OrderProcessingFeatureSlice
 	}
 	
 	@Override
-	public void configure(
+	public void configureAutomation(
 			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
 		builder.readmodel(shipmentsToBeAnounced);
 		builder.automation(new AnnounceShipmentAutomation(shipmentsToBeAnounced));

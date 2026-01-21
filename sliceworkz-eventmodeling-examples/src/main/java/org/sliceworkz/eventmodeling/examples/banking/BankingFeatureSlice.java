@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingInboundEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingOutboundEvent;
@@ -24,6 +25,12 @@ import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
 
 public interface BankingFeatureSlice extends FeatureSliceConfiguration<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> {
 	
+	default void configureCommand(BoundedContextBuilder<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> builder) { }
+
+	default void configureQuery(BoundedContextBuilder<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> builder) { }
+		
+	default void configureAutomation(BoundedContextBuilder<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> builder) { }
+
 	void configure ( BankingBoundedContext boundedContext );
 	
 }

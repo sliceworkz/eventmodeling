@@ -41,7 +41,7 @@ public class PackageOrderFeatureSlice implements OrderProcessingFeatureSlice{
 	}
 	
 	@Override
-	public void configure(
+	public void configureAutomation(
 			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
 		builder.readmodel(ordersReadyToPackage);
 		builder.automation(new PackageOrderAutomation(ordersReadyToPackage));

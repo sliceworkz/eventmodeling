@@ -42,7 +42,7 @@ public class CreateShippingLabelFeatureSlice implements OrderProcessingFeatureSl
 
 
 	@Override
-	public void configure(
+	public void configureAutomation (
 			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
 		builder.readmodel(requiredShippingLabels);
 		builder.automation(new CreateShippingLabelAutomation(requiredShippingLabels));

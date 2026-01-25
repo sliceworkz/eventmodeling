@@ -36,9 +36,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 
-import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 
 public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	
@@ -57,8 +55,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private String boundedContext;
 	private Instance instance;
 	
-	private Counter meterLiveModel;
-	private Timer timerLiveModel;
+	private MeterRegistry meterRegistry;
 	
 	
 	public ReadModelModule (
@@ -103,13 +100,9 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 		this.eventuallyConsistentReadModelThreadManagers = createEventuallyConsistentEventProcessors(eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels);
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>("readmodel", this.eventuallyConsistentReadModelThreadManagers);
-		
-		io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
-				.of("context", boundedContext);
 
-		this.meterLiveModel = meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags);
-		this.timerLiveModel = meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags);
-		
+		this.meterRegistry = meterRegistry;
+
 		LOGGER.info("live readmodels: %s".formatted(liveModelClasses));
 	}
 
@@ -130,14 +123,17 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public <T> T liveModel ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
 		if ( liveModels.contains(readModelClass)) {
-			meterLiveModel.increment();
-			
-			return timerLiveModel.record(()->{
+			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
+					.of("context", boundedContext)
+					.and("readmodel", readModelClass.getSimpleName());
+			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
+
+			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
 				ProjectLiveModelCommand cmd = new ProjectLiveModelCommand(boundedContext, instance, domainEventStream, readModelClass, constructorParams);
 				kernelFunctions.executeKernelCommand(cmd, tracing);
 				return (T) cmd.readModel();
 			});
-			
+
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
 		}
@@ -146,9 +142,12 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public <T> T liveModelUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
 		if ( liveModels.contains(readModelClass)) {
-			meterLiveModel.increment();
+			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
+					.of("context", boundedContext)
+					.and("readmodel", readModelClass.getSimpleName());
+			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
 
-			return timerLiveModel.record(()->{
+			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
 				ProjectLiveModelUnboundedCommand cmd = new ProjectLiveModelUnboundedCommand(boundedContext, instance, allInStorageEventStream, readModelClass, constructorParams);
 				kernelFunctions.executeKernelCommand(cmd, tracing);
 				return (T) cmd.readModel();

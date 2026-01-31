@@ -136,7 +136,7 @@ public record Tracing ( Instance instance, Correlation correlation, Transaction 
 		return (EphemeralEvent<T>) event.withTags(mergedTags);
 	}
 
-	public static final Tracing get ( ) {
+	private static final Tracing get ( ) {
 		return tracingPerThread.get();
 	}
 

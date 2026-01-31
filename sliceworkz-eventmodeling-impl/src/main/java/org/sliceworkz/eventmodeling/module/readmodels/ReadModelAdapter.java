@@ -21,19 +21,19 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
-
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.EventQuery;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventWithMetaDataHandler;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
+import org.sliceworkz.eventstore.query.EventQuery;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 
 /**
  * Adapter that wraps a ReadModelWithMetaData and adds Micrometer monitoring for

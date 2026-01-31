@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextFunction
 import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistentEventProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistentEventProcessor.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Event;
@@ -98,21 +99,21 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			this.eventuallyConsistentLocalReadModels.add(eventuallyConsistentEphemeralReadModel);
 		}
 
+		this.meterRegistry = meterRegistry;
+
 		this.eventuallyConsistentReadModelThreadManagers = createEventuallyConsistentEventProcessors(eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels);
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>("readmodel", this.eventuallyConsistentReadModelThreadManagers);
-
-		this.meterRegistry = meterRegistry;
 
 		LOGGER.info("live readmodels: %s".formatted(liveModelClasses));
 	}
 
 	Collection<EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>> createEventuallyConsistentEventProcessors ( Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> shared, Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> local, Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> ephemeral ) {
 		Collection<EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>> result = new ArrayList<>();
-		
-		shared.forEach(rm->result.add(new EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).shared().build(), (EventStream<DOMAIN_EVENT_TYPE>)domainEventStream, rm.eventQuery(), rm, ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance)));
-		local.forEach(rm->result.add(new EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).local().build(), (EventStream<DOMAIN_EVENT_TYPE>)domainEventStream, rm.eventQuery(), rm, ProcessorMode.RUNNING_ON_ALL_INSTANCES,instance)));
-		ephemeral.forEach(rm->result.add(new EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).ephemeral().build(), (EventStream<DOMAIN_EVENT_TYPE>)domainEventStream, rm.eventQuery(), rm, ProcessorMode.RUNNING_ON_ALL_INSTANCES,instance)));
-		
+
+		shared.forEach(rm->result.add(new EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).shared().build(), (EventStream<DOMAIN_EVENT_TYPE>)domainEventStream, rm.eventQuery(), new ReadModelAdapter<>(rm, boundedContext, Storage.SHARED, meterRegistry), ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance)));
+		local.forEach(rm->result.add(new EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).local().build(), (EventStream<DOMAIN_EVENT_TYPE>)domainEventStream, rm.eventQuery(), new ReadModelAdapter<>(rm, boundedContext, Storage.LOCAL, meterRegistry), ProcessorMode.RUNNING_ON_ALL_INSTANCES,instance)));
+		ephemeral.forEach(rm->result.add(new EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).ephemeral().build(), (EventStream<DOMAIN_EVENT_TYPE>)domainEventStream, rm.eventQuery(), new ReadModelAdapter<>(rm, boundedContext, Storage.EPHEMERAL, meterRegistry), ProcessorMode.RUNNING_ON_ALL_INSTANCES,instance)));
+
 		return result;
 	}
 	

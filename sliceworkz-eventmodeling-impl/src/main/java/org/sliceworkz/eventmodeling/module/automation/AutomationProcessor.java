@@ -34,27 +34,38 @@ import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamEventuallyConsistentBookmarkListener;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
+
 public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements EventStreamEventuallyConsistentBookmarkListener, Processor {
-	
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(AutomationProcessor.class);
-	
+
 	private static final Limit MAX_BATCH_SIZE = Limit.to(50); // TODO this should be configurable via a builder, avoid direct ctr
 	private static final long WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS = 10000;
 	private static final long WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS = 30000;
-	
+
 	private EventSource<DOMAIN_EVENT_TYPE> eventSource;
 	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation;
 	private ProcessorMode originalProcessorMode;
 	private ProcessorMode processorMode;
 	private EventuallyConsistentProcessorIdentification processorIdentification; // this is us
 	private EventuallyConsistentProcessorIdentification monitoredProcessorIdentification; // this is the readmodel-building processor we will shadow
-	
+
 	private Supplier<AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContext;
-	
+
 	private ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER; // TOOD implement leader selection on processors
 	private Instance instance;
-	
-	public AutomationProcessor ( EventuallyConsistentProcessorIdentification processorIdentification, EventuallyConsistentProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Supplier<AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContext, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance ) {
+
+	private final String boundedContext;
+	private final MeterRegistry meterRegistry;
+	private final Counter batchCounter;
+	private final Counter itemsHandledCounter;
+	private final Timer batchTimer;
+
+	public AutomationProcessor ( EventuallyConsistentProcessorIdentification processorIdentification, EventuallyConsistentProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Supplier<AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContext, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, MeterRegistry meterRegistry ) {
 		this.automationContext = automationContext;
 		this.automation = automation;
 		this.originalProcessorMode = processorMode;
@@ -63,7 +74,17 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		this.monitoredProcessorIdentification = monitoredProcessorIdentification;
 		this.eventSource = eventSource;
 		this.instance = instance;
- 
+		this.boundedContext = boundedContext;
+		this.meterRegistry = meterRegistry;
+
+		// Initialize metrics with base tags
+		Tags baseTags = Tags.of("context", boundedContext)
+				.and("automation", processorIdentification.id());
+
+		this.batchCounter = meterRegistry.counter("sliceworkz.eventmodeling.automation.batch", baseTags);
+		this.itemsHandledCounter = meterRegistry.counter("sliceworkz.eventmodeling.automation.items.handled", baseTags);
+		this.batchTimer = meterRegistry.timer("sliceworkz.eventmodeling.automation.batch.duration", baseTags);
+
 		eventSource.subscribe(this);
 	}
 
@@ -143,13 +164,24 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 								if ( monitoredBookmark.isPresent() ) {
 									LOGGER.debug("monitored bookmark is at {}", monitoredBookmark.get());
 									
-									Tracing.set(Tracing.init(instance).channel(processorIdentification.type()).actor(processorIdentification.id()));
+									Tracing tracing = Tracing.init(instance).channel(processorIdentification.type()).actor(processorIdentification.id());
+									Tracing.set(tracing);
 									
 									LOGGER.debug("starting processing of max {} items at a time", MAX_BATCH_SIZE);
 		
-									Counter counter = new Counter();
-									
-									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(item->automation.handle(item,automationContext.get())).flatMap(Optional::stream).reduce((first,second)->second);
+									ItemCounter counter = new ItemCounter();
+
+									// Create a tracing-aware context that passes tracing to all executed commands
+									AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> tracingContext = new TracingAutomationContext<>(automationContext.get(), tracing);
+
+									// Time the batch processing and count items
+									Timer.Sample sample = Timer.start(meterRegistry);
+									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(item->automation.handle(item, tracingContext)).flatMap(Optional::stream).reduce((first,second)->second);
+									sample.stop(batchTimer);
+
+									// Record metrics
+									batchCounter.increment();
+									itemsHandledCounter.increment(counter.get());
 		
 									if ( lastProducedEvent.isPresent() ) {
 										// set our position to the last event we produced, we won't do a new run until the readmodel has been updated
@@ -226,7 +258,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		LOGGER.info("{} gracefully terminated", processorIdentification.toString());
 	}
 	
-	private class Counter {
+	private class ItemCounter {
 		long value;
 		public long increment ( ) {
 			value++;

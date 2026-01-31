@@ -291,7 +291,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers = dispatcherSpecs.stream().map(i->(Dispatcher<OUTBOUND_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
 		OutboundModule<OUTBOUND_EVENT_TYPE> om = new OutboundModule<OUTBOUND_EVENT_TYPE>(name, outboundEventStream, dispatchers, instance);
 		
-		AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> am = new AutomationModule<>(name, domainEventStream, automations, instance);
+		AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> am = new AutomationModule<>(name, domainEventStream, automations, instance, meterRegistry);
 		
 		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelClasses, consistentReadModels, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
 		DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcb = new DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, instance, rmm, domainEventStream, outboundEventStream, false, meterRegistry);

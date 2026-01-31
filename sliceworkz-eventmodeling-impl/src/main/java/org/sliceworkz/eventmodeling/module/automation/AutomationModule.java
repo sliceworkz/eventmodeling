@@ -29,23 +29,27 @@ import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcess
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.stream.EventStream;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
-	
+
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
-	
+
 	private String boundedContext;
 	private AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> capabilities;
 	private ProcessorThreadManager<DOMAIN_EVENT_TYPE> processorThreadManager;
-	
+
 	private Instance instance;
-	
-	public AutomationModule ( String boundedContext, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations, Instance instance ) {
+	private MeterRegistry meterRegistry;
+
+	public AutomationModule ( String boundedContext, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations, Instance instance, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
 		this.domainEventStream = domainEventStream;
 		this.instance = instance;
-		
+		this.meterRegistry = meterRegistry;
+
 		Collection<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> aps = createAutomationProcessors(automations);
-		
+
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>("automation", aps);
 	}
 	
@@ -60,7 +64,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 				EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance)
 					.context(boundedContext)
 					.automation()
-					.name(a) 
+					.name(a)
 					.shared()
 				.build(),
 				EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance)
@@ -69,7 +73,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 					.name(a.getTodoList().readmodelName()) // the one we follow
 					.shared() // TODO is this always OK?  copy from readmodelprocessor?
 				.build(),
-				domainEventStream, ()->capabilities, a, AutomationProcessor.ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance))
+				domainEventStream, ()->capabilities, a, AutomationProcessor.ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance, boundedContext, meterRegistry))
 		);
 		return result;
 	}

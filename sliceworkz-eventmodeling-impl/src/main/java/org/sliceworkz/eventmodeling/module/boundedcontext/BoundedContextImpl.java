@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -48,6 +49,7 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 
 public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, ConsistentEventProcessor<DOMAIN_EVENT_TYPE>, BoundedContextFunctions {
@@ -69,25 +71,30 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	
 	private String name;
 	private Instance instance;
-	
-	public BoundedContextImpl ( 
-			String name, 
-			List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices, 
-			List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices, 
-			EventStream<DOMAIN_EVENT_TYPE> domainEventStream, 
-			EventStream<INBOUND_EVENT_TYPE> inboundEventStream, 
-			EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, 
-			EventStream<KernelEvent> kernelLoggingEventStream, 
-			DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule, 
-			AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule, 
-			ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule, 
-			AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule, 
-			InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule, 
-			OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule, 
-			Instance instance, 
+
+	private MeterRegistry meterRegistry;
+	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<String, Counter> inboundEventCounters = new ConcurrentHashMap<>();
+
+	public BoundedContextImpl (
+			String name,
+			List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices,
+			List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices,
+			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
+			EventStream<INBOUND_EVENT_TYPE> inboundEventStream,
+			EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream,
+			EventStream<KernelEvent> kernelLoggingEventStream,
+			DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule,
+			AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule,
+			ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule,
+			AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule,
+			InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule,
+			OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule,
+			Instance instance,
 			MeterRegistry meterRegistry ) {
 		this.name = name;
 		this.instance = instance;
+		this.meterRegistry = meterRegistry;
 		this.deployedFeatureSlices = deployedFeatureSlices;
 		this.undeployedFeatureSlices = undeployedFeatureSlices;
 		
@@ -209,6 +216,12 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
+		String eventName = event.getClass().getSimpleName();
+		Counter counter = domainEventCounters.computeIfAbsent(eventName, key ->
+			meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
+				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName)));
+		counter.increment();
+
 		// store event, no append criteria as we don't have any context for it
 		List<? extends Event<? extends DOMAIN_EVENT_TYPE>> result = domainEventStream.append(AppendCriteria.none(), Collections.singletonList(tracing.storeOn(Event.of(event, tags))));
 		return result.stream().findFirst().map(Event::reference);
@@ -235,6 +248,12 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
+		String eventName = event.getClass().getSimpleName();
+		Counter counter = inboundEventCounters.computeIfAbsent(eventName, key ->
+			meterRegistry.counter("sliceworkz.eventmodeling.inbound.event",
+				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName)));
+		counter.increment();
+
 		inboundModule.incoming ( event, idempotencyKey, tracing );
 	}
 

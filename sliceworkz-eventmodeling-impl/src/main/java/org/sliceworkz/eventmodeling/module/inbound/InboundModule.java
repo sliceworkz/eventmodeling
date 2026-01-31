@@ -20,7 +20,12 @@ package org.sliceworkz.eventmodeling.module.inbound;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
@@ -40,22 +45,27 @@ import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
-	
+
 	private EventStream<INBOUND_EVENT_TYPE> inboundEventStream;
-	
+
 	private TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> context;
-	
+
 	private String boundedContext;
 	private ProcessorThreadManager<INBOUND_EVENT_TYPE> processorThreadManager;
 	private Instance instance;
-	
-	public InboundModule ( String boundedContext, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> eventuallyConsistentTranslators, Instance instance ) {
+
+	private MeterRegistry meterRegistry;
+	private ConcurrentHashMap<String, Counter> translatorCounters = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<String, Timer> translatorTimers = new ConcurrentHashMap<>();
+
+	public InboundModule ( String boundedContext, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> eventuallyConsistentTranslators, Instance instance, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
 		this.inboundEventStream = inboundEventStream;
 		this.instance = instance;
-		
+		this.meterRegistry = meterRegistry;
+
 		Collection<EventuallyConsistentEventProcessor<INBOUND_EVENT_TYPE>> eceps = createEventuallyConsistentEventProcessors(eventuallyConsistentTranslators);
-		
+
 		this.processorThreadManager = new ProcessorThreadManager<INBOUND_EVENT_TYPE>("translator", eceps);
 
 	}
@@ -86,18 +96,35 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	}
 	
 	class TranslatorAdapter implements EventWithMetaDataHandler<INBOUND_EVENT_TYPE> {
-		
+
 		private Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator;
 		private Supplier<TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> context;
-		
+		private String translatorName;
+
 		public TranslatorAdapter(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator, Supplier<TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> context ) {
 			this.translator = translator;
 			this.context = context;
+			this.translatorName = translator.getClass().getSimpleName();
 		}
-		
+
 		@Override
 		public void when(Event<INBOUND_EVENT_TYPE> eventWithMeta) {
-			translator.translate(eventWithMeta.data(), context.get());
+			String eventName = eventWithMeta.data().getClass().getSimpleName();
+			Tracing tracing = Tracing.readFrom(eventWithMeta);
+			String actor = tracing.actor() != null ? tracing.actor() : "unknown";
+			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+			String cacheKey = translatorName + ":" + eventName + ":" + actor + ":" + channel;
+
+			Counter counter = translatorCounters.computeIfAbsent(cacheKey, key ->
+				meterRegistry.counter("sliceworkz.eventmodeling.translator.translate",
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName, "actor", actor, "channel", channel)));
+			counter.increment();
+
+			Timer timer = translatorTimers.computeIfAbsent(cacheKey, key ->
+				meterRegistry.timer("sliceworkz.eventmodeling.translator.duration",
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName, "actor", actor, "channel", channel)));
+
+			timer.record(() -> translator.translate(eventWithMeta.data(), context.get()));
 		}
 	}
 

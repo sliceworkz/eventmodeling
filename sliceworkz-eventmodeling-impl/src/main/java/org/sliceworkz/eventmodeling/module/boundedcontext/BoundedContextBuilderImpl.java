@@ -286,10 +286,10 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.EVENTUALLY_CONSISTENT&&s.isLocal()&&s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 		
 		Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translators = translatorSpecs.stream().map(i->(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
-		InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> im = new InboundModule<>(name, inboundEventStream, translators, instance);
+		InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> im = new InboundModule<>(name, inboundEventStream, translators, instance, meterRegistry);
 
 		Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers = dispatcherSpecs.stream().map(i->(Dispatcher<OUTBOUND_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
-		OutboundModule<OUTBOUND_EVENT_TYPE> om = new OutboundModule<OUTBOUND_EVENT_TYPE>(name, outboundEventStream, dispatchers, instance);
+		OutboundModule<OUTBOUND_EVENT_TYPE> om = new OutboundModule<OUTBOUND_EVENT_TYPE>(name, outboundEventStream, dispatchers, instance, meterRegistry);
 		
 		AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> am = new AutomationModule<>(name, domainEventStream, automations, instance, meterRegistry);
 		

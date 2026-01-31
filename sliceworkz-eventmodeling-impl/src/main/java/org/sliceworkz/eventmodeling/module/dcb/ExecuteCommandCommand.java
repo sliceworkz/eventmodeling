@@ -91,7 +91,7 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 
 			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
 				meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "actor", actor, "channel", channel)));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "actor", actor, "channel", channel, "source", "dcb")));
 			counter.increment();
 		}
 

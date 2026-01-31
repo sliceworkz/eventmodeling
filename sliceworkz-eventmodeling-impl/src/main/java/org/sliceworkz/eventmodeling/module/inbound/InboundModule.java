@@ -109,14 +109,17 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 		@Override
 		public void when(Event<INBOUND_EVENT_TYPE> eventWithMeta) {
-			Counter counter = translatorCounters.computeIfAbsent(translatorName, name ->
+			String eventName = eventWithMeta.data().getClass().getSimpleName();
+			String cacheKey = translatorName + ":" + eventName;
+
+			Counter counter = translatorCounters.computeIfAbsent(cacheKey, key ->
 				meterRegistry.counter("sliceworkz.eventmodeling.translator.translate",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", name)));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName)));
 			counter.increment();
 
-			Timer timer = translatorTimers.computeIfAbsent(translatorName, name ->
+			Timer timer = translatorTimers.computeIfAbsent(cacheKey, key ->
 				meterRegistry.timer("sliceworkz.eventmodeling.translator.duration",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", name)));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName)));
 
 			timer.record(() -> translator.translate(eventWithMeta.data(), context.get()));
 		}

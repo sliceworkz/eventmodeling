@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.EventQuery;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventWithMetaDataHandler;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
@@ -131,5 +132,10 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements EventWithMetaDataHandler<DO
 		if (readModel instanceof BatchAwareProjection<?> batchAware) {
 			batchAware.cancelBatch();
 		}
+	}
+
+	@Override
+	public EventQuery eventQuery() {
+		return readModel.eventQuery();
 	}
 }

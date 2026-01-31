@@ -78,7 +78,7 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 		String actor = (tracing != null && tracing.actor() != null) ? tracing.actor() : "unknown";
 		String channel = (tracing != null && tracing.channel() != null) ? tracing.channel() : "unknown";
 		for (EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event : events) {
-			String eventName = event.payload().getClass().getSimpleName();
+			String eventName = event.data().getClass().getSimpleName();
 			String cacheKey = eventName + ":" + actor + ":" + channel;
 
 			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->

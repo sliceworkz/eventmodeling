@@ -86,7 +86,7 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
 		for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : applicationCommandResult.raisedEvents()) {
-			String eventName = event.payload().getClass().getSimpleName();
+			String eventName = event.data().getClass().getSimpleName();
 			String cacheKey = eventName + ":" + actor + ":" + channel;
 
 			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->

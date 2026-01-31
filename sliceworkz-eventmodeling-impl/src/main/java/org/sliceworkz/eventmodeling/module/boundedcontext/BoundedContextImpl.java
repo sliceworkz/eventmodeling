@@ -218,7 +218,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
 		String eventName = event.getClass().getSimpleName();
 		Counter counter = domainEventCounters.computeIfAbsent(eventName, key ->
-			meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
+			meterRegistry.counter("sliceworkz.eventmodeling.provided.event",
 				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName)));
 		counter.increment();
 

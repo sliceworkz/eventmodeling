@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.module.automation;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.function.Function;
 
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;

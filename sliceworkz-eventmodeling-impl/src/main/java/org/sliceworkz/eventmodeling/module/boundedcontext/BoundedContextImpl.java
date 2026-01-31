@@ -217,9 +217,13 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
 		String eventName = event.getClass().getSimpleName();
-		Counter counter = domainEventCounters.computeIfAbsent(eventName, key ->
+		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
+		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+		String cacheKey = eventName + ":" + actor + ":" + channel;
+
+		Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
 			meterRegistry.counter("sliceworkz.eventmodeling.provided.event",
-				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName)));
+				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName, "actor", actor, "channel", channel)));
 		counter.increment();
 
 		// store event, no append criteria as we don't have any context for it
@@ -249,9 +253,13 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
 		String eventName = event.getClass().getSimpleName();
-		Counter counter = inboundEventCounters.computeIfAbsent(eventName, key ->
+		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
+		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+		String cacheKey = eventName + ":" + actor + ":" + channel;
+
+		Counter counter = inboundEventCounters.computeIfAbsent(cacheKey, key ->
 			meterRegistry.counter("sliceworkz.eventmodeling.inbound.event",
-				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName)));
+				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName, "actor", actor, "channel", channel)));
 		counter.increment();
 
 		inboundModule.incoming ( event, idempotencyKey, tracing );

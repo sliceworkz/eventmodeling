@@ -18,21 +18,27 @@
 package org.sliceworkz.eventmodeling.module.dcb;
 
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.sliceworkz.eventmodeling.commands.AbstractCommand;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.events.Instance;
+import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent;
 import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
 import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger.Metrics;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 
 public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> implements Command<KernelEvent> {
 
@@ -42,18 +48,22 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 	private AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command;
 	private EventStream<DOMAIN_EVENT_TYPE> queryEventStream;
 	private EventStream<PRODUCED_EVENT_TYPE> targetEventStream;
-	
+	private MeterRegistry meterRegistry;
+	private ConcurrentHashMap<String, Counter> domainEventCounters;
+
 	private Optional<EventReference> lastAppendedEventReference;
-	
+
 	private ReadModel<DOMAIN_EVENT_TYPE> readModel;
-	
-	public ExecuteCommandCommand ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command ) {
+
+	public ExecuteCommandCommand ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command, MeterRegistry meterRegistry, ConcurrentHashMap<String, Counter> domainEventCounters ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.readModelModule = readModelModule;
 		this.queryEventStream = queryEventStream;
 		this.targetEventStream = targetEventStream;
 		this.command = command;
+		this.meterRegistry = meterRegistry;
+		this.domainEventCounters = domainEventCounters;
 	}
 	
 	public ReadModel<DOMAIN_EVENT_TYPE> readModel ( ) {
@@ -66,22 +76,36 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 		CommandResultImpl<KernelEvent,KernelEvent> kernelCommandResult = (CommandResultImpl<KernelEvent, KernelEvent>)context.noDecisionModels();
 
 		// execute command and get resulting events
-		DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>(boundedContext, readModelModule, queryEventStream, targetEventStream, ((DCBCommandContextImpl<KernelEvent,KernelEvent>)context).tracing());
+		Tracing tracing = ((DCBCommandContextImpl<KernelEvent,KernelEvent>)context).tracing();
+		DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>(boundedContext, readModelModule, queryEventStream, targetEventStream, tracing);
 		CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> applicationCommandResult = (CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>) command.execute(commandContext);
 
 		// TODO maybe catch optimistic locking exception somewhere, and retry command with incremental backoff and logging of this fact?
 
+		// Record metrics for each raised domain event with tracing tags
+		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
+		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+		for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : applicationCommandResult.raisedEvents()) {
+			String eventName = event.payload().getClass().getSimpleName();
+			String cacheKey = eventName + ":" + actor + ":" + channel;
+
+			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
+				meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "actor", actor, "channel", channel, "source", "dcb")));
+			counter.increment();
+		}
+
 		// append to the event store (with optimistic locking the DCB way) and keep a reference to the last one
-		this.lastAppendedEventReference = 
+		this.lastAppendedEventReference =
 				targetEventStream.append(kernelCommandResult.appendCriteria(), applicationCommandResult.raisedEvents())
 				.stream().reduce((first,second)->second).map(Event::reference);
-		
+
 		long finish = System.currentTimeMillis();
 		long duration = finish - start;
 		ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
 		Metrics metrics = new Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
 		PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("command.execute").command(command.commandName()).log();
-		return kernelCommandResult;  
+		return kernelCommandResult;
 	}
 	
 	public Optional<EventReference> getLastAppendedEventReference ( ) {

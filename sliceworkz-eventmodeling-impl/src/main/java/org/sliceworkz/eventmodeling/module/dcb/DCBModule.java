@@ -57,6 +57,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	private MeterRegistry meterRegistry;
 	private ConcurrentHashMap<String, Counter> commandCounters = new ConcurrentHashMap<>();
 	private ConcurrentHashMap<String, Timer> commandTimers = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
 	
 	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, boolean kernelMode, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
@@ -115,7 +116,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			return timer.record(()->{
 			
 				@SuppressWarnings({ "unchecked", "rawtypes" })
-				ExecuteCommandCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> cmd = new ExecuteCommandCommand(boundedContext, instance, readModelModule, domainEventStream, targetEventStream, command);
+				ExecuteCommandCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> cmd = new ExecuteCommandCommand(boundedContext, instance, readModelModule, domainEventStream, targetEventStream, command, meterRegistry, domainEventCounters);
 				kernelFunctions.executeKernelCommand(cmd, tracing);
 			
 				// return the last application event reference rather than the observability event 

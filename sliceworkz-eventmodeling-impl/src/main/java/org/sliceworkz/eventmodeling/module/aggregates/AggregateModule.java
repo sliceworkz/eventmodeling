@@ -22,6 +22,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,11 +47,14 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 	private String boundedContext;
 	private Instance instance;
-	
+	private MeterRegistry meterRegistry;
+	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
+
 	public AggregateModule ( String boundedContext, Instance instance, List<? extends AggregateSpecificationImpl<DOMAIN_EVENT_TYPE,?,?>> aggregateSpecifications, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.domainEventStream = domainEventStream;
+		this.meterRegistry = meterRegistry;
 		
 		io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
 				.of("context", boundedContext);
@@ -124,16 +128,18 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 					}
 					
 					AggregateContextImpl<DOMAIN_EVENT_TYPE> aci = new AggregateContextImpl<DOMAIN_EVENT_TYPE> (
-							boundedContext, 
-							instance, 
-							aggregateInfo.name(), 
+							boundedContext,
+							instance,
+							aggregateInfo.name(),
 							identity,
-							result, 
-							domainEventStream, 
+							result,
+							domainEventStream,
 							lastEventReference,
 							aggregateInfo.snapshotStorageForWrite(),
 							aggregateInfo.snapshotEventCountThreshold(),
-							aggregateInfo.counterSnapshotWrite);
+							aggregateInfo.counterSnapshotWrite,
+							meterRegistry,
+							domainEventCounters);
 					result.setContext(aci);
 					aci.updateFromStream();
 					

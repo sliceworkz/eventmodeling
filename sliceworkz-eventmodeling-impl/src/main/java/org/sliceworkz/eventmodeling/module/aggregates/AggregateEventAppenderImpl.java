@@ -19,9 +19,11 @@ package org.sliceworkz.eventmodeling.module.aggregates;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateEventAppender;
+import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -31,6 +33,9 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateEventAppender<DOMAIN_EVENT_TYPE> {
 
 	private List<EphemeralEvent<? extends DOMAIN_EVENT_TYPE>> events = new ArrayList<>();
@@ -38,12 +43,18 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 	private EventStream<DOMAIN_EVENT_TYPE> eventStream;
 	private Tags identity;
 	private EventReference lastReference;
-	
-	public AggregateEventAppenderImpl ( EventStream<DOMAIN_EVENT_TYPE> eventStream, Aggregate<DOMAIN_EVENT_TYPE> aggregate, Tags identity, EventReference lastReference ) {
+	private String boundedContext;
+	private MeterRegistry meterRegistry;
+	private ConcurrentHashMap<String, Counter> domainEventCounters;
+
+	public AggregateEventAppenderImpl ( EventStream<DOMAIN_EVENT_TYPE> eventStream, Aggregate<DOMAIN_EVENT_TYPE> aggregate, Tags identity, EventReference lastReference, String boundedContext, MeterRegistry meterRegistry, ConcurrentHashMap<String, Counter> domainEventCounters ) {
 		this.eventStream = eventStream;
 		this.aggregate = aggregate;
 		this.identity = identity;
-		this.lastReference = lastReference; 
+		this.lastReference = lastReference;
+		this.boundedContext = boundedContext;
+		this.meterRegistry = meterRegistry;
+		this.domainEventCounters = domainEventCounters;
 	}
 	
 	@Override
@@ -59,6 +70,20 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 
 	@Override
 	public EventReference append() {
+		// Record metrics for each raised domain event with tracing tags
+		Tracing tracing = Tracing.get();
+		String actor = (tracing != null && tracing.actor() != null) ? tracing.actor() : "unknown";
+		String channel = (tracing != null && tracing.channel() != null) ? tracing.channel() : "unknown";
+		for (EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event : events) {
+			String eventName = event.payload().getClass().getSimpleName();
+			String cacheKey = eventName + ":" + actor + ":" + channel;
+
+			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
+				meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "actor", actor, "channel", channel, "source", "aggregate")));
+			counter.increment();
+		}
+
 		EventReference lastEvent = eventStream.append(
 				AppendCriteria.of(EventQuery.forEvents(EventTypesFilter.any(), identity), lastReference),
 				events).stream().map(e->{this.lastReference=e.reference();return e;}).map(e->{aggregate.when(e);return e;}).map(Event::reference).reduce((one,two)->two).orElse(null);

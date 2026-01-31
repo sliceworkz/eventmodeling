@@ -29,15 +29,17 @@ import org.sliceworkz.eventstore.events.Tags;
 
 public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 
-	private AllCapabilities<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> delegate;
-	
-	public AutomationContextImpl ( AllCapabilities<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> delegate ) {
+	private final AllCapabilities<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> delegate;
+	private final Tracing tracing;
+
+	public AutomationContextImpl ( AllCapabilities<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> delegate, Tracing tracing ) {
 		this.delegate = delegate;
+		this.tracing = tracing;
 	}
-	
+
 	@Override
 	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command) {
-		return delegate.execute(command);
+		return delegate.execute(command, tracing);
 	}
 
 	@Override
@@ -47,7 +49,7 @@ public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND
 
 	@Override
 	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command) {
-		return delegate.execute(command);
+		return delegate.execute(command, tracing);
 	}
 
 	@Override
@@ -62,12 +64,12 @@ public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event) {
-		return delegate.event(event);
+		return delegate.event(event, tracing);
 	}
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags) {
-		return delegate.event(event, tags);
+		return delegate.event(event, tags, tracing);
 	}
 
 	@Override

@@ -18,7 +18,7 @@
 package org.sliceworkz.eventmodeling.module.automation;
 
 import java.util.Optional;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,7 +54,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private EventuallyConsistentProcessorIdentification processorIdentification; // this is us
 	private EventuallyConsistentProcessorIdentification monitoredProcessorIdentification; // this is the readmodel-building processor we will shadow
 
-	private Supplier<AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContext;
+	private Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory;
 
 	private ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER; // TOOD implement leader selection on processors
 	private Instance instance;
@@ -65,8 +65,8 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private final Counter itemsHandledCounter;
 	private final Timer batchTimer;
 
-	public AutomationProcessor ( EventuallyConsistentProcessorIdentification processorIdentification, EventuallyConsistentProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Supplier<AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContext, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, MeterRegistry meterRegistry ) {
-		this.automationContext = automationContext;
+	public AutomationProcessor ( EventuallyConsistentProcessorIdentification processorIdentification, EventuallyConsistentProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, MeterRegistry meterRegistry ) {
+		this.automationContextFactory = automationContextFactory;
 		this.automation = automation;
 		this.originalProcessorMode = processorMode;
 		this.processorMode = processorMode;
@@ -171,12 +171,12 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		
 									ItemCounter counter = new ItemCounter();
 
-									// Create a tracing-aware context that passes tracing to all executed commands
-									AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> tracingContext = new TracingAutomationContext<>(automationContext.get(), tracing);
+									// Create automation context with tracing for proper correlation
+									AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context = automationContextFactory.apply(tracing);
 
 									// Time the batch processing and count items
 									Timer.Sample sample = Timer.start(meterRegistry);
-									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(item->automation.handle(item, tracingContext)).flatMap(Optional::stream).reduce((first,second)->second);
+									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(item->automation.handle(item, context)).flatMap(Optional::stream).reduce((first,second)->second);
 									sample.stop(batchTimer);
 
 									// Record metrics

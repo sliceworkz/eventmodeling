@@ -19,12 +19,14 @@ package org.sliceworkz.eventmodeling.module.automation;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.function.Function;
 
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
+import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -36,7 +38,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 
 	private String boundedContext;
-	private AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> capabilities;
+	private AllCapabilities<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> capabilitiesDelegate;
 	private ProcessorThreadManager<DOMAIN_EVENT_TYPE> processorThreadManager;
 
 	private Instance instance;
@@ -52,9 +54,13 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>("automation", aps);
 	}
-	
+
 	public void setCapabilitiesDelegate ( AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> delegate ) {
-		this.capabilities = new AutomationContextImpl<>(delegate);
+		this.capabilitiesDelegate = delegate;
+	}
+
+	private AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> createAutomationContext ( Tracing tracing ) {
+		return new AutomationContextImpl<>(capabilitiesDelegate, tracing);
 	}
 	
 	Collection<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> createAutomationProcessors ( Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations ) {
@@ -73,7 +79,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 					.name(a.getTodoList().readmodelName()) // the one we follow
 					.shared() // TODO is this always OK?  copy from readmodelprocessor?
 				.build(),
-				domainEventStream, ()->capabilities, a, AutomationProcessor.ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance, boundedContext, meterRegistry))
+				domainEventStream, this::createAutomationContext, a, AutomationProcessor.ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance, boundedContext, meterRegistry))
 		);
 		return result;
 	}

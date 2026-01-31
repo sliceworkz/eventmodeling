@@ -74,7 +74,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 								.build(),
 						(EventStream<OUTBOUND_EVENT_TYPE>)outboundEventStream,
 						t.eventQuery(),
-						new DispatcherAdapter(t),
+						new DispatcherAdapter(t, Tracing.actorAndChannel(t.getClass().getSimpleName(), "dispatch").instance(instance)),
 						ProcessorMode.RUNNING_ON_SINGLE_LEADER,
 						instance)));
 		return result;
@@ -84,16 +84,17 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 
 		private Dispatcher<OUTBOUND_EVENT_TYPE> dispatcher;
 		private String dispatcherName;
+		private Tracing tracing;
 
-		public DispatcherAdapter(Dispatcher<OUTBOUND_EVENT_TYPE> dispatcher) {
+		public DispatcherAdapter(Dispatcher<OUTBOUND_EVENT_TYPE> dispatcher, Tracing tracing) {
 			this.dispatcher = dispatcher;
 			this.dispatcherName = dispatcher.getClass().getSimpleName();
+			this.tracing = tracing;
 		}
 
 		@Override
 		public void when(Event<OUTBOUND_EVENT_TYPE> eventWithMeta) {
 			String eventName = eventWithMeta.data().getClass().getSimpleName();
-			Tracing tracing = Tracing.readFrom(eventWithMeta);
 			String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
 			String cacheKey = dispatcherName + ":" + eventName + ":" + actor + ":" + channel;

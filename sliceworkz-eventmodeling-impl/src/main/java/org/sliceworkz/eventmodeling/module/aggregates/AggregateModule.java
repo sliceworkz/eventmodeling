@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
+import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -95,27 +96,41 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 		LOGGER.info("aggregates: %s".formatted(aggregateInfoByClass.keySet()));
 	}
 	
-	@SuppressWarnings("unchecked")
 	@Override
 	public <T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate(Class<T> aggregateClass, Tags identity) {
-		
+		return aggregate(aggregateClass, identity, Tracing.init(instance));
+	}
+
+	@SuppressWarnings("unchecked")
+	@Override
+	public <T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate(Class<T> aggregateClass, Tags identity, Tracing tracing) {
+		tracing = tracing.instance(instance);
+
 		if ( aggregateInfoByClass.containsKey(aggregateClass)) {
-			
+
 			if ( identity == null || identity.tags().size() < 1 ) {
 				throw new IllegalArgumentException("aggregate identity needs at least one tag, got '%s'".formatted(identity));
 			}
-			
+
 			AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo = aggregateInfoByClass.get(aggregateClass);
-			
-			aggregateInfo.counter().increment();
-			
+
+			String actor = tracing.actor() != null ? tracing.actor() : "unknown";
+			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+			String cacheKey = aggregateInfo.name() + ":" + actor + ":" + channel;
+
+			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
+				meterRegistry.counter("sliceworkz.eventmodeling.aggregate.load.count",
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "aggregate", aggregateInfo.name(), "actor", actor, "channel", channel)));
+			counter.increment();
+
+			final Tracing finalTracing = tracing;
 			return aggregateInfo.timer().record(()->{
 				T result;
 				try {
 					result = (T) aggregateInfo.constructor().newInstance(new Object[] {});
-					
+
 					EventReference lastEventReference = null;
-					
+
 					if ( aggregateInfo.readSnapshots() && result instanceof SnapshotCapable snapshotCapable ) {
 						String key = snapshotCapable.key(aggregateInfo.name(), identity);
 						String version = snapshotCapable.version();
@@ -126,7 +141,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 							lastEventReference = loadedSnapshot.get().lastEventReference();
 						}
 					}
-					
+
 					AggregateContextImpl<DOMAIN_EVENT_TYPE> aci = new AggregateContextImpl<DOMAIN_EVENT_TYPE> (
 							boundedContext,
 							instance,
@@ -139,10 +154,11 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 							aggregateInfo.snapshotEventCountThreshold(),
 							aggregateInfo.counterSnapshotWrite,
 							meterRegistry,
-							domainEventCounters);
+							domainEventCounters,
+							finalTracing);
 					result.setContext(aci);
 					aci.updateFromStream();
-					
+
 				} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
 						| InvocationTargetException | SecurityException e) {
 					LOGGER.error(e.getMessage(), e);
@@ -150,7 +166,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 				}
 				return result;
 			});
-			
+
 		} else {
 			throw new IllegalArgumentException("aggregate class '%s' not registered in bounded context '%s'".formatted(aggregateClass, boundedContext));
 		}

@@ -23,7 +23,6 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.events.Instance;
-import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
@@ -142,8 +141,6 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 						Stream<Event<EVENT_TYPE>> newEvents = eventSource.query(eventQuery, lastReference, MAX_BATCH_SIZE);
 				
 						try {
-							Tracing.set(Tracing.init(instance).channel(processorIdentification.type()).actor(processorIdentification.id()));
-							
 							// handle all events (if any)
 							Optional<HandledEvent<EVENT_TYPE>> lastHandled = handle(newEvents);
 							if ( lastHandled.isPresent() ) {
@@ -184,8 +181,6 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 							LOGGER.warn("Stopping handler due to error: {}", r.throwable().getMessage(), r.throwable());
 							processorMode = ProcessorMode.STOPPED;
 							
-						} finally {
-							Tracing.clear();
 						}
 					} else {
 						LOGGER.debug("we're not leader, not running on this instance");

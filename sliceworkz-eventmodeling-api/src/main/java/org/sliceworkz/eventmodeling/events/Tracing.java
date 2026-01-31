@@ -21,10 +21,10 @@ import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.events.EphemeralEvent;
 
 public record Tracing ( Instance instance, Correlation correlation, Transaction transaction, String actor, String channel ) {
 
@@ -69,10 +69,7 @@ public record Tracing ( Instance instance, Correlation correlation, Transaction 
 	}
 	
 	public static final Tracing init ( Instance instance ) {
-		if ( tracingPerThread.get() == null ) {
-			set(new Tracing(instance, Correlation.create(), Transaction.create(), UNKNOWN_ACTOR, UNKNOWN_CHANNEL));
-		}
-		return get();
+		return new Tracing(instance, Correlation.create(), Transaction.create(), UNKNOWN_ACTOR, UNKNOWN_CHANNEL);
 	}
 	
 	public Tracing instance ( Instance instance ) {
@@ -140,15 +137,4 @@ public record Tracing ( Instance instance, Correlation correlation, Transaction 
 		return (EphemeralEvent<T>) event.withTags(mergedTags);
 	}
 
-	private static final Tracing get ( ) {
-		return tracingPerThread.get();
-	}
-
-	public static final void set ( Tracing tracing ) {
-		tracingPerThread.set(tracing);
-	}
-
-	public static final void clear ( ) {
-		tracingPerThread.remove();
-	}
 }

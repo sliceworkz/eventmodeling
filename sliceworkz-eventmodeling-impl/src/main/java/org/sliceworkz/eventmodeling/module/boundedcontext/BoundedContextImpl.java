@@ -307,7 +307,12 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 */
 	@Override
 	public <T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate(Class<T> aggregateClass, Tags identity) {
-		return aggregateModule.aggregate(aggregateClass,identity);
+		return aggregate(aggregateClass, identity, Tracing.init(instance));
+	}
+
+	@Override
+	public <T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate(Class<T> aggregateClass, Tags identity, Tracing tracing) {
+		return aggregateModule.aggregate(aggregateClass, identity, tracing.instance(instance));
 	}
 	
 	

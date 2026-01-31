@@ -48,8 +48,9 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 	private Instance instance;
 	private MeterRegistry meterRegistry;
 	private ConcurrentHashMap<String, Counter> domainEventCounters;
+	private Tracing tracing;
 
-	public AggregateEventAppenderImpl ( EventStream<DOMAIN_EVENT_TYPE> eventStream, Aggregate<DOMAIN_EVENT_TYPE> aggregate, Tags identity, EventReference lastReference, String boundedContext, Instance instance, MeterRegistry meterRegistry, ConcurrentHashMap<String, Counter> domainEventCounters ) {
+	public AggregateEventAppenderImpl ( EventStream<DOMAIN_EVENT_TYPE> eventStream, Aggregate<DOMAIN_EVENT_TYPE> aggregate, Tags identity, EventReference lastReference, String boundedContext, Instance instance, MeterRegistry meterRegistry, ConcurrentHashMap<String, Counter> domainEventCounters, Tracing tracing ) {
 		this.eventStream = eventStream;
 		this.aggregate = aggregate;
 		this.identity = identity;
@@ -58,6 +59,7 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 		this.instance = instance;
 		this.meterRegistry = meterRegistry;
 		this.domainEventCounters = domainEventCounters;
+		this.tracing = tracing;
 	}
 	
 	@Override
@@ -74,7 +76,6 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 	@Override
 	public EventReference append() {
 		// Record metrics for each raised domain event with tracing tags
-		Tracing tracing = Tracing.init(instance);
 		String actor = (tracing != null && tracing.actor() != null) ? tracing.actor() : "unknown";
 		String channel = (tracing != null && tracing.channel() != null) ? tracing.channel() : "unknown";
 		for (EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event : events) {

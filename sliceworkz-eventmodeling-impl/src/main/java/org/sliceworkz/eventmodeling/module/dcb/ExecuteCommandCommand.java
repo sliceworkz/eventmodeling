@@ -85,6 +85,12 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 		// Record metrics for each raised domain event with tracing tags
 		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+
+		// append to the event store (with optimistic locking the DCB way) and keep a reference to the last one
+		this.lastAppendedEventReference =
+				targetEventStream.append(kernelCommandResult.appendCriteria(), applicationCommandResult.raisedEvents())
+				.stream().reduce((first,second)->second).map(Event::reference);
+
 		for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : applicationCommandResult.raisedEvents()) {
 			String eventName = event.data().getClass().getSimpleName();
 			String cacheKey = eventName + ":" + actor + ":" + channel;
@@ -94,11 +100,6 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "actor", actor, "channel", channel, "source", "dcb")));
 			counter.increment();
 		}
-
-		// append to the event store (with optimistic locking the DCB way) and keep a reference to the last one
-		this.lastAppendedEventReference =
-				targetEventStream.append(kernelCommandResult.appendCriteria(), applicationCommandResult.raisedEvents())
-				.stream().reduce((first,second)->second).map(Event::reference);
 
 		long finish = System.currentTimeMillis();
 		long duration = finish - start;

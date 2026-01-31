@@ -23,10 +23,6 @@ import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
-
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -43,6 +39,10 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
 
@@ -88,7 +88,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 								.build(), 
 							inboundEventStream, 
 							t.eventQuery(), 
-							new TranslatorAdapter(t,()->context), 
+							new TranslatorAdapter(t,()->context, Tracing.actorAndChannel(t.getClass().getSimpleName(), "translation").instance(instance)), 
 							ProcessorMode.RUNNING_ON_SINGLE_LEADER, 
 							instance)
 			));
@@ -99,18 +99,19 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 		private Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator;
 		private Supplier<TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> context;
+		private Tracing tracing;
 		private String translatorName;
 
-		public TranslatorAdapter(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator, Supplier<TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> context ) {
+		public TranslatorAdapter(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator, Supplier<TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> context, Tracing tracing) {
 			this.translator = translator;
 			this.context = context;
+			this.tracing = tracing;
 			this.translatorName = translator.getClass().getSimpleName();
 		}
 
 		@Override
 		public void when(Event<INBOUND_EVENT_TYPE> eventWithMeta) {
 			String eventName = eventWithMeta.data().getClass().getSimpleName();
-			Tracing tracing = Tracing.readFrom(eventWithMeta);
 			String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
 			String cacheKey = translatorName + ":" + eventName + ":" + actor + ":" + channel;

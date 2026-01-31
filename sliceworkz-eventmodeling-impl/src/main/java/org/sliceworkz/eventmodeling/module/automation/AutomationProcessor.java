@@ -165,7 +165,6 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 									LOGGER.debug("monitored bookmark is at {}", monitoredBookmark.get());
 									
 									Tracing tracing = Tracing.init(instance).channel(processorIdentification.type()).actor(processorIdentification.id());
-									Tracing.set(tracing);
 									
 									LOGGER.debug("starting processing of max {} items at a time", MAX_BATCH_SIZE);
 		
@@ -216,8 +215,6 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 								LOGGER.warn("Stopping handler due to error: {}", t.getMessage());
 								processorMode = ProcessorMode.STOPPED;
 								
-							} finally {
-								Tracing.clear();
 							}
 						} else {
 							// risk of handling item twice ...

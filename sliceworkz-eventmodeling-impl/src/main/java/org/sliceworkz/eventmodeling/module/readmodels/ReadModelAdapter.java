@@ -53,6 +53,7 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements EventWithMetaDataHandler<DO
 	private final String readModelName;
 	private final String readModelType;
 	private final MeterRegistry meterRegistry;
+	private final Tracing tracing;
 
 	private final ConcurrentHashMap<String, Counter> eventCounters = new ConcurrentHashMap<>();
 	private final ConcurrentHashMap<String, Timer> eventTimers = new ConcurrentHashMap<>();
@@ -64,12 +65,13 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements EventWithMetaDataHandler<DO
 	private Timer.Sample batchSample;
 	private final AtomicLong batchEventCount = new AtomicLong(0);
 
-	public ReadModelAdapter(ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel, String boundedContext, Storage storage, MeterRegistry meterRegistry) {
+	public ReadModelAdapter(ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel, String boundedContext, Storage storage, MeterRegistry meterRegistry, Tracing tracing) {
 		this.readModel = readModel;
 		this.boundedContext = boundedContext;
 		this.readModelName = readModel.readmodelName();
 		this.readModelType = storage.label();
 		this.meterRegistry = meterRegistry;
+		this.tracing = tracing;
 
 		Tags baseTags = Tags.of("context", boundedContext, "readmodel", readModelName, "readmodeltype", readModelType);
 		this.batchCounter = meterRegistry.counter("sliceworkz.eventmodeling.readmodel.ec.batch", baseTags);
@@ -80,7 +82,6 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements EventWithMetaDataHandler<DO
 	@Override
 	public void when(Event<DOMAIN_EVENT_TYPE> eventWithMeta) {
 		String eventName = eventWithMeta.data().getClass().getSimpleName();
-		Tracing tracing = Tracing.readFrom(eventWithMeta);
 		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
 		String cacheKey = readModelName + ":" + readModelType + ":" + eventName + ":" + actor + ":" + channel;

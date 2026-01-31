@@ -177,7 +177,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public <T> T read(Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params) {
-		return readmodelModule.liveModel(readModelClass, tracing, params);
+		return readmodelModule.liveModel(readModelClass, tracing.instance(instance), params);
 	}
 
 	@Override
@@ -192,7 +192,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public <T> T readUnbounded(Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params) {
-		return readmodelModule.liveModelUnbounded(readModelClass, tracing, params);
+		return readmodelModule.liveModelUnbounded(readModelClass, tracing.instance(instance), params);
 	}
 
 	/*
@@ -206,7 +206,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tracing tracing ) {
-		return event(event, Tags.none(), tracing);
+		return event(event, Tags.none(), tracing.instance(instance));
 	}
 
 	@Override
@@ -216,6 +216,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
+		tracing = tracing.instance(instance);
 		String eventName = event.getClass().getSimpleName();
 		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
@@ -242,7 +243,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public void incoming(INBOUND_EVENT_TYPE event, Tracing tracing ) {
-		this.incoming ( event, null, tracing );
+		this.incoming ( event, null, tracing.instance(instance) );
 	}
 
 	@Override
@@ -252,6 +253,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
+		tracing = tracing.instance(instance);
 		String eventName = event.getClass().getSimpleName();
 		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
@@ -276,7 +278,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return dcbDomainModule.execute(command, tracing);
+		return dcbDomainModule.execute(command, tracing.instance(instance));
 	}
 
 	@Override
@@ -286,7 +288,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, Tracing tracing) {
-		return dcbDomainModule.execute(command, tracing);
+		return dcbDomainModule.execute(command, tracing.instance(instance));
 	}
 
 
@@ -296,7 +298,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 */
 	@Override
 	public Optional<EventReference> executeKernelCommand(Command<KernelEvent> kernelCommand, Tracing tracing ) {
-		return dcbKernelModule.execute(kernelCommand, tracing);
+		return dcbKernelModule.execute(kernelCommand, tracing.instance(instance));
 	}
 
 	

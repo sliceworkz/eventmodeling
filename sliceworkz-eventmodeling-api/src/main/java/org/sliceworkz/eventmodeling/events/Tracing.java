@@ -75,6 +75,10 @@ public record Tracing ( Instance instance, Correlation correlation, Transaction 
 		return get();
 	}
 	
+	public Tracing instance ( Instance instance ) {
+		return new Tracing(instance, correlation, transaction, actor, channel);
+	}
+
 	public static final Tracing actorAndChannel ( String actor, String channel ) {
 		return new Tracing ( null, null, null, actor, channel);
 	}

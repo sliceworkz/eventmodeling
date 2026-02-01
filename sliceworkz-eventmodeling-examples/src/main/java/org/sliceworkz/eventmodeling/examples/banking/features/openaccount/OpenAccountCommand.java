@@ -44,16 +44,12 @@ public class OpenAccountCommand implements Command<BankingDomainEvent> {
 		
 		DomainConceptId accountId = DomainConceptId.create();
 		
-		result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()), 
+		return result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()), 
 				Tags.of(
 						DomainConceptTag.of(BankingDomain.CONCEPT_ACCOUNT, accountId),
 						DomainConceptTag.of(BankingDomain.CONCEPT_CUSTOMER, customerId)
 				)
 			);
-		
-		return result;
 	}
 	
-	
-
 }

@@ -118,7 +118,7 @@ public class EventuallyConsistentEventProcessor<EVENT_TYPE> implements EventStre
 		
 		if ( processorIdentification.storage() == Storage.EPHEMERAL ) {
 			LOGGER.info("EPHEMERAL storage, processing stream from start ...");
-			mustFetchBookmark = false; // ignore any existing bookmark that might be there from a previous process
+			eventSource.removeBookmark(processorIdentification.toString()); // so we can't read one from a previous run for ephemeral readmodels
 		}
 		
 		while ( instanceMode != ProcessorInstanceMode.TERMINATING ) {

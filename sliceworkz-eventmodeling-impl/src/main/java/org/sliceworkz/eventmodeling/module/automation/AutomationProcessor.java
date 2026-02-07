@@ -69,7 +69,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		this.automationContextFactory = automationContextFactory;
 		this.automation = automation;
 		this.originalProcessorMode = processorMode;
-		this.processorMode = processorMode;
+		this.processorMode = ProcessorMode.STOPPED; // initialize as STOPPED, don't run before start() or things might nog have been initialized in the bounded context impl
 		this.processorIdentification = processorIdentification;
 		this.monitoredProcessorIdentification = monitoredProcessorIdentification;
 		this.eventSource = eventSource;

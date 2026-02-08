@@ -118,9 +118,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			lastEventReference = projectorMetrics.lastEventReference();
 		}
 		
-		// TODO needs forLockingCheck() -> FORWARD !   
-		
-		return new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery.forLockingCheck(), lastEventReference);
+		return new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery.filter(), lastEventReference);
 	}
 	
 	private Event<? extends CONSUMED_EVENT_TYPE> offerEventToDecisionModels ( Event<CONSUMED_EVENT_TYPE> e, List<DecisionModel<CONSUMED_EVENT_TYPE>> decisionModels ) {

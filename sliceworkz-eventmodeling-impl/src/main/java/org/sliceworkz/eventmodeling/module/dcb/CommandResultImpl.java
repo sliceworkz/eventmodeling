@@ -26,26 +26,26 @@ import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
-public record CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventQuery eventQuery, EventReference lastEventReference, List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> events ) 
+public record CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventFilter eventFilter, EventReference lastEventReference, List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> events )
 implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
 	// TODO add monitoring & debugging metadata? (models used, events seen, timings, correlation id, actor / acting user, channel, ...)
-	
-	public CommandResultImpl ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventQuery eventQuery, EventReference lastEventReference, List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> events ) {
+
+	public CommandResultImpl ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventFilter eventFilter, EventReference lastEventReference, List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> events ) {
 		this.boundedContext = boundedContext;
 		this.targetStreamId = targetStreamId;
 		this.tracing = tracing;
-		this.eventQuery = eventQuery;
+		this.eventFilter = eventFilter;
 		this.lastEventReference = lastEventReference;
 		this.events = events;
 	}
 
-	public CommandResultImpl ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventQuery eventQuery, EventReference lastEventReference ) {
-		this(boundedContext, targetStreamId, tracing, eventQuery, lastEventReference, new ArrayList<>());
+	public CommandResultImpl ( String boundedContext, EventStreamId targetStreamId, Tracing tracing, EventFilter eventFilter, EventReference lastEventReference ) {
+		this(boundedContext, targetStreamId, tracing, eventFilter, lastEventReference, new ArrayList<>());
 	}
 	
 	@Override
@@ -64,7 +64,7 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 	}
 
 	public AppendCriteria appendCriteria ( ) {
-		return AppendCriteria.of(eventQuery, lastEventReference); 
+		return AppendCriteria.of(eventFilter, lastEventReference); 
 	}
 	
 }

@@ -92,7 +92,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		}
 		
 		if ( combinedQuery == null ) {
-			combinedQuery = EventQuery.matchAll();
+			combinedQuery = EventQuery.matchNone();
 		}
 
 		// execute combined query for all decisionmodels

@@ -41,7 +41,6 @@ import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.infra.postgres.DataSourceFactory;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorage;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
@@ -144,7 +143,7 @@ public class BenchmarkApplication {
 		
 		while ( !executor.isTerminated() ) {
 			System.err.println("events ingested  : %d".formatted(orderNumbering.get()));
-			long totalEvents = domainStream.queryBackwards(EventQuery.matchAll(), Limit.to(1)).map(Event::reference).map(EventReference::position).findFirst().orElse(Long.valueOf(0));
+			long totalEvents = domainStream.query(EventQuery.matchAll().backwards().limit(1)).map(Event::reference).map(EventReference::position).findFirst().orElse(Long.valueOf(0));
 			System.err.println("total events     : %d / %d".formatted(totalEvents, TOTAL_EVENTS_EXPECTED));
 			executor.awaitTermination(5, TimeUnit.SECONDS);
 		}
@@ -154,7 +153,7 @@ public class BenchmarkApplication {
 
 		long totalEvents = 0;
 		while ( totalEvents < TOTAL_EVENTS_EXPECTED ) {
-			totalEvents = domainStream.queryBackwards(EventQuery.matchAll(), Limit.to(1)).findFirst().get().reference().position();
+			totalEvents = domainStream.query(EventQuery.matchAll().backwards().limit(1)).findFirst().get().reference().position();
 //			int eventsDomain = domainStream.query(EventQuery.matchAll()).toList().size();
 //			eventsOutbound = outboundStream.query(EventQuery.matchAll()).toList().size();
 //			System.err.println("events in domain : %d".formatted(eventsDomain));

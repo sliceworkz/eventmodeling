@@ -88,7 +88,7 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 
 		// append to the event store (with optimistic locking the DCB way) and keep a reference to the last one
 		this.lastAppendedEventReference =
-				targetEventStream.append(kernelCommandResult.appendCriteria(), applicationCommandResult.raisedEvents())
+				targetEventStream.append(applicationCommandResult.appendCriteria(), applicationCommandResult.raisedEvents())
 				.stream().reduce((first,second)->second).map(Event::reference);
 
 		for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : applicationCommandResult.raisedEvents()) {

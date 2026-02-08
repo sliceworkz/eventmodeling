@@ -81,14 +81,18 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 	private CommandResult<CONSUMED_EVENT_TYPE,PRODUCED_EVENT_TYPE> executeDecisionModels ( ) {
 
-		EventQuery combinedQuery = EventQuery.matchNone();
+		EventQuery combinedQuery = null;
 		
 		EventReference lastEventReference = null;
 		
 		// loop over all decisionmodels
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
 			// combine queries into one that fetches all
-			combinedQuery = combinedQuery.combineWith(p.eventQuery());
+			combinedQuery = (combinedQuery==null)?p.eventQuery():combinedQuery.combineWith(p.eventQuery());
+		}
+		
+		if ( combinedQuery == null ) {
+			combinedQuery = EventQuery.matchAll();
 		}
 
 		// execute combined query for all decisionmodels
@@ -114,7 +118,9 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			lastEventReference = projectorMetrics.lastEventReference();
 		}
 		
-		return new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery, lastEventReference);
+		// TODO needs forLockingCheck() -> FORWARD !   
+		
+		return new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery.forLockingCheck(), lastEventReference);
 	}
 	
 	private Event<? extends CONSUMED_EVENT_TYPE> offerEventToDecisionModels ( Event<CONSUMED_EVENT_TYPE> e, List<DecisionModel<CONSUMED_EVENT_TYPE>> decisionModels ) {

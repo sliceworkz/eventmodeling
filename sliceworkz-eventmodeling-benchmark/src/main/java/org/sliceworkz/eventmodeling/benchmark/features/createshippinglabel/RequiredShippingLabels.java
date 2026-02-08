@@ -32,6 +32,7 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderReceived;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.ShippingLabelCreated;
 import org.sliceworkz.eventmodeling.benchmark.features.createshippinglabel.RequiredShippingLabels.RequiredShippingLabel;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
@@ -43,6 +44,7 @@ public class RequiredShippingLabels implements TodoListReadModel<OrderProcessing
 
 	private DataSource dataSource;
 	private Connection connection;
+	private EventReference lastEventReference;
 
 	public RequiredShippingLabels(DataSource dataSource) {
 		this.dataSource = dataSource;
@@ -68,9 +70,9 @@ public class RequiredShippingLabels implements TodoListReadModel<OrderProcessing
 	}
 
 	@Override
-	public synchronized void when(OrderProcessingDomainEvent event) {
+	public synchronized void when(Event<OrderProcessingDomainEvent> eventWithMeta) {
 		try {
-			switch(event) {
+			switch(eventWithMeta.data()) {
 				case OrderReceived e -> {
 					try (var stmt = connection.prepareStatement(
 						"INSERT INTO todo_required_shipping_labels (order_id) VALUES (?) ON CONFLICT DO NOTHING")) {
@@ -90,6 +92,12 @@ public class RequiredShippingLabels implements TodoListReadModel<OrderProcessing
 		} catch (SQLException e) {
 			throw new RuntimeException("Failed to update todo_required_shipping_labels", e);
 		}
+		lastEventReference = eventWithMeta.reference();
+	}
+
+	@Override
+	public Optional<EventReference> lastEventReference() {
+		return Optional.ofNullable(lastEventReference);
 	}
 
 	@Override

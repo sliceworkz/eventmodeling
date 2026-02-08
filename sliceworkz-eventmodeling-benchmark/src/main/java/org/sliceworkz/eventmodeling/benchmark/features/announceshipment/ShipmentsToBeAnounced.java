@@ -23,7 +23,6 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import javax.sql.DataSource;
@@ -33,6 +32,7 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.ShipmentAnnounced;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.ShippingLabelCreated;
 import org.sliceworkz.eventmodeling.benchmark.features.announceshipment.ShipmentsToBeAnounced.ShipmentToBeAnnounced;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
@@ -44,6 +44,7 @@ public class ShipmentsToBeAnounced implements TodoListReadModel<OrderProcessingD
 
 	private DataSource dataSource;
 	private Connection connection;
+	private EventReference lastEventReference;
 
 	public ShipmentsToBeAnounced ( DataSource dataSource ) {
 		this.dataSource = dataSource;
@@ -69,9 +70,9 @@ public class ShipmentsToBeAnounced implements TodoListReadModel<OrderProcessingD
 	}
 
 	@Override
-	public synchronized void when(OrderProcessingDomainEvent event) {
+	public synchronized void when(Event<OrderProcessingDomainEvent> eventWithMeta) {
 		try {
-			switch(event) {
+			switch(eventWithMeta.data()) {
 				case ShippingLabelCreated e -> {
 					try (var stmt = connection.prepareStatement(
 						"INSERT INTO todo_shipments_to_be_announced (order_id) VALUES (?) ON CONFLICT DO NOTHING")) {
@@ -91,6 +92,12 @@ public class ShipmentsToBeAnounced implements TodoListReadModel<OrderProcessingD
 		} catch (SQLException e) {
 			throw new RuntimeException("Failed to update todo_shipments_to_be_announced", e);
 		}
+		lastEventReference = eventWithMeta.reference();
+	}
+
+	@Override
+	public Optional<EventReference> lastEventReference() {
+		return Optional.ofNullable(lastEventReference);
 	}
 
 	@Override

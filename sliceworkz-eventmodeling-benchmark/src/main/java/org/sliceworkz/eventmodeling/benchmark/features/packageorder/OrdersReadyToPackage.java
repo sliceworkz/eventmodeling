@@ -32,6 +32,7 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderPackaged;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderReceived;
 import org.sliceworkz.eventmodeling.benchmark.features.packageorder.OrdersReadyToPackage.OrderReadyToPackage;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
@@ -43,6 +44,7 @@ public class OrdersReadyToPackage implements TodoListReadModel<OrderProcessingDo
 
 	private DataSource dataSource;
 	private Connection connection;
+	private EventReference lastEventReference;
 
 	public OrdersReadyToPackage ( DataSource dataSource ) {
 		this.dataSource = dataSource;
@@ -68,9 +70,9 @@ public class OrdersReadyToPackage implements TodoListReadModel<OrderProcessingDo
 	}
 
 	@Override
-	public synchronized void when(OrderProcessingDomainEvent event) {
+	public synchronized void when(Event<OrderProcessingDomainEvent> eventWithMeta) {
 		try {
-			switch(event) {
+			switch(eventWithMeta.data()) {
 				case OrderProcessingDomainEvent.OrderReceived e -> {
 					try (var stmt = connection.prepareStatement(
 						"INSERT INTO todo_ready_to_package (order_id) VALUES (?) ON CONFLICT DO NOTHING")) {
@@ -90,6 +92,12 @@ public class OrdersReadyToPackage implements TodoListReadModel<OrderProcessingDo
 		} catch (SQLException e) {
 			throw new RuntimeException("Failed to update todo_ready_to_package", e);
 		}
+		lastEventReference = eventWithMeta.reference();
+	}
+
+	@Override
+	public Optional<EventReference> lastEventReference() {
+		return Optional.ofNullable(lastEventReference);
 	}
 
 	@Override

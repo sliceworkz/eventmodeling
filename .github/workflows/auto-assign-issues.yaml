@@ -4,6 +4,8 @@ on:
     types: [opened]
   pull_request:
     types: [opened]
+permissions:
+  pull-requests: write
 jobs:
   run:
     runs-on: ubuntu-latest

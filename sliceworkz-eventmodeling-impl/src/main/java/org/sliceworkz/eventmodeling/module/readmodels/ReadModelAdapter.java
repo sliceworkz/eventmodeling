@@ -82,20 +82,19 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements EventWithMetaDataHandler<DO
 	@Override
 	public void when(Event<DOMAIN_EVENT_TYPE> eventWithMeta) {
 		String eventName = eventWithMeta.data().getClass().getSimpleName();
-		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
-		String cacheKey = readModelName + ":" + readModelType + ":" + eventName + ":" + actor + ":" + channel;
+		String cacheKey = readModelName + ":" + readModelType + ":" + eventName + ":" + channel;
 
 		Counter counter = eventCounters.computeIfAbsent(cacheKey, key ->
 			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.ec.update",
 				Tags.of("context", boundedContext, "readmodel", readModelName, "readmodeltype", readModelType,
-					"event", eventName, "actor", actor, "channel", channel)));
+					"event", eventName, "channel", channel)));
 		counter.increment();
 
 		Timer timer = eventTimers.computeIfAbsent(cacheKey, key ->
 			meterRegistry.timer("sliceworkz.eventmodeling.readmodel.ec.duration",
 				Tags.of("context", boundedContext, "readmodel", readModelName, "readmodeltype", readModelType,
-					"event", eventName, "actor", actor, "channel", channel)));
+					"event", eventName, "channel", channel)));
 
 		timer.record(() -> readModel.when(eventWithMeta));
 		batchEventCount.incrementAndGet();

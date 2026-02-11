@@ -76,15 +76,14 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 	@Override
 	public EventReference append() {
 		// Record metrics for each raised domain event with tracing tags
-		String actor = (tracing != null && tracing.actor() != null) ? tracing.actor() : "unknown";
 		String channel = (tracing != null && tracing.channel() != null) ? tracing.channel() : "unknown";
 		for (EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event : events) {
 			String eventName = event.data().getClass().getSimpleName();
-			String cacheKey = eventName + ":" + actor + ":" + channel;
+			String cacheKey = eventName + ":" + channel;
 
 			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
 				meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "actor", actor, "channel", channel, "source", "aggregate")));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "channel", channel, "source", "aggregate")));
 			counter.increment();
 		}
 

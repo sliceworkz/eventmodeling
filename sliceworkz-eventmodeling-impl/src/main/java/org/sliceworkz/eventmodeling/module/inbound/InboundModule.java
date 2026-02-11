@@ -112,18 +112,17 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		@Override
 		public void when(Event<INBOUND_EVENT_TYPE> eventWithMeta) {
 			String eventName = eventWithMeta.data().getClass().getSimpleName();
-			String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
-			String cacheKey = translatorName + ":" + eventName + ":" + actor + ":" + channel;
+			String cacheKey = translatorName + ":" + eventName + ":" + channel;
 
 			Counter counter = translatorCounters.computeIfAbsent(cacheKey, key ->
 				meterRegistry.counter("sliceworkz.eventmodeling.translator.translate",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName, "actor", actor, "channel", channel)));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName, "channel", channel)));
 			counter.increment();
 
 			Timer timer = translatorTimers.computeIfAbsent(cacheKey, key ->
 				meterRegistry.timer("sliceworkz.eventmodeling.translator.duration",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName, "actor", actor, "channel", channel)));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName, "channel", channel)));
 
 			timer.record(() -> translator.translate(eventWithMeta.data(), context.get()));
 		}

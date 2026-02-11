@@ -95,18 +95,17 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 		@Override
 		public void when(Event<OUTBOUND_EVENT_TYPE> eventWithMeta) {
 			String eventName = eventWithMeta.data().getClass().getSimpleName();
-			String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
-			String cacheKey = dispatcherName + ":" + eventName + ":" + actor + ":" + channel;
+			String cacheKey = dispatcherName + ":" + eventName + ":" + channel;
 
 			Counter counter = dispatcherCounters.computeIfAbsent(cacheKey, key ->
 				meterRegistry.counter("sliceworkz.eventmodeling.dispatcher.dispatch",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "dispatcher", dispatcherName, "event", eventName, "actor", actor, "channel", channel)));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "dispatcher", dispatcherName, "event", eventName, "channel", channel)));
 			counter.increment();
 
 			Timer timer = dispatcherTimers.computeIfAbsent(cacheKey, key ->
 				meterRegistry.timer("sliceworkz.eventmodeling.dispatcher.duration",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "dispatcher", dispatcherName, "event", eventName, "actor", actor, "channel", channel)));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "dispatcher", dispatcherName, "event", eventName, "channel", channel)));
 
 			timer.record(() -> dispatcher.when(eventWithMeta));
 		}

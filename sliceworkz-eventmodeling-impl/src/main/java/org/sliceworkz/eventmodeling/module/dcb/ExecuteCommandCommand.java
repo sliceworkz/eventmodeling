@@ -83,7 +83,6 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 		// TODO maybe catch optimistic locking exception somewhere, and retry command with incremental backoff and logging of this fact?
 
 		// Record metrics for each raised domain event with tracing tags
-		String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
 
 		// append to the event store (with optimistic locking the DCB way) and keep a reference to the last one
@@ -93,11 +92,11 @@ public class ExecuteCommandCommand<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> imple
 
 		for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : applicationCommandResult.raisedEvents()) {
 			String eventName = event.data().getClass().getSimpleName();
-			String cacheKey = eventName + ":" + actor + ":" + channel;
+			String cacheKey = eventName + ":" + channel;
 
 			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
 				meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "actor", actor, "channel", channel, "source", "dcb")));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "channel", channel, "source", "dcb")));
 			counter.increment();
 		}
 

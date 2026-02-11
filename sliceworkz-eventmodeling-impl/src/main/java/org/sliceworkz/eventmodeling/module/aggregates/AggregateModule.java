@@ -114,13 +114,12 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 
 			AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo = aggregateInfoByClass.get(aggregateClass);
 
-			String actor = tracing.actor() != null ? tracing.actor() : "unknown";
 			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
-			String cacheKey = aggregateInfo.name() + ":" + actor + ":" + channel;
+			String cacheKey = aggregateInfo.name() + ":" + channel;
 
 			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
 				meterRegistry.counter("sliceworkz.eventmodeling.aggregate.load.count",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "aggregate", aggregateInfo.name(), "actor", actor, "channel", channel)));
+					io.micrometer.core.instrument.Tags.of("context", boundedContext, "aggregate", aggregateInfo.name(), "channel", channel)));
 			counter.increment();
 
 			final Tracing finalTracing = tracing;

@@ -45,11 +45,15 @@ import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
 import org.sliceworkz.eventmodeling.module.inbound.InboundModule;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
+import org.sliceworkz.eventmodeling.module.readmodels.LiveModelSpecificationAccessor;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
+import org.sliceworkz.eventmodeling.module.snapshots.LiveModelSnapshotSpecificationImpl;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LongLivedReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.snapshots.LiveModelSnapshotSpecification;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventmodeling.slices.AnnotationBasedDiscoveryAndConfiguration;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
@@ -278,22 +282,20 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 			LOGGER.warn("no features rootPackage");
 		}
 		
-		Collection<Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>> liveModelClasses = liveModelSpecs.stream().map(LiveModelSpecificationImpl::readModelClass).collect(Collectors.toCollection(ArrayList::new));
-		
 		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> consistentReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.CONSISTENT).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.EVENTUALLY_CONSISTENT&&s.isShared()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.EVENTUALLY_CONSISTENT&&s.isLocal()&&!s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.EVENTUALLY_CONSISTENT&&s.isLocal()&&s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		
+
 		Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translators = translatorSpecs.stream().map(i->(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
 		InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> im = new InboundModule<>(name, inboundEventStream, translators, instance, meterRegistry);
 
 		Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers = dispatcherSpecs.stream().map(i->(Dispatcher<OUTBOUND_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
 		OutboundModule<OUTBOUND_EVENT_TYPE> om = new OutboundModule<OUTBOUND_EVENT_TYPE>(name, outboundEventStream, dispatchers, instance, meterRegistry);
-		
+
 		AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> am = new AutomationModule<>(name, domainEventStream, automations, instance, meterRegistry);
-		
-		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelClasses, consistentReadModels, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
+
+		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, consistentReadModels, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
 		DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcb = new DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, instance, rmm, domainEventStream, outboundEventStream, false, meterRegistry);
 		
 		AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule = new AggregateModule<DOMAIN_EVENT_TYPE>(name, instance, aggregateSpecifications, domainEventStream, meterRegistry);
@@ -322,12 +324,13 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		});
 	}
 
-	public class LiveModelSpecificationImpl implements LiveModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
-		
+	public class LiveModelSpecificationImpl implements LiveModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, LiveModelSpecificationAccessor<DOMAIN_EVENT_TYPE> {
+
 		private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder;
 		private Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass;
 		private Consistency consistency = Consistency.LIVE;
-		
+		private LiveModelSnapshotSpecificationImpl<?,DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshotSpecification;
+
 		public LiveModelSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder, Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass ) {
 			this.builder = builder;
 			this.readModelClass = readModelClass;
@@ -349,12 +352,39 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 			throw new IllegalArgumentException("LIVE read model - cannot be updated EVENTUALLY CONSISTENT");
 		}
 
+		@Override
+		public <SNAPSHOT_TYPE> LiveModelSnapshotSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshots (
+				SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage ) {
+			if ( snapshotStorage == null ) {
+				throw new IllegalArgumentException("snapshotStorage can not be null");
+			}
+			this.snapshotSpecification = new LiveModelSnapshotSpecificationImpl<SNAPSHOT_TYPE, DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(builder, snapshotStorage);
+			return snapshotSpecification;
+		}
+
 		public Consistency consistency ( ) {
 			return consistency;
 		}
-		
+
 		public Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass ( ) {
 			return readModelClass;
+		}
+
+		@SuppressWarnings("unchecked")
+		public SnapshotStorage<Object> snapshotStorage ( ) {
+			return snapshotSpecification == null ? null : (SnapshotStorage<Object>) snapshotSpecification.snapshotStorage();
+		}
+
+		public boolean readSnapshots ( ) {
+			return snapshotSpecification != null && snapshotSpecification.readAndOrWrite().mustRead();
+		}
+
+		public boolean writeSnapshots ( ) {
+			return snapshotSpecification != null && snapshotSpecification.readAndOrWrite().mustWrite();
+		}
+
+		public int snapshotEventCountThreshold ( ) {
+			return snapshotSpecification == null ? 0 : snapshotSpecification.eventCountThreshold();
 		}
 
 	}

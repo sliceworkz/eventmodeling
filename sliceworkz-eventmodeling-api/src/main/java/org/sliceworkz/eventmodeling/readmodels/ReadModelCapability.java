@@ -25,10 +25,4 @@ public interface ReadModelCapability<DOMAIN_EVENT_TYPE> {
 
 	<T> T read ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass,  Object... params );
 
-	// TODO how to hide these from other clients than the Dashboard?
-	
-	<T> T readUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params );
-
-	<T> T readUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass,  Object... params );
-
 }

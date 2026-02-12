@@ -18,6 +18,8 @@
 package org.sliceworkz.eventmodeling.readmodels;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.snapshots.LiveModelSnapshotSpecification;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 
 public interface LiveModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
 
@@ -26,5 +28,18 @@ public interface LiveModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, O
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> consistent();
 
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventuallyConsistent();
+
+	/**
+	 * Configures snapshotting for this live model to optimize projection performance.
+	 * <p>
+	 * Snapshots store the complete state of a live model at a point in time, allowing
+	 * faster projection by avoiding replay of the entire event history. The live model
+	 * must implement {@link org.sliceworkz.eventmodeling.snapshots.SnapshotCapable} to use this feature.
+	 *
+	 * @param <SNAPSHOT_TYPE> the type representing the live model's snapshot state
+	 * @param snapshotStorage the storage mechanism for persisting and loading snapshots
+	 * @return a snapshot specification for further configuration
+	 */
+	<SNAPSHOT_TYPE> LiveModelSnapshotSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshots ( SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage );
 
 }

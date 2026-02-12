@@ -19,6 +19,9 @@ package org.sliceworkz.eventmodeling.module.readmodels;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -33,56 +36,89 @@ import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcess
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 
 public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
-	
+
 	private static Logger LOGGER = LoggerFactory.getLogger(ReadModelModule.class);
 
 	private Collection<EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModelThreadManagers;
 	private ProcessorThreadManager<DOMAIN_EVENT_TYPE> processorThreadManager;
-	
+
 	private BoundedContextFunctions kernelFunctions;
 	private EventSource<DOMAIN_EVENT_TYPE> domainEventStream;
 	private EventSource<Object> allInStorageEventStream;
-	private Collection<Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>> liveModels = new ArrayList<>();
+	private Map<Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>, LiveModelInfo<DOMAIN_EVENT_TYPE>> liveModels = new HashMap<>();
 	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> consistentReadModels = new ArrayList<>();
 	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels = new ArrayList<>();
 	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels = new ArrayList<>();
 	private String boundedContext;
 	private Instance instance;
-	
+
 	private MeterRegistry meterRegistry;
-	
-	
-	public ReadModelModule (
+
+	public record LiveModelInfo<DOMAIN_EVENT_TYPE> (
+			Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass,
+			SnapshotStorage<Object> snapshotStorage,
+			boolean readSnapshots,
+			boolean writeSnapshots,
+			int snapshotEventCountThreshold,
+			Counter counterSnapshotRead,
+			Counter counterSnapshotWrite
+		) {
+
+		public SnapshotStorage<Object> snapshotStorageForWrite ( ) {
+			return writeSnapshots ? snapshotStorage : null;
+		}
+
+	}
+
+	public <LMSI extends LiveModelSpecificationAccessor<DOMAIN_EVENT_TYPE>> ReadModelModule (
 			String boundedContext,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventStream<Object> allInStorageEventStream,
-			Collection<Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>> liveModelClasses, 
-			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> consistentReadModels, 
-			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels, 
+			List<LMSI> liveModelSpecs,
+			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> consistentReadModels,
+			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels,
 			Instance instance,
 			MeterRegistry meterRegistry
 		) {
-		
+
 		this.domainEventStream = domainEventStream;
 		this.allInStorageEventStream = allInStorageEventStream;
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 
-		for ( Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> liveModelClass : liveModelClasses ) {
-			if ( this.liveModels.contains(liveModelClass)) {
-				LOGGER.error("multiple live readmodels of type '%s' registered".formatted(liveModelClass));
-				throw new IllegalArgumentException("duplicate live readmodel %s".formatted(liveModelClass));
+		for ( LMSI spec : liveModelSpecs ) {
+			Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass = spec.readModelClass();
+			if ( this.liveModels.containsKey(readModelClass) ) {
+				LOGGER.error("multiple live readmodels of type '%s' registered".formatted(readModelClass));
+				throw new IllegalArgumentException("duplicate live readmodel %s".formatted(readModelClass));
 			}
-			this.liveModels.add(liveModelClass);
+
+			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
+					.of("context", boundedContext)
+					.and("readmodel", readModelClass.getSimpleName());
+
+			Counter counterSnapshotRead = meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.snapshot.read.count", tags);
+			Counter counterSnapshotWrite = meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.snapshot.write.count", tags);
+
+			this.liveModels.put(readModelClass, new LiveModelInfo<>(
+					readModelClass,
+					spec.snapshotStorage(),
+					spec.readSnapshots(),
+					spec.writeSnapshots(),
+					spec.snapshotEventCountThreshold(),
+					counterSnapshotRead,
+					counterSnapshotWrite));
 		}
 
 		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> consistentReadModel : consistentReadModels ) {
@@ -104,7 +140,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		this.eventuallyConsistentReadModelThreadManagers = createEventuallyConsistentEventProcessors(eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels);
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>("readmodel", this.eventuallyConsistentReadModelThreadManagers);
 
-		LOGGER.info("live readmodels: %s".formatted(liveModelClasses));
+		LOGGER.info("live readmodels: %s".formatted(liveModels.keySet()));
 	}
 
 	Collection<EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>> createEventuallyConsistentEventProcessors ( Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> shared, Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> local, Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> ephemeral ) {
@@ -116,21 +152,22 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 		return result;
 	}
-	
+
 	public void kernelFunctions ( BoundedContextFunctions kernelFunctions ) {
 		this.kernelFunctions = kernelFunctions;
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public <T> T liveModel ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
-		if ( liveModels.contains(readModelClass)) {
+		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
+		if ( info != null ) {
 			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
 					.of("context", boundedContext)
 					.and("readmodel", readModelClass.getSimpleName());
 			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
 
 			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				ProjectLiveModelCommand cmd = new ProjectLiveModelCommand(boundedContext, instance, domainEventStream, readModelClass, constructorParams);
+				ProjectLiveModelCommand cmd = new ProjectLiveModelCommand(boundedContext, instance, domainEventStream, readModelClass, info, constructorParams);
 				kernelFunctions.executeKernelCommand(cmd, tracing);
 				return (T) cmd.readModel();
 			});
@@ -139,17 +176,18 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
 		}
 	}
-	
+
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public <T> T liveModelUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
-		if ( liveModels.contains(readModelClass)) {
+		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
+		if ( info != null ) {
 			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
 					.of("context", boundedContext)
 					.and("readmodel", readModelClass.getSimpleName());
 			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
 
 			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				ProjectLiveModelUnboundedCommand cmd = new ProjectLiveModelUnboundedCommand(boundedContext, instance, allInStorageEventStream, readModelClass, constructorParams);
+				ProjectLiveModelUnboundedCommand cmd = new ProjectLiveModelUnboundedCommand(boundedContext, instance, allInStorageEventStream, readModelClass, info, constructorParams);
 				kernelFunctions.executeKernelCommand(cmd, tracing);
 				return (T) cmd.readModel();
 			});
@@ -176,7 +214,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	public void initializeEphemeralModels ( Stream<? extends Event<DOMAIN_EVENT_TYPE>> events ) {
 		// TODO implement preloading of (inmemory) models upon kernel start
 	}
-	
+
 	@Override
 	public void start ( ) {
 		this.processorThreadManager.start();
@@ -186,7 +224,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	public void stop ( ) {
 		this.processorThreadManager.stop();
 	}
-	
+
 	@Override
 	public void terminate ( ) {
 		this.processorThreadManager.terminate();

@@ -93,7 +93,7 @@ public class SnapshotCapableTest {
 
 	@Test
 	void testKeyWithNullIdentity() {
-		String key = snapshotCapable.key("Account", null);
+		String key = snapshotCapable.key("Account", (Tags) null);
 		assertEquals("Account", key);
 	}
 
@@ -162,7 +162,7 @@ public class SnapshotCapableTest {
 
 	@Test
 	void testKeyWithNullNameAndNullIdentity() {
-		String key = snapshotCapable.key(null, null);
+		String key = snapshotCapable.key(null, (Tags) null);
 		assertEquals("", key);
 	}
 

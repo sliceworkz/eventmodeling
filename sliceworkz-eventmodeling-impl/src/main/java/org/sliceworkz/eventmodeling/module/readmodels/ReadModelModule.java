@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.readmodels;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -29,15 +31,20 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
-import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextFunctions;
+import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
 import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistentEventProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistentEventProcessor.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.projection.Projector;
+import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 
@@ -51,7 +58,6 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private Collection<EventuallyConsistentEventProcessor<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModelThreadManagers;
 	private ProcessorThreadManager<DOMAIN_EVENT_TYPE> processorThreadManager;
 
-	private BoundedContextFunctions kernelFunctions;
 	private EventSource<DOMAIN_EVENT_TYPE> domainEventStream;
 	private EventSource<Object> allInStorageEventStream;
 	private Map<Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>, LiveModelInfo<DOMAIN_EVENT_TYPE>> liveModels = new HashMap<>();
@@ -153,11 +159,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		return result;
 	}
 
-	public void kernelFunctions ( BoundedContextFunctions kernelFunctions ) {
-		this.kernelFunctions = kernelFunctions;
-	}
-
-	@SuppressWarnings({ "unchecked", "rawtypes" })
+	@SuppressWarnings("unchecked")
 	public <T> T liveModel ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
@@ -167,9 +169,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
 
 			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				ProjectLiveModelCommand cmd = new ProjectLiveModelCommand(boundedContext, instance, domainEventStream, readModelClass, info, constructorParams);
-				kernelFunctions.executeKernelCommand(cmd, tracing);
-				return (T) cmd.readModel();
+				return (T) projectLiveModel(domainEventStream, readModelClass, info, constructorParams);
 			});
 
 		} else {
@@ -177,7 +177,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		}
 	}
 
-	@SuppressWarnings({ "rawtypes", "unchecked" })
+	@SuppressWarnings("unchecked")
 	public <T> T liveModelUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
@@ -187,13 +187,70 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
 
 			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				ProjectLiveModelUnboundedCommand cmd = new ProjectLiveModelUnboundedCommand(boundedContext, instance, allInStorageEventStream, readModelClass, info, constructorParams);
-				kernelFunctions.executeKernelCommand(cmd, tracing);
-				return (T) cmd.readModel();
+				return (T) projectLiveModel(allInStorageEventStream, readModelClass, info, constructorParams);
 			});
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
 		}
+	}
+
+	@SuppressWarnings({ "unchecked", "rawtypes" })
+	private ReadModelWithMetaData<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Object[] constructorParams ) {
+		long start = System.currentTimeMillis();
+		try {
+			ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel = (ReadModelWithMetaData<DOMAIN_EVENT_TYPE>) selectConstructor(readModelClass, constructorParams).newInstance(constructorParams);
+
+			EventReference lastEventReference = null;
+
+			// Load snapshot if configured and read model implements SnapshotCapable
+			if ( info.readSnapshots() && readModel instanceof SnapshotCapable<?> snapshotCapable ) {
+				String key = snapshotCapable.key(readModel.readmodelName(), constructorParams);
+				String version = snapshotCapable.version();
+				var loadedSnapshot = info.snapshotStorage().load(key, version);
+				if ( loadedSnapshot.isPresent() ) {
+					info.counterSnapshotRead().increment();
+					((SnapshotCapable<Object>) snapshotCapable).fromSnapshot(loadedSnapshot.get().snapshot());
+					lastEventReference = loadedSnapshot.get().lastEventReference();
+				}
+			}
+
+			// Replay events — starting after snapshot's last event reference if available
+			Projector projector = Projector.from(eventSource).towards(readModel).startingAfter(lastEventReference).build();
+			ProjectorMetrics projectorMetrics = projector.run();
+
+			// Save snapshot if configured and threshold met
+			saveSnapshotIfNeeded(readModel, info, projectorMetrics, constructorParams);
+
+			long finish = System.currentTimeMillis();
+			long duration = finish - start;
+			PerformanceLogger.Metrics metrics = new PerformanceLogger.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+			PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("readmodel.live").readmodel(readModel.readmodelName()).log();
+
+			return readModel;
+		} catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private void saveSnapshotIfNeeded ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel, LiveModelInfo<DOMAIN_EVENT_TYPE> info, ProjectorMetrics projectorMetrics, Object[] constructorParams ) {
+		SnapshotStorage<Object> snapshotStorageForWrite = info.snapshotStorageForWrite();
+		if ( snapshotStorageForWrite != null
+				&& projectorMetrics.eventsStreamed() >= info.snapshotEventCountThreshold()
+				&& readModel instanceof SnapshotCapable<?> snapshotCapable ) {
+			String key = snapshotCapable.key(readModel.readmodelName(), constructorParams);
+			snapshotStorageForWrite.save(key, snapshotCapable.version(), ((SnapshotCapable<Object>) snapshotCapable).takeSnapshot(), projectorMetrics.lastEventReference());
+			info.counterSnapshotWrite().increment();
+		}
+	}
+
+	private Constructor<?> selectConstructor ( Class<?> readModelClass, Object[] constructorParams ) {
+		for ( Constructor<?> ctr : readModelClass.getDeclaredConstructors() ) {
+			if ( ctr.getParameterCount() == constructorParams.length ) {
+				return ctr;
+			}
+		}
+		throw new IllegalArgumentException("no public constructor found on " + readModelClass + " for parameters " + constructorParams);
 	}
 
 	/**

@@ -52,7 +52,7 @@ import org.sliceworkz.eventstore.stream.EventStream;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 
-public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, ConsistentEventProcessor<DOMAIN_EVENT_TYPE>, BoundedContextFunctions {
+public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, ConsistentEventProcessor<DOMAIN_EVENT_TYPE> {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(BoundedContextImpl.class);
 	
@@ -60,7 +60,6 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	
 	private ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule;
 	private DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbDomainModule;
-	private DCBModule<KernelEvent, KernelEvent> dcbKernelModule;
 	private AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule;
 	private AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule;
 	private InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule;
@@ -105,15 +104,9 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.inboundModule = inboundModule;
 		this.dcbDomainModule = dcbModule;
 		this.automationModule = automationModule;
-		
-		this.dcbKernelModule = new DCBModule<KernelEvent,KernelEvent>(name, instance, null, kernelLoggingEventStream, kernelLoggingEventStream, true, meterRegistry);
 
 		this.aggregateModule = aggregateModule;
-		
-		// pass reference to self
-		this.readmodelModule.kernelFunctions(this);
-		this.dcbDomainModule.kernelFunctions(this);
-		
+
 		this.outboundModule = outboundModule;
 		
 		this.instance = instance;
@@ -142,7 +135,6 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.inboundModule.start();
 		this.outboundModule.start();
 		this.dcbDomainModule.start();
-		this.dcbKernelModule.start();
 		this.automationModule.start();
 		this.readmodelModule.start();
 		LOGGER.info("started bounded context '{}'.", name);
@@ -154,7 +146,6 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.inboundModule.stop();
 		this.outboundModule.stop();
 		this.dcbDomainModule.stop();
-		this.dcbKernelModule.stop();
 		this.automationModule.stop();
 		this.readmodelModule.stop();
 		LOGGER.info("stopped bounded context '{}'.", name);
@@ -166,7 +157,6 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.inboundModule.terminate();
 		this.outboundModule.terminate();
 		this.dcbDomainModule.terminate();
-		this.dcbKernelModule.terminate();
 		this.automationModule.terminate();
 		this.readmodelModule.terminate();
 		LOGGER.info("terminating bounded context '{}'.", name);
@@ -289,15 +279,6 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		return dcbDomainModule.execute(command, tracing.instance(instance));
 	}
 
-
-	
-	/*
-	 * KERNEL COMMAND EXECUTION
-	 */
-	@Override
-	public Optional<EventReference> executeKernelCommand(Command<KernelEvent> kernelCommand, Tracing tracing ) {
-		return dcbKernelModule.execute(kernelCommand, tracing.instance(instance));
-	}
 
 	
 	/*

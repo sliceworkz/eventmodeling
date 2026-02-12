@@ -25,15 +25,15 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.commands.AbstractCommand;
 import org.sliceworkz.eventmodeling.commands.Command;
-import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
-import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextFunctions;
+import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.stream.AppendCriteria;
+import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 import io.micrometer.core.instrument.Counter;
@@ -46,26 +46,22 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	
 	private String boundedContext;
 	private Instance instance;
-	
+
 	private ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule;
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 	private EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream;
-	private boolean kernelMode;
-	
-	private BoundedContextFunctions kernelFunctions;
 
 	private MeterRegistry meterRegistry;
 	private ConcurrentHashMap<String, Counter> commandCounters = new ConcurrentHashMap<>();
 	private ConcurrentHashMap<String, Timer> commandTimers = new ConcurrentHashMap<>();
 	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
-	
-	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, boolean kernelMode, MeterRegistry meterRegistry ) {
+
+	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.readModelModule = readModelModule;
 		this.domainEventStream = domainEventStream;
 		this.outboundEventStream = outboundEventStream;
-		this.kernelMode = kernelMode;
 		this.meterRegistry = meterRegistry;
 	}
 	
@@ -78,55 +74,55 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	}
 
 	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeInternal ( AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream ) {
-		Optional<EventReference> result;
-		
-		// to avoid infinite recursing ...
-		if ( kernelMode ) {
-			// ... after all this code needs to execute in the end ...
-			
+		String commandName = command.getClass().getSimpleName();
+
+		Counter counter = commandCounters.computeIfAbsent(commandName, name ->
+			meterRegistry.counter("sliceworkz.eventmodeling.command.execute",
+				io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
+		counter.increment();
+
+		Timer timer = commandTimers.computeIfAbsent(commandName, name ->
+			meterRegistry.timer("sliceworkz.eventmodeling.command.duration",
+				io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
+
+		return timer.record(() -> {
+			long start = System.currentTimeMillis();
+
 			// execute command and get resulting events
-			CommandContext<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracing);
-			CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = (CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE>)command.execute(commandContext);
-			
+			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracing);
+			CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = (CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE>) command.execute(commandContext);
+
+			Optional<EventReference> result;
+
 			if ( !commandResult.raisedEvents().isEmpty() ) {
 				// append to the event store (with optimistic locking the DCB way)
 				// and return the last event reference produced (for bookmarking purposes etc ...)
-				result = targetEventStream.append(AppendCriteria.none(), commandResult.raisedEvents()).stream().reduce((first,second)->second).map(Event::reference);
-				
+				result = targetEventStream.append(commandResult.appendCriteria(), commandResult.raisedEvents())
+						.stream().reduce((first,second)->second).map(Event::reference);
+
+				// Record metrics for each raised domain event
+				String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+				for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : commandResult.raisedEvents()) {
+					String eventName = event.data().getClass().getSimpleName();
+					String cacheKey = eventName + ":" + channel;
+					Counter eventCounter = domainEventCounters.computeIfAbsent(cacheKey, key ->
+						meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
+							io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "channel", channel, "source", "dcb")));
+					eventCounter.increment();
+				}
 			} else {
 				LOGGER.debug("no events raised by command {}", command.getClass());
 				result = Optional.empty();
 			}
-			
+
+			long finish = System.currentTimeMillis();
+			long duration = finish - start;
+			ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
+			PerformanceLogger.Metrics metrics = new PerformanceLogger.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+			PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("command.execute").command(command.commandName()).log();
+
 			return result;
-			
-		} else {
-
-			String commandName = command.getClass().getSimpleName();
-
-			Counter counter = commandCounters.computeIfAbsent(commandName, name ->
-				meterRegistry.counter("sliceworkz.eventmodeling.command.execute",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
-			counter.increment();
-
-			Timer timer = commandTimers.computeIfAbsent(commandName, name ->
-				meterRegistry.timer("sliceworkz.eventmodeling.command.duration",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
-
-			return timer.record(()->{
-			
-				@SuppressWarnings({ "unchecked", "rawtypes" })
-				ExecuteCommandCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> cmd = new ExecuteCommandCommand(boundedContext, instance, readModelModule, domainEventStream, targetEventStream, command, meterRegistry, domainEventCounters);
-				kernelFunctions.executeKernelCommand(cmd, tracing);
-			
-				// return the last application event reference rather than the observability event 
-				return cmd.getLastAppendedEventReference();
-			});
-		}
-	}
-
-	public void kernelFunctions ( BoundedContextFunctions kernelFunctions ) {
-		this.kernelFunctions = kernelFunctions;
+		});
 	}
 	
 	@Override

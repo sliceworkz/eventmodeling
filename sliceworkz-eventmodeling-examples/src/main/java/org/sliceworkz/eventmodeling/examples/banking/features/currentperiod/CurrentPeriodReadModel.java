@@ -22,32 +22,33 @@ import java.time.YearMonth;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTags;
+import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.*;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
- * Live read model that shows the current state of an account's active period.
+ * Live read model that shows the state of a specific account period.
  * <p>
- * Queried via: {@code bc.read(CurrentPeriodReadModel.class, accountId)}
+ * Queried via: {@code bc.read(CurrentPeriodReadModel.class, accountId, month)}
  * <p>
- * This queries ALL events for the account (across all months) but only
- * maintains the "current" period state. Thanks to the MonthOpened carry-forward
- * event, the state is always correct even though we replay from the beginning.
+ * The caller must first look up the active month via {@link ActiveMonthReadModel}
+ * and pass it in. This ensures the read model only replays events for that specific
+ * period — never the full account history.
  * <p>
- * <b>Performance note:</b> For accounts with many months of history, this replays
- * all events. This is where {@code SnapshotCapable} would help — or alternatively,
- * this read model could query only events tagged with the current month (but then
- * you need a way to know which month is current, which is a chicken-and-egg problem
- * best solved with an eventually-consistent read model tracking active periods).
+ * The query leverages tag rotation: each period's events are tagged with both account
+ * and month, so filtering by both tags yields only the bounded set of events for that
+ * period. The {@code MonthOpened} carry-forward event (or {@code AccountOpened} for the
+ * first period) provides the opening balance.
  */
 public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 
 	private final DomainConceptId accountId;
+	private final YearMonth month;
 
 	private YearMonth activeMonth;
 	private BigDecimal balance = BigDecimal.ZERO;
@@ -56,16 +57,20 @@ public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 	private int periodTransactionCount;
 	private boolean periodClosed;
 
-	public CurrentPeriodReadModel(DomainConceptId accountId) {
+	public CurrentPeriodReadModel(DomainConceptId accountId, YearMonth month) {
 		this.accountId = accountId;
+		this.month = month;
 	}
 
 	@Override
 	public EventQuery eventQuery() {
-		// Query ALL events for this account across all periods
 		return EventQuery.forEvents(
 			EventTypesFilter.any(),
-			DomainConceptTags.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId)
+			Tags.of(
+				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
+				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
+					new DomainConceptId(month.toString()))
+			)
 		);
 	}
 

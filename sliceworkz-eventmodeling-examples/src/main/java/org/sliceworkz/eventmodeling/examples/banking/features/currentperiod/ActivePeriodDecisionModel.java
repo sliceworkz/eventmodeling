@@ -22,14 +22,21 @@ import java.time.YearMonth;
 
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTags;
+import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.*;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyDeposited;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyWithdrawn;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthClosed;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthOpened;
+import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
- * Decision model that tracks the current state of an account's active period.
+ * Decision model that tracks the state of a specific account period.
  * <p>
  * Used by commands (Deposit, Withdraw, CloseMonth) to:
  * <ul>
@@ -39,16 +46,24 @@ import org.sliceworkz.eventstore.query.EventQuery;
  *   <li>Get running totals for the close summary</li>
  * </ul>
  *
- * <p><b>Key design choice:</b> This queries by account tag only (not month tag),
- * so it sees ALL events for the account across all periods. It then tracks
- * state by processing the full lifecycle. This is where snapshots or
- * "closing the books" helps — once a month is closed, the MonthOpened event
- * carries forward just the balance, so the decision model only needs to
- * replay from the most recent MonthOpened (or AccountOpened for the first month).</p>
+ * <p><b>Always requires a month parameter.</b> The caller is expected to look
+ * up the active month first via {@link ActiveMonthReadModel} (a single
+ * backwards query) and pass it in. This ensures only events for that specific
+ * period are replayed — never the full account history.</p>
+ *
+ * <p>The query leverages the tag rotation built into the "Closing The Books"
+ * pattern: each period's events are tagged with both the account and the month,
+ * so filtering by both tags yields only the events for that period. The
+ * {@code MonthOpened} carry-forward event (or {@code AccountOpened} for the
+ * first period) provides the opening balance, so no prior history is needed.</p>
+ *
+ * <p>The query filter is also used for DCB optimistic locking, ensuring
+ * concurrent changes within the period are detected.</p>
  */
 public class ActivePeriodDecisionModel implements DecisionModel<BankingEvent> {
 
 	private final DomainConceptId accountId;
+	private final YearMonth month;
 
 	// Current state
 	private boolean accountExists;
@@ -60,25 +75,35 @@ public class ActivePeriodDecisionModel implements DecisionModel<BankingEvent> {
 	private BigDecimal periodOpeningBalance = BigDecimal.ZERO;
 	private boolean periodClosed;
 
-	public ActivePeriodDecisionModel(DomainConceptId accountId) {
+	/**
+	 * Creates a decision model scoped to a specific month.
+	 * Only events tagged with the given account + month are replayed.
+	 * <p>
+	 * Use {@link ActiveMonthReadModel} to look up the active month first.
+	 *
+	 * @param accountId the account to query
+	 * @param month the month to scope the query to (must not be null)
+	 */
+	public ActivePeriodDecisionModel(DomainConceptId accountId, YearMonth month) {
 		this.accountId = accountId;
+		this.month = month;
 	}
 
-	/**
-	 * Query ALL events for this account (across all months).
-	 * The tag filter is on account identity only — no month filter.
-	 */
 	@Override
 	public EventQuery eventQuery() {
 		return EventQuery.forEvents(
-			org.sliceworkz.eventstore.query.EventTypesFilter.any(),
-			DomainConceptTags.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId)
+			EventTypesFilter.any(),
+			Tags.of(
+				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
+				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
+					new DomainConceptId(month.toString()))
+			)
 		);
 	}
 
 	@Override
-	public void when(BankingEvent event) {
-		switch (event) {
+	public void when(Event<BankingEvent> eventWithMetaData) {
+		switch (eventWithMetaData.data()) {
 			case AccountOpened ao -> {
 				accountExists = true;
 				activeMonth = ao.initialMonth();
@@ -101,6 +126,7 @@ public class ActivePeriodDecisionModel implements DecisionModel<BankingEvent> {
 			}
 			case MonthOpened mo -> {
 				// This is the carry-forward: reset period counters, keep the balance
+				accountExists = true;
 				activeMonth = mo.month();
 				balance = mo.carryForwardBalance();
 				periodOpeningBalance = mo.carryForwardBalance();

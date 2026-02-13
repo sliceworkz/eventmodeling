@@ -46,7 +46,9 @@ import org.sliceworkz.eventstore.events.Tags;
  * <p><b>Important design detail:</b> The two events are raised in a single command execution,
  * so they are appended atomically. The MonthClosed event is tagged with the OLD month,
  * and the MonthOpened event is tagged with the NEW month. Both are tagged with the
- * account identity so they show up when querying all events for an account.</p>
+ * account identity so they show up when querying all events for an account.
+ * Idempotency is ensured by the {@link ActivePeriodDecisionModel} — if the period
+ * is already closed, the command rejects the operation.</p>
  *
  * <p>This command can be invoked manually (user action) or by an automation
  * (scheduled month-end processing).</p>
@@ -65,7 +67,7 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 	public CommandResult<BankingEvent, BankingEvent> execute(
 			CommandContext<BankingEvent, BankingEvent> context) {
 
-		var period = new ActivePeriodDecisionModel(accountId);
+		var period = new ActivePeriodDecisionModel(accountId, monthToClose);
 		var result = context.decisionModels(period);
 
 		// ── Validation ───────────────────────────────────────────────
@@ -102,8 +104,7 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 				period.periodTransactionCount(),
 				LocalDate.now()
 			),
-			currentMonthTags,
-			"close-month-" + accountId.value() + "-" + monthToClose  // idempotency key
+			currentMonthTags
 		);
 
 		// ── Open the next month with carry-forward ───────────────────
@@ -123,8 +124,7 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 				period.balance(),       // carry forward the closing balance
 				monthToClose
 			),
-			nextMonthTags,
-			"open-month-" + accountId.value() + "-" + nextMonth  // idempotency key
+			nextMonthTags
 		);
 
 		return result;

@@ -26,9 +26,16 @@ import java.util.stream.Stream;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
 import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.*;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyDeposited;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyWithdrawn;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthClosed;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthOpened;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 
 /**
@@ -62,13 +69,16 @@ public class AccountsToCloseTodoList implements TodoListReadModel<BankingEvent, 
 
 	@Override
 	public EventQuery eventQuery() {
-		// Watch all domain events to track account lifecycles
-		return EventQuery.matchAll();
+		// Only watch lifecycle events — deposits/withdrawals are irrelevant for this todo list
+		return EventQuery.forEvents(
+			EventTypesFilter.of(AccountOpened.class, MonthClosed.class, MonthOpened.class),
+			Tags.none()
+		);
 	}
 
 	@Override
-	public void when(BankingEvent event) {
-		switch (event) {
+	public void when(Event<BankingEvent> eventWithMetaData) {
+		switch (eventWithMetaData.data()) {
 			case AccountOpened ao -> {
 				accounts.put(ao.accountId().value(), new AccountState(
 					ao.accountId(), ao.initialMonth(), false));
@@ -88,11 +98,6 @@ public class AccountsToCloseTodoList implements TodoListReadModel<BankingEvent, 
 			case MoneyDeposited d -> {}
 			case MoneyWithdrawn w -> {}
 		}
-	}
-
-	@Override
-	public void lastEventReference(EventReference eventReference) {
-		this.lastEventReference = eventReference;
 	}
 
 	@Override

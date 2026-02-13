@@ -1,0 +1,90 @@
+/*
+ * Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
+ * Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.sliceworkz.eventmodeling.examples.banking.features.deposit;
+
+import java.math.BigDecimal;
+import java.time.YearMonth;
+
+import org.sliceworkz.eventmodeling.commands.Command;
+import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
+import org.sliceworkz.eventmodeling.domain.DomainConceptId;
+import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyDeposited;
+import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActiveMonthReadModel;
+import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActivePeriodDecisionModel;
+import org.sliceworkz.eventstore.events.Tags;
+
+/**
+ * Deposits money into the account's currently active period.
+ * <p>
+ * The caller must look up the active month via {@link ActiveMonthReadModel}
+ * and pass it in. This ensures the decision model only replays events for
+ * the current period, not the full account history.
+ * <p>
+ * Uses the {@link ActivePeriodDecisionModel} to determine:
+ * <ul>
+ *   <li>Whether the account exists</li>
+ *   <li>Whether the current period is still open (rejects deposits to closed periods)</li>
+ * </ul>
+ *
+ * <p>The raised event is tagged with both account AND month, so it will be
+ * filtered correctly when loading a specific period's events.</p>
+ */
+public class DepositCommand implements Command<BankingEvent> {
+
+	private final DomainConceptId accountId;
+	private final YearMonth month;
+	private final BigDecimal amount;
+	private final String description;
+
+	public DepositCommand(DomainConceptId accountId, YearMonth month, BigDecimal amount, String description) {
+		this.accountId = accountId;
+		this.month = month;
+		this.amount = amount;
+		this.description = description;
+	}
+
+	@Override
+	public CommandResult<BankingEvent, BankingEvent> execute(
+			CommandContext<BankingEvent, BankingEvent> context) {
+
+		var period = new ActivePeriodDecisionModel(accountId, month);
+		var result = context.decisionModels(period);
+
+		if (!period.accountExists()) {
+			throw new IllegalStateException("Account does not exist");
+		}
+		if (period.isPeriodClosed()) {
+			throw new IllegalStateException(
+				"Period " + period.activeMonth() + " is closed, cannot deposit");
+		}
+
+		// Tag with both account identity AND period identity
+		return result.raiseEvent(
+			new MoneyDeposited(accountId, period.activeMonth(), amount, description),
+			Tags.of(
+				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
+				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
+					new DomainConceptId(period.activeMonth().toString()))
+			)
+		);
+	}
+}

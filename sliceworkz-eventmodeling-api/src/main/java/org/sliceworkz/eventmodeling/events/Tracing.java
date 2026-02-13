@@ -26,11 +26,11 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
-public record Tracing ( Instance instance, Correlation correlation, Transaction transaction, String actor, String channel ) {
+public record Tracing ( Instance instance, String actor, String channel ) {
 
 	public static final String UNKNOWN_ACTOR = null;
 	public static final String UNKNOWN_CHANNEL = null;
-	
+
 	public static final String AUTOMATION_ACTOR = "automation";
 	public static final String AUTOMATION_CHANNEL = "automation";
 
@@ -41,51 +41,35 @@ public record Tracing ( Instance instance, Correlation correlation, Transaction 
 	private static final String TAG_INSTANCE_LOGICAL = "x-instance-logical";
 	private static final String TAG_INSTANCE_PHYSICAL = "x-instance-physical";
 	private static final String TAG_INSTANCE_PROCESS = "x-instance-process";
-	private static final String TAG_CORRELATION = "x-correlation";
-	private static final String TAG_TRANSACTION = "x-transaction";
 	private static final String TAG_CHANNEL = "x-channel";
 	private static final String TAG_ACTOR = "x-actor";
 
-	private static ThreadLocal<Tracing> tracingPerThread  = new ThreadLocal<Tracing>();
-	
-	public Tracing correlation ( Correlation correlation ) {
-		return new Tracing ( instance, correlation, transaction, actor, channel );
-	}
-
-	public Tracing transaction ( Transaction transaction ) {
-		return new Tracing ( instance, correlation, transaction, actor, channel );
-	}
-
 	public Tracing actor ( String actor ) {
-		return new Tracing ( instance, correlation, transaction, actor, channel );
+		return new Tracing ( instance, actor, channel );
 	}
-	
+
 	public Tracing channel ( String channel ) {
-		return new Tracing ( instance, correlation, transaction, actor, channel );
+		return new Tracing ( instance, actor, channel );
 	}
-	
-	public Tracing newTransaction ( ) {
-		return transaction(Transaction.create());
-	}
-	
+
 	public static final Tracing init ( Instance instance ) {
-		return new Tracing(instance, Correlation.create(), Transaction.create(), UNKNOWN_ACTOR, UNKNOWN_CHANNEL);
+		return new Tracing(instance, UNKNOWN_ACTOR, UNKNOWN_CHANNEL);
 	}
-	
+
 	public Tracing instance ( Instance instance ) {
-		return new Tracing(instance, correlation, transaction, actor, channel);
+		return new Tracing(instance, actor, channel);
 	}
 
 	public static final Tracing actorAndChannel ( String actor, String channel ) {
-		return new Tracing ( null, null, null, actor, channel);
+		return new Tracing ( null, actor, channel);
 	}
 
 	public static final Tracing automation ( Instance instance ) {
-		return new Tracing(instance, Correlation.create(), Transaction.create(), AUTOMATION_ACTOR, AUTOMATION_CHANNEL);
+		return new Tracing(instance, AUTOMATION_ACTOR, AUTOMATION_CHANNEL);
 	}
 
 	public static final Tracing kernel ( Instance instance ) {
-		return new Tracing(instance, Correlation.create(), Transaction.create(), KERNEL_ACTOR, KERNEL_CHANNEL);
+		return new Tracing(instance, KERNEL_ACTOR, KERNEL_CHANNEL);
 	}
 
 	public static final <T> Event<T> removeFrom ( Event<T> event ) {
@@ -100,12 +84,10 @@ public record Tracing ( Instance instance, Correlation correlation, Transaction 
 				tagValue(event, TAG_INSTANCE_PHYSICAL).orElse(null),
 				tagValue(event, TAG_INSTANCE_PROCESS).orElse(null)
 				);
-		Transaction transaction = tagValue(event, TAG_TRANSACTION).map(Transaction::of).orElse(null);
-		Correlation correlation = tagValue(event, TAG_CORRELATION).map(Correlation::of).orElse(null);
 		String actor = tagValue(event, TAG_ACTOR).orElse(null);
 		String channel = tagValue(event, TAG_CHANNEL).orElse(null);
-			
-		return new Tracing(instance, correlation, transaction, actor, channel);
+
+		return new Tracing(instance, actor, channel);
 	}
 
 	private static final Optional<String> tagValue ( Event<?> event, String tagName ) {
@@ -126,8 +108,6 @@ public record Tracing ( Instance instance, Correlation correlation, Transaction 
 			addTag(tags, TAG_INSTANCE_PHYSICAL, instance.physical());
 			addTag(tags, TAG_INSTANCE_PROCESS, instance.process());
 		}
-		addTag(tags, TAG_CORRELATION, correlation == null ? null: correlation.id());
-		addTag(tags, TAG_TRANSACTION, transaction == null ? null: transaction.id());
 		addTag(tags, TAG_CHANNEL, channel);
 		addTag(tags, TAG_ACTOR, actor);
 		

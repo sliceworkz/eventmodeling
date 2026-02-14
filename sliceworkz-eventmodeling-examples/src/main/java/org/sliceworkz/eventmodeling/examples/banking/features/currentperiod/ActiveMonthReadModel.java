@@ -36,10 +36,10 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
  * account, backwards with limit 1. This returns at most one event — the most
  * recent period-opening event — from which the active month is extracted.
  * <p>
- * This is the recommended first step before executing any command. The returned
- * month is then passed to the command (and to {@link ActivePeriodDecisionModel})
- * so that the decision model only needs to replay events for that specific
- * period, avoiding a full-stream scan.
+ * Useful for display and informational queries that need to show which month
+ * is currently active. Commands no longer need this lookup — the
+ * {@link ActivePeriodDecisionModel} discovers the active month itself via
+ * {@code initQuery()}.
  * <p>
  * Queried via: {@code bc.read(ActiveMonthReadModel.class, accountId)}
  */

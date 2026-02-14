@@ -28,10 +28,8 @@ import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
-import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.query.EventQuery;
@@ -46,7 +44,6 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	private List<DecisionModel<CONSUMED_EVENT_TYPE>> decisionModels = new ArrayList<>();
 	private ReadModelModule<CONSUMED_EVENT_TYPE> readModelModule;
 	
-	private Projector<CONSUMED_EVENT_TYPE> projector;
 	private ProjectorMetrics projectorMetrics;
 	
 	private boolean decisionModelsDetermined = false;
@@ -82,64 +79,45 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	private CommandResult<CONSUMED_EVENT_TYPE,PRODUCED_EVENT_TYPE> executeDecisionModels ( ) {
 
 		EventQuery combinedQuery = null;
-		
+
 		EventReference lastEventReference = null;
-		
+
 		// loop over all decisionmodels
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
 			// combine queries into one that fetches all
 			combinedQuery = (combinedQuery==null)?p.eventQuery():combinedQuery.combineWith(p.eventQuery());
 		}
-		
+
 		if ( combinedQuery == null ) {
 			combinedQuery = EventQuery.matchNone();
 		}
 
-		// execute combined query for all decisionmodels
+		// run a separate projector for each decision model so that each model's
+		// initQuery (if present) and eventQuery are handled independently with
+		// correct cursor management by the Projector
 
-		final var finalCombinedQuery = combinedQuery;
-		
-		this.projector = Projector.from(queryEventStream).towards(new Projection<>() {
+		ProjectorMetrics accumulatedMetrics = ProjectorMetrics.empty();
 
-			@Override
-			public void when(Event<CONSUMED_EVENT_TYPE> event) {
-				offerEventToDecisionModels(event, decisionModels);
-			}
-
-			@Override
-			public EventQuery eventQuery() {
-				return finalCombinedQuery;
-			}
-			
-		}).build();
-		
 		if  ( ! decisionModels.isEmpty()  ) {
-			projectorMetrics = this.projector.run();
-			lastEventReference = projectorMetrics.lastEventReference();
+			for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
+				Projector<CONSUMED_EVENT_TYPE> modelProjector = Projector.from(queryEventStream).towards(p).build();
+				ProjectorMetrics metrics = modelProjector.run();
+				accumulatedMetrics = accumulatedMetrics.add(metrics);
+				if ( metrics.lastEventReference() != null ) {
+					if ( lastEventReference == null || metrics.lastEventReference().happenedAfter(lastEventReference) ) {
+						lastEventReference = metrics.lastEventReference();
+					}
+				}
+			}
 		}
-		
-		return new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery.filter(), lastEventReference);
-	}
-	
-	private Event<? extends CONSUMED_EVENT_TYPE> offerEventToDecisionModels ( Event<CONSUMED_EVENT_TYPE> e, List<DecisionModel<CONSUMED_EVENT_TYPE>> decisionModels ) {
-		for ( DecisionModel<CONSUMED_EVENT_TYPE> decisionModel: decisionModels ) {
-			offerEventToDecisionModel(e, decisionModel);
-		}
-		return e;
-	}
 
-	private void offerEventToDecisionModel ( Event<CONSUMED_EVENT_TYPE> e, DecisionModel<CONSUMED_EVENT_TYPE> p ) {
-		if ( p.eventQuery().matches(e) ) {
-			p.when(e);
-		}
+		projectorMetrics = accumulatedMetrics;
+
+		return new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery.filter(), lastEventReference);
 	}
 
 	public Tracing tracing ( ) {
 		return tracing;
-	}
-	
-	public Projector<CONSUMED_EVENT_TYPE> projector ( ) {
-		return projector;
 	}
 	
 	public ProjectorMetrics projectorMetrics ( ) {

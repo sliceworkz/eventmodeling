@@ -22,33 +22,28 @@ import java.time.YearMonth;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
+import org.sliceworkz.eventmodeling.domain.DomainConceptTags;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.*;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
- * Live read model that shows the state of a specific account period.
+ * Live read model that shows the state of the current account period.
  * <p>
- * Queried via: {@code bc.read(CurrentPeriodReadModel.class, accountId, month)}
+ * Queried via: {@code bc.read(CurrentPeriodReadModel.class, accountId)}
  * <p>
- * The caller must first look up the active month via {@link ActiveMonthReadModel}
- * and pass it in. This ensures the read model only replays events for that specific
- * period — never the full account history.
- * <p>
- * The query leverages tag rotation: each period's events are tagged with both account
- * and month, so filtering by both tags yields only the bounded set of events for that
- * period. The {@code MonthOpened} carry-forward event (or {@code AccountOpened} for the
- * first period) provides the opening balance.
+ * Uses the savepoint pattern via {@link #initQuery()}: a single backwards
+ * query finds the most recent period-opening event ({@code MonthOpened} or
+ * {@code AccountOpened}), which provides the carry-forward balance and
+ * identifies the active month. The main {@link #eventQuery()} then only
+ * processes movement events after that savepoint.
  */
 public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 
 	private final DomainConceptId accountId;
-	private final YearMonth month;
 
 	private YearMonth activeMonth;
 	private BigDecimal balance = BigDecimal.ZERO;
@@ -57,20 +52,23 @@ public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 	private int periodTransactionCount;
 	private boolean periodClosed;
 
-	public CurrentPeriodReadModel(DomainConceptId accountId, YearMonth month) {
+	public CurrentPeriodReadModel(DomainConceptId accountId) {
 		this.accountId = accountId;
-		this.month = month;
+	}
+
+	@Override
+	public EventQuery initQuery() {
+		return EventQuery.forEvents(
+			EventTypesFilter.of(AccountOpened.class, MonthOpened.class),
+			DomainConceptTags.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId)
+		).backwards().limit(1);
 	}
 
 	@Override
 	public EventQuery eventQuery() {
 		return EventQuery.forEvents(
-			EventTypesFilter.any(),
-			Tags.of(
-				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
-				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-					new DomainConceptId(month.toString()))
-			)
+			EventTypesFilter.of(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class),
+			DomainConceptTags.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId)
 		);
 	}
 

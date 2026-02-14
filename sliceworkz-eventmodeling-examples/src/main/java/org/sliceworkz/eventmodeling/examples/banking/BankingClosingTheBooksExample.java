@@ -130,22 +130,16 @@ public class BankingClosingTheBooksExample {
 
 		// ── Step 2: Make transactions in January ────────────────────────
 		//
-		// First, look up the active month using the lightweight ActiveMonthReadModel.
-		// This does a single backwards query (limit 1) to find the most recent
-		// period-opening event. The returned month is then passed to every command,
-		// ensuring commands only replay events for that specific period.
+		// Commands no longer need the active month passed in — the decision model
+		// discovers it automatically via initQuery (a single backwards query).
 
 		System.out.println("=== STEP 2: Transactions in January 2025 ===");
 		System.out.println();
 
-		ActiveMonthReadModel activeMonth = bc.read(ActiveMonthReadModel.class, accountId);
-		YearMonth currentMonth = activeMonth.activeMonth();
-		System.out.println("Active month: " + currentMonth);
-
-		bc.execute(new DepositCommand(accountId, currentMonth, new BigDecimal("1000.00"), "Initial deposit"));
-		bc.execute(new DepositCommand(accountId, currentMonth, new BigDecimal("2500.00"), "Salary"));
-		bc.execute(new WithdrawCommand(accountId, currentMonth, new BigDecimal("150.00"), "Groceries"));
-		bc.execute(new WithdrawCommand(accountId, currentMonth, new BigDecimal("85.00"), "Utilities"));
+		bc.execute(new DepositCommand(accountId, new BigDecimal("1000.00"), "Initial deposit"));
+		bc.execute(new DepositCommand(accountId, new BigDecimal("2500.00"), "Salary"));
+		bc.execute(new WithdrawCommand(accountId, new BigDecimal("150.00"), "Groceries"));
+		bc.execute(new WithdrawCommand(accountId, new BigDecimal("85.00"), "Utilities"));
 
 		System.out.println("Deposited 1000.00 (Initial deposit)");
 		System.out.println("Deposited 2500.00 (Salary)");
@@ -159,7 +153,7 @@ public class BankingClosingTheBooksExample {
 		System.out.println("=== STEP 3: Current period state (January, open) ===");
 		System.out.println();
 
-		CurrentPeriodReadModel janPeriodModel = bc.read(CurrentPeriodReadModel.class, accountId, january);
+		CurrentPeriodReadModel janPeriodModel = bc.read(CurrentPeriodReadModel.class, accountId);
 		janPeriodModel.getCurrentPeriod().ifPresent(period -> {
 			System.out.println("  Month:        " + period.month());
 			System.out.println("  Balance:      " + period.balance());
@@ -219,12 +213,11 @@ public class BankingClosingTheBooksExample {
 		System.out.println("=== STEP 7: Current period after closing (February 2025) ===");
 		System.out.println();
 
-		// Look up the new active month — should now be February
-		YearMonth february = YearMonth.of(2025, 2);
+		// Check the active month — should now be February
 		ActiveMonthReadModel postCloseMonth = bc.read(ActiveMonthReadModel.class, accountId);
 		System.out.println("Active month after closing: " + postCloseMonth.activeMonth());
 
-		CurrentPeriodReadModel febPeriodModel = bc.read(CurrentPeriodReadModel.class, accountId, february);
+		CurrentPeriodReadModel febPeriodModel = bc.read(CurrentPeriodReadModel.class, accountId);
 		febPeriodModel.getCurrentPeriod().ifPresent(period -> {
 			System.out.println("  Month:             " + period.month());
 			System.out.println("  Balance:           " + period.balance());
@@ -242,13 +235,9 @@ public class BankingClosingTheBooksExample {
 		System.out.println("=== STEP 8: Transactions in February 2025 ===");
 		System.out.println();
 
-		// Look up active month again for February transactions
-		ActiveMonthReadModel febActiveMonth = bc.read(ActiveMonthReadModel.class, accountId);
-		currentMonth = febActiveMonth.activeMonth();
-
-		bc.execute(new DepositCommand(accountId, currentMonth, new BigDecimal("2500.00"), "February salary"));
-		bc.execute(new WithdrawCommand(accountId, currentMonth, new BigDecimal("1200.00"), "Rent"));
-		bc.execute(new WithdrawCommand(accountId, currentMonth, new BigDecimal("60.00"), "Streaming services"));
+		bc.execute(new DepositCommand(accountId, new BigDecimal("2500.00"), "February salary"));
+		bc.execute(new WithdrawCommand(accountId, new BigDecimal("1200.00"), "Rent"));
+		bc.execute(new WithdrawCommand(accountId, new BigDecimal("60.00"), "Streaming services"));
 
 		System.out.println("Deposited 2500.00 (February salary)");
 		System.out.println("Withdrew  1200.00 (Rent)");
@@ -261,7 +250,7 @@ public class BankingClosingTheBooksExample {
 		System.out.println("=== STEP 9: Current period state (February, open) ===");
 		System.out.println();
 
-		CurrentPeriodReadModel febUpdatedModel = bc.read(CurrentPeriodReadModel.class, accountId, february);
+		CurrentPeriodReadModel febUpdatedModel = bc.read(CurrentPeriodReadModel.class, accountId);
 		febUpdatedModel.getCurrentPeriod().ifPresent(period -> {
 			System.out.println("  Month:        " + period.month());
 			System.out.println("  Balance:      " + period.balance());
@@ -278,6 +267,7 @@ public class BankingClosingTheBooksExample {
 		System.out.println("=== STEP 10: February statement (still open) ===");
 		System.out.println();
 
+		YearMonth february = YearMonth.of(2025, 2);
 		MonthStatementReadModel febStatementModel = bc.read(MonthStatementReadModel.class, accountId, february);
 		febStatementModel.getStatement().ifPresent(BankingClosingTheBooksExample::printStatement);
 		System.out.println();

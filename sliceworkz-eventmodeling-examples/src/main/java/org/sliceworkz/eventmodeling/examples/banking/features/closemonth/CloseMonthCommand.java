@@ -67,7 +67,7 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 	public CommandResult<BankingEvent, BankingEvent> execute(
 			CommandContext<BankingEvent, BankingEvent> context) {
 
-		var period = new ActivePeriodDecisionModel(accountId, monthToClose);
+		var period = new ActivePeriodDecisionModel(accountId);
 		var result = context.decisionModels(period);
 
 		// ── Validation ───────────────────────────────────────────────

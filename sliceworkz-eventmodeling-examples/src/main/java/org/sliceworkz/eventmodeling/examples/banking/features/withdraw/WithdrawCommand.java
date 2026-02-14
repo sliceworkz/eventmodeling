@@ -18,7 +18,6 @@
 package org.sliceworkz.eventmodeling.examples.banking.features.withdraw;
 
 import java.math.BigDecimal;
-import java.time.YearMonth;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
@@ -28,34 +27,27 @@ import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyWithdrawn;
-import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActiveMonthReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActivePeriodDecisionModel;
 import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * Withdraws money from the account's currently active period.
  * <p>
- * The caller must look up the active month via {@link ActiveMonthReadModel}
- * and pass it in. This ensures the decision model only replays events for
- * the current period, not the full account history.
- * <p>
  * Enforces:
  * <ul>
  *   <li>Account must exist</li>
- *   <li>Current period must be open</li>
+ *   <li>Current period must be open (discovered via initQuery)</li>
  *   <li>Sufficient balance</li>
  * </ul>
  */
 public class WithdrawCommand implements Command<BankingEvent> {
 
 	private final DomainConceptId accountId;
-	private final YearMonth month;
 	private final BigDecimal amount;
 	private final String description;
 
-	public WithdrawCommand(DomainConceptId accountId, YearMonth month, BigDecimal amount, String description) {
+	public WithdrawCommand(DomainConceptId accountId, BigDecimal amount, String description) {
 		this.accountId = accountId;
-		this.month = month;
 		this.amount = amount;
 		this.description = description;
 	}
@@ -64,7 +56,7 @@ public class WithdrawCommand implements Command<BankingEvent> {
 	public CommandResult<BankingEvent, BankingEvent> execute(
 			CommandContext<BankingEvent, BankingEvent> context) {
 
-		var period = new ActivePeriodDecisionModel(accountId, month);
+		var period = new ActivePeriodDecisionModel(accountId);
 		var result = context.decisionModels(period);
 
 		if (!period.accountExists()) {

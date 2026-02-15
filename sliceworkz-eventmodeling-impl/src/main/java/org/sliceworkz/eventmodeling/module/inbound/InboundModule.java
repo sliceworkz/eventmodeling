@@ -29,13 +29,14 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
-import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistentEventProcessor;
-import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistentEventProcessor.ProcessorMode;
+import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
+import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.EventWithMetaDataHandler;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.projection.Projection;
+import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
@@ -64,38 +65,37 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		this.instance = instance;
 		this.meterRegistry = meterRegistry;
 
-		Collection<EventuallyConsistentEventProcessor<INBOUND_EVENT_TYPE>> eceps = createEventuallyConsistentEventProcessors(eventuallyConsistentTranslators);
+		Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> processors = createProjectorProcessors(eventuallyConsistentTranslators);
 
-		this.processorThreadManager = new ProcessorThreadManager<INBOUND_EVENT_TYPE>("translator", eceps);
+		this.processorThreadManager = new ProcessorThreadManager<INBOUND_EVENT_TYPE>("translator", processors);
 
 	}
-	
+
 	public void setCapabilitiesDelegate ( AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> capabilities ) {
 		this.context = new TranslatorContextImpl<>(capabilities);
 	}
 
-	Collection<EventuallyConsistentEventProcessor<INBOUND_EVENT_TYPE>> createEventuallyConsistentEventProcessors ( Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> integrations ) {
-		Collection<EventuallyConsistentEventProcessor<INBOUND_EVENT_TYPE>> result = new ArrayList<>();
-		
+	Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> createProjectorProcessors ( Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> integrations ) {
+		Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> result = new ArrayList<>();
+
 		integrations.forEach(t->result.add(
-				new EventuallyConsistentEventProcessor<INBOUND_EVENT_TYPE>(
+				new ProjectorProcessor<>(
 						EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder
 							.newBuilder(instance)
 								.context(boundedContext)
 								.translator()
 								.name(t)
 								.shared()
-								.build(), 
-							inboundEventStream, 
-							t.eventQuery(), 
-							new TranslatorAdapter(t,()->context, Tracing.actorAndChannel(t.getClass().getSimpleName(), "translation").instance(instance)), 
-							ProcessorMode.RUNNING_ON_SINGLE_LEADER, 
-							instance)
+								.build(),
+						inboundEventStream,
+						new TranslatorAdapter(t, ()->context, Tracing.actorAndChannel(t.getClass().getSimpleName(), "translation").instance(instance)),
+						ProcessorMode.RUNNING_ON_SINGLE_LEADER,
+						instance)
 			));
 		return result;
 	}
-	
-	class TranslatorAdapter implements EventWithMetaDataHandler<INBOUND_EVENT_TYPE> {
+
+	class TranslatorAdapter implements Projection<INBOUND_EVENT_TYPE> {
 
 		private Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator;
 		private Supplier<TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> context;
@@ -126,11 +126,16 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 			timer.record(() -> translator.translate(eventWithMeta.data(), context.get()));
 		}
+
+		@Override
+		public EventQuery eventQuery() {
+			return translator.eventQuery();
+		}
 	}
 
 	public void incoming (INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
-		// just append to the inbound-stream and let the eventually consistent processors do their thing...
-		
+		// just append to the inbound-stream and let the projector processors do their thing...
+
 		AppendCriteria appendCriteria = AppendCriteria.none();
 		try {
 			inboundEventStream.append(appendCriteria, Collections.singletonList(tracing.storeOn(Event.of(event, Tags.none()).withIdempotencyKey(idempotencyKey))));
@@ -138,7 +143,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 			// idempotency check kicked in.  assume we already know this event
 		}
 	}
-	
+
 	@Override
 	public void start ( ) {
 		this.processorThreadManager.start();
@@ -148,7 +153,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	public void stop ( ) {
 		this.processorThreadManager.stop();
 	}
-	
+
 	@Override
 	public void terminate ( ) {
 		this.processorThreadManager.terminate();

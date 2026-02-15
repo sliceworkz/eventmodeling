@@ -110,7 +110,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	public EventReference eventsAppended ( EventReference atLeastUntil ) {
 		LOGGER.debug("projector processor notified of updates until at least {}", atLeastUntil);
 		EventReference lastRef = projector.accumulatedMetrics().lastEventReference();
-		if ( lastRef == null || (atLeastUntil.position() > lastRef.position()) ) {
+		if ( lastRef == null || atLeastUntil.happenedAfter(lastRef) ) {
 			LOGGER.debug("might be new interesting events, querying them immediately!");
 			synchronized ( this ) {
 				potentiallyNewEventsAppended = true;

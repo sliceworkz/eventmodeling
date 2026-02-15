@@ -26,7 +26,6 @@ import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcess
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.EventWithMetaDataHandler;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
 import org.sliceworkz.eventstore.query.EventQuery;
 
@@ -46,7 +45,7 @@ import io.micrometer.core.instrument.Timer;
  * - sliceworkz.eventmodeling.readmodel.ec.batch.duration: Timer for batch processing duration
  * - sliceworkz.eventmodeling.readmodel.ec.batch.events: Counter for total events processed in batches
  */
-class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements EventWithMetaDataHandler<DOMAIN_EVENT_TYPE>, BatchAwareProjection<DOMAIN_EVENT_TYPE> {
+class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN_EVENT_TYPE> {
 
 	private final ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel;
 	private final String boundedContext;

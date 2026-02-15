@@ -28,13 +28,14 @@ import io.micrometer.core.instrument.Timer;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
-import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistentEventProcessor;
-import org.sliceworkz.eventmodeling.module.eventdispatching.EventuallyConsistentEventProcessor.ProcessorMode;
+import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
+import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.EventWithMetaDataHandler;
+import org.sliceworkz.eventstore.projection.Projection;
+import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
@@ -55,16 +56,16 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 		this.instance = instance;
 		this.meterRegistry = meterRegistry;
 
-		Collection<EventuallyConsistentEventProcessor<OUTBOUND_EVENT_TYPE>> eceps = createEventuallyConsistentEventProcessors(dispatchers);
+		Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> processors = createProjectorProcessors(dispatchers);
 
-		this.processorThreadManager = new ProcessorThreadManager<OUTBOUND_EVENT_TYPE>("dispatcher", eceps);
+		this.processorThreadManager = new ProcessorThreadManager<OUTBOUND_EVENT_TYPE>("dispatcher", processors);
 	}
-	
-	Collection<EventuallyConsistentEventProcessor<OUTBOUND_EVENT_TYPE>> createEventuallyConsistentEventProcessors ( Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers ) {
-		Collection<EventuallyConsistentEventProcessor<OUTBOUND_EVENT_TYPE>> result = new ArrayList<>();
+
+	Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> createProjectorProcessors ( Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers ) {
+		Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> result = new ArrayList<>();
 
 		dispatchers.forEach(t->result.add(
-				new EventuallyConsistentEventProcessor<OUTBOUND_EVENT_TYPE>(
+				new ProjectorProcessor<>(
 						EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder
 							.newBuilder(instance)
 								.context(boundedContext)
@@ -73,14 +74,13 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 								.shared()
 								.build(),
 						(EventStream<OUTBOUND_EVENT_TYPE>)outboundEventStream,
-						t.eventQuery(),
 						new DispatcherAdapter(t, Tracing.actorAndChannel(t.getClass().getSimpleName(), "dispatch").instance(instance)),
 						ProcessorMode.RUNNING_ON_SINGLE_LEADER,
 						instance)));
 		return result;
 	}
 
-	class DispatcherAdapter implements EventWithMetaDataHandler<OUTBOUND_EVENT_TYPE> {
+	class DispatcherAdapter implements Projection<OUTBOUND_EVENT_TYPE> {
 
 		private Dispatcher<OUTBOUND_EVENT_TYPE> dispatcher;
 		private String dispatcherName;
@@ -108,6 +108,11 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 					io.micrometer.core.instrument.Tags.of("context", boundedContext, "dispatcher", dispatcherName, "event", eventName, "channel", channel)));
 
 			timer.record(() -> dispatcher.when(eventWithMeta));
+		}
+
+		@Override
+		public EventQuery eventQuery() {
+			return dispatcher.eventQuery();
 		}
 	}
 

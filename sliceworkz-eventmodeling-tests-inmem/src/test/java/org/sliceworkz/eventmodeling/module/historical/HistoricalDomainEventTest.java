@@ -150,7 +150,7 @@ public class HistoricalDomainEventTest {
 
 	public sealed interface CurrentDomainEvent {
 		record ItemAddedV2(String name, int quantity, String category) implements CurrentDomainEvent {}
-		record ItemRemoved(String name, String reason) implements CurrentDomainEvent {}
+		record ItemRemovedV2(String name, String reason) implements CurrentDomainEvent {}
 	}
 
 	// --- Historical event types with upcasters ---
@@ -174,14 +174,14 @@ public class HistoricalDomainEventTest {
 		}
 	}
 
-	public static class ItemRemovedUpcaster implements Upcast<HistoricalDomainEvent.ItemRemoved, CurrentDomainEvent.ItemRemoved> {
+	public static class ItemRemovedUpcaster implements Upcast<HistoricalDomainEvent.ItemRemoved, CurrentDomainEvent.ItemRemovedV2> {
 		@Override
-		public CurrentDomainEvent.ItemRemoved upcast(HistoricalDomainEvent.ItemRemoved historicalEvent) {
-			return new CurrentDomainEvent.ItemRemoved(historicalEvent.name(), "no reason recorded");
+		public CurrentDomainEvent.ItemRemovedV2 upcast(HistoricalDomainEvent.ItemRemoved historicalEvent) {
+			return new CurrentDomainEvent.ItemRemovedV2(historicalEvent.name(), "no reason recorded");
 		}
 		@Override
-		public Class<CurrentDomainEvent.ItemRemoved> targetType() {
-			return CurrentDomainEvent.ItemRemoved.class;
+		public Class<CurrentDomainEvent.ItemRemovedV2> targetType() {
+			return CurrentDomainEvent.ItemRemovedV2.class;
 		}
 	}
 
@@ -233,7 +233,7 @@ public class HistoricalDomainEventTest {
 			eventCount++;
 			switch (event) {
 				case CurrentDomainEvent.ItemAddedV2 added -> totalAdded += added.quantity();
-				case CurrentDomainEvent.ItemRemoved ignored -> {}
+				case CurrentDomainEvent.ItemRemovedV2 ignored -> {}
 			}
 		}
 

@@ -35,9 +35,14 @@ public interface BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OU
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> name(String name);
 
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventTypes(
-			Class<DOMAIN_EVENT_TYPE> domainEventRootType, 
+			Class<DOMAIN_EVENT_TYPE> domainEventRootType,
 			Class<INBOUND_EVENT_TYPE> inboundEventRootType,
 			Class<OUTBOUND_EVENT_TYPE> outboundEventRootType);
+
+	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> historicalEventTypes(
+			Class<?> historicalDomainEventRootType,
+			Class<?> historicalInboundEventRootType,
+			Class<?> historicalOutboundEventRootType);
 
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> instance(Instance instance);
 

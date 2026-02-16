@@ -24,7 +24,7 @@ public interface ReadModelWithMetaData<DOMAIN_EVENT_TYPE> extends Projection<DOM
 	/**
 	 * By default this returns the classname, but in case the same readmodel class is reused for multiple different instances,
 	 * this methods can be overriden to return a different name for each of them.
-	 * This allows to differentiate them for different bookmarks for different EventuallyConsistentEventProcessers tasks.
+	 * This allows to differentiate them for different bookmarks for different processor tasks.
 	 */
 	default String readmodelName () {
 		return this.getClass().getSimpleName();

@@ -30,7 +30,7 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
-import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
@@ -66,7 +66,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 
 		dispatchers.forEach(t->result.add(
 				new ProjectorProcessor<>(
-						EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder
+						ProcessorIdentification.ProcessorIdentificationBuilder
 							.newBuilder(instance)
 								.context(boundedContext)
 								.dispatcher()

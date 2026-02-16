@@ -23,13 +23,13 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
-public record EventuallyConsistentProcessorIdentification ( String context, String type, String id, Storage storage, String location ) {
-	
+public record ProcessorIdentification ( String context, String type, String id, Storage storage, String location ) {
+
 	public enum Storage {
 		EPHEMERAL("ephemeral"),
 		LOCAL("local"),
 		SHARED("shared");
-		
+
 		private String label;
 		private Storage ( String label ) {
 			this.label = label;
@@ -50,11 +50,11 @@ public record EventuallyConsistentProcessorIdentification ( String context, Stri
 			}
 		}
 	}
-	
+
 	private static final char SEPARATOR = '/';
-	
-	public EventuallyConsistentProcessorIdentification ( String context, String type, String id, Storage storage, String location ) {
-		
+
+	public ProcessorIdentification ( String context, String type, String id, Storage storage, String location ) {
+
 		validateNonEmpty("context", context);
 		validateNonEmpty("type", type);
 		validateNonEmpty("id", id);
@@ -65,7 +65,7 @@ public record EventuallyConsistentProcessorIdentification ( String context, Stri
 			if ( storage != Storage.SHARED ) {
 				throw new IllegalArgumentException("storage specifier is required, unless for shared storage");
 			}
-			
+
 		} else {
 			if ( storage == Storage.SHARED ) {
 				throw new IllegalArgumentException("shared storage cannot have a location specifier");
@@ -77,13 +77,13 @@ public record EventuallyConsistentProcessorIdentification ( String context, Stri
 		this.storage = storage;
 		this.location = location;
 	}
-	
+
 	private void validateNonEmpty ( String name, String s ) {
 		if ( s == null || s.strip().length() == 0 ) {
 			throw new IllegalArgumentException("%s is required".formatted(name));
 		}
 	}
-	
+
 	public String toString ( ) {
 		StringBuilder result = new StringBuilder();
 		result.append(context);
@@ -105,120 +105,120 @@ public record EventuallyConsistentProcessorIdentification ( String context, Stri
 		result.append("]");
 		return result.toString();
 	}
-	
-	public static EventuallyConsistentProcessorIdentification parse ( String value ) {
+
+	public static ProcessorIdentification parse ( String value ) {
 		if ( value == null || value.trim().isEmpty() ) {
 			throw new IllegalArgumentException("value is required");
 		}
-		
+
 		java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
 			"([^/]+)/([^/]+)/([^\\[]+)\\[([^:\\]]+)(?::([^\\]]+))?\\]"
 		);
-		
+
 		java.util.regex.Matcher matcher = pattern.matcher(value);
 		if ( !matcher.matches() ) {
 			throw new IllegalArgumentException("Invalid format: expected 'context/type/id[storage:location]' or 'context/type/id[storage]'");
 		}
-		
+
 		String context = matcher.group(1);
 		String type = matcher.group(2);
 		String id = matcher.group(3);
 		String storageLabel = matcher.group(4);
 		String location = matcher.group(5);
-		
+
 		Storage storage = Storage.of(storageLabel);
 		if ( storage == null ) {
 			throw new IllegalArgumentException("Invalid storage type: " + storageLabel);
 		}
-		
+
 		if ( location != null && storage == Storage.SHARED ) {
 			throw new IllegalArgumentException("Invalid format: shared storage cannot have location");
 		}
 		if ( location == null && storage != Storage.SHARED ) {
 			throw new IllegalArgumentException("Invalid format: non-shared storage must have location");
 		}
-		
-		return new EventuallyConsistentProcessorIdentification(context, type, id, storage, location);
+
+		return new ProcessorIdentification(context, type, id, storage, location);
 	}
 
-	public static class EventuallyConsistentProcessorIdentificationBuilder {
+	public static class ProcessorIdentificationBuilder {
 
-		private static final Logger LOGGER = LoggerFactory.getLogger(EventuallyConsistentProcessorIdentificationBuilder.class);
-		
+		private static final Logger LOGGER = LoggerFactory.getLogger(ProcessorIdentificationBuilder.class);
+
 		private Instance instance;
 		private String context;
 		private String type;
 		private String name;
 		private Storage storage;
-		
-		public static EventuallyConsistentProcessorIdentificationBuilder newBuilder ( Instance instance ) {
-			return new EventuallyConsistentProcessorIdentificationBuilder(instance);
+
+		public static ProcessorIdentificationBuilder newBuilder ( Instance instance ) {
+			return new ProcessorIdentificationBuilder(instance);
 		}
-		
-		public EventuallyConsistentProcessorIdentificationBuilder ( Instance instance ) {
+
+		public ProcessorIdentificationBuilder ( Instance instance ) {
 			this.instance = instance;
 		}
-		
-		public EventuallyConsistentProcessorIdentificationBuilder context ( String context ) {
+
+		public ProcessorIdentificationBuilder context ( String context ) {
 			this.context = context;
 			return this;
 		}
-		
-		public EventuallyConsistentProcessorIdentificationBuilder type ( String type ) {
+
+		public ProcessorIdentificationBuilder type ( String type ) {
 			this.type = type;
 			return this;
 		}
 
-		public EventuallyConsistentProcessorIdentificationBuilder readmodel ( ) {
+		public ProcessorIdentificationBuilder readmodel ( ) {
 			this.type = "readmodel";
 			return this;
 		}
-		
-		public EventuallyConsistentProcessorIdentificationBuilder translator ( ) {
+
+		public ProcessorIdentificationBuilder translator ( ) {
 			this.type = "translator";
 			return this;
 		}
 
-		public EventuallyConsistentProcessorIdentificationBuilder dispatcher ( ) {
+		public ProcessorIdentificationBuilder dispatcher ( ) {
 			this.type = "dispatcher";
 			return this;
 		}
 
-		public EventuallyConsistentProcessorIdentificationBuilder automation ( ) {
+		public ProcessorIdentificationBuilder automation ( ) {
 			this.type = "automation";
 			return this;
 		}
 
-		public EventuallyConsistentProcessorIdentificationBuilder name ( String name ) {
+		public ProcessorIdentificationBuilder name ( String name ) {
 			this.name = name;
 			return this;
 		}
-		
-		public EventuallyConsistentProcessorIdentificationBuilder name ( Class<?> clazz ) {
+
+		public ProcessorIdentificationBuilder name ( Class<?> clazz ) {
 			this.name = clazz.getSimpleName();
 			return this;
 		}
 
-		public EventuallyConsistentProcessorIdentificationBuilder name ( Object object ) {
+		public ProcessorIdentificationBuilder name ( Object object ) {
 			return name(object.getClass());
 		}
-		
-		public EventuallyConsistentProcessorIdentificationBuilder local ( ) {
+
+		public ProcessorIdentificationBuilder local ( ) {
 			this.storage = Storage.LOCAL;
 			return this;
 		}
 
-		public EventuallyConsistentProcessorIdentificationBuilder shared ( ) {
+		public ProcessorIdentificationBuilder shared ( ) {
 			this.storage = Storage.SHARED;
 			return this;
 		}
 
-		public EventuallyConsistentProcessorIdentificationBuilder ephemeral ( ) {
+		public ProcessorIdentificationBuilder ephemeral ( ) {
 			this.storage = Storage.EPHEMERAL;
 			return this;
 		}
-		
-		public EventuallyConsistentProcessorIdentification build ( ) {
+
+		public ProcessorIdentification build ( ) {
 			String location = null;
 			switch ( storage ) {
 				case EPHEMERAL:
@@ -236,11 +236,11 @@ public record EventuallyConsistentProcessorIdentification ( String context, Stri
 					LOGGER.error("unhandled switch case for storage type {} - cannot determine location key", storage);
 					throw new RuntimeException("unhandled switch case for storage");
 			}
-			return new EventuallyConsistentProcessorIdentification(context, type, name, storage, location);
+			return new ProcessorIdentification(context, type, name, storage, location);
 		}
 
 	}
-	
+
 	public Tags toTags ( Instance instance ) {
 		Tags tags = Tags.of(
 				Tag.of("x-context", context()),

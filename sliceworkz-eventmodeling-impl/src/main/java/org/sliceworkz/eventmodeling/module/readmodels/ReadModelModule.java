@@ -34,8 +34,8 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
-import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
-import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification.Storage;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
@@ -153,19 +153,19 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> result = new ArrayList<>();
 
 		shared.forEach(rm -> result.add(new ProjectorProcessor<>(
-				EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).shared().build(),
+				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).shared().build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
 				new ReadModelAdapter<>(rm, boundedContext, Storage.SHARED, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				ProcessorMode.RUNNING_ON_SINGLE_LEADER,
 				instance)));
 		local.forEach(rm -> result.add(new ProjectorProcessor<>(
-				EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).local().build(),
+				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).local().build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
 				new ReadModelAdapter<>(rm, boundedContext, Storage.LOCAL, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				ProcessorMode.RUNNING_ON_ALL_INSTANCES,
 				instance)));
 		ephemeral.forEach(rm -> result.add(new ProjectorProcessor<>(
-				EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).ephemeral().build(),
+				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).ephemeral().build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
 				new ReadModelAdapter<>(rm, boundedContext, Storage.EPHEMERAL, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				ProcessorMode.RUNNING_ON_ALL_INSTANCES,

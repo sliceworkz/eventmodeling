@@ -58,7 +58,7 @@ public class HistoricalDomainEventTest {
 
 	@BeforeEach
 	void setUp() {
-		this.eventStorage = InMemoryEventStorage.newBuilder().build();
+		this.eventStorage = createEventStorage();
 	}
 
 	@AfterEach
@@ -66,6 +66,14 @@ public class HistoricalDomainEventTest {
 		if (boundedContext != null) {
 			boundedContext.stop();
 		}
+		destroyEventStorage(eventStorage);
+	}
+
+	public EventStorage createEventStorage() {
+		return InMemoryEventStorage.newBuilder().build();
+	}
+
+	public void destroyEventStorage(EventStorage storage) {
 	}
 
 	@Test

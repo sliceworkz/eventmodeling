@@ -114,7 +114,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 
 			AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo = aggregateInfoByClass.get(aggregateClass);
 
-			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 			String cacheKey = aggregateInfo.name() + ":" + channel;
 
 			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->

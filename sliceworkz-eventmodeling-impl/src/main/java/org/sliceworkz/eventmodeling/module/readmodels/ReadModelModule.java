@@ -144,7 +144,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		this.meterRegistry = meterRegistry;
 
 		this.projectorProcessors = createProjectorProcessors(eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels);
-		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>("readmodel", this.projectorProcessors);
+		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.TYPE_READMODEL, this.projectorProcessors);
 
 		LOGGER.info("live readmodels: %s".formatted(liveModels.keySet()));
 	}

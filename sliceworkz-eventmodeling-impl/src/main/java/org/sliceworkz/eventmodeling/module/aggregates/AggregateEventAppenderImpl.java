@@ -76,7 +76,7 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 	@Override
 	public EventReference append() {
 		// Record metrics for each raised domain event with tracing tags
-		String channel = (tracing != null && tracing.channel() != null) ? tracing.channel() : "unknown";
+		String channel = (tracing != null && tracing.channel() != null) ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 		for (EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event : events) {
 			String eventName = event.data().getClass().getSimpleName();
 			String cacheKey = eventName + ":" + channel;

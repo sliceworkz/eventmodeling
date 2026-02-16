@@ -86,6 +86,10 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	private Class<DOMAIN_EVENT_TYPE> domainEventRootType;
 	private Class<INBOUND_EVENT_TYPE> inboundEventRootType;
 	private Class<OUTBOUND_EVENT_TYPE> outboundEventRootType;
+
+	private Class<?> historicalDomainEventRootType;
+	private Class<?> historicalInboundEventRootType;
+	private Class<?> historicalOutboundEventRootType;
 	
 	private FeaturesSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> featuresSpecification = new FeaturesSpecificationImpl<>(this);
 	
@@ -111,6 +115,18 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		this.inboundEventRootType = inboundEventRootType;
 		this.outboundEventRootType = outboundEventRootType;
 		 return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> historicalEventTypes (
+			Class<?> historicalDomainEventRootType,
+			Class<?> historicalInboundEventRootType,
+			Class<?> historicalOutboundEventRootType
+			) {
+		this.historicalDomainEventRootType = historicalDomainEventRootType;
+		this.historicalInboundEventRootType = historicalInboundEventRootType;
+		this.historicalOutboundEventRootType = historicalOutboundEventRootType;
+		return this;
 	}
 
 	@Override
@@ -242,9 +258,15 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		EventStream<KernelEvent> observabilityEventStream; 
 		
 		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage, meterRegistry);
-		domainEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("domain"), domainEventRootType);
-		inboundEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("inbound"), inboundEventRootType);
-		outboundEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("outbound"), outboundEventRootType);
+		domainEventStream = historicalDomainEventRootType != null
+			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("domain"), domainEventRootType, historicalDomainEventRootType)
+			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("domain"), domainEventRootType);
+		inboundEventStream = historicalInboundEventRootType != null
+			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("inbound"), inboundEventRootType, historicalInboundEventRootType)
+			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("inbound"), inboundEventRootType);
+		outboundEventStream = historicalOutboundEventRootType != null
+			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("outbound"), outboundEventRootType, historicalOutboundEventRootType)
+			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("outbound"), outboundEventRootType);
 		observabilityEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("observability"), KernelEvent.class);
 		readAllInStoreEventStream = eventStore.getEventStream(EventStreamId.anyContext().anyPurpose());
 

@@ -101,7 +101,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 						.stream().reduce((first,second)->second).map(Event::reference);
 
 				// Record metrics for each raised domain event
-				String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+				String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 				for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : commandResult.raisedEvents()) {
 					String eventName = event.data().getClass().getSimpleName();
 					String cacheKey = eventName + ":" + channel;

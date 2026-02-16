@@ -209,7 +209,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
 		tracing = tracing.instance(instance);
 		String eventName = event.getClass().getSimpleName();
-		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 		String cacheKey = eventName + ":" + channel;
 
 		Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
@@ -245,7 +245,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
 		tracing = tracing.instance(instance);
 		String eventName = event.getClass().getSimpleName();
-		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 		String cacheKey = eventName + ":" + channel;
 
 		Counter counter = inboundEventCounters.computeIfAbsent(cacheKey, key ->

@@ -67,7 +67,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 		Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> processors = createProjectorProcessors(eventuallyConsistentTranslators);
 
-		this.processorThreadManager = new ProcessorThreadManager<INBOUND_EVENT_TYPE>("translator", processors);
+		this.processorThreadManager = new ProcessorThreadManager<INBOUND_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.TYPE_TRANSLATOR, processors);
 
 	}
 
@@ -112,7 +112,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		@Override
 		public void when(Event<INBOUND_EVENT_TYPE> eventWithMeta) {
 			String eventName = eventWithMeta.data().getClass().getSimpleName();
-			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 			String cacheKey = translatorName + ":" + eventName + ":" + channel;
 
 			Counter counter = translatorCounters.computeIfAbsent(cacheKey, key ->

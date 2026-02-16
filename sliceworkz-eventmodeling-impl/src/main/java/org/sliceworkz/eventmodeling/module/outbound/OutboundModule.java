@@ -30,7 +30,7 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
-import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
@@ -58,7 +58,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 
 		Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> processors = createProjectorProcessors(dispatchers);
 
-		this.processorThreadManager = new ProcessorThreadManager<OUTBOUND_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.TYPE_DISPATCHER, processors);
+		this.processorThreadManager = new ProcessorThreadManager<OUTBOUND_EVENT_TYPE>(ProcessorIdentification.TYPE_DISPATCHER, processors);
 	}
 
 	Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> createProjectorProcessors ( Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers ) {
@@ -66,7 +66,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 
 		dispatchers.forEach(t->result.add(
 				new ProjectorProcessor<>(
-						EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder
+						ProcessorIdentification.ProcessorIdentificationBuilder
 							.newBuilder(instance)
 								.context(boundedContext)
 								.dispatcher()

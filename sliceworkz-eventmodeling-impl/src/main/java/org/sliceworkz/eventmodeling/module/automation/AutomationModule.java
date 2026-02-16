@@ -26,7 +26,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
-import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.stream.EventStream;
 
@@ -51,7 +51,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 
 		Collection<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> aps = createAutomationProcessors(automations);
 
-		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.TYPE_AUTOMATION, aps);
+		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(ProcessorIdentification.TYPE_AUTOMATION, aps);
 	}
 
 	public void setCapabilitiesDelegate ( AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> delegate ) {
@@ -66,13 +66,13 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 		Collection<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> result = new ArrayList<>();
 
 		automations.forEach(a->result.add(new AutomationProcessor<>(
-				EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance)
+				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)
 					.context(boundedContext)
 					.automation()
 					.name(a)
 					.shared()
 				.build(),
-				EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder.newBuilder(instance)
+				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)
 					.context(boundedContext)
 					.readmodel()
 					.name(a.getTodoList().readmodelName()) // the one we follow

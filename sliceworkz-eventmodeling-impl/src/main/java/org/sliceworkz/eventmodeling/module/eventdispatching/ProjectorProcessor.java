@@ -20,8 +20,8 @@ package org.sliceworkz.eventmodeling.module.eventdispatching;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.events.Instance;
-import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
-import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification.Storage;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projection;
@@ -46,7 +46,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	private static final long WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS = 30000;
 
 	private final Projector<EVENT_TYPE> projector;
-	private final EventuallyConsistentProcessorIdentification processorIdentification;
+	private final ProcessorIdentification processorIdentification;
 	private final ProcessorMode originalProcessorMode;
 
 	private volatile ProcessorMode processorMode;
@@ -54,7 +54,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	private volatile boolean potentiallyNewEventsAppended;
 
 	public ProjectorProcessor (
-			EventuallyConsistentProcessorIdentification processorIdentification,
+			ProcessorIdentification processorIdentification,
 			EventSource<EVENT_TYPE> eventSource,
 			Projection<EVENT_TYPE> projection,
 			ProcessorMode processorMode,

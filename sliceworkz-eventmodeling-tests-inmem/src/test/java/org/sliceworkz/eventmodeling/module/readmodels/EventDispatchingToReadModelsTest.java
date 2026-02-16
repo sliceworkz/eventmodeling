@@ -17,8 +17,10 @@
  */
 package org.sliceworkz.eventmodeling.module.readmodels;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -174,40 +176,34 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 	}
 
 	void assertModelsCallingWhenEventOccurs ( ) {
-		
-		try {
-			// Let the eventually consistent read models keep up
-			Thread.sleep(500);
-		} catch (InterruptedException e) {
-			// no problem
-		}
 
 		assertEquals(3, consistentModel.eventCountForThisThread(), "consistent model should have been called from this thread when a domain event happens");
 		assertEquals(1, consistentModelOnlyFirstEventType.eventCountForThisThread(), "consistent model should have been called from this thread when a domain event happens, but only if it passes the EventQuery");
 		assertEquals(1, consistentModelOnlySecondEventType.eventCountForThisThread(), "consistent model should have been called from this thread when a domain event happens, but only if it passes the EventQuery");
 		assertEquals(1, consistentModelOnlyThirdEventType.eventCountForThisThread(), "consistent model should have been called from this thread when a domain event happens, but only if it passes the EventQuery");
-		
+
 		assertEquals(0, eventuallyConsistentSharedModel.eventCountForThisThread(), "eventually consistent model should not have been called from this thread when a domain event happens");
 		assertEquals(0, eventuallyConsistentSharedModelOnlyFirstEventType.eventCountForThisThread(), "eventually consistent model should not have been called from this thread when a domain event happens");
 		assertEquals(0, eventuallyConsistentSharedModelOnlySecondEventType.eventCountForThisThread(), "eventually consistent model should nothave been called from this thread when a domain event happens");
 		assertEquals(0, eventuallyConsistentSharedModelOnlyThirdEventType.eventCountForThisThread(), "eventually consistent model should not have been called from this thread when a domain event happens");
-		
+
 		assertEquals(0, eventuallyConsistentLocalModel.eventCountForThisThread(), "eventually consistent model should not have been called from this thread when a domain event happens");
 		assertEquals(0, eventuallyConsistentLocalModelOnlyFirstEventType.eventCountForThisThread(), "eventually consistent model should not have been called from this thread when a domain event happens");
 		assertEquals(0, eventuallyConsistentLocalModelOnlySecondEventType.eventCountForThisThread(), "eventually consistent model should not have been called from this thread when a domain event happens");
 		assertEquals(0, eventuallyConsistentLocalModelOnlyThirdEventType.eventCountForThisThread(), "eventually consistent model should not have been called from this thread when a domain event happens");
 
-		// now check the figures - over all threads, so also the eventually consistent ones
-		
-		assertEquals(3, eventuallyConsistentSharedModel.eventCount(), "eventually consistent model should have been called when a domain event happens and async processing is done");
-		assertEquals(1, eventuallyConsistentSharedModelOnlyFirstEventType.eventCount(), "eventually consistent model should have been called when a domain event happens and async processing is done");
-		assertEquals(1, eventuallyConsistentSharedModelOnlySecondEventType.eventCount(), "eventually consistent model should have been called when a domain event happens and async processing is done");
-		assertEquals(1, eventuallyConsistentSharedModelOnlyThirdEventType.eventCount(), "eventually consistent model should have been called when a domain event happens and async processing is done");
+		// wait for eventually consistent read models to finish async processing, then check the figures over all threads
+		await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
+			assertEquals(3, eventuallyConsistentSharedModel.eventCount(), "eventually consistent model should have been called when a domain event happens and async processing is done");
+			assertEquals(1, eventuallyConsistentSharedModelOnlyFirstEventType.eventCount(), "eventually consistent model should have been called when a domain event happens and async processing is done");
+			assertEquals(1, eventuallyConsistentSharedModelOnlySecondEventType.eventCount(), "eventually consistent model should have been called when a domain event happens and async processing is done");
+			assertEquals(1, eventuallyConsistentSharedModelOnlyThirdEventType.eventCount(), "eventually consistent model should have been called when a domain event happens and async processing is done");
 
-		assertEquals(3, eventuallyConsistentLocalModel.eventCount(), "eventually consistent model should have been called after publish");
-		assertEquals(1, eventuallyConsistentLocalModelOnlyFirstEventType.eventCount(), "eventually consistent model should have been called after publish");
-		assertEquals(1, eventuallyConsistentLocalModelOnlySecondEventType.eventCount(), "eventually consistent model have been called after publish");
-		assertEquals(1, eventuallyConsistentLocalModelOnlyThirdEventType.eventCount(), "eventually consistent model should have been called after publish");
+			assertEquals(3, eventuallyConsistentLocalModel.eventCount(), "eventually consistent model should have been called after publish");
+			assertEquals(1, eventuallyConsistentLocalModelOnlyFirstEventType.eventCount(), "eventually consistent model should have been called after publish");
+			assertEquals(1, eventuallyConsistentLocalModelOnlySecondEventType.eventCount(), "eventually consistent model have been called after publish");
+			assertEquals(1, eventuallyConsistentLocalModelOnlyThirdEventType.eventCount(), "eventually consistent model should have been called after publish");
+		});
 
 	}
 	

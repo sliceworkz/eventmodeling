@@ -75,14 +75,22 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 	@BeforeEach
 	protected void setUp() {
 		super.setUp();
-		this.eventStorage = InMemoryEventStorage.newBuilder().build();
+		this.eventStorage = createEventStorage();
 	}
 
 	@AfterEach
 	protected void tearDown() {
+		destroyEventStorage(eventStorage);
 		if (boundedContext() != null) {
 			boundedContext().stop();
 		}
+	}
+
+	public EventStorage createEventStorage() {
+		return InMemoryEventStorage.newBuilder().build();
+	}
+
+	public void destroyEventStorage(EventStorage storage) {
 	}
 
 	private MockBoundedContext buildDomain() {

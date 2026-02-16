@@ -42,6 +42,7 @@
 		
 		<testcontainers.postgresql.version>1.21.4</testcontainers.postgresql.version>
 		<archunit.version>1.4.1</archunit.version>
+		<awaitility.version>4.3.0</awaitility.version>
 
 		<maven.maven-surefire-plugin.version>3.5.4</maven.maven-surefire-plugin.version>
 		<maven.maven-compiler-plugin.version>3.15.0</maven.maven-compiler-plugin.version>
@@ -110,6 +111,14 @@
 			    <version>${archunit.version}</version>
 			    <scope>test</scope>
 			</dependency>
+
+			<!-- Awaitility -->
+			<dependency>
+			    <groupId>org.awaitility</groupId>
+			    <artifactId>awaitility</artifactId>
+			    <version>${awaitility.version}</version>
+			    <scope>test</scope>
+			</dependency>
 			
 			<!-- micrometer -->
 			<dependency>
@@ -138,6 +147,12 @@
 		    <groupId>org.slf4j</groupId>
 		    <artifactId>slf4j-simple</artifactId>
 		    <scope>test</scope>
+		</dependency>
+		
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<scope>test</scope>
 		</dependency>
 		
 		<!-- micrometer -->

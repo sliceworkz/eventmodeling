@@ -31,7 +31,7 @@ import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
-import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
@@ -67,7 +67,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 		Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> processors = createProjectorProcessors(eventuallyConsistentTranslators);
 
-		this.processorThreadManager = new ProcessorThreadManager<INBOUND_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.TYPE_TRANSLATOR, processors);
+		this.processorThreadManager = new ProcessorThreadManager<INBOUND_EVENT_TYPE>(ProcessorIdentification.TYPE_TRANSLATOR, processors);
 
 	}
 
@@ -80,7 +80,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 		integrations.forEach(t->result.add(
 				new ProjectorProcessor<>(
-						EventuallyConsistentProcessorIdentification.EventuallyConsistentProcessorIdentificationBuilder
+						ProcessorIdentification.ProcessorIdentificationBuilder
 							.newBuilder(instance)
 								.context(boundedContext)
 								.translator()

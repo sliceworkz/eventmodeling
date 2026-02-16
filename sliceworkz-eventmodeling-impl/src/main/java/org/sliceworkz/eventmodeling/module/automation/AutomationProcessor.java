@@ -26,7 +26,7 @@ import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
-import org.sliceworkz.eventmodeling.module.threading.EventuallyConsistentProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.Limit;
@@ -51,8 +51,8 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation;
 	private ProcessorMode originalProcessorMode;
 	private ProcessorMode processorMode;
-	private EventuallyConsistentProcessorIdentification processorIdentification; // this is us
-	private EventuallyConsistentProcessorIdentification monitoredProcessorIdentification; // this is the readmodel-building processor we will shadow
+	private ProcessorIdentification processorIdentification; // this is us
+	private ProcessorIdentification monitoredProcessorIdentification; // this is the readmodel-building processor we will shadow
 
 	private Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory;
 
@@ -65,7 +65,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private final Counter itemsHandledCounter;
 	private final Timer batchTimer;
 
-	public AutomationProcessor ( EventuallyConsistentProcessorIdentification processorIdentification, EventuallyConsistentProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, MeterRegistry meterRegistry ) {
+	public AutomationProcessor ( ProcessorIdentification processorIdentification, ProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, MeterRegistry meterRegistry ) {
 		this.automationContextFactory = automationContextFactory;
 		this.automation = automation;
 		this.originalProcessorMode = processorMode;
@@ -114,7 +114,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 	@Override
 	public void bookmarkUpdated (String reader, EventReference processedUntil ) {
-		EventuallyConsistentProcessorIdentification processor = EventuallyConsistentProcessorIdentification.parse(reader);
+		ProcessorIdentification processor = ProcessorIdentification.parse(reader);
 
 		if ( processor.equals(monitoredProcessorIdentification)) {
 			LOGGER.debug("monitored event processor {} moved bookmark to  {}", processor.toString(), processedUntil);

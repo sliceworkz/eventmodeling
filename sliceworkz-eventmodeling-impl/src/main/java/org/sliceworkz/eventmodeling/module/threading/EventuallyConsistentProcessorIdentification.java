@@ -24,7 +24,12 @@ import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
 public record EventuallyConsistentProcessorIdentification ( String context, String type, String id, Storage storage, String location ) {
-	
+
+	public static final String TYPE_READMODEL = "readmodel";
+	public static final String TYPE_TRANSLATOR = "translator";
+	public static final String TYPE_DISPATCHER = "dispatcher";
+	public static final String TYPE_AUTOMATION = "automation";
+
 	public enum Storage {
 		EPHEMERAL("ephemeral"),
 		LOCAL("local"),
@@ -170,22 +175,22 @@ public record EventuallyConsistentProcessorIdentification ( String context, Stri
 		}
 
 		public EventuallyConsistentProcessorIdentificationBuilder readmodel ( ) {
-			this.type = "readmodel";
+			this.type = TYPE_READMODEL;
 			return this;
 		}
-		
+
 		public EventuallyConsistentProcessorIdentificationBuilder translator ( ) {
-			this.type = "translator";
+			this.type = TYPE_TRANSLATOR;
 			return this;
 		}
 
 		public EventuallyConsistentProcessorIdentificationBuilder dispatcher ( ) {
-			this.type = "dispatcher";
+			this.type = TYPE_DISPATCHER;
 			return this;
 		}
 
 		public EventuallyConsistentProcessorIdentificationBuilder automation ( ) {
-			this.type = "automation";
+			this.type = TYPE_AUTOMATION;
 			return this;
 		}
 

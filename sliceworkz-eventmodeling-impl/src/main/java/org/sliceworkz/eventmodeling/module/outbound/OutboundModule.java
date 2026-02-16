@@ -58,7 +58,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 
 		Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> processors = createProjectorProcessors(dispatchers);
 
-		this.processorThreadManager = new ProcessorThreadManager<OUTBOUND_EVENT_TYPE>("dispatcher", processors);
+		this.processorThreadManager = new ProcessorThreadManager<OUTBOUND_EVENT_TYPE>(EventuallyConsistentProcessorIdentification.TYPE_DISPATCHER, processors);
 	}
 
 	Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> createProjectorProcessors ( Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers ) {
@@ -95,7 +95,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 		@Override
 		public void when(Event<OUTBOUND_EVENT_TYPE> eventWithMeta) {
 			String eventName = eventWithMeta.data().getClass().getSimpleName();
-			String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 			String cacheKey = dispatcherName + ":" + eventName + ":" + channel;
 
 			Counter counter = dispatcherCounters.computeIfAbsent(cacheKey, key ->

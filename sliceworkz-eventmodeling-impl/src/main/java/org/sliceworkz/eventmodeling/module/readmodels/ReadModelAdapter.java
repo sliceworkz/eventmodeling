@@ -81,7 +81,7 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN
 	@Override
 	public void when(Event<DOMAIN_EVENT_TYPE> eventWithMeta) {
 		String eventName = eventWithMeta.data().getClass().getSimpleName();
-		String channel = tracing.channel() != null ? tracing.channel() : "unknown";
+		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 		String cacheKey = readModelName + ":" + readModelType + ":" + eventName + ":" + channel;
 
 		Counter counter = eventCounters.computeIfAbsent(cacheKey, key ->

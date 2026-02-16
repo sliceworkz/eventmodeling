@@ -73,7 +73,12 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(BoundedContextBuilderImpl.class);
-	
+
+	private static final String PURPOSE_DOMAIN = "domain";
+	private static final String PURPOSE_INBOUND = "inbound";
+	private static final String PURPOSE_OUTBOUND = "outbound";
+	private static final String PURPOSE_OBSERVABILITY = "observability";
+
 	private String name;
 	
 	private List<LiveModelSpecificationImpl> liveModelSpecs = new ArrayList<>();
@@ -259,15 +264,15 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		
 		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage, meterRegistry);
 		domainEventStream = historicalDomainEventRootType != null
-			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("domain"), domainEventRootType, historicalDomainEventRootType)
-			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("domain"), domainEventRootType);
+			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_DOMAIN), domainEventRootType, historicalDomainEventRootType)
+			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_DOMAIN), domainEventRootType);
 		inboundEventStream = historicalInboundEventRootType != null
-			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("inbound"), inboundEventRootType, historicalInboundEventRootType)
-			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("inbound"), inboundEventRootType);
+			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_INBOUND), inboundEventRootType, historicalInboundEventRootType)
+			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_INBOUND), inboundEventRootType);
 		outboundEventStream = historicalOutboundEventRootType != null
-			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("outbound"), outboundEventRootType, historicalOutboundEventRootType)
-			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("outbound"), outboundEventRootType);
-		observabilityEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose("observability"), KernelEvent.class);
+			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OUTBOUND), outboundEventRootType, historicalOutboundEventRootType)
+			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OUTBOUND), outboundEventRootType);
+		observabilityEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OBSERVABILITY), KernelEvent.class);
 		readAllInStoreEventStream = eventStore.getEventStream(EventStreamId.anyContext().anyPurpose());
 
 		List<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices = Collections.emptyList();

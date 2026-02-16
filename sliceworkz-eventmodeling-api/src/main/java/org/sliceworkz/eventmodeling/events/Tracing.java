@@ -30,6 +30,7 @@ public record Tracing ( Instance instance, String actor, String channel ) {
 
 	public static final String UNKNOWN_ACTOR = null;
 	public static final String UNKNOWN_CHANNEL = null;
+	public static final String UNKNOWN_CHANNEL_LABEL = "unknown";
 
 	public static final String AUTOMATION_ACTOR = "automation";
 	public static final String AUTOMATION_CHANNEL = "automation";

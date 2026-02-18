@@ -39,6 +39,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.infra.postgres.DataSourceFactory;
+import org.sliceworkz.eventstore.infra.postgres.DatabaseInitMode;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorage;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -73,6 +74,8 @@ public class BenchmarkApplication {
 		System.out.println("initializeDatabase=" + initializeDatabase);
 		boolean finalInitializeDatabase = initializeDatabase;
 		
+		DatabaseInitMode databaseInitMode = finalInitializeDatabase?DatabaseInitMode.INITIALIZE:DatabaseInitMode.VALIDATE;
+		
 		/**
 		 * Starting PrometheusRegistry and Javalin REST API to expose metrics 
 		 */
@@ -97,7 +100,7 @@ public class BenchmarkApplication {
 		
 //		EventStorage eventStorage = InMemoryEventStorage.newBuilder().build();
 		DataSource dataSource = DataSourceFactory.fromConfiguration("pooled");
-		EventStorage eventStorage = PostgresEventStorage.newBuilder().dataSource(dataSource).prefix("benchmark_").initializeDatabase(initializeDatabase).build();
+		EventStorage eventStorage = PostgresEventStorage.newBuilder().dataSource(dataSource).prefix("benchmark_").databaseInitMode(databaseInitMode).build();
 
 		OrderProcessingBoundedContext bc = BoundedContext.newBuilder(OrderProcessingDomainEvent.class, OrderProcessingInboundEvent.class, OrderProcessingOutboundEvent.class)
 				.meterRegistry(prometheusMeterRegistry)

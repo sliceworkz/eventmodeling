@@ -49,13 +49,9 @@ import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
 public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
-	
+
 	private EventStorage eventStorage;
-	
-	private MockReadModel consistentModel;
-	private MockReadModel consistentModelOnlyFirstEventType;
-	private MockReadModel consistentModelOnlySecondEventType;
-	private MockReadModel consistentModelOnlyThirdEventType;
+
 	private MockReadModel eventuallyConsistentSharedModel;
 	private MockReadModel eventuallyConsistentSharedModelOnlyFirstEventType;
 	private MockReadModel eventuallyConsistentSharedModelOnlySecondEventType;
@@ -64,15 +60,11 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 	private MockReadModel eventuallyConsistentLocalModelOnlyFirstEventType;
 	private MockReadModel eventuallyConsistentLocalModelOnlySecondEventType;
 	private MockReadModel eventuallyConsistentLocalModelOnlyThirdEventType;
-	
+
 	@BeforeEach
 	protected void setUp ( ) {
 		super.setUp();
 		this.eventStorage = createEventStorage();
-		this.consistentModel = new MockReadModel("consistent, all domain events");
-		this.consistentModelOnlyFirstEventType = new MockReadModel("consistent, only first domain event", Arrays.asList(new Class[] {FirstDomainEvent.class}));
-		this.consistentModelOnlySecondEventType = new MockReadModel("consistent, only second domain event type", Arrays.asList(new Class[] {SecondDomainEvent.class}));
-		this.consistentModelOnlyThirdEventType = new MockReadModel("consistent, only third domain event type", Arrays.asList(new Class[] {ThirdDomainEvent.class}));
 		this.eventuallyConsistentSharedModel = new MockReadModel("eventually consistent shared model, all domain events");
 		this.eventuallyConsistentSharedModelOnlyFirstEventType = new MockReadModel("eventually consistent shared model, only first domain event type", Arrays.asList(new Class[] {FirstDomainEvent.class}));
 		this.eventuallyConsistentSharedModelOnlySecondEventType = new MockReadModel("eventually consistent shared model, only second domain event type", Arrays.asList(new Class[] {SecondDomainEvent.class}));
@@ -82,76 +74,76 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 		this.eventuallyConsistentLocalModelOnlySecondEventType = new MockReadModel("eventually consistent local model, only second domain event type", Arrays.asList(new Class[] {SecondDomainEvent.class}));
 		this.eventuallyConsistentLocalModelOnlyThirdEventType = new MockReadModel("eventually consistent local model, only third domain event type", Arrays.asList(new Class[] {ThirdDomainEvent.class}));
 	}
-	
+
 	@AfterEach
 	protected void tearDown ( ) {
 		destroyEventStorage(eventStorage);
 		boundedContext().stop();
 	}
-	
+
 	public EventStorage createEventStorage ( ) {
 		return InMemoryEventStorage.newBuilder().build();
 	}
-	
+
 	public void destroyEventStorage ( EventStorage storage ) {
-		
+
 	}
-	
+
 	@Test
 	void testLiveModelsNotCalledWithExternallyProvidedEvent ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), noConsistentModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
-		
-		// throw in an external event		
+		MockBoundedContext domain = domainWithReadModels(liveModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
+
+		// throw in an external event
 		domain.event(new MockDomainEvent.FirstDomainEvent("test"));
 		domain.event(new MockDomainEvent.SecondDomainEvent("test"));
 		domain.event(new MockDomainEvent.ThirdDomainEvent("test"));
-		
+
 		assertEquals(0, MockReadModel.TOTAL_EVENT_COUNT_OVER_INSTANCES(), "live model should not have been called when a domain event happens");
 	}
 
 	@Test
 	void testLiveModelsNotCalledWithCommandGeneratedEventsSentSeparately ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), noConsistentModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
-		
+		MockBoundedContext domain = domainWithReadModels(liveModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
+
 		// generate one event at a time via a command
 		domain.execute(new MockCommand(Collections.singletonList(new MockDomainEvent.FirstDomainEvent("test"))));
 		domain.execute(new MockCommand(Collections.singletonList(new MockDomainEvent.SecondDomainEvent("test"))));
 		domain.execute(new MockCommand(Collections.singletonList(new MockDomainEvent.ThirdDomainEvent("test"))));
-		
+
 		assertEquals(0, MockReadModel.TOTAL_EVENT_COUNT_OVER_INSTANCES(), "live model should not have been called when a domain event happens");
 	}
 
 	@Test
 	void testLiveModelsNotCalledWithCommandGeneratedEventsSentInOneTransaction ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), noConsistentModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
-		
+		MockBoundedContext domain = domainWithReadModels(liveModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
+
 		List<MockDomainEvent> events = new ArrayList<>();
 		events.add(new MockDomainEvent.FirstDomainEvent("test"));
 		events.add(new MockDomainEvent.SecondDomainEvent("test"));
 		events.add(new MockDomainEvent.ThirdDomainEvent("test"));
-		
+
 		// generate all events at once in one command
 		domain.execute(new MockCommand(events));
-		
+
 		assertEquals(0, MockReadModel.TOTAL_EVENT_COUNT_OVER_INSTANCES(), "live model should not have been called when a domain event happens");
 	}
 
 	@Test
 	void testModelsCallingWhenExternalEventsOccur ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), consistentModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
-		
-		// throw in an external event		
+		MockBoundedContext domain = domainWithReadModels(liveModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
+
+		// throw in an external event
 		domain.event(new MockDomainEvent.FirstDomainEvent("test"));
 		domain.event(new MockDomainEvent.SecondDomainEvent("test"));
 		domain.event(new MockDomainEvent.ThirdDomainEvent("test"));
-		
+
 		assertModelsCallingWhenEventOccurs();
 	}
-	
+
 	@Test
 	void testModelsCallingWhenCommandGeneratedEventsOccurSeparately ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), consistentModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
-		
+		MockBoundedContext domain = domainWithReadModels(liveModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
+
 		// generate one event at a time via a command
 		domain.execute(new MockCommand(Collections.singletonList(new MockDomainEvent.FirstDomainEvent("test"))));
 		domain.execute(new MockCommand(Collections.singletonList(new MockDomainEvent.SecondDomainEvent("test"))));
@@ -159,16 +151,16 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 
 		assertModelsCallingWhenEventOccurs();
 	}
-	
+
 	@Test
 	void testModelsCallingWhenCommandGeneratedEventsOccurInOneTransaction ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), consistentModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
-		
+		MockBoundedContext domain = domainWithReadModels(liveModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
+
 		List<MockDomainEvent> events = new ArrayList<>();
 		events.add(new MockDomainEvent.FirstDomainEvent("test"));
 		events.add(new MockDomainEvent.SecondDomainEvent("test"));
 		events.add(new MockDomainEvent.ThirdDomainEvent("test"));
-		
+
 		// generate all events at once in one command
 		domain.execute(new MockCommand(events));
 
@@ -176,11 +168,6 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 	}
 
 	void assertModelsCallingWhenEventOccurs ( ) {
-
-		assertEquals(3, consistentModel.eventCountForThisThread(), "consistent model should have been called from this thread when a domain event happens");
-		assertEquals(1, consistentModelOnlyFirstEventType.eventCountForThisThread(), "consistent model should have been called from this thread when a domain event happens, but only if it passes the EventQuery");
-		assertEquals(1, consistentModelOnlySecondEventType.eventCountForThisThread(), "consistent model should have been called from this thread when a domain event happens, but only if it passes the EventQuery");
-		assertEquals(1, consistentModelOnlyThirdEventType.eventCountForThisThread(), "consistent model should have been called from this thread when a domain event happens, but only if it passes the EventQuery");
 
 		assertEquals(0, eventuallyConsistentSharedModel.eventCountForThisThread(), "eventually consistent model should not have been called from this thread when a domain event happens");
 		assertEquals(0, eventuallyConsistentSharedModelOnlyFirstEventType.eventCountForThisThread(), "eventually consistent model should not have been called from this thread when a domain event happens");
@@ -206,13 +193,12 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 		});
 
 	}
-	
-	MockBoundedContext domainWithReadModels ( 
-			Collection<Class<? extends ReadModelWithMetaData<MockDomainEvent>>> liveModelClasses, 
-			Collection<ReadModelWithMetaData<MockDomainEvent>> consistentReadModels,
+
+	MockBoundedContext domainWithReadModels (
+			Collection<Class<? extends ReadModelWithMetaData<MockDomainEvent>>> liveModelClasses,
 			Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentSharedReadModels,
 			Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentLocalReadModels ) {
-		
+
 		BoundedContextBuilder<MockDomainEvent, MockInboundEvent, MockOutboundEvent> builder =
 				BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
 				.name("UnitTestBoundedContext")
@@ -220,27 +206,18 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"));
 
 		liveModelClasses.forEach(builder::readmodel);
-		consistentReadModels.stream().map(builder::readmodel).forEach(a->a.consistent());
 		eventuallyConsistentSharedReadModels.stream().map(builder::readmodel).map(LongLivedReadModelSpecification::shared).forEach(LongLivedReadModelSpecification::eventuallyConsistent);
 		eventuallyConsistentLocalReadModels.stream().map(builder::readmodel).map(LongLivedReadModelSpecification::local).forEach(LongLivedReadModelSpecification::eventuallyConsistent);
-		
+
 		return buildBoundedContext ( builder );
 	}
 
-	
+
 	Collection<Class<? extends ReadModelWithMetaData<MockDomainEvent>>> liveModels ( ) {
 		return Arrays.asList(MockReadModel.class);
 	}
 
 	Collection<Class<? extends ReadModelWithMetaData<MockDomainEvent>>> noLiveModels ( ) {
-		return Collections.emptyList();
-	}
-
-	Collection<ReadModelWithMetaData<MockDomainEvent>> consistentModels ( ) {
-		return Arrays.asList(consistentModel, consistentModelOnlyFirstEventType, consistentModelOnlySecondEventType, consistentModelOnlyThirdEventType);
-	}
-
-	Collection<ReadModelWithMetaData<MockDomainEvent>> noConsistentModels ( ) {
 		return Collections.emptyList();
 	}
 

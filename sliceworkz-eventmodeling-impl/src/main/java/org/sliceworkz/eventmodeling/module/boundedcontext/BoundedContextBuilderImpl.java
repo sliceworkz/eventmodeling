@@ -309,10 +309,9 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 			LOGGER.warn("no features rootPackage");
 		}
 		
-		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> consistentReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.CONSISTENT).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.EVENTUALLY_CONSISTENT&&s.isShared()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.EVENTUALLY_CONSISTENT&&s.isLocal()&&!s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.consistency()==Consistency.EVENTUALLY_CONSISTENT&&s.isLocal()&&s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels = longLivedReadModelSpecs.stream().filter(s->s.isShared()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&!s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 
 		Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translators = translatorSpecs.stream().map(i->(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
 		InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> im = new InboundModule<>(name, inboundEventStream, translators, instance, meterRegistry);
@@ -322,7 +321,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 
 		AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> am = new AutomationModule<>(name, domainEventStream, automations, instance, meterRegistry);
 
-		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, consistentReadModels, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
+		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
 		DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcb = new DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, instance, rmm, domainEventStream, outboundEventStream, meterRegistry);
 		
 		AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule = new AggregateModule<DOMAIN_EVENT_TYPE>(name, instance, aggregateSpecifications, domainEventStream, meterRegistry);
@@ -355,7 +354,6 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 
 		private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder;
 		private Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass;
-		private Consistency consistency = Consistency.LIVE;
 		private LiveModelSnapshotSpecificationImpl<?,DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshotSpecification;
 
 		public LiveModelSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder, Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass ) {
@@ -365,13 +363,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 
 		@Override
 		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> live ( ) {
-			this.consistency = Consistency.LIVE;
 			return builder;
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> consistent ( ) {
-			throw new IllegalArgumentException("LIVE read model - cannot be updated CONSISTENTly");
 		}
 
 		@Override
@@ -387,10 +379,6 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 			}
 			this.snapshotSpecification = new LiveModelSnapshotSpecificationImpl<SNAPSHOT_TYPE, DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(builder, snapshotStorage);
 			return snapshotSpecification;
-		}
-
-		public Consistency consistency ( ) {
-			return consistency;
 		}
 
 		public Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass ( ) {
@@ -422,7 +410,6 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		private boolean ephemeral = false;
 		private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder;
 		private ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel;
-		private Consistency consistency = Consistency.EVENTUALLY_CONSISTENT;
 
 		public LongLivedReadModelSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder, ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel ) {
 			this.builder = builder;
@@ -435,17 +422,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		}
 
 		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> consistent ( ) {
-			if ( ! isShared() ) {
-				throw new IllegalArgumentException("CONSISTENT updates are only supported for SHARED ReadMoodels.  LIVE, LOCAL and EPHEMERAL ReadModels can not by updated CONSISTENTly.");
-			}
-			this.consistency = Consistency.CONSISTENT;
-			return builder;
-		}
-
-		@Override
 		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventuallyConsistent ( ) {
-			this.consistency = Consistency.EVENTUALLY_CONSISTENT;
 			return builder;
 		}
 		
@@ -482,10 +459,6 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 			return !isShared();
 		}
 		
-		public Consistency consistency ( ) {
-			return consistency;
-		}
-		
 		public ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel ( ) {
 			return readModel;
 		}
@@ -502,10 +475,4 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		}
 	}
 	
-	public enum Consistency {
-		LIVE,
-		CONSISTENT,
-		EVENTUALLY_CONSISTENT
-	}
-
 }

@@ -65,6 +65,8 @@ public class BankingExample {
 				.done()
 			.build(BankingBoundedContext.class);
 		
+		bc.start();
+		
 		EventStream<BankingDomainEvent> eventStream = eventStore.getEventStream(EventStreamId.forContext("banking").withPurpose("domain"), BankingDomainEvent.class);
 		
 		/*

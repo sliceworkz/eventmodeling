@@ -103,6 +103,8 @@ public class BankingClosingTheBooksExample {
 			.done();
 
 		ClosingTheBooksBoundedContext bc = builder.build(ClosingTheBooksBoundedContext.class);
+		
+		bc.start();
 
 		EventStream<BankingEvent> eventStream = eventStore.getEventStream(
 			EventStreamId.forContext("banking-ctb").withPurpose("domain"),

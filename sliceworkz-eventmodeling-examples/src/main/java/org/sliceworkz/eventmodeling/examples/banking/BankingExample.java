@@ -35,8 +35,10 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamEventuallyConsistentAppendListener;
@@ -95,7 +97,12 @@ public class BankingExample {
 		Optional<EventReference> ref = bc.execute(new OpenAccountCommand(DomainConceptId.create()));
 		
 		// Go fetch the AccountOpened Event that should have been raised by the OpenAccountCommmand
-		AccountOpened ao = eventStream.getEventById(ref.get().id()).map(Event::data).map(e->(AccountOpened)e).get();
+		AccountOpened ao = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none()))
+			.filter(e -> e.reference().id().equals(ref.get().id()))
+			.map(Event::data)
+			.map(e -> (AccountOpened) e)
+			.findFirst()
+			.get();
 		
 		// Render a live model with the details of the Account
 		AccountDetailsReadModel rm = bc.read(AccountDetailsReadModel.class, ao.accountId());

@@ -41,7 +41,10 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
+import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
@@ -117,9 +120,11 @@ public class BankingClosingTheBooksExample {
 		Optional<EventReference> ref = bc.execute(new OpenBankAccountCommand(customerId, january));
 
 		// Retrieve the AccountOpened event to get the generated accountId
-		AccountOpened accountOpened = eventStream.getEventById(ref.get().id())
+		AccountOpened accountOpened = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none()))
+			.filter(e -> e.reference().id().equals(ref.get().id()))
 			.map(Event::data)
 			.map(e -> (AccountOpened) e)
+			.findFirst()
 			.get();
 		DomainConceptId accountId = accountOpened.accountId();
 

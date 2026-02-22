@@ -61,7 +61,6 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private EventSource<DOMAIN_EVENT_TYPE> domainEventStream;
 	private EventSource<Object> allInStorageEventStream;
 	private Map<Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>, LiveModelInfo<DOMAIN_EVENT_TYPE>> liveModels = new HashMap<>();
-	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> consistentReadModels = new ArrayList<>();
 	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels = new ArrayList<>();
 	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels = new ArrayList<>();
 	private String boundedContext;
@@ -90,7 +89,6 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventStream<Object> allInStorageEventStream,
 			List<LMSI> liveModelSpecs,
-			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> consistentReadModels,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels,
@@ -125,10 +123,6 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 					spec.snapshotEventCountThreshold(),
 					counterSnapshotRead,
 					counterSnapshotWrite));
-		}
-
-		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> consistentReadModel : consistentReadModels ) {
-			this.consistentReadModels.add(consistentReadModel);
 		}
 
 		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentSharedReadModel : eventuallyConsistentSharedReadModels ) {
@@ -266,16 +260,6 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			}
 		}
 		throw new IllegalArgumentException("no public constructor found on " + readModelClass + " for parameters " + constructorParams);
-	}
-
-	/**
-	 * Updates consistent readmodels shared over all BoundedContext instances (eg: database, CDN, ...)
-	 * This method will only be called on a single BoundedContext instance, the one where the event is initially delivered (due to consistency)
-	 */
-	public void updateSharedConsistentModels ( Stream<? extends Event<DOMAIN_EVENT_TYPE>> events ) {
-		events.forEach(e->{
-			consistentReadModels.stream().filter(rm->rm.eventQuery().matches(e)).forEach(rm->rm.when(e));
-		});
 	}
 
 	// TODO is this the way?  this can be done by the processors at start also ...

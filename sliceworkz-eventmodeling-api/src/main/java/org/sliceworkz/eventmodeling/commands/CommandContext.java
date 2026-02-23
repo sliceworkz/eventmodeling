@@ -1,6 +1,6 @@
 /*
  * Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
- * Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+ * Copyright © 2025-2026 Sliceworkz / XTi (info@sliceworkz.org)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -17,11 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.commands;
 
-import java.util.Optional;
-
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
-import org.sliceworkz.eventstore.events.EventId;
-import org.sliceworkz.eventstore.events.EventReference;
 
 public interface CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
@@ -30,7 +26,5 @@ public interface CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 	CommandResult<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> noDecisionModels ( );
 	
 	CommandResult<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> decisionModels ( @SuppressWarnings("unchecked") DecisionModel<CONSUMED_EVENT_TYPE>... decisionModels );
-	
-	Optional<EventReference> getEventReference ( EventId eventId );
 
 }

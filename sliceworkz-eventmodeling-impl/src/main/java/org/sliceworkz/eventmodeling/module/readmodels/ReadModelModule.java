@@ -1,6 +1,6 @@
 /*
  * Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
- * Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+ * Copyright © 2025-2026 Sliceworkz / XTi (info@sliceworkz.org)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -37,7 +37,6 @@ import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.P
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
-import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;

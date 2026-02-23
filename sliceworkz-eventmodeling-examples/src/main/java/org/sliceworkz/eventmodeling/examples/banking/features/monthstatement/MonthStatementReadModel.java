@@ -1,6 +1,6 @@
 /*
  * Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
- * Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+ * Copyright © 2025-2026 Sliceworkz / XTi (info@sliceworkz.org)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -18,7 +18,6 @@
 package org.sliceworkz.eventmodeling.examples.banking.features.monthstatement;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +27,11 @@ import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.*;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyDeposited;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyWithdrawn;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthClosed;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthOpened;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;

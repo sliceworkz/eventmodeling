@@ -2,7 +2,7 @@
 <!--
 
     Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
-    Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+    Copyright © 2025-2026 Sliceworkz / XTi (info@sliceworkz.org)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Lesser General Public License as published by
@@ -34,7 +34,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-		<sliceworkz.eventstore.version>0.6.4</sliceworkz.eventstore.version>
+		<sliceworkz.eventstore.version>0.7.0</sliceworkz.eventstore.version>
 		
 		<maven.minimal-version>3.6.3</maven.minimal-version>
 		
@@ -139,7 +139,7 @@
 						<project.description>an opinionated Event Modeling framework in Java</project.description>
 					    <owner>Sliceworkz / XTi</owner>
 					    <email>info@sliceworkz.org</email>
-					    <year>2025</year>
+					    <year>2025-2026</year>
 					</properties>
 					<licenseSets>
 						<licenseSet>

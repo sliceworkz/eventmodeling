@@ -1,6 +1,6 @@
 /*
  * Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
- * Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+ * Copyright © 2025-2026 Sliceworkz / XTi (info@sliceworkz.org)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -18,6 +18,9 @@
 package org.sliceworkz.eventmodeling.module.historical;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -173,23 +176,23 @@ public class HistoricalDomainEventTest {
 
 	public static class ItemAddedUpcaster implements Upcast<HistoricalDomainEvent.ItemAdded, CurrentDomainEvent.ItemAddedV2> {
 		@Override
-		public CurrentDomainEvent.ItemAddedV2 upcast(HistoricalDomainEvent.ItemAdded historicalEvent) {
-			return new CurrentDomainEvent.ItemAddedV2(historicalEvent.name(), historicalEvent.quantity(), "unknown");
+		public List<CurrentDomainEvent.ItemAddedV2> upcast(HistoricalDomainEvent.ItemAdded historicalEvent) {
+			return List.of(new CurrentDomainEvent.ItemAddedV2(historicalEvent.name(), historicalEvent.quantity(), "unknown"));
 		}
 		@Override
-		public Class<CurrentDomainEvent.ItemAddedV2> targetType() {
-			return CurrentDomainEvent.ItemAddedV2.class;
+		public Set<Class<? extends CurrentDomainEvent.ItemAddedV2>> targetTypes() {
+			return Set.of(CurrentDomainEvent.ItemAddedV2.class);
 		}
 	}
 
 	public static class ItemRemovedUpcaster implements Upcast<HistoricalDomainEvent.ItemRemoved, CurrentDomainEvent.ItemRemovedV2> {
 		@Override
-		public CurrentDomainEvent.ItemRemovedV2 upcast(HistoricalDomainEvent.ItemRemoved historicalEvent) {
-			return new CurrentDomainEvent.ItemRemovedV2(historicalEvent.name(), "no reason recorded");
+		public List<CurrentDomainEvent.ItemRemovedV2> upcast(HistoricalDomainEvent.ItemRemoved historicalEvent) {
+			return List.of(new CurrentDomainEvent.ItemRemovedV2(historicalEvent.name(), "no reason recorded"));
 		}
 		@Override
-		public Class<CurrentDomainEvent.ItemRemovedV2> targetType() {
-			return CurrentDomainEvent.ItemRemovedV2.class;
+		public Set<Class<? extends CurrentDomainEvent.ItemRemovedV2>> targetTypes() {
+			return Set.of(CurrentDomainEvent.ItemRemovedV2.class);
 		}
 	}
 

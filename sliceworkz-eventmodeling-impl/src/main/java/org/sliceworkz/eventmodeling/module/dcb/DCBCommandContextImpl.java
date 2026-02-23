@@ -1,6 +1,6 @@
 /*
  * Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
- * Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+ * Copyright © 2025-2026 Sliceworkz / XTi (info@sliceworkz.org)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.module.dcb;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
@@ -28,7 +27,6 @@ import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
-import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
@@ -103,9 +101,9 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 				Projector<CONSUMED_EVENT_TYPE> modelProjector = Projector.from(queryEventStream).towards(p).build();
 				ProjectorMetrics metrics = modelProjector.run();
 				accumulatedMetrics = accumulatedMetrics.add(metrics);
-				if ( metrics.lastEventReference() != null ) {
-					if ( lastEventReference == null || metrics.lastEventReference().happenedAfter(lastEventReference) ) {
-						lastEventReference = metrics.lastEventReference();
+				if ( metrics.mostRecentEventReference() != null ) {
+					if ( lastEventReference == null || metrics.mostRecentEventReference().happenedAfter(lastEventReference) ) {
+						lastEventReference = metrics.mostRecentEventReference();
 					}
 				}
 			}
@@ -122,11 +120,6 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	
 	public ProjectorMetrics projectorMetrics ( ) {
 		return projectorMetrics == null?ProjectorMetrics.empty():projectorMetrics;
-	}
-
-	@Override
-	public Optional<EventReference> getEventReference(EventId eventId) {
-		return queryEventStream.queryReference(eventId);
 	}
 
 	@Override

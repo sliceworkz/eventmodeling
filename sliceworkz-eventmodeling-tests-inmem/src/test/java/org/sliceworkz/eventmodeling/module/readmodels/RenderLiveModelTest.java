@@ -1,6 +1,6 @@
 /*
  * Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
- * Copyright © 2025 Sliceworkz / XTi (info@sliceworkz.org)
+ * Copyright © 2025-2026 Sliceworkz / XTi (info@sliceworkz.org)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -87,7 +87,7 @@ public class RenderLiveModelTest extends AbstractMockDomainTest {
 	}
 
 	private void testLiveModelWithDifferentNumberOfEvents ( MockBoundedContext boundedContext, int eventCount ) {
-		int expectedQueries = (eventCount+Projector.Builder.DEFAULT_MAX_EVENTS_PER_QUERY)/Projector.Builder.DEFAULT_MAX_EVENTS_PER_QUERY;
+		int expectedQueries = (eventCount - 1) / Projector.Builder.DEFAULT_MAX_EVENTS_PER_QUERY + 2;
 		
 //		System.out.println("assuming "  + expectedQueries + " queries for " + eventCount + " events");
 		

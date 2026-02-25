@@ -17,8 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.benchmark;
 
-import javax.sql.DataSource;
-
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
@@ -31,6 +29,4 @@ public interface OrderProcessingFeatureSlice extends FeatureSliceConfiguration<O
 	default void configureQuery ( BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder ) { }
 	default void configureAutomation ( BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder ) { }
 
-	void preConfigure ( DataSource dataSource, boolean initializeDatabase );
-	
 }

@@ -34,6 +34,7 @@ import org.sliceworkz.eventmodeling.Banner;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
+import org.sliceworkz.eventmodeling.boundedcontext.AdapterBinding;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
@@ -101,9 +102,11 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	private MeterRegistry meterRegistry = Metrics.globalRegistry;
 	
 	private EventStorage eventStorage;
-	
+
 	private Instance instance;
-	
+
+	private final AdapterRegistry adapterRegistry = new AdapterRegistry();
+
 	@Override
 	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> name ( String name ) {
 		this.name = name;
@@ -235,6 +238,27 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		return aggregateSpecification;
 	}
 	
+	@Override
+	public AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> adapter(Object adapter) {
+		if (adapter == null) {
+			throw new IllegalArgumentException("adapter must not be null");
+		}
+		return new AdapterBindingImpl(adapter);
+	}
+
+	@Override
+	public <T> T port(Class<T> portType) {
+		return adapterRegistry.lookup(portType, AdapterRegistry.DEFAULT_QUALIFICATION);
+	}
+
+	@Override
+	public <T> T port(Class<T> portType, String qualification) {
+		if (qualification == null) {
+			throw new IllegalArgumentException("qualification must not be null");
+		}
+		return adapterRegistry.lookup(portType, qualification);
+	}
+
 	@SuppressWarnings("unchecked")
 	@Override
 	public BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> build ( ) {
@@ -285,9 +309,6 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 					featuresSpecification.rootPackage(),
 					featuresSpecification.filter(),
 					slice -> {
-							if ( featuresSpecification.preConfigure() != null ) {
-								featuresSpecification.preConfigure().accept(slice);
-							}
 							if ( featuresSpecification.mustDeployCommands() ) {
 								slice.configureCommand(this);
 							}
@@ -474,5 +495,29 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 			LOGGER.info("N/A");
 		}
 	}
-	
+
+	private class AdapterBindingImpl implements AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+
+		private final Object adapter;
+
+		AdapterBindingImpl(Object adapter) {
+			this.adapter = adapter;
+		}
+
+		@Override
+		public <T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType) {
+			adapterRegistry.register(adapter, portType, AdapterRegistry.DEFAULT_QUALIFICATION);
+			return BoundedContextBuilderImpl.this;
+		}
+
+		@Override
+		public <T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType, String qualification) {
+			if (qualification == null) {
+				throw new IllegalArgumentException("qualification must not be null");
+			}
+			adapterRegistry.register(adapter, portType, qualification);
+			return BoundedContextBuilderImpl.this;
+		}
+	}
+
 }

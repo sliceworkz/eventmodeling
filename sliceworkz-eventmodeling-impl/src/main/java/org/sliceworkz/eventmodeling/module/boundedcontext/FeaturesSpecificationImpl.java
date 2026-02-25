@@ -17,7 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
@@ -25,29 +24,21 @@ import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
 import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
 
 public class FeaturesSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> implements FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
-	
+
 	private Package rootPackage;
-	private Consumer<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> preConfigure;
 	private Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> filter = (slice) -> true;
 	private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContextBuilder;
 	private boolean deployCommands = true;
 	private boolean deployQueries = true;
 	private boolean deployAutomations = true;
-	
+
 	public FeaturesSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContextBuilder ) {
 		this.boundedContextBuilder = boundedContextBuilder;
 	}
-	
+
 	@Override
 	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> rootPackage(Package rootPackage) {
 		this.rootPackage = rootPackage;
-		return this;
-	}
-
-	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> preConfigure(
-			Consumer<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> preConfigure) {
-		this.preConfigure = preConfigure;
 		return this;
 	}
 
@@ -120,11 +111,7 @@ public class FeaturesSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OU
 	Package rootPackage ( ) {
 		return rootPackage;
 	}
-	
-	Consumer<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> preConfigure ( ) {
-		return preConfigure;
-	}
-	
+
 	boolean mustDeployCommands ( ) {
 		return deployCommands;
 	}

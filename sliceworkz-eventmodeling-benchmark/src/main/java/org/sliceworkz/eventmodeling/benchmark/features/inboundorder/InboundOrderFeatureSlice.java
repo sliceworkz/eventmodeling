@@ -17,8 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.benchmark.features.inboundorder;
 
-import javax.sql.DataSource;
-
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
@@ -29,11 +27,6 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 
 @FeatureSlice(type = Type.TRANSLATION)
 public class InboundOrderFeatureSlice implements OrderProcessingFeatureSlice {
-
-	@Override
-	public void preConfigure(DataSource dataSource, boolean initializeDatabase) {
-	} 
-
 
 	@Override
 	public void configureAutomation(

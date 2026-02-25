@@ -26,24 +26,18 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingFeatureSlice;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventstore.infra.postgres.DatabaseInitMode;
 
 @FeatureSlice(type = Type.AUTOMATION)
 public class CreateShippingLabelFeatureSlice implements OrderProcessingFeatureSlice{
 
-	private RequiredShippingLabels requiredShippingLabels;
-	
-	@Override
-	public void preConfigure(DataSource dataSource, boolean initializeDatabase) {
-		requiredShippingLabels = new RequiredShippingLabels(dataSource);
-		if ( initializeDatabase ) {
-			this.requiredShippingLabels.initialize();
-		}
-	}
-
-
 	@Override
 	public void configureAutomation (
 			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
+		var requiredShippingLabels = new RequiredShippingLabels(builder.port(DataSource.class));
+		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
+			requiredShippingLabels.initialize();
+		}
 		builder.readmodel(requiredShippingLabels);
 		builder.automation(new CreateShippingLabelAutomation(requiredShippingLabels));
 	}

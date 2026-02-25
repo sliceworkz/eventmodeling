@@ -26,23 +26,18 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingFeatureSlice;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventstore.infra.postgres.DatabaseInitMode;
 
 @FeatureSlice(type=Type.AUTOMATION)
 public class AnnounceShipmentFeatureSlice implements OrderProcessingFeatureSlice{
 
-	private ShipmentsToBeAnounced shipmentsToBeAnounced;
-	
-	@Override
-	public void preConfigure(DataSource dataSource, boolean initializeDatabase) {
-		this.shipmentsToBeAnounced = new ShipmentsToBeAnounced(dataSource);
-		if ( initializeDatabase ) {
-			this.shipmentsToBeAnounced.initialize();
-		}
-	}
-	
 	@Override
 	public void configureAutomation(
 			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
+		var shipmentsToBeAnounced = new ShipmentsToBeAnounced(builder.port(DataSource.class));
+		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
+			shipmentsToBeAnounced.initialize();
+		}
 		builder.readmodel(shipmentsToBeAnounced);
 		builder.automation(new AnnounceShipmentAutomation(shipmentsToBeAnounced));
 	}

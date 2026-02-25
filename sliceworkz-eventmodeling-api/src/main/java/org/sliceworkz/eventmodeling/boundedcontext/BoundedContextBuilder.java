@@ -73,6 +73,44 @@ public interface BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OU
 	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dispatcher(
 			Class<? extends Dispatcher<? extends OUTBOUND_EVENT_TYPE>> dispatcherClass);
 
+	/**
+	 * Starts an adapter binding for the given adapter instance.
+	 * <p>
+	 * The returned {@link AdapterBinding} must be completed by calling
+	 * {@link AdapterBinding#forPort(Class)} to specify the port type.
+	 * <p>
+	 * Example:
+	 * <pre>
+	 *   .adapter(myDataSource).forPort(DataSource.class)
+	 *   .adapter(myCache).forPort(Cache.class).withQualification("customers")
+	 * </pre>
+	 *
+	 * @param adapter the adapter instance implementing a port
+	 * @return an adapter binding to specify the port type
+	 */
+	AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> adapter(Object adapter);
+
+	/**
+	 * Retrieves the adapter registered for the given port type with the default qualification.
+	 *
+	 * @param <T> the port type
+	 * @param portType the port interface class
+	 * @return the adapter instance, cast to the port type
+	 * @throws IllegalStateException if no adapter is registered for this port
+	 */
+	<T> T port(Class<T> portType);
+
+	/**
+	 * Retrieves the adapter registered for the given port type and qualification.
+	 *
+	 * @param <T> the port type
+	 * @param portType the port interface class
+	 * @param qualification the qualification name
+	 * @return the adapter instance, cast to the port type
+	 * @throws IllegalStateException if no adapter is registered for this port and qualification
+	 */
+	<T> T port(Class<T> portType, String qualification);
+
 	<T extends BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> T build( );
 
 	<T extends BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> T build(Class<T> returnType);

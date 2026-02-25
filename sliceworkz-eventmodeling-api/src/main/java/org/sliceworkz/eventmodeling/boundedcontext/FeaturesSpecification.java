@@ -17,7 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
@@ -25,20 +24,6 @@ import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
 public interface FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
 
 	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> rootPackage(Package rootPackage);
-
-	/**
-	 * Registers a pre-configuration callback that will be invoked for each feature slice
-	 * before it is configured.
-	 * <p>
-	 * This allows customization of feature slice configurations before they are built into
-	 * the bounded context. The callback receives the feature slice configuration and can
-	 * modify its settings.
-	 *
-	 * @param preConfigure the callback to invoke for each feature slice configuration
-	 * @return this builder for method chaining
-	 */
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> preConfigure (
-			Consumer<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> preConfigure );
 
 	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> filter (Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> filter);
 

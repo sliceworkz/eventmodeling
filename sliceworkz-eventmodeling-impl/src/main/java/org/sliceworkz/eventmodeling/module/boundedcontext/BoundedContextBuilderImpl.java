@@ -38,7 +38,6 @@ import org.sliceworkz.eventmodeling.boundedcontext.AdapterBinding;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
-import org.sliceworkz.eventmodeling.boundedcontext.QualifiableAdapterBinding;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
@@ -506,152 +505,18 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		}
 
 		@Override
-		public <T> QualifiableAdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType) {
+		public <T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType) {
 			adapterRegistry.register(adapter, portType, AdapterRegistry.DEFAULT_QUALIFICATION);
-			return new QualifiableAdapterBindingImpl(adapter, portType);
-		}
-	}
-
-	private class QualifiableAdapterBindingImpl extends DelegatingBoundedContextBuilder
-			implements QualifiableAdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
-
-		private final Object adapter;
-		private final Class<?> portType;
-
-		QualifiableAdapterBindingImpl(Object adapter, Class<?> portType) {
-			this.adapter = adapter;
-			this.portType = portType;
+			return BoundedContextBuilderImpl.this;
 		}
 
 		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> withQualification(String qualification) {
+		public <T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType, String qualification) {
 			if (qualification == null) {
 				throw new IllegalArgumentException("qualification must not be null");
 			}
-			adapterRegistry.requalify(portType, qualification);
+			adapterRegistry.register(adapter, portType, qualification);
 			return BoundedContextBuilderImpl.this;
-		}
-	}
-
-	/**
-	 * Delegates all BoundedContextBuilder methods to the enclosing BoundedContextBuilderImpl,
-	 * allowing QualifiableAdapterBindingImpl to act as a BoundedContextBuilder for chaining.
-	 */
-	private abstract class DelegatingBoundedContextBuilder implements BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> name(String name) {
-			return BoundedContextBuilderImpl.this.name(name);
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventTypes(
-				Class<DOMAIN_EVENT_TYPE> domainEventRootType,
-				Class<INBOUND_EVENT_TYPE> inboundEventRootType,
-				Class<OUTBOUND_EVENT_TYPE> outboundEventRootType) {
-			return BoundedContextBuilderImpl.this.eventTypes(domainEventRootType, inboundEventRootType, outboundEventRootType);
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> historicalEventTypes(
-				Class<?> historicalDomainEventRootType,
-				Class<?> historicalInboundEventRootType,
-				Class<?> historicalOutboundEventRootType) {
-			return BoundedContextBuilderImpl.this.historicalEventTypes(historicalDomainEventRootType, historicalInboundEventRootType, historicalOutboundEventRootType);
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> instance(Instance instance) {
-			return BoundedContextBuilderImpl.this.instance(instance);
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> meterRegistry(MeterRegistry meterRegistry) {
-			return BoundedContextBuilderImpl.this.meterRegistry(meterRegistry);
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventStorage(EventStorage eventStorage) {
-			return BoundedContextBuilderImpl.this.eventStorage(eventStorage);
-		}
-
-		@Override
-		public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> features() {
-			return BoundedContextBuilderImpl.this.features();
-		}
-
-		@Override
-		public AggregateSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> aggregate(
-				Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass) {
-			return BoundedContextBuilderImpl.this.aggregate(aggregateClass);
-		}
-
-		@Override
-		public LiveModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readmodel(
-				Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass) {
-			return BoundedContextBuilderImpl.this.readmodel(readModelClass);
-		}
-
-		@Override
-		public LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readmodel(
-				ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel) {
-			return BoundedContextBuilderImpl.this.readmodel(readModel);
-		}
-
-		@Override
-		public <TODO_ITEM_TYPE> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> automation(
-				Automation<TODO_ITEM_TYPE, DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> automation) {
-			return BoundedContextBuilderImpl.this.automation(automation);
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> translator(
-				Translator<? extends INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> translator) {
-			return BoundedContextBuilderImpl.this.translator(translator);
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> translator(
-				Class<? extends Translator<? extends INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>> translatorClass) {
-			return BoundedContextBuilderImpl.this.translator(translatorClass);
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dispatcher(
-				Dispatcher<? extends OUTBOUND_EVENT_TYPE> dispatcher) {
-			return BoundedContextBuilderImpl.this.dispatcher(dispatcher);
-		}
-
-		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dispatcher(
-				Class<? extends Dispatcher<? extends OUTBOUND_EVENT_TYPE>> dispatcherClass) {
-			return BoundedContextBuilderImpl.this.dispatcher(dispatcherClass);
-		}
-
-		@Override
-		public AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> adapter(Object adapter) {
-			return BoundedContextBuilderImpl.this.adapter(adapter);
-		}
-
-		@Override
-		public <T> T port(Class<T> portType) {
-			return BoundedContextBuilderImpl.this.port(portType);
-		}
-
-		@Override
-		public <T> T port(Class<T> portType, String qualification) {
-			return BoundedContextBuilderImpl.this.port(portType, qualification);
-		}
-
-		@SuppressWarnings("unchecked")
-		@Override
-		public BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> build() {
-			return BoundedContextBuilderImpl.this.build();
-		}
-
-		@Override
-		public <T extends BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> T build(Class<T> returnType) {
-			return BoundedContextBuilderImpl.this.build(returnType);
 		}
 	}
 

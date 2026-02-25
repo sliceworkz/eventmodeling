@@ -82,7 +82,7 @@ public interface BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OU
 	 * Example:
 	 * <pre>
 	 *   .adapter(myDataSource).forPort(DataSource.class)
-	 *   .adapter(myCache).forPort(Cache.class).withQualification("customers")
+	 *   .adapter(myCache).forPort(Cache.class, "customers")
 	 * </pre>
 	 *
 	 * @param adapter the adapter instance implementing a port

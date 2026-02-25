@@ -58,24 +58,6 @@ class AdapterRegistry {
 	}
 
 	/**
-	 * Moves an existing default-qualified binding to a named qualification.
-	 * Used when {@code .forPort(X).withQualification("name")} is called.
-	 *
-	 * @param portType the port interface
-	 * @param qualification the new qualification
-	 */
-	void requalify(Class<?> portType, String qualification) {
-		var defaultKey = new PortKey(portType, DEFAULT_QUALIFICATION);
-		Object adapter = adapters.remove(defaultKey);
-		if (adapter == null) {
-			throw new IllegalStateException(
-					"Cannot requalify: no default adapter registered for port '%s'"
-							.formatted(portType.getName()));
-		}
-		register(adapter, portType, qualification);
-	}
-
-	/**
 	 * Looks up the adapter for the given port type and qualification.
 	 *
 	 * @param <T> the port type

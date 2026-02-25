@@ -31,14 +31,26 @@ public interface AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_
 
 	/**
 	 * Binds the adapter to the specified port type with the default (unqualified) qualification.
-	 * <p>
-	 * The adapter must be assignable to the port type.
 	 *
 	 * @param <T> the port type
 	 * @param portType the port interface class that the adapter implements
-	 * @return a qualifiable binding that can optionally be further qualified, or chained as a builder
+	 * @return the builder for continued chaining
 	 * @throws IllegalArgumentException if the adapter is not assignable to the port type
 	 */
-	<T> QualifiableAdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType);
+	<T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType);
+
+	/**
+	 * Binds the adapter to the specified port type with a named qualification.
+	 * <p>
+	 * This allows multiple adapters to be registered for the same port type
+	 * under different qualifications.
+	 *
+	 * @param <T> the port type
+	 * @param portType the port interface class that the adapter implements
+	 * @param qualification the qualification name
+	 * @return the builder for continued chaining
+	 * @throws IllegalArgumentException if the adapter is not assignable to the port type
+	 */
+	<T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType, String qualification);
 
 }

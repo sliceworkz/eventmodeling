@@ -80,16 +80,16 @@ The example demonstrates:
 The framework uses a builder pattern to create bounded contexts:
 
 ```java
-BoundedContext.newBuilder(MyContext.class)  // MyContext extends EventTypes<D,I,O>
+BoundedContext.newBuilder(MyContext.class)  // MyContext extends BoundedContext<D,I,O>
     .name("context-name")
     .eventStorage(eventStorage)
     .instance(instance)
     .rootPackage(RootClass.class.getPackage())
-    .build(BoundedContextInterface.class)
+    .build(MyContext.class)
 ```
 
 Key concepts:
-- **BoundedContext**: Main entry point providing `execute()` and `read()` capabilities
+- **BoundedContext**: Main entry point providing `execute()` and `read()` capabilities. Context interfaces extend `BoundedContext<D,I,O>` directly (e.g., `Banking extends BoundedContext<BankingEvent, BankingInboundEvent, BankingOutboundEvent>`)
 - **ServiceLoader pattern**: Implementation discovery uses Java ServiceLoader (see `BoundedContext.newBuilder()`)
 - **Three event types**: Domain events (internal), Inbound events (received), Outbound events (published)
 - **Instance**: Deployment/tenant identifier created via `InstanceFactory.determine()`
@@ -99,7 +99,7 @@ Key concepts:
 Features are organized as vertical slices:
 
 1. **@FeatureSlice annotation**: Classes annotated with `@FeatureSlice` are discovered via package scanning
-2. **FeatureSliceConfiguration interface**: Slices implement this to configure themselves
+2. **Slice interface**: Feature slices implement `Slice<C>` where `C` is the bounded context type (e.g., `Slice<Banking>`)
 3. **Types of feature slices**:
    - `STATE_CHANGE`: Commands that change state
    - `STATE_READ`: Read models that project state
@@ -161,8 +161,8 @@ The framework supports the 4 Event Modeling patterns:
 - Commands: `*Command` (e.g., `OpenAccountCommand`)
 - ReadModels: `*ReadModel` (e.g., `AccountDetailsReadModel`)
 - Automations: `*Automation` (e.g., `ProcessPaymentAutomation`)
-- Feature slices: `*FeatureSlice` (e.g., `OpenAccountFeatureSlice`)
-- Bounded context interfaces: `*BoundedContext` (e.g., `BankingBoundedContext`)
+- Feature slices: `*FeatureSlice` (e.g., `OpenAccountFeatureSlice`), implementing `Slice<Context>` directly
+- Bounded context interfaces: Short names extending `BoundedContext<D,I,O>` (e.g., `Banking`, `OrderProcessing`)
 - Domain model: Often named `*Domain` (e.g., `BankingDomain`)
 
 **Events:**

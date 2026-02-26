@@ -85,7 +85,7 @@ BoundedContext.newBuilder(MyContext.class)  // MyContext extends BoundedContext<
     .eventStorage(eventStorage)
     .instance(instance)
     .rootPackage(RootClass.class.getPackage())
-    .build(MyContext.class)
+    .build()
 ```
 
 Key concepts:

@@ -349,17 +349,25 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, meterRegistry);
 
 		BoundedContextImpl bc =
-				new BoundedContextImpl(name, deployedFeatureSlices, undeployedFeatureSlices, domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry, adapterRegistry);
+				new BoundedContextImpl(name, deployedFeatureSlices, undeployedFeatureSlices,
+						featuresSpecification.mustDeployCommands(),
+						featuresSpecification.mustDeployQueries(),
+						featuresSpecification.mustDeployAutomations(),
+						featuresSpecification.mustDeployProjections(),
+						domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry, adapterRegistry);
 
 		// this is only possible after creation
 		am.setCapabilitiesDelegate(bc);
 		im.setCapabilitiesDelegate(bc);
 
+		T result;
 		if ( returnType.isInterface()) {
-			return proxy(bc, returnType);
+			result = proxy(bc, returnType);
 		} else {
-			return (T)bc;
+			result = (T)bc;
 		}
+		bc.setSelfReference((BoundedContext<?,?,?>) result);
+		return result;
 	}
 
 	public static <T> T proxy ( BoundedContextImpl<?,?,?> boundedContext, Class<?> interfaceClass ) {

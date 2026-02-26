@@ -68,7 +68,14 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> deployedFeatureSlices;
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> undeployedFeatureSlices;
-	
+
+	private boolean startCommands;
+	private boolean startQueries;
+	private boolean startAutomations;
+	private boolean startProjections;
+
+	private BoundedContext<?,?,?> selfReference;
+
 	private String name;
 	private Instance instance;
 
@@ -82,6 +89,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			String name,
 			List<? extends Slice<? extends BoundedContext<?,?,?>>> deployedFeatureSlices,
 			List<? extends Slice<? extends BoundedContext<?,?,?>>> undeployedFeatureSlices,
+			boolean startCommands,
+			boolean startQueries,
+			boolean startAutomations,
+			boolean startProjections,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventStream<INBOUND_EVENT_TYPE> inboundEventStream,
 			EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream,
@@ -100,6 +111,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.meterRegistry = meterRegistry;
 		this.deployedFeatureSlices = deployedFeatureSlices;
 		this.undeployedFeatureSlices = undeployedFeatureSlices;
+		this.startCommands = startCommands;
+		this.startQueries = startQueries;
+		this.startAutomations = startAutomations;
+		this.startProjections = startProjections;
 		
 		this.domainEventStream = domainEventStream;
 		
@@ -129,13 +144,25 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		);
 	}
 	
+	void setSelfReference(BoundedContext<?,?,?> selfReference) {
+		this.selfReference = selfReference;
+	}
+
 	private Set<KernelEvent.FeatureSlice> map ( List<? extends Slice<? extends BoundedContext<?,?,?>>> featureSlices ) {
 		return featureSlices.stream().map(fs->new KernelEvent.FeatureSlice(fs.name(), fs.type().name(), fs.context(), fs.chapter(), fs.tags())).collect(Collectors.toSet());
 	}
 
+	@SuppressWarnings({"unchecked", "rawtypes"})
 	@Override
 	public void start ( ) {
 		LOGGER.info("starting bounded context '{}' ...", name);
+		for (var slice : deployedFeatureSlices) {
+			Slice raw = (Slice) slice;
+			if (startCommands) raw.startCommand(selfReference);
+			if (startQueries) raw.startQuery(selfReference);
+			if (startAutomations) raw.startAutomation(selfReference);
+			if (startProjections) raw.startProjection(selfReference);
+		}
 		this.inboundModule.start();
 		this.outboundModule.start();
 		this.dcbDomainModule.start();

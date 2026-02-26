@@ -35,6 +35,8 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
 	BoundedContextBuilder<C> name(String name);
 
+	BoundedContextBuilder<C> contextType(Class<C> contextType);
+
 	BoundedContextBuilder<C> eventTypes(
 			Class<?> domainEventRootType,
 			Class<?> inboundEventRootType,
@@ -107,8 +109,6 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 */
 	<T> T port(Class<T> portType, String qualification);
 
-	<T> T build( );
-
-	<T> T build(Class<T> returnType);
+	C build();
 
 }

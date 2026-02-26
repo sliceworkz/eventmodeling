@@ -55,6 +55,7 @@ import org.sliceworkz.eventstore.stream.EventStreamId;
  * annotations and {@link Upcast} implementations to transparently transform old events
  * to current types when read from the event store.</p>
  */
+@SuppressWarnings("unchecked")
 public class HistoricalDomainEventTest {
 
 	private EventStorage eventStorage;
@@ -104,7 +105,7 @@ public class HistoricalDomainEventTest {
 
 		builder.readmodel(ItemCountReadModel.class).live();
 
-		boundedContext = builder.build();
+		boundedContext = (BoundedContext<CurrentDomainEvent, InboundEvent, OutboundEvent>) (BoundedContext<?,?,?>) builder.build();
 		boundedContext.start();
 
 		// Step 3: Execute a command that adds a NEW event (using the current schema)
@@ -139,7 +140,7 @@ public class HistoricalDomainEventTest {
 
 		builder.readmodel(ItemCountReadModel.class).live();
 
-		boundedContext = builder.build();
+		boundedContext = (BoundedContext<CurrentDomainEvent, InboundEvent, OutboundEvent>) (BoundedContext<?,?,?>) builder.build();
 		boundedContext.start();
 
 		// Execute a command that raises a new event

@@ -107,7 +107,7 @@ public class BenchmarkApplication {
 				.features()
 					.rootPackage(BenchmarkApplication.class.getPackage())
 					.done()
-				.build(OrderProcessing.class);
+				.build();
 		
 		bc.start();
 

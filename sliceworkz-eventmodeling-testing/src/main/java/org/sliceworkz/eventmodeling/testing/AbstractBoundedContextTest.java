@@ -73,7 +73,7 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 		// let subclasses do any needed configuration
 		configure(builder);
 
-		this.boundedContext = builder.build(BoundedContext.class);
+		this.boundedContext = (BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>) builder.build();
 	}
 
 	public abstract Class<DOMAIN_EVENT_TYPE> domainEventType ( );

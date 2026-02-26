@@ -100,7 +100,7 @@ public class BankingClosingTheBooksExample {
 			.rootPackage(BankingClosingTheBooksExample.class.getPackage())
 			.done();
 
-		ClosingTheBooks bc = builder.build(ClosingTheBooks.class);
+		ClosingTheBooks bc = builder.build();
 		
 		bc.start();
 

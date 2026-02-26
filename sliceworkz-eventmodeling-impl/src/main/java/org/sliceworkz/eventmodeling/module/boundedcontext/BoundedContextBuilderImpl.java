@@ -82,6 +82,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private static final String PURPOSE_OUTBOUND = "outbound";
 	private static final String PURPOSE_OBSERVABILITY = "observability";
 
+	private Class<C> contextType;
 	private String name;
 
 	private List<LiveModelSpecificationImpl> liveModelSpecs = new ArrayList<>();
@@ -108,6 +109,12 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private Instance instance;
 
 	private final AdapterRegistry adapterRegistry = new AdapterRegistry();
+
+	@Override
+	public BoundedContextBuilder<C> contextType(Class<C> contextType) {
+		this.contextType = contextType;
+		return this;
+	}
 
 	@Override
 	public BoundedContextBuilder<C> name ( String name ) {
@@ -260,12 +267,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	@Override
-	public <T> T build ( ) {
-		return build((Class<T>) BoundedContext.class);
-	}
-
-	@Override
-	public <T> T build ( Class<T> returnType ) {
+	public C build ( ) {
+		Class<?> returnType = contextType != null ? contextType : BoundedContext.class;
 
 		if ( instance == null ) {
 			throw new IllegalArgumentException("instance not set");
@@ -360,11 +363,11 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		am.setCapabilitiesDelegate(bc);
 		im.setCapabilitiesDelegate(bc);
 
-		T result;
+		C result;
 		if ( returnType.isInterface()) {
 			result = proxy(bc, returnType);
 		} else {
-			result = (T)bc;
+			result = (C)bc;
 		}
 		bc.setSelfReference((BoundedContext<?,?,?>) result);
 		return result;

@@ -54,6 +54,7 @@ public interface BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_
 				". Ensure it extends EventTypes with concrete type arguments.");
 		}
 		BoundedContextBuilder<C> result = ServiceLoader.load(BoundedContextBuilder.class).findFirst().get();
+		result.contextType(contextType);
 		result.eventTypes((Class<?>) typeArgs[0], (Class<?>) typeArgs[1], (Class<?>) typeArgs[2]);
 		return result;
 	}

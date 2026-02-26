@@ -21,8 +21,9 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 
 public abstract class AbstractMockDomainTest extends AbstractBoundedContextTest<MockDomainEvent,MockInboundEvent,MockOutboundEvent> {
 	
+	@SuppressWarnings("unchecked")
 	protected Mock buildBoundedContext ( BoundedContextBuilder<?> boundedContextBuilder ) {
-		Mock result = boundedContextBuilder.build(Mock.class);
+		Mock result = (Mock) boundedContextBuilder.build();
 		this.boundedContext = result;
 		this.boundedContext.start();
 		return result;

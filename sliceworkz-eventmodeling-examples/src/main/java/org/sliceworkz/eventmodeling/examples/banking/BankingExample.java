@@ -61,7 +61,7 @@ public class BankingExample {
 			.features()
 				.rootPackage(BankingExample.class.getPackage())
 				.done()
-			.build(Banking.class);
+			.build();
 		
 		bc.start();
 		

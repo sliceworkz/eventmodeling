@@ -27,7 +27,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.InvocationCountingEventStorage;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockBoundedContext;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent.SomeInboundEvent;
@@ -141,9 +141,9 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 	}
 
 	
-	MockBoundedContext createBoundedContext( ) {
+	Mock createBoundedContext( ) {
 		
-		var builder = BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
+		var builder = BoundedContext.newBuilder(Mock.class)
 			.name("UnitTestBoundedContext")
 			.eventStorage(eventStorage)
 			.instance(InstanceFactory.determine("unittests"));

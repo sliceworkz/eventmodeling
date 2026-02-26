@@ -83,7 +83,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 	}
 
-	public <LMSI extends LiveModelSpecificationAccessor<DOMAIN_EVENT_TYPE>> ReadModelModule (
+	public <LMSI extends LiveModelSpecificationAccessor> ReadModelModule (
 			String boundedContext,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventStream<Object> allInStorageEventStream,
@@ -101,7 +101,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		this.instance = instance;
 
 		for ( LMSI spec : liveModelSpecs ) {
-			Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass = spec.readModelClass();
+			@SuppressWarnings("unchecked")
+			Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass = (Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>) (Class<?>) spec.readModelClass();
 			if ( this.liveModels.containsKey(readModelClass) ) {
 				LOGGER.error("multiple live readmodels of type '%s' registered".formatted(readModelClass));
 				throw new IllegalArgumentException("duplicate live readmodel %s".formatted(readModelClass));

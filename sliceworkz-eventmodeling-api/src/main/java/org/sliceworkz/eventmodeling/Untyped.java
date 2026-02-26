@@ -15,13 +15,15 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.benchmark;
+package org.sliceworkz.eventmodeling;
 
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 
-public interface OrderProcessingBoundedContext extends BoundedContext<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> {
+/**
+ * A {@link BoundedContext} for contexts that don't use typed events.
+ * <p>
+ * Use this for contexts like dashboards or monitoring that work with raw Object events.
+ */
+public interface Untyped extends BoundedContext<Object, Object, Object> {
 
 }

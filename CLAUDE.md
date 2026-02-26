@@ -80,7 +80,7 @@ The example demonstrates:
 The framework uses a builder pattern to create bounded contexts:
 
 ```java
-BoundedContext.newBuilder(DomainEventType.class, InboundEventType.class, OutboundEventType.class)
+BoundedContext.newBuilder(MyContext.class)  // MyContext extends EventTypes<D,I,O>
     .name("context-name")
     .eventStorage(eventStorage)
     .instance(instance)

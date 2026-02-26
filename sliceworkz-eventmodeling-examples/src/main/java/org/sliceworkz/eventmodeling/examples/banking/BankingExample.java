@@ -26,8 +26,6 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingInboundEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingOutboundEvent;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountdetails.AccountDetailsReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountoverview.AccountOverviewReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.openaccount.OpenAccountCommand;
@@ -56,14 +54,14 @@ public class BankingExample {
 		/*
 		 * Create the BoundedContext 
 		 */
-		BankingBoundedContext bc = BoundedContext.newBuilder(BankingDomainEvent.class,BankingInboundEvent.class,BankingOutboundEvent.class)
+		Banking bc = BoundedContext.newBuilder(Banking.class)
 			.name("banking")
 			.eventStorage(eventStorage)
 			.instance(instance)
 			.features()
 				.rootPackage(BankingExample.class.getPackage())
 				.done()
-			.build(BankingBoundedContext.class);
+			.build(Banking.class);
 		
 		bc.start();
 		

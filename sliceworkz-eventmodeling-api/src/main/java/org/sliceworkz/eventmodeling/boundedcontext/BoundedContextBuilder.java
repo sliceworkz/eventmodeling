@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+import org.sliceworkz.eventmodeling.EventTypes; // retained for javadoc reference
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
@@ -30,48 +31,43 @@ import org.sliceworkz.eventstore.spi.EventStorage;
 
 import io.micrometer.core.instrument.MeterRegistry;
 
-public interface BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> name(String name);
+	BoundedContextBuilder<C> name(String name);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventTypes(
-			Class<DOMAIN_EVENT_TYPE> domainEventRootType,
-			Class<INBOUND_EVENT_TYPE> inboundEventRootType,
-			Class<OUTBOUND_EVENT_TYPE> outboundEventRootType);
+	BoundedContextBuilder<C> eventTypes(
+			Class<?> domainEventRootType,
+			Class<?> inboundEventRootType,
+			Class<?> outboundEventRootType);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> historicalEventTypes(
+	BoundedContextBuilder<C> historicalEventTypes(
 			Class<?> historicalDomainEventRootType,
 			Class<?> historicalInboundEventRootType,
 			Class<?> historicalOutboundEventRootType);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> instance(Instance instance);
+	BoundedContextBuilder<C> instance(Instance instance);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> meterRegistry(MeterRegistry meterRegistry);
+	BoundedContextBuilder<C> meterRegistry(MeterRegistry meterRegistry);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventStorage(EventStorage eventStorage);
+	BoundedContextBuilder<C> eventStorage(EventStorage eventStorage);
 
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> features ( );
+	FeaturesSpecification<C> features ( );
 
-	AggregateSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> aggregate(Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass);
+	AggregateSpecification<C> aggregate(Class<? extends Aggregate<?>> aggregateClass);
 
-	LiveModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readmodel(Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass);
+	LiveModelSpecification<C> readmodel(Class<? extends ReadModelWithMetaData<?>> readModelClass);
 
-	LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readmodel(ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel);
+	LongLivedReadModelSpecification<C> readmodel(ReadModelWithMetaData<?> readModel);
 
-	<TODO_ITEM_TYPE> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> automation(
-			Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation);
+	BoundedContextBuilder<C> automation(Automation<?,?,?> automation);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> translator(
-			Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator);
+	BoundedContextBuilder<C> translator(Translator<?,?> translator);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> translator(
-			Class<? extends Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translatorClass);
+	BoundedContextBuilder<C> translator(Class<? extends Translator<?,?>> translatorClass);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dispatcher(
-			Dispatcher<? extends OUTBOUND_EVENT_TYPE> dispatcher);
+	BoundedContextBuilder<C> dispatcher(Dispatcher<?> dispatcher);
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dispatcher(
-			Class<? extends Dispatcher<? extends OUTBOUND_EVENT_TYPE>> dispatcherClass);
+	BoundedContextBuilder<C> dispatcher(Class<? extends Dispatcher<?>> dispatcherClass);
 
 	/**
 	 * Starts an adapter binding for the given adapter instance.
@@ -88,7 +84,7 @@ public interface BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OU
 	 * @param adapter the adapter instance implementing a port
 	 * @return an adapter binding to specify the port type
 	 */
-	AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> adapter(Object adapter);
+	AdapterBinding<C> adapter(Object adapter);
 
 	/**
 	 * Retrieves the adapter registered for the given port type with the default qualification.
@@ -111,8 +107,8 @@ public interface BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OU
 	 */
 	<T> T port(Class<T> portType, String qualification);
 
-	<T extends BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> T build( );
+	<T> T build( );
 
-	<T extends BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> T build(Class<T> returnType);
+	<T> T build(Class<T> returnType);
 
 }

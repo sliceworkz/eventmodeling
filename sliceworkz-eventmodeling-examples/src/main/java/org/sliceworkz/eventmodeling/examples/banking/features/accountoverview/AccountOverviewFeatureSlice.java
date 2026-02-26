@@ -18,26 +18,18 @@
 package org.sliceworkz.eventmodeling.examples.banking.features.accountoverview;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
-import org.sliceworkz.eventmodeling.examples.banking.BankingBoundedContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingInboundEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingOutboundEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingFeatureSlice;
+import org.sliceworkz.eventmodeling.examples.banking.Banking;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
 @FeatureSlice(type = Type.STATE_READ, context="banking", chapter="Account management", tags= {"batch"})
-public class AccountOverviewFeatureSlice implements BankingFeatureSlice {
+public class AccountOverviewFeatureSlice implements Slice<Banking> {
 
 	@Override
-	public void configureQuery(
-			BoundedContextBuilder<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> builder) {
+	public void configureQuery(BoundedContextBuilder<Banking> builder) {
 		builder.readmodel(AccountOverviewReadModel.INSTANCE).local().eventuallyConsistent();
 	}
 
-	@Override
-	public void configure(BankingBoundedContext boundedContext) {
-
-	}
 
 }

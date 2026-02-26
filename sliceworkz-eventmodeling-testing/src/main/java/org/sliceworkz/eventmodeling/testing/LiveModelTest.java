@@ -28,7 +28,7 @@ public abstract class LiveModelTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUN
 	public abstract Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> getLiveModelClass ( );
 	
 	@Override
-	public void configure ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContextBuilder ) {
+	public void configure ( BoundedContextBuilder<?> boundedContextBuilder ) {
 		boundedContextBuilder.readmodel(getLiveModelClass()).live();
 	}
 	

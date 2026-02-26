@@ -18,10 +18,9 @@
 package org.sliceworkz.eventmodeling.examples.banking;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingInboundEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingOutboundEvent;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingInboundEvent;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingOutboundEvent;
 
-public interface BankingBoundedContext extends BoundedContext<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> {
-
+public interface ClosingTheBooks extends BoundedContext<BankingEvent, BankingInboundEvent, BankingOutboundEvent> {
 }

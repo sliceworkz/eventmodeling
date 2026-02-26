@@ -35,7 +35,7 @@ import org.sliceworkz.eventstore.query.Limit;
 public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> extends AbstractBoundedContextTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 	
 	@Override
-	public void configure ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContextBuilder ) {
+	public void configure ( BoundedContextBuilder<?> boundedContextBuilder ) {
 		// no extra config required to run Commands
 	}
 

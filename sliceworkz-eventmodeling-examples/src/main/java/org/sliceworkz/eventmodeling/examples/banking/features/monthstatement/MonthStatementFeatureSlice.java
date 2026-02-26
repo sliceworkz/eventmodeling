@@ -17,10 +17,10 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.monthstatement;
 
-import org.sliceworkz.eventmodeling.examples.banking.BankingBoundedContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingFeatureSlice;
+import org.sliceworkz.eventmodeling.examples.banking.Banking;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
  * Read model for viewing a specific month's bank statement.
@@ -30,9 +30,5 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
  * month are replayed (thanks to the month tag filter).
  */
 @FeatureSlice(type = Type.STATE_READ, context = "banking", chapter = "Closing The Books")
-public class MonthStatementFeatureSlice implements BankingFeatureSlice {
-
-	@Override
-	public void configure(BankingBoundedContext boundedContext) {
-	}
+public class MonthStatementFeatureSlice implements Slice<Banking> {
 }

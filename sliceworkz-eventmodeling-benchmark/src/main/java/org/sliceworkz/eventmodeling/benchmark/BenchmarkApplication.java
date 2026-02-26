@@ -28,10 +28,7 @@ import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent.OrderRegistered;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventstore.EventStoreFactory;
@@ -100,7 +97,7 @@ public class BenchmarkApplication {
 		DataSource dataSource = DataSourceFactory.fromConfiguration("pooled");
 		EventStorage eventStorage = PostgresEventStorage.newBuilder().dataSource(dataSource).prefix("benchmark_").databaseInitMode(databaseInitMode).build();
 
-		OrderProcessingBoundedContext bc = BoundedContext.newBuilder(OrderProcessingDomainEvent.class, OrderProcessingInboundEvent.class, OrderProcessingOutboundEvent.class)
+		OrderProcessing bc = BoundedContext.newBuilder(OrderProcessing.class)
 				.meterRegistry(prometheusMeterRegistry)
 				.name(BOUNDED_CONTEXT_NAME)
 				.instance(InstanceFactory.determine(BOUNDED_CONTEXT_NAME))
@@ -110,7 +107,7 @@ public class BenchmarkApplication {
 				.features()
 					.rootPackage(BenchmarkApplication.class.getPackage())
 					.done()
-				.build(OrderProcessingBoundedContext.class);
+				.build(OrderProcessing.class);
 		
 		bc.start();
 

@@ -19,9 +19,10 @@ package org.sliceworkz.eventmodeling.slices;
 
 import java.util.Set;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 
-public interface FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+public interface Slice<C extends BoundedContext<?,?,?>> {
 
 	default String name ( ) {
 		String name = this.getClass().getSimpleName();
@@ -30,31 +31,41 @@ public interface FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE
 		}
 		return name;
 	}
-	
+
 	default FeatureSlice.Type type ( ) {
 		return meta().type();
 	}
-	
+
 	default String chapter ( ) {
 		return meta().chapter();
 	}
-	
+
 	default String context ( ) {
 		return meta().context();
 	}
-	
+
 	default Set<String> tags ( ) {
 		return Set.of(meta().tags());
 	}
-	
+
 	default FeatureSlice meta ( ) {
 		return this.getClass().getAnnotation(FeatureSlice.class);
 	}
 
-	void configureCommand ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder );
-	
-	void configureQuery ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder );
-	
-	void configureAutomation ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder );
-	
+	default void configureCommand ( BoundedContextBuilder<C> builder ) { }
+
+	default void configureQuery ( BoundedContextBuilder<C> builder ) { }
+
+	default void configureAutomation ( BoundedContextBuilder<C> builder ) { }
+
+	default void configureProjection ( BoundedContextBuilder<C> builder ) { }
+
+	default void startCommand ( C boundedContext ) { }
+
+	default void startQuery ( C boundedContext ) { }
+
+	default void startAutomation ( C boundedContext ) { }
+
+	default void startProjection ( C boundedContext ) { }
+
 }

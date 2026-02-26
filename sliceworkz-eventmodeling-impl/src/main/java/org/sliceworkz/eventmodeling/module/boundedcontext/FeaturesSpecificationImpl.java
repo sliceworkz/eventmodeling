@@ -19,95 +19,114 @@ package org.sliceworkz.eventmodeling.module.boundedcontext;
 
 import java.util.function.Predicate;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
-import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
-public class FeaturesSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> implements FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+public class FeaturesSpecificationImpl<C extends BoundedContext<?,?,?>> implements FeaturesSpecification<C> {
 
 	private Package rootPackage;
-	private Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> filter = (slice) -> true;
-	private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContextBuilder;
+	private Predicate<Slice<C>> filter = (slice) -> true;
+	private BoundedContextBuilder<C> boundedContextBuilder;
 	private boolean deployCommands = true;
 	private boolean deployQueries = true;
 	private boolean deployAutomations = true;
+	private boolean deployProjections = true;
 
-	public FeaturesSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContextBuilder ) {
+	public FeaturesSpecificationImpl ( BoundedContextBuilder<C> boundedContextBuilder ) {
 		this.boundedContextBuilder = boundedContextBuilder;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> rootPackage(Package rootPackage) {
+	public FeaturesSpecification<C> rootPackage(Package rootPackage) {
 		this.rootPackage = rootPackage;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> filter(
-			Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> filter) {
+	public FeaturesSpecification<C> filter(Predicate<Slice<C>> filter) {
 		this.filter = filter;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableCommands() {
+	public FeaturesSpecification<C> enableCommands() {
 		deployCommands = true;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableCommands(boolean enableCommands) {
+	public FeaturesSpecification<C> enableCommands(boolean enableCommands) {
 		deployCommands = enableCommands;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> disableCommands() {
+	public FeaturesSpecification<C> disableCommands() {
 		deployCommands = false;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableQueries() {
+	public FeaturesSpecification<C> enableQueries() {
 		deployQueries = true;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableQueries(boolean enableQueries) {
+	public FeaturesSpecification<C> enableQueries(boolean enableQueries) {
 		deployQueries = enableQueries;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> disableQueries() {
+	public FeaturesSpecification<C> disableQueries() {
 		deployQueries = false;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableAutomations() {
+	public FeaturesSpecification<C> enableAutomations() {
 		deployAutomations = true;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableAutomations(boolean enableAutomations) {
+	public FeaturesSpecification<C> enableAutomations(boolean enableAutomations) {
 		deployAutomations = enableAutomations;
 		return this;
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> disableAutomations() {
+	public FeaturesSpecification<C> disableAutomations() {
 		deployAutomations = false;
 		return this;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> done() {
+	public FeaturesSpecification<C> enableProjections() {
+		deployProjections = true;
+		return this;
+	}
+
+	@Override
+	public FeaturesSpecification<C> enableProjections(boolean enableProjections) {
+		deployProjections = enableProjections;
+		return this;
+	}
+
+	@Override
+	public FeaturesSpecification<C> disableProjections() {
+		deployProjections = false;
+		return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<C> done() {
 		return boundedContextBuilder;
 	}
-	
+
 	Package rootPackage ( ) {
 		return rootPackage;
 	}
@@ -115,15 +134,20 @@ public class FeaturesSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OU
 	boolean mustDeployCommands ( ) {
 		return deployCommands;
 	}
-	
+
 	boolean mustDeployQueries( ) {
 		return deployQueries;
 	}
-	
+
 	boolean mustDeployAutomations( ) {
 		return deployAutomations;
 	}
-	Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> filter ( ) {
+
+	boolean mustDeployProjections( ) {
+		return deployProjections;
+	}
+
+	Predicate<Slice<C>> filter ( ) {
 		return filter;
 	}
 }

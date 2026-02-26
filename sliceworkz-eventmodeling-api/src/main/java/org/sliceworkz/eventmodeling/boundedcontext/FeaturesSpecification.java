@@ -19,26 +19,30 @@ package org.sliceworkz.eventmodeling.boundedcontext;
 
 import java.util.function.Predicate;
 
-import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
-public interface FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+public interface FeaturesSpecification<C extends BoundedContext<?,?,?>> {
 
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> rootPackage(Package rootPackage);
+	FeaturesSpecification<C> rootPackage(Package rootPackage);
 
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> filter (Predicate<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> filter);
+	FeaturesSpecification<C> filter (Predicate<Slice<C>> filter);
 
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableCommands ( );
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableCommands ( boolean enableCommands );
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> disableCommands ( );
+	FeaturesSpecification<C> enableCommands ( );
+	FeaturesSpecification<C> enableCommands ( boolean enableCommands );
+	FeaturesSpecification<C> disableCommands ( );
 
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableQueries( );
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableQueries( boolean enableQueries );
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> disableQueries( );
+	FeaturesSpecification<C> enableQueries( );
+	FeaturesSpecification<C> enableQueries( boolean enableQueries );
+	FeaturesSpecification<C> disableQueries( );
 
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableAutomations ( );
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> enableAutomations ( boolean enableAutomations);
-	FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> disableAutomations ( );
+	FeaturesSpecification<C> enableAutomations ( );
+	FeaturesSpecification<C> enableAutomations ( boolean enableAutomations);
+	FeaturesSpecification<C> disableAutomations ( );
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> done ( );
+	FeaturesSpecification<C> enableProjections ( );
+	FeaturesSpecification<C> enableProjections ( boolean enableProjections );
+	FeaturesSpecification<C> disableProjections ( );
+
+	BoundedContextBuilder<C> done ( );
 
 }

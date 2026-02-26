@@ -23,11 +23,9 @@ package org.sliceworkz.eventmodeling.boundedcontext;
  * Created by {@link BoundedContextBuilder#adapter(Object)} and completed
  * by calling {@link #forPort(Class)}.
  *
- * @param <DOMAIN_EVENT_TYPE> the domain event root type
- * @param <INBOUND_EVENT_TYPE> the inbound event root type
- * @param <OUTBOUND_EVENT_TYPE> the outbound event root type
+ * @param <C> the bounded context type
  */
-public interface AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+public interface AdapterBinding<C extends BoundedContext<?,?,?>> {
 
 	/**
 	 * Binds the adapter to the specified port type with the default (unqualified) qualification.
@@ -37,7 +35,7 @@ public interface AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_
 	 * @return the builder for continued chaining
 	 * @throws IllegalArgumentException if the adapter is not assignable to the port type
 	 */
-	<T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType);
+	<T> BoundedContextBuilder<C> forPort(Class<T> portType);
 
 	/**
 	 * Binds the adapter to the specified port type with a named qualification.
@@ -51,6 +49,6 @@ public interface AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_
 	 * @return the builder for continued chaining
 	 * @throws IllegalArgumentException if the adapter is not assignable to the port type
 	 */
-	<T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType, String qualification);
+	<T> BoundedContextBuilder<C> forPort(Class<T> portType, String qualification);
 
 }

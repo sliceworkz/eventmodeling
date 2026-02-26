@@ -15,10 +15,12 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.mock.boundedcontext;
+package org.sliceworkz.eventmodeling.examples.banking;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingInboundEvent;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingOutboundEvent;
 
-public interface MockBoundedContext extends BoundedContext<MockDomainEvent, MockInboundEvent, MockOutboundEvent> {
-
+public interface Banking extends BoundedContext<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> {
 }

@@ -25,6 +25,7 @@ import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.sliceworkz.eventmodeling.Untyped;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
@@ -94,8 +95,8 @@ public class HistoricalDomainEventTest {
 				Event.of(new OriginalDomainEvent.ItemRemoved("widget"), Tags.none()));
 
 		// Step 2: Build a BoundedContext with current + historical event types
-		var builder = BoundedContext.<CurrentDomainEvent, InboundEvent, OutboundEvent>newBuilder(
-				CurrentDomainEvent.class, InboundEvent.class, OutboundEvent.class)
+		var builder = BoundedContext.newBuilder(Untyped.class)
+				.eventTypes(CurrentDomainEvent.class, InboundEvent.class, OutboundEvent.class)
 			.name("test-historical")
 			.historicalEventTypes(HistoricalDomainEvent.class, null, null)
 			.eventStorage(eventStorage)
@@ -129,8 +130,8 @@ public class HistoricalDomainEventTest {
 				Event.of(new OriginalDomainEvent.ItemAdded("widget", 5), Tags.none()));
 
 		// Build BoundedContext with historical types
-		var builder = BoundedContext.<CurrentDomainEvent, InboundEvent, OutboundEvent>newBuilder(
-				CurrentDomainEvent.class, InboundEvent.class, OutboundEvent.class)
+		var builder = BoundedContext.newBuilder(Untyped.class)
+				.eventTypes(CurrentDomainEvent.class, InboundEvent.class, OutboundEvent.class)
 			.name("test-historical")
 			.historicalEventTypes(HistoricalDomainEvent.class, null, null)
 			.eventStorage(eventStorage)

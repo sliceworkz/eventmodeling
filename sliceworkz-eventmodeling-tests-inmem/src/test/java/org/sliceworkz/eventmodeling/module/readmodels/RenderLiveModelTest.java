@@ -26,7 +26,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.InvocationCountingEventStorage;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockBoundedContext;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
@@ -64,29 +64,29 @@ public class RenderLiveModelTest extends AbstractMockDomainTest {
 	
 	@Test
 	void testProjectLiveModel1 ( ) {
-		MockBoundedContext boundedContext = domainWithLiveModel(MockReadModel.class);
+		Mock boundedContext = domainWithLiveModel(MockReadModel.class);
 		testLiveModelWithDifferentNumberOfEvents( boundedContext, 1);
 	}
 
 	@Test
 	void testProjectLiveModel2 ( ) {
-		MockBoundedContext boundedContext = domainWithLiveModel(MockReadModel.class);
+		Mock boundedContext = domainWithLiveModel(MockReadModel.class);
 		testLiveModelWithDifferentNumberOfEvents( boundedContext, 2);
 	}
 
 	@Test
 	void testProjectLiveModel250 ( ) {
-		MockBoundedContext boundedContext = domainWithLiveModel(MockReadModel.class);
+		Mock boundedContext = domainWithLiveModel(MockReadModel.class);
 		testLiveModelWithDifferentNumberOfEvents( boundedContext, 250);
 	}
 	
 	@Test
 	void testProjectLiveModel1000 ( ) {
-		MockBoundedContext boundedContext = domainWithLiveModel(MockReadModel.class);
+		Mock boundedContext = domainWithLiveModel(MockReadModel.class);
 		testLiveModelWithDifferentNumberOfEvents( boundedContext, 10000);
 	}
 
-	private void testLiveModelWithDifferentNumberOfEvents ( MockBoundedContext boundedContext, int eventCount ) {
+	private void testLiveModelWithDifferentNumberOfEvents ( Mock boundedContext, int eventCount ) {
 		int expectedQueries = (eventCount - 1) / Projector.Builder.DEFAULT_MAX_EVENTS_PER_QUERY + 2;
 		
 //		System.out.println("assuming "  + expectedQueries + " queries for " + eventCount + " events");
@@ -103,9 +103,9 @@ public class RenderLiveModelTest extends AbstractMockDomainTest {
 //		System.out.println(time + " ms for " + eventCount + " events in " + expectedQueries + " queries in readmodel");
 	}
 	
-	MockBoundedContext domainWithLiveModel ( Class<? extends ReadModel<MockDomainEvent>> liveModelClass ) {
+	Mock domainWithLiveModel ( Class<? extends ReadModel<MockDomainEvent>> liveModelClass ) {
 		
-		var builder = BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
+		var builder = BoundedContext.newBuilder(Mock.class)
 			.name("UnitTestBoundedContext")
 			.eventStorage(eventStorage)
 			.instance(InstanceFactory.determine("unittests"));

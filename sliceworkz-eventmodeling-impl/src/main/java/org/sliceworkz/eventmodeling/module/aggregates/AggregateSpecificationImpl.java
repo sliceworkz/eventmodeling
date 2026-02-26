@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.aggregates;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
@@ -24,52 +25,52 @@ import org.sliceworkz.eventmodeling.module.snapshots.SnapshotSpecificationImpl;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotSpecification;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 
-public class AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> implements AggregateSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+@SuppressWarnings({"unchecked", "rawtypes"})
+public class AggregateSpecificationImpl<C extends BoundedContext<?,?,?>> implements AggregateSpecification<C> {
 
-	private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> parent;
-	
-	private Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass;
-	private SnapshotSpecificationImpl<?,DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshotSpecification = new SnapshotSpecificationImpl<>(parent, null);
+	private BoundedContextBuilder<C> parent;
 
-	public AggregateSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> parent, Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass ) {
+	private Class<? extends Aggregate<?>> aggregateClass;
+	private SnapshotSpecificationImpl snapshotSpecification = new SnapshotSpecificationImpl(parent, null);
+
+	public AggregateSpecificationImpl ( BoundedContextBuilder<C> parent, Class<? extends Aggregate<?>> aggregateClass ) {
 		this.parent = parent;
 		this.aggregateClass = aggregateClass;
 	}
-	
+
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> done() {
+	public BoundedContextBuilder<C> done() {
 		return parent;
 	}
-	
-	public Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass ( ) {
+
+	public Class<? extends Aggregate<?>> aggregateClass ( ) {
 		return aggregateClass;
 	}
-	
-	@SuppressWarnings("unchecked")
+
 	public SnapshotStorage<Object> snapshotStorage ( ) {
 		return snapshotSpecification == null?null:(SnapshotStorage<Object>)snapshotSpecification.snapshotStorage();
 	}
-	
+
 	public boolean readSnapshots ( ) {
 		return snapshotSpecification == null?false:snapshotSpecification.readAndOrWrite().mustRead();
 	}
-	
+
 	public boolean writeSnapshots ( ) {
 		return snapshotSpecification == null?false:snapshotSpecification.readAndOrWrite().mustWrite();
 	}
-	
+
 	public int snapshotEventCountThreshold ( ) {
 		return snapshotSpecification == null?0:snapshotSpecification.eventCountThreshold();
 	}
 
 	@Override
-	public <SNAPSHOT_TYPE> SnapshotSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshots(
+	public <SNAPSHOT_TYPE> SnapshotSpecification<C> snapshots(
 			SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage) {
 		if ( snapshotStorage == null ) {
 			throw new IllegalArgumentException("snapshotStorage can not be null");
 		}
-		this.snapshotSpecification = new SnapshotSpecificationImpl<SNAPSHOT_TYPE,DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(parent,snapshotStorage);
+		this.snapshotSpecification = new SnapshotSpecificationImpl(parent, snapshotStorage);
 		return snapshotSpecification;
 	}
-	
+
 }

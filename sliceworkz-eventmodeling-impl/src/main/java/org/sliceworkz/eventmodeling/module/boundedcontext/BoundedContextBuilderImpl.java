@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.Banner;
+import org.sliceworkz.eventmodeling.EventTypes; // retained for javadoc/logging
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
@@ -57,7 +58,7 @@ import org.sliceworkz.eventmodeling.snapshots.LiveModelSnapshotSpecification;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventmodeling.slices.AnnotationBasedDiscoveryAndConfiguration;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
+import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -67,12 +68,13 @@ import org.sliceworkz.eventstore.stream.EventStreamId;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 
-public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> implements BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+@SuppressWarnings({"unchecked", "rawtypes"})
+public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implements BoundedContextBuilder<C> {
 
 	static {
 		Banner.printBanner();
 	}
-	
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(BoundedContextBuilderImpl.class);
 
 	private static final String PURPOSE_DOMAIN = "domain";
@@ -81,26 +83,26 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	private static final String PURPOSE_OBSERVABILITY = "observability";
 
 	private String name;
-	
+
 	private List<LiveModelSpecificationImpl> liveModelSpecs = new ArrayList<>();
 	private List<LongLivedReadModelSpecificationImpl> longLivedReadModelSpecs = new ArrayList<>();
-	private List<Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translatorSpecs = new ArrayList<>();
-	private List<Dispatcher<? extends OUTBOUND_EVENT_TYPE>> dispatcherSpecs = new ArrayList<>();
-	private List<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations = new ArrayList<>();
-	private List<AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> aggregateSpecifications = new ArrayList<>();
-	
-	private Class<DOMAIN_EVENT_TYPE> domainEventRootType;
-	private Class<INBOUND_EVENT_TYPE> inboundEventRootType;
-	private Class<OUTBOUND_EVENT_TYPE> outboundEventRootType;
+	private List<Translator> translatorSpecs = new ArrayList<>();
+	private List<Dispatcher> dispatcherSpecs = new ArrayList<>();
+	private List<Automation> automations = new ArrayList<>();
+	private List<AggregateSpecificationImpl> aggregateSpecifications = new ArrayList<>();
+
+	private Class<?> domainEventRootType;
+	private Class<?> inboundEventRootType;
+	private Class<?> outboundEventRootType;
 
 	private Class<?> historicalDomainEventRootType;
 	private Class<?> historicalInboundEventRootType;
 	private Class<?> historicalOutboundEventRootType;
-	
-	private FeaturesSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> featuresSpecification = new FeaturesSpecificationImpl<>(this);
-	
+
+	private FeaturesSpecificationImpl<C> featuresSpecification = new FeaturesSpecificationImpl<>(this);
+
 	private MeterRegistry meterRegistry = Metrics.globalRegistry;
-	
+
 	private EventStorage eventStorage;
 
 	private Instance instance;
@@ -108,16 +110,16 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	private final AdapterRegistry adapterRegistry = new AdapterRegistry();
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> name ( String name ) {
+	public BoundedContextBuilder<C> name ( String name ) {
 		this.name = name;
 		return this;
 	}
-	
+
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> eventTypes ( 
-			Class<DOMAIN_EVENT_TYPE> domainEventRootType,
-			Class<INBOUND_EVENT_TYPE> inboundEventRootType,
-			Class<OUTBOUND_EVENT_TYPE> outboundEventRootType
+	public BoundedContextBuilder<C> eventTypes (
+			Class<?> domainEventRootType,
+			Class<?> inboundEventRootType,
+			Class<?> outboundEventRootType
 			) {
 		this.domainEventRootType = domainEventRootType;
 		this.inboundEventRootType = inboundEventRootType;
@@ -126,7 +128,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> historicalEventTypes (
+	public BoundedContextBuilder<C> historicalEventTypes (
 			Class<?> historicalDomainEventRootType,
 			Class<?> historicalInboundEventRootType,
 			Class<?> historicalOutboundEventRootType
@@ -138,18 +140,18 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 
 	@Override
-	public FeaturesSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> features ( ) {
+	public FeaturesSpecification<C> features ( ) {
 		return featuresSpecification;
 	}
-	
+
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> instance ( Instance instance ) {
+	public BoundedContextBuilder<C> instance ( Instance instance ) {
 		this.instance = instance;
 		return this;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> meterRegistry ( MeterRegistry meterRegistry ) {
+	public BoundedContextBuilder<C> meterRegistry ( MeterRegistry meterRegistry ) {
 		if ( meterRegistry != null ) {
 			this.meterRegistry = meterRegistry;
 		} else {
@@ -159,39 +161,39 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventStorage ( EventStorage eventStorage ) {
+	public BoundedContextBuilder<C> eventStorage ( EventStorage eventStorage ) {
 		this.eventStorage = eventStorage;
 		return this;
 	}
 
 	@Override
-	public LiveModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readmodel ( Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass ) {
+	public LiveModelSpecification<C> readmodel ( Class<? extends ReadModelWithMetaData<?>> readModelClass ) {
 		var m = new LiveModelSpecificationImpl(this, readModelClass);
 		liveModelSpecs.add(m);
 		return m;
 	}
 
 	@Override
-	public LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readmodel ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel ) {
+	public LongLivedReadModelSpecification<C> readmodel ( ReadModelWithMetaData<?> readModel ) {
 		var m = new LongLivedReadModelSpecificationImpl(this, readModel);
 		longLivedReadModelSpecs.add(m);
 		return m;
 	}
 
 	@Override
-	public <TODO_ITEM_TYPE> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  automation ( Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation ) {
+	public BoundedContextBuilder<C> automation ( Automation<?,?,?> automation ) {
 		automations.add(automation);
 		return this;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  translator ( Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator ) {
+	public BoundedContextBuilder<C> translator ( Translator<?,?> translator ) {
 		translatorSpecs.add(translator);
 		return this;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  translator ( Class<? extends Translator<? extends INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translatorClass ) {
+	public BoundedContextBuilder<C> translator ( Class<? extends Translator<?,?>> translatorClass ) {
 		try {
 			return translator(translatorClass.getDeclaredConstructor(new Class[0]).newInstance());
 		} catch (InvocationTargetException e) {
@@ -206,13 +208,13 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  dispatcher ( Dispatcher<? extends OUTBOUND_EVENT_TYPE> dispatcher ) {
+	public BoundedContextBuilder<C> dispatcher ( Dispatcher<?> dispatcher ) {
 		dispatcherSpecs.add(dispatcher);
 		return this;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>  dispatcher ( Class<? extends Dispatcher<? extends OUTBOUND_EVENT_TYPE>> dispatcherClass ) {
+	public BoundedContextBuilder<C> dispatcher ( Class<? extends Dispatcher<?>> dispatcherClass ) {
 		try {
 			return dispatcher(dispatcherClass.getDeclaredConstructor(new Class[0]).newInstance());
 		} catch (NoSuchMethodException e) {
@@ -227,19 +229,17 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 	}
 
 	@Override
-	public AggregateSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> aggregate(
-			Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass) {
+	public AggregateSpecification<C> aggregate(Class<? extends Aggregate<?>> aggregateClass) {
 		if ( aggregateClass == null ) {
 			throw new IllegalArgumentException();
 		}
-		var aggregateSpecification = new AggregateSpecificationImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> (this, aggregateClass);
+		var aggregateSpecification = new AggregateSpecificationImpl(this, aggregateClass);
 		this.aggregateSpecifications.add(aggregateSpecification);
-		
 		return aggregateSpecification;
 	}
-	
+
 	@Override
-	public AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> adapter(Object adapter) {
+	public AdapterBinding<C> adapter(Object adapter) {
 		if (adapter == null) {
 			throw new IllegalArgumentException("adapter must not be null");
 		}
@@ -259,15 +259,13 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		return adapterRegistry.lookup(portType, qualification);
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
-	public BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> build ( ) {
-		return build(BoundedContext.class);
+	public <T> T build ( ) {
+		return build((Class<T>) BoundedContext.class);
 	}
 
-	@SuppressWarnings("unchecked")
 	@Override
-	public <T extends BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> T build ( Class<T> returnType ) {
+	public <T> T build ( Class<T> returnType ) {
 
 		if ( instance == null ) {
 			throw new IllegalArgumentException("instance not set");
@@ -275,17 +273,17 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		if (  name == null ) {
 			throw new IllegalArgumentException("name not set");
 		}
-		
+
 		logEventTypes("DOMAIN", domainEventRootType);
 		logEventTypes("INBOUND", inboundEventRootType);
 		logEventTypes("OUTBOUND", outboundEventRootType);
-		
+
 		EventStream<Object> readAllInStoreEventStream;
-		EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
-		EventStream<INBOUND_EVENT_TYPE> inboundEventStream;
-		EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream;
-		EventStream<KernelEvent> observabilityEventStream; 
-		
+		EventStream domainEventStream;
+		EventStream inboundEventStream;
+		EventStream outboundEventStream;
+		EventStream<KernelEvent> observabilityEventStream;
+
 		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage, meterRegistry);
 		domainEventStream = historicalDomainEventRootType != null
 			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_DOMAIN), domainEventRootType, historicalDomainEventRootType)
@@ -299,12 +297,12 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		observabilityEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OBSERVABILITY), KernelEvent.class);
 		readAllInStoreEventStream = eventStore.getEventStream(EventStreamId.anyContext().anyPurpose());
 
-		List<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices = Collections.emptyList();
-		List<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices = Collections.emptyList();
-		
+		List<Slice<C>> deployedFeatureSlices = Collections.emptyList();
+		List<Slice<C>> undeployedFeatureSlices = Collections.emptyList();
+
 		if ( featuresSpecification.rootPackage() != null ) {
-			deployedFeatureSlices = 
-			AnnotationBasedDiscoveryAndConfiguration.<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>>instantiateAndConfigure(
+			deployedFeatureSlices =
+			AnnotationBasedDiscoveryAndConfiguration.<Slice<C>>instantiateAndConfigure(
 					FeatureSlice.class,
 					featuresSpecification.rootPackage(),
 					featuresSpecification.filter(),
@@ -318,10 +316,13 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 							if ( featuresSpecification.mustDeployAutomations() ) {
 								slice.configureAutomation(this);
 							}
+							if ( featuresSpecification.mustDeployProjections() ) {
+								slice.configureProjection(this);
+							}
 						});
-			
-			undeployedFeatureSlices = 
-			AnnotationBasedDiscoveryAndConfiguration.<FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>>instantiateAndConfigure(
+
+			undeployedFeatureSlices =
+			AnnotationBasedDiscoveryAndConfiguration.<Slice<C>>instantiateAndConfigure(
 					FeatureSlice.class,
 					featuresSpecification.rootPackage(),
 					featuresSpecification.filter().negate(),
@@ -329,39 +330,38 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		} else {
 			LOGGER.warn("no features rootPackage");
 		}
-		
-		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels = longLivedReadModelSpecs.stream().filter(s->s.isShared()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&!s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 
-		Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translators = translatorSpecs.stream().map(i->(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
-		InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> im = new InboundModule<>(name, inboundEventStream, translators, instance, meterRegistry);
+		Collection<ReadModelWithMetaData> eventuallyConsistentSharedReadModels = longLivedReadModelSpecs.stream().filter(s->s.isShared()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		Collection<ReadModelWithMetaData> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&!s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		Collection<ReadModelWithMetaData> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 
-		Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers = dispatcherSpecs.stream().map(i->(Dispatcher<OUTBOUND_EVENT_TYPE>)i).collect(Collectors.toCollection(ArrayList::new));
-		OutboundModule<OUTBOUND_EVENT_TYPE> om = new OutboundModule<OUTBOUND_EVENT_TYPE>(name, outboundEventStream, dispatchers, instance, meterRegistry);
+		Collection<Translator> translators = translatorSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
+		InboundModule im = new InboundModule(name, inboundEventStream, translators, instance, meterRegistry);
 
-		AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> am = new AutomationModule<>(name, domainEventStream, automations, instance, meterRegistry);
+		Collection<Dispatcher> dispatchers = dispatcherSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
+		OutboundModule om = new OutboundModule(name, outboundEventStream, dispatchers, instance, meterRegistry);
 
-		ReadModelModule<DOMAIN_EVENT_TYPE> rmm = new ReadModelModule<DOMAIN_EVENT_TYPE>(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
-		DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcb = new DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, instance, rmm, domainEventStream, outboundEventStream, meterRegistry);
-		
-		AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule = new AggregateModule<DOMAIN_EVENT_TYPE>(name, instance, aggregateSpecifications, domainEventStream, meterRegistry);
+		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, meterRegistry);
 
-		BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> bc = 
-				new BoundedContextImpl<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(name, deployedFeatureSlices, undeployedFeatureSlices, domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry);
-		
+		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
+		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, outboundEventStream, meterRegistry);
+
+		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, meterRegistry);
+
+		BoundedContextImpl bc =
+				new BoundedContextImpl(name, deployedFeatureSlices, undeployedFeatureSlices, domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry, adapterRegistry);
+
 		// this is only possible after creation
 		am.setCapabilitiesDelegate(bc);
 		im.setCapabilitiesDelegate(bc);
-				
+
 		if ( returnType.isInterface()) {
 			return proxy(bc, returnType);
 		} else {
-			return (T)bc; 
+			return (T)bc;
 		}
 	}
 
-	@SuppressWarnings("unchecked")
 	public static <T> T proxy ( BoundedContextImpl<?,?,?> boundedContext, Class<?> interfaceClass ) {
 		return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class[] {interfaceClass}, new InvocationHandler() {
 			@Override
@@ -371,42 +371,41 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		});
 	}
 
-	public class LiveModelSpecificationImpl implements LiveModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, LiveModelSpecificationAccessor<DOMAIN_EVENT_TYPE> {
+	public class LiveModelSpecificationImpl implements LiveModelSpecification<C>, LiveModelSpecificationAccessor {
 
-		private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder;
-		private Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass;
-		private LiveModelSnapshotSpecificationImpl<?,DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshotSpecification;
+		private BoundedContextBuilder<C> builder;
+		private Class<? extends ReadModelWithMetaData<?>> readModelClass;
+		private LiveModelSnapshotSpecificationImpl snapshotSpecification;
 
-		public LiveModelSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder, Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass ) {
+		public LiveModelSpecificationImpl ( BoundedContextBuilder<C> builder, Class<? extends ReadModelWithMetaData<?>> readModelClass ) {
 			this.builder = builder;
 			this.readModelClass = readModelClass;
 		}
 
 		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> live ( ) {
+		public BoundedContextBuilder<C> live ( ) {
 			return builder;
 		}
 
 		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventuallyConsistent ( ) {
+		public BoundedContextBuilder<C> eventuallyConsistent ( ) {
 			throw new IllegalArgumentException("LIVE read model - cannot be updated EVENTUALLY CONSISTENT");
 		}
 
 		@Override
-		public <SNAPSHOT_TYPE> LiveModelSnapshotSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> snapshots (
+		public <SNAPSHOT_TYPE> LiveModelSnapshotSpecification<C> snapshots (
 				SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage ) {
 			if ( snapshotStorage == null ) {
 				throw new IllegalArgumentException("snapshotStorage can not be null");
 			}
-			this.snapshotSpecification = new LiveModelSnapshotSpecificationImpl<SNAPSHOT_TYPE, DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>(builder, snapshotStorage);
+			this.snapshotSpecification = new LiveModelSnapshotSpecificationImpl(builder, snapshotStorage);
 			return snapshotSpecification;
 		}
 
-		public Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass ( ) {
+		public Class<? extends ReadModelWithMetaData<?>> readModelClass ( ) {
 			return readModelClass;
 		}
 
-		@SuppressWarnings("unchecked")
 		public SnapshotStorage<Object> snapshotStorage ( ) {
 			return snapshotSpecification == null ? null : (SnapshotStorage<Object>) snapshotSpecification.snapshotStorage();
 		}
@@ -425,44 +424,44 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 
 	}
 
-	public class LongLivedReadModelSpecificationImpl implements LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
-		
+	public class LongLivedReadModelSpecificationImpl implements LongLivedReadModelSpecification<C> {
+
 		private boolean shared = true;
 		private boolean ephemeral = false;
-		private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder;
-		private ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel;
+		private BoundedContextBuilder<C> builder;
+		private ReadModelWithMetaData<?> readModel;
 
-		public LongLivedReadModelSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder, ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel ) {
+		public LongLivedReadModelSpecificationImpl ( BoundedContextBuilder<C> builder, ReadModelWithMetaData<?> readModel ) {
 			this.builder = builder;
 			this.readModel= readModel;
 		}
-		
+
 		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> live ( ) {
+		public BoundedContextBuilder<C> live ( ) {
 			throw new IllegalArgumentException("state-based readmodel - cannot be live rendered");
 		}
 
 		@Override
-		public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventuallyConsistent ( ) {
+		public BoundedContextBuilder<C> eventuallyConsistent ( ) {
 			return builder;
 		}
-		
+
 		@Override
-		public LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> ephemeral ( ) {
+		public LongLivedReadModelSpecification<C> ephemeral ( ) {
 			this.shared = false;
 			this.ephemeral = true;
 			return this;
 		}
 
 		@Override
-		public LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> local ( ) {
+		public LongLivedReadModelSpecification<C> local ( ) {
 			this.shared = false;
 			this.ephemeral = false;
 			return this;
 		}
-		
+
 		@Override
-		public LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> shared ( ) {
+		public LongLivedReadModelSpecification<C> shared ( ) {
 			this.shared = true;
 			this.ephemeral = false;
 			return this;
@@ -475,17 +474,17 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		public boolean isShared ( ) {
 			return shared;
 		}
-		
+
 		public boolean isLocal ( ) {
 			return !isShared();
 		}
-		
-		public ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel ( ) {
+
+		public ReadModelWithMetaData<?> readModel ( ) {
 			return readModel;
 		}
-		
+
 	}
-	
+
 	private static void logEventTypes ( String type, Class<?> rootEventClass ) {
 		LOGGER.info(type + " EVENTS:");
 		Class<?>[] eventClasses = (rootEventClass == null ) ? null: rootEventClass.getPermittedSubclasses();
@@ -496,7 +495,7 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		}
 	}
 
-	private class AdapterBindingImpl implements AdapterBinding<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+	private class AdapterBindingImpl implements AdapterBinding<C> {
 
 		private final Object adapter;
 
@@ -505,13 +504,13 @@ public class BoundedContextBuilderImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE, OUT
 		}
 
 		@Override
-		public <T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType) {
+		public <T> BoundedContextBuilder<C> forPort(Class<T> portType) {
 			adapterRegistry.register(adapter, portType, AdapterRegistry.DEFAULT_QUALIFICATION);
 			return BoundedContextBuilderImpl.this;
 		}
 
 		@Override
-		public <T> BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> forPort(Class<T> portType, String qualification) {
+		public <T> BoundedContextBuilder<C> forPort(Class<T> portType, String qualification) {
 			if (qualification == null) {
 				throw new IllegalArgumentException("qualification must not be null");
 			}

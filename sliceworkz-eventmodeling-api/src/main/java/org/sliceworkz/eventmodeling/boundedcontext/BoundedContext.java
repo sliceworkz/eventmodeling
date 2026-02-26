@@ -17,9 +17,13 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.ServiceLoader;
 
-public interface BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+import org.sliceworkz.eventmodeling.EventTypes;
+
+public interface BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, EventTypes<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
 
 	/**
 	 * Returns the name of this bounded context.
@@ -31,15 +35,56 @@ public interface BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_
 	 */
 	String name ( );
 
+	/**
+	 * Creates a new builder for a bounded context type.
+	 * <p>
+	 * The domain, inbound, and outbound event types are resolved from the
+	 * type parameters of the {@code EventTypes} superinterface.
+	 *
+	 * @param <C> the bounded context type
+	 * @param contextType the class extending {@link BoundedContext}
+	 * @return a new builder
+	 */
 	@SuppressWarnings("unchecked")
-	public static <DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> BoundedContextBuilder<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> newBuilder ( 
-			Class<DOMAIN_EVENT_TYPE> domainEventRootType,
-			Class<INBOUND_EVENT_TYPE> inboundEventRootType,
-			Class<OUTBOUND_EVENT_TYPE> outboundEventRootType
-			) {
-		 var result = ServiceLoader.load(BoundedContextBuilder.class).findFirst().get();
-		 result.eventTypes(domainEventRootType, inboundEventRootType, outboundEventRootType);
-		 return result;
+	public static <C extends BoundedContext<?,?,?>> BoundedContextBuilder<C> newBuilder(Class<C> contextType) {
+		Type[] typeArgs = resolveEventTypes(contextType);
+		if (typeArgs == null) {
+			throw new IllegalArgumentException(
+				"Cannot resolve EventTypes<D,I,O> type arguments from " + contextType.getName() +
+				". Ensure it extends EventTypes with concrete type arguments.");
+		}
+		BoundedContextBuilder<C> result = ServiceLoader.load(BoundedContextBuilder.class).findFirst().get();
+		result.eventTypes((Class<?>) typeArgs[0], (Class<?>) typeArgs[1], (Class<?>) typeArgs[2]);
+		return result;
+	}
+
+	private static Type[] resolveEventTypes(Class<?> contextType) {
+		for (Type iface : contextType.getGenericInterfaces()) {
+			if (iface instanceof ParameterizedType pt) {
+				if (EventTypes.class.isAssignableFrom((Class<?>) pt.getRawType())) {
+					Type[] args = pt.getActualTypeArguments();
+					if (allConcreteTypes(args)) return args;
+				}
+			}
+		}
+		// Search recursively through super-interfaces
+		for (Type iface : contextType.getGenericInterfaces()) {
+			Class<?> rawType = iface instanceof ParameterizedType pt
+				? (Class<?>) pt.getRawType()
+				: (Class<?>) iface;
+			if (EventTypes.class.isAssignableFrom(rawType)) {
+				Type[] result = resolveEventTypes(rawType);
+				if (result != null) return result;
+			}
+		}
+		return null;
+	}
+
+	private static boolean allConcreteTypes(Type[] types) {
+		for (Type t : types) {
+			if (!(t instanceof Class)) return false;
+		}
+		return true;
 	}
 
 }

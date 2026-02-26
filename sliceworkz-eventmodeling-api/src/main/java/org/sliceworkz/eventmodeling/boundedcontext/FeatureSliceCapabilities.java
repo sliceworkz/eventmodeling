@@ -19,12 +19,10 @@ package org.sliceworkz.eventmodeling.boundedcontext;
 
 import java.util.List;
 
-import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
+public interface FeatureSliceCapabilities {
 
-public interface FeatureSliceCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+	<T> List<T> getDeployedFeatureSlices ( );
 
-	<T extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> List<T> getDeployedFeatureSlices ( );
-
-	<T extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> List<T> getUndeployedFeatureSlices ( );
+	<T> List<T> getUndeployedFeatureSlices ( );
 
 }

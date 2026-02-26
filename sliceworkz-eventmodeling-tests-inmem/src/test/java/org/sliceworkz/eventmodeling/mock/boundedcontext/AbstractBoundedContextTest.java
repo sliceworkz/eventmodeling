@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.mock.boundedcontext;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.sliceworkz.eventmodeling.Untyped;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -41,15 +42,16 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 		return boundedContext;
 	}
 	
-	protected BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContextBuilder ( EventStorage eventStorage ) {
-		
-		BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder = 
-				BoundedContext.newBuilder(domainEventType(), inboundEventType(), outboundEventType());
-		
+	protected BoundedContextBuilder<?> boundedContextBuilder ( EventStorage eventStorage ) {
+
+		BoundedContextBuilder<?> builder =
+				BoundedContext.newBuilder(Untyped.class)
+				.eventTypes(domainEventType(), inboundEventType(), outboundEventType());
+
 		builder
 			.name("UnitTestBoundedContext")
 			.eventStorage(eventStorage);
-		
+
 		return builder;
 	}
 	

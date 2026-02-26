@@ -51,7 +51,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 	private MeterRegistry meterRegistry;
 	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
 
-	public AggregateModule ( String boundedContext, Instance instance, List<? extends AggregateSpecificationImpl<DOMAIN_EVENT_TYPE,?,?>> aggregateSpecifications, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, MeterRegistry meterRegistry ) {
+	public AggregateModule ( String boundedContext, Instance instance, List<? extends AggregateSpecificationImpl<?>> aggregateSpecifications, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, MeterRegistry meterRegistry ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.domainEventStream = domainEventStream;
@@ -73,10 +73,11 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 				Counter counterSnapshotWrite = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.snapshot.write.count", aggregateTags);
 				Timer timer = meterRegistry.timer("sliceworkz.eventmodeling.aggregate.load.duration", aggregateTags);
 				
-				AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo = 
+				Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass = (Class<? extends Aggregate<DOMAIN_EVENT_TYPE>>) (Class<?>) spec.aggregateClass();
+				AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo =
 						new AggregateInfo<>(
-								spec.aggregateClass().getSimpleName(),
-								spec.aggregateClass().getDeclaredConstructor(new Class[] {}),
+								aggregateClass.getSimpleName(),
+								aggregateClass.getDeclaredConstructor(new Class[] {}),
 								spec.snapshotStorage(),
 								spec.readSnapshots(),
 								spec.writeSnapshots(),
@@ -85,8 +86,8 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 								counterSnapshotRead,
 								counterSnapshotWrite,
 								timer);
-				
-				aggregateInfoByClass.put(spec.aggregateClass(), aggregateInfo);
+
+				aggregateInfoByClass.put(aggregateClass, aggregateInfo);
 			} catch (NoSuchMethodException | SecurityException e) {
 				LOGGER.error(e.getMessage(), e);
 				throw new RuntimeException(e);

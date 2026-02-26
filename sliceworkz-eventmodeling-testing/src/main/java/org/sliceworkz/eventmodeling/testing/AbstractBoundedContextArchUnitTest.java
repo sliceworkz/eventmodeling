@@ -23,7 +23,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
-import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -42,7 +42,7 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * 		- whether no feature packages depend on another one.
  *
  * A feature package is any package that contains a class implementing
- * {@link FeatureSliceConfiguration} (directly or via extending). Classes in
+ * {@link Slice} (directly or via extending). Classes in
  * subpackages of a feature package are considered part of the same feature.
  *
  * Overriding is done with an empty class, in the right base package.
@@ -86,7 +86,7 @@ public abstract class AbstractBoundedContextArchUnitTest {
 	private static Set<String> findFeaturePackages(JavaClasses classes) {
 		Set<String> featurePackages = new HashSet<>();
 		for (JavaClass javaClass : classes) {
-			if (!javaClass.isInterface() && javaClass.isAssignableTo(FeatureSliceConfiguration.class)) {
+			if (!javaClass.isInterface() && javaClass.isAssignableTo(Slice.class)) {
 				featurePackages.add(javaClass.getPackageName());
 			}
 		}

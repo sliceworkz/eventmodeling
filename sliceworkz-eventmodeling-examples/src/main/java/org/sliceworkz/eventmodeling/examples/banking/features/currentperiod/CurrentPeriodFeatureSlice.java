@@ -17,15 +17,11 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.currentperiod;
 
-import org.sliceworkz.eventmodeling.examples.banking.BankingBoundedContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingFeatureSlice;
+import org.sliceworkz.eventmodeling.examples.banking.Banking;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
 @FeatureSlice(type = Type.STATE_READ, context = "banking", chapter = "Account management")
-public class CurrentPeriodFeatureSlice implements BankingFeatureSlice {
-
-	@Override
-	public void configure(BankingBoundedContext boundedContext) {
-	}
+public class CurrentPeriodFeatureSlice implements Slice<Banking> {
 }

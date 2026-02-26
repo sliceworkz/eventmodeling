@@ -17,16 +17,10 @@
  */
 package org.sliceworkz.eventmodeling.benchmark;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
-import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
-import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
 
-public interface OrderProcessingFeatureSlice extends FeatureSliceConfiguration<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> {
-
-	default void configureCommand ( BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder ) { }
-	default void configureQuery ( BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder ) { }
-	default void configureAutomation ( BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder ) { }
-
+public interface OrderProcessing extends BoundedContext<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> {
 }

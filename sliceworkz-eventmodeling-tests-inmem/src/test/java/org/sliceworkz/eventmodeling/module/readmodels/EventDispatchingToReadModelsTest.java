@@ -34,7 +34,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockBoundedContext;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockCommand;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
@@ -91,7 +91,7 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 
 	@Test
 	void testLiveModelsNotCalledWithExternallyProvidedEvent ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
+		Mock domain = domainWithReadModels(liveModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
 
 		// throw in an external event
 		domain.event(new MockDomainEvent.FirstDomainEvent("test"));
@@ -103,7 +103,7 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 
 	@Test
 	void testLiveModelsNotCalledWithCommandGeneratedEventsSentSeparately ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
+		Mock domain = domainWithReadModels(liveModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
 
 		// generate one event at a time via a command
 		domain.execute(new MockCommand(Collections.singletonList(new MockDomainEvent.FirstDomainEvent("test"))));
@@ -115,7 +115,7 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 
 	@Test
 	void testLiveModelsNotCalledWithCommandGeneratedEventsSentInOneTransaction ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
+		Mock domain = domainWithReadModels(liveModels(), noEventuallyConsistentSharedModels(), noEventuallyConsistentLocalModels());
 
 		List<MockDomainEvent> events = new ArrayList<>();
 		events.add(new MockDomainEvent.FirstDomainEvent("test"));
@@ -130,7 +130,7 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 
 	@Test
 	void testModelsCallingWhenExternalEventsOccur ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
+		Mock domain = domainWithReadModels(liveModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
 
 		// throw in an external event
 		domain.event(new MockDomainEvent.FirstDomainEvent("test"));
@@ -142,7 +142,7 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 
 	@Test
 	void testModelsCallingWhenCommandGeneratedEventsOccurSeparately ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
+		Mock domain = domainWithReadModels(liveModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
 
 		// generate one event at a time via a command
 		domain.execute(new MockCommand(Collections.singletonList(new MockDomainEvent.FirstDomainEvent("test"))));
@@ -154,7 +154,7 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 
 	@Test
 	void testModelsCallingWhenCommandGeneratedEventsOccurInOneTransaction ( ) {
-		MockBoundedContext domain = domainWithReadModels(liveModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
+		Mock domain = domainWithReadModels(liveModels(), eventuallyConsistentSharedModels(), eventuallyConsistentLocalModels());
 
 		List<MockDomainEvent> events = new ArrayList<>();
 		events.add(new MockDomainEvent.FirstDomainEvent("test"));
@@ -194,13 +194,13 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 
 	}
 
-	MockBoundedContext domainWithReadModels (
+	Mock domainWithReadModels (
 			Collection<Class<? extends ReadModelWithMetaData<MockDomainEvent>>> liveModelClasses,
 			Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentSharedReadModels,
 			Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentLocalReadModels ) {
 
-		BoundedContextBuilder<MockDomainEvent, MockInboundEvent, MockOutboundEvent> builder =
-				BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
+		var builder =
+				BoundedContext.newBuilder(Mock.class)
 				.name("UnitTestBoundedContext")
 				.eventStorage(eventStorage)
 				.instance(InstanceFactory.determine("unittests"));

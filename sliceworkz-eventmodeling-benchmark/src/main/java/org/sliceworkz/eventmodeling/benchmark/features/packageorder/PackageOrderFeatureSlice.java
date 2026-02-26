@@ -19,21 +19,18 @@ package org.sliceworkz.eventmodeling.benchmark.features.packageorder;
 
 import javax.sql.DataSource;
 
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingFeatureSlice;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessing;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventstore.infra.postgres.DatabaseInitMode;
 
 @FeatureSlice(type=Type.AUTOMATION)
-public class PackageOrderFeatureSlice implements OrderProcessingFeatureSlice{
+public class PackageOrderFeatureSlice implements Slice<OrderProcessing>{
 
 	@Override
-	public void configureAutomation(
-			BoundedContextBuilder<OrderProcessingDomainEvent, OrderProcessingInboundEvent, OrderProcessingOutboundEvent> builder) {
+	public void configureAutomation(BoundedContextBuilder<OrderProcessing> builder) {
 		var ordersReadyToPackage = new OrdersReadyToPackage(builder.port(DataSource.class));
 		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
 			ordersReadyToPackage.initialize();

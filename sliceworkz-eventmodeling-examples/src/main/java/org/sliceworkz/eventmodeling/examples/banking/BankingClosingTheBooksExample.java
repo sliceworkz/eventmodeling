@@ -27,8 +27,6 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingInboundEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingOutboundEvent;
 import org.sliceworkz.eventmodeling.examples.banking.features.closemonth.CloseMonthCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActiveMonthReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.CurrentPeriodReadModel;
@@ -89,7 +87,7 @@ public class BankingClosingTheBooksExample {
 		 * Read models must be registered explicitly so the bounded context knows
 		 * how to project them when bc.read() is called.
 		 */
-		var builder = BoundedContext.newBuilder(BankingEvent.class, BankingInboundEvent.class, BankingOutboundEvent.class)
+		var builder = BoundedContext.newBuilder(ClosingTheBooks.class)
 			.name("banking-ctb")
 			.eventStorage(eventStorage)
 			.instance(instance);
@@ -102,7 +100,7 @@ public class BankingClosingTheBooksExample {
 			.rootPackage(BankingClosingTheBooksExample.class.getPackage())
 			.done();
 
-		ClosingTheBooksBoundedContext bc = builder.build(ClosingTheBooksBoundedContext.class);
+		ClosingTheBooks bc = builder.build(ClosingTheBooks.class);
 		
 		bc.start();
 

@@ -17,18 +17,19 @@
  */
 package org.sliceworkz.eventmodeling.readmodels;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 
-public interface LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+public interface LongLivedReadModelSpecification<C extends BoundedContext<?,?,?>> {
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> live();
+	BoundedContextBuilder<C> live();
 
-	BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventuallyConsistent();
+	BoundedContextBuilder<C> eventuallyConsistent();
 
-	LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> ephemeral();
+	LongLivedReadModelSpecification<C> ephemeral();
 
-	LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> local();
+	LongLivedReadModelSpecification<C> local();
 
-	LongLivedReadModelSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> shared();
+	LongLivedReadModelSpecification<C> shared();
 
 }

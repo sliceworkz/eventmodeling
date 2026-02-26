@@ -15,13 +15,15 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.examples.banking.features.openbankaccount;
+package org.sliceworkz.eventmodeling.boundedcontext;
 
-import org.sliceworkz.eventmodeling.examples.banking.Banking;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
-import org.sliceworkz.eventmodeling.slices.Slice;
+/**
+ * Capability for retrieving registered port adapters from a built bounded context.
+ */
+public interface PortsCapability {
 
-@FeatureSlice(type = Type.STATE_CHANGE, context = "banking", chapter = "Account management")
-public class OpenBankAccountFeatureSlice implements Slice<Banking> {
+	<T> T port(Class<T> portType);
+
+	<T> T port(Class<T> portType, String qualification);
+
 }

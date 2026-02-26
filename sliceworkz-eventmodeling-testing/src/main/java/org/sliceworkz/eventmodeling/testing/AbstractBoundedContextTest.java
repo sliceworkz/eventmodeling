@@ -26,6 +26,7 @@ import java.util.GregorianCalendar;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.sliceworkz.eventmodeling.Untyped;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -41,28 +42,29 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 
 public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
-	
+
 	private static final String DOMAIN_NAME = "unitTests";
 	private static final String DOMAIN = "domain";
-	
+
 	private static final String IGNORE_TEXT = "<<<IGNORE>>>";
 	private static final Calendar IGNORE_DATE_CALENDAR = new GregorianCalendar(); static {IGNORE_DATE_CALENDAR.set(666, 6, 6, 6, 6, 6);};
 	private static final Date IGNORE_DATE = IGNORE_DATE_CALENDAR.getTime();
-	
+
 	private Instance INSTANCE = InstanceFactory.determine("unittests");
-	
+
 	private BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContext;
 	private EventStorage eventStorage;
 	private EventStore eventStore;
-	
+
 	@SuppressWarnings("unchecked")
 	@BeforeEach
 	void setUp ( ) {
 		this.eventStorage = InMemoryEventStorage.newBuilder().build();
-		
+
 		this.eventStore = EventStoreFactory.get().eventStore(eventStorage);
-		BoundedContextBuilder< DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder = BoundedContext.newBuilder(domainEventType(), inboundEventType(), outboundEventType());
-		
+		BoundedContextBuilder<?> builder = BoundedContext.newBuilder(Untyped.class)
+				.eventTypes(domainEventType(), inboundEventType(), outboundEventType());
+
 		builder
 				.name(DOMAIN_NAME)
 				.instance(INSTANCE)
@@ -70,18 +72,18 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 
 		// let subclasses do any needed configuration
 		configure(builder);
-		
+
 		this.boundedContext = builder.build(BoundedContext.class);
 	}
-	
+
 	public abstract Class<DOMAIN_EVENT_TYPE> domainEventType ( );
 
 	public abstract Class<INBOUND_EVENT_TYPE> inboundEventType ( );
-	
+
 	public abstract Class<OUTBOUND_EVENT_TYPE> outboundEventType ( );
-	
-	public abstract void configure ( BoundedContextBuilder< DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> builder );
-	
+
+	public abstract void configure ( BoundedContextBuilder<?> builder );
+
 	public BoundedContext<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> kernel ( ) {
 		return boundedContext;
 	}
@@ -89,7 +91,7 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 	public EventStreamId eventStreamId ( ) {
 		return EventStreamId.forContext(DOMAIN_NAME).withPurpose(DOMAIN);
 	}
-	
+
 	public EventStore eventStore ( ) {
 		return eventStore;
 	}
@@ -98,9 +100,9 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 		ObjectWriter mapper = new JsonMapper()
 			.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.FIELD, com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.ANY)
 			.writerWithDefaultPrettyPrinter();
-		
+
 		assertEquals(expected.getClass(), actual.getClass(), "type for %s not as expected".formatted(objectDescription));
-		
+
 		try {
 			String expectedAsPrettyPrintString = mapper.writeValueAsString(expected);
 			String actualAsPrettyPrintString = mapper.writeValueAsString(actual);
@@ -108,7 +110,7 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 //			System.out.println(actualAsPrettyPrintString);
 
 			assertEquals(expectedAsPrettyPrintString, actualAsPrettyPrintString);
-			
+
 		} catch (JsonProcessingException e) {
 			throw new RuntimeException(e);
 		}
@@ -121,7 +123,7 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 			.writerWithDefaultPrettyPrinter();
 
 		assertEquals(expected.getClass(), actual.getClass(), "type for %s not as expected".formatted(objectDescription));
-		
+
 		try {
 			String expectedAsPrettyPrintString = mapper.writeValueAsString(expected);
 			String actualAsPrettyPrintString = mapper.writeValueAsString(actual);
@@ -133,7 +135,7 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 
 			List<String> expectedToCompare = new ArrayList<>();
 			List<String> actualToCompare = new ArrayList<>();
-			
+
 			int j = 0;
 			for ( String expectedLine: expectedParts ) {
 				if ( ! expectedLine.contains(IGNORE_TEXT) && ! expectedLine.contains(mapper.writeValueAsString(IGNORE_DATE))) {
@@ -151,7 +153,7 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 				System.out.println("ACTUAL   : " + actualToCompare);
 			}
 			assertEquals(expectedToCompare, actualToCompare);
-			
+
 		} catch (JsonProcessingException e) {
 			throw new RuntimeException(e);
 		}
@@ -159,13 +161,13 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 
 	// TODO maybe check UUID format for this one instead of just ignoring alltogether?
 	public static String IGNORE_ID() {
-		return IGNORE_TEXT; 
+		return IGNORE_TEXT;
 	}
 
 	public static String IGNORE_TEXT() {
 		return IGNORE_TEXT;
 	}
-	
+
 	public static Date IGNORE_DATE() {
 		return IGNORE_DATE;
 	}

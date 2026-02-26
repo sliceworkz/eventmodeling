@@ -17,10 +17,10 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.closemonth;
 
-import org.sliceworkz.eventmodeling.examples.banking.BankingBoundedContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingFeatureSlice;
+import org.sliceworkz.eventmodeling.examples.banking.Banking;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
  * Feature slice for the "Closing The Books" pattern.
@@ -36,11 +36,7 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
  *   <li>{@link MonthEndClosingAutomation} — processes the todo list</li>
  * </ul>
  */
-@FeatureSlice(type = Type.OTHER, context = "banking", chapter = "Closing The Books",
+@FeatureSlice(type = Type.AUTOMATION, context = "banking", chapter = "Closing The Books",
 	tags = {"closing-the-books", "month-end"})
-public class CloseMonthFeatureSlice implements BankingFeatureSlice {
-
-	@Override
-	public void configure(BankingBoundedContext boundedContext) {
-	}
+public class CloseMonthFeatureSlice implements Slice<Banking> {
 }

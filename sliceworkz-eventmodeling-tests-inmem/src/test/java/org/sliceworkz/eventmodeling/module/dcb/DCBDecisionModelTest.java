@@ -35,7 +35,7 @@ import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockBoundedContext;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
@@ -93,14 +93,14 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 	public void destroyEventStorage(EventStorage storage) {
 	}
 
-	private MockBoundedContext buildDomain() {
-		BoundedContextBuilder<MockDomainEvent, MockInboundEvent, MockOutboundEvent> builder =
-				BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
+	private Mock buildDomain() {
+		var builder =
+				BoundedContext.newBuilder(Mock.class)
 						.name("UnitTestBoundedContext")
 						.eventStorage(eventStorage)
 						.instance(InstanceFactory.determine("unittests"));
 
-		MockBoundedContext domain = buildBoundedContext(builder);
+		Mock domain = buildBoundedContext(builder);
 
 		// Create a direct event stream for injecting concurrent events during command execution
 		directStream = EventStoreFactory.get().eventStore(eventStorage)
@@ -367,7 +367,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void singleDecisionModelWithoutInitQuery_populatesState() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		domain.event(new FirstDomainEvent("existing-1"));
 		domain.event(new FirstDomainEvent("existing-2"));
@@ -380,7 +380,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void singleDecisionModelWithoutInitQuery_sequentialCommandsSeeAllEvents() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		domain.execute(new SingleModelCommand(10));
 		domain.execute(new SingleModelCommand(10));
@@ -392,7 +392,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void singleDecisionModelWithInitQuery_savepointSkipsOldEvents() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		domain.event(new SecondDomainEvent("old-1"));
 		domain.event(new SecondDomainEvent("old-2"));
@@ -410,7 +410,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void singleDecisionModelWithInitQuery_noSavepoint() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		domain.event(new SecondDomainEvent("movement-1"));
 		domain.event(new SecondDomainEvent("movement-2"));
@@ -423,7 +423,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void singleDecisionModelWithInitQuery_emptyStream() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		var cmd = new SavepointModelCommand();
 		domain.execute(cmd);
@@ -433,7 +433,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void savepointModel_correctStateWithMultipleSavepoints() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		domain.event(new ThirdDomainEvent("10"));
 		domain.event(new SecondDomainEvent("m1"));
@@ -456,7 +456,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void twoClassicModels_eachSeesOwnEventTypes() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		domain.event(new FirstDomainEvent("f1"));
 		domain.event(new SecondDomainEvent("s1"));
@@ -473,7 +473,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void mixedModels_bothPopulatedCorrectly() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		domain.event(new FirstDomainEvent("f1"));
 		domain.event(new SecondDomainEvent("old-movement"));
@@ -493,7 +493,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void mixedModels_correctStateAfterMultipleCommands() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		domain.event(new ThirdDomainEvent("0"));
 
@@ -520,7 +520,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_singleModelNoInitQuery_conflictOnMatchingEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 		domain.event(new FirstDomainEvent("baseline"));
 
 		// Command injects a FirstDomainEvent after reading decision models
@@ -541,7 +541,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_singleModelNoInitQuery_noConflictOnNonMatchingEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 		domain.event(new FirstDomainEvent("baseline"));
 
 		// Inject SecondDomainEvent — not in CountingDecisionModel's eventQuery filter
@@ -561,7 +561,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_singleModelWithInitQuery_conflictOnMovementEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 		domain.event(new ThirdDomainEvent("0"));
 		domain.event(new SecondDomainEvent("existing"));
 
@@ -582,7 +582,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_singleModelWithInitQuery_noConflictOnSavepointEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 		domain.event(new ThirdDomainEvent("0"));
 		domain.event(new SecondDomainEvent("existing"));
 
@@ -603,7 +603,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_twoClassicModels_conflictOnFirstModelEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		// Inject a FirstDomainEvent after reading both models
 		assertOptimisticLockingException(() ->
@@ -615,7 +615,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_twoClassicModels_conflictOnSecondModelEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		// Inject a SecondDomainEvent — the other model's event type, still in combined filter
 		assertOptimisticLockingException(() ->
@@ -627,7 +627,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_twoClassicModels_noConflictOnUnrelatedEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		// Inject ThirdDomainEvent — not in either model's eventQuery
 		domain.execute(new TwoClassicModelsCommand(
@@ -637,7 +637,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_mixedModels_conflictOnFirstModelEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		assertOptimisticLockingException(() ->
 				domain.execute(new MultiModelCommand(
@@ -648,7 +648,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_mixedModels_conflictOnSecondModelEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		assertOptimisticLockingException(() ->
 				domain.execute(new MultiModelCommand(
@@ -659,7 +659,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_mixedModels_noConflictOnSavepointEventType() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		// ThirdDomainEvent is only in initQuery, not in any eventQuery
 		var cmd = new MultiModelCommand(
@@ -670,7 +670,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void optimisticLocking_mixedModels_savepointModelSeesNewSavepointCorrectly() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		domain.event(new ThirdDomainEvent("0"));
 
@@ -696,7 +696,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void noDecisionModels_noOptimisticLockingEvenWithConcurrentEvents() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		// Inject all event types during execution — none should cause conflict
 		domain.execute(new NoDecisionModelCommand(() -> {
@@ -712,7 +712,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void sequentialCommands_noConflictsWhenNoExternalModification() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 
 		for (int i = 0; i < 5; i++) {
 			var cmd = new SingleModelCommand(10);
@@ -723,7 +723,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void sequentialMixedCommands_noConflictsWhenNoExternalModification() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 		domain.event(new ThirdDomainEvent("0"));
 
 		for (int i = 0; i < 5; i++) {
@@ -738,7 +738,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	@Test
 	void sequentialSavepointCommands_noConflictsAndCorrectState() {
-		MockBoundedContext domain = buildDomain();
+		Mock domain = buildDomain();
 		domain.event(new ThirdDomainEvent("0"));
 
 		for (int i = 0; i < 3; i++) {

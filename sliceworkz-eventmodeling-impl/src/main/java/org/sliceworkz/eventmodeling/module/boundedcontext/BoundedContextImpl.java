@@ -41,7 +41,8 @@ import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventmodeling.readmodels.UnboundedReadModelCapability;
-import org.sliceworkz.eventmodeling.slices.FeatureSliceConfiguration;
+import org.sliceworkz.eventmodeling.slices.Slice;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -65,8 +66,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule;
 	private OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule;
 	
-	private List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices;
-	private List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices;
+	private List<? extends Slice<? extends BoundedContext<?,?,?>>> deployedFeatureSlices;
+	private List<? extends Slice<? extends BoundedContext<?,?,?>>> undeployedFeatureSlices;
 	
 	private String name;
 	private Instance instance;
@@ -75,10 +76,12 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
 	private ConcurrentHashMap<String, Counter> inboundEventCounters = new ConcurrentHashMap<>();
 
+	private AdapterRegistry adapterRegistry;
+
 	public BoundedContextImpl (
 			String name,
-			List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> deployedFeatureSlices,
-			List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> undeployedFeatureSlices,
+			List<? extends Slice<? extends BoundedContext<?,?,?>>> deployedFeatureSlices,
+			List<? extends Slice<? extends BoundedContext<?,?,?>>> undeployedFeatureSlices,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventStream<INBOUND_EVENT_TYPE> inboundEventStream,
 			EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream,
@@ -90,7 +93,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule,
 			OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule,
 			Instance instance,
-			MeterRegistry meterRegistry ) {
+			MeterRegistry meterRegistry,
+			AdapterRegistry adapterRegistry ) {
 		this.name = name;
 		this.instance = instance;
 		this.meterRegistry = meterRegistry;
@@ -107,7 +111,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.aggregateModule = aggregateModule;
 
 		this.outboundModule = outboundModule;
-		
+
+		this.adapterRegistry = adapterRegistry;
 		this.instance = instance;
 
 		EphemeralEvent<KernelEvent> kernelEvent = Event.of(
@@ -124,7 +129,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		);
 	}
 	
-	private Set<KernelEvent.FeatureSlice> map ( List<? extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> featureSlices ) {
+	private Set<KernelEvent.FeatureSlice> map ( List<? extends Slice<? extends BoundedContext<?,?,?>>> featureSlices ) {
 		return featureSlices.stream().map(fs->new KernelEvent.FeatureSlice(fs.name(), fs.type().name(), fs.context(), fs.chapter(), fs.tags())).collect(Collectors.toSet());
 	}
 
@@ -297,14 +302,24 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> List<T> getDeployedFeatureSlices() {
+	public <T> List<T> getDeployedFeatureSlices() {
 		return (List<T>)deployedFeatureSlices;
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T extends FeatureSliceConfiguration<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>> List<T> getUndeployedFeatureSlices() {
+	public <T> List<T> getUndeployedFeatureSlices() {
 		return (List<T>)undeployedFeatureSlices;
+	}
+
+	@Override
+	public <T> T port(Class<T> portType) {
+		return adapterRegistry.lookup(portType, AdapterRegistry.DEFAULT_QUALIFICATION);
+	}
+
+	@Override
+	public <T> T port(Class<T> portType, String qualification) {
+		return adapterRegistry.lookup(portType, qualification);
 	}
 
 }

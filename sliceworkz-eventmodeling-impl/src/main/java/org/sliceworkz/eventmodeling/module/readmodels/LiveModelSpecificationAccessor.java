@@ -23,9 +23,9 @@ import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 /**
  * Internal accessor interface for live model specification data needed by ReadModelModule.
  */
-public interface LiveModelSpecificationAccessor<DOMAIN_EVENT_TYPE> {
+public interface LiveModelSpecificationAccessor {
 
-	Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass ( );
+	Class<? extends ReadModelWithMetaData<?>> readModelClass ( );
 
 	SnapshotStorage<Object> snapshotStorage ( );
 

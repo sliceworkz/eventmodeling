@@ -39,7 +39,6 @@ public @interface FeatureSlice {
 		STATE_READ,
 		AUTOMATION,
 		TRANSLATION,
-		OTHER,
 		UNDEFINED
 	}
 	

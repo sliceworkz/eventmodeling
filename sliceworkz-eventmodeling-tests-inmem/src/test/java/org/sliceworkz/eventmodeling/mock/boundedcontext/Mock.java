@@ -15,20 +15,9 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.examples.banking;
+package org.sliceworkz.eventmodeling.mock.boundedcontext;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingInboundEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingOutboundEvent;
 
-/**
- * Bounded context interface for the "Closing The Books" banking example.
- * <p>
- * Uses the extended event types from {@link BankingDomainWithClosingTheBooks}
- * which include period lifecycle events ({@code MonthClosed}, {@code MonthOpened})
- * alongside the standard transaction events.
- */
-public interface ClosingTheBooksBoundedContext extends BoundedContext<BankingEvent, BankingInboundEvent, BankingOutboundEvent> {
-
+public interface Mock extends BoundedContext<MockDomainEvent, MockInboundEvent, MockOutboundEvent> {
 }

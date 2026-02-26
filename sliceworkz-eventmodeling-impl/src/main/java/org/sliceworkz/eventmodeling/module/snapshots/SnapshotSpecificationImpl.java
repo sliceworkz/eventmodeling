@@ -17,21 +17,22 @@
  */
 package org.sliceworkz.eventmodeling.module.snapshots;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotSpecification;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 
-public class SnapshotSpecificationImpl<SNAPSHOT_TYPE,DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> implements SnapshotSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
-	
+public class SnapshotSpecificationImpl<SNAPSHOT_TYPE, C extends BoundedContext<?,?,?>> implements SnapshotSpecification<C> {
+
 	public static final int DEFAULT_EVENT_COUNT_THRESHOLD = 100;
-	
+
 	private SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage;
 	private READ_AND_OR_WRITE readAndOrWrite = READ_AND_OR_WRITE.READ_WRITE;
-	private int eventCountThreshold = DEFAULT_EVENT_COUNT_THRESHOLD; 
-	private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> parent;
-	
+	private int eventCountThreshold = DEFAULT_EVENT_COUNT_THRESHOLD;
+	private BoundedContextBuilder<C> parent;
+
 	public enum READ_AND_OR_WRITE {
-		
+
 		NO_READ_NO_WRITE(false,false),
 		READ_WRITE(true,true),
 		READ_ONLY(true,false),
@@ -39,23 +40,23 @@ public class SnapshotSpecificationImpl<SNAPSHOT_TYPE,DOMAIN_EVENT_TYPE, INBOUND_
 
 		private boolean mustRead;
 		private boolean mustWrite;
-		
+
 		private READ_AND_OR_WRITE ( boolean mustRead, boolean mustWrite ) {
 			this.mustRead = mustRead;
 			this.mustWrite = mustWrite;
 		}
-		
+
 		public boolean mustRead ( ) {
 			return mustRead;
 		}
-		
+
 		public boolean mustWrite ( ) {
 			return mustWrite;
 		}
-		
+
 	}
-	
-	public SnapshotSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> parent, SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage ) {
+
+	public SnapshotSpecificationImpl ( BoundedContextBuilder<C> parent, SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage ) {
 		this.parent = parent;
 		this.snapshotStorage = snapshotStorage;
 		if ( snapshotStorage != null ) {
@@ -66,7 +67,7 @@ public class SnapshotSpecificationImpl<SNAPSHOT_TYPE,DOMAIN_EVENT_TYPE, INBOUND_
 	}
 
 	@Override
-	public SnapshotSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventCountThreshold ( int eventCountThreshold ) {
+	public SnapshotSpecification<C> eventCountThreshold ( int eventCountThreshold ) {
 		validateSnapshotStorage();
 		if ( eventCountThreshold <= 0 ) {
 			throw new IllegalArgumentException("eventCountThreshold must be above 0");
@@ -76,40 +77,40 @@ public class SnapshotSpecificationImpl<SNAPSHOT_TYPE,DOMAIN_EVENT_TYPE, INBOUND_
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readAndWrite() {
+	public BoundedContextBuilder<C> readAndWrite() {
 		validateSnapshotStorage();
 		this.readAndOrWrite = READ_AND_OR_WRITE.READ_WRITE;
 		return parent;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readOnly() {
+	public BoundedContextBuilder<C> readOnly() {
 		validateSnapshotStorage();
 		this.readAndOrWrite = READ_AND_OR_WRITE.READ_ONLY;
 		return parent;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> writeOnly() {
+	public BoundedContextBuilder<C> writeOnly() {
 		validateSnapshotStorage();
 		this.readAndOrWrite = READ_AND_OR_WRITE.WRITE_ONLY;
 		return parent;
 	}
-	
+
 	private void validateSnapshotStorage ( ) {
 		if ( snapshotStorage == null ) {
 			throw new IllegalArgumentException("snapshot storage cannot be null");
 		}
 	}
-	
+
 	public READ_AND_OR_WRITE readAndOrWrite ( ) {
 		return readAndOrWrite;
 	}
-	
+
 	public SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage ( ) {
 		return snapshotStorage;
 	}
-	
+
 	public int eventCountThreshold ( ) {
 		return eventCountThreshold;
 	}

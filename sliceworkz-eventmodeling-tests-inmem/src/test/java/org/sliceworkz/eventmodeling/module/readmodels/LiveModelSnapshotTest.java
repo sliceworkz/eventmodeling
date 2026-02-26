@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockBoundedContext;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
@@ -76,7 +76,7 @@ public class LiveModelSnapshotTest extends AbstractMockDomainTest {
 
 	@Test
 	void testLiveModelWithoutSnapshots ( ) {
-		MockBoundedContext domain = domainWithLiveModel(0);
+		Mock domain = domainWithLiveModel(0);
 
 		for ( int i = 0; i < 100; i++ ) {
 			domain.event(new FirstDomainEvent("test " + i));
@@ -89,7 +89,7 @@ public class LiveModelSnapshotTest extends AbstractMockDomainTest {
 
 	@Test
 	void testLiveModelSnapshots ( ) {
-		MockBoundedContext domain = domainWithLiveModel(5);
+		Mock domain = domainWithLiveModel(5);
 
 		// Produce 10 events
 		for ( int i = 0; i < 10; i++ ) {
@@ -136,7 +136,7 @@ public class LiveModelSnapshotTest extends AbstractMockDomainTest {
 
 	@Test
 	void testLiveModelSnapshotsChangingVersion ( ) {
-		MockBoundedContext domain = domainWithLiveModel(5);
+		Mock domain = domainWithLiveModel(5);
 
 		// Produce 10 events and read to create first snapshot
 		for ( int i = 0; i < 10; i++ ) {
@@ -164,7 +164,7 @@ public class LiveModelSnapshotTest extends AbstractMockDomainTest {
 	@Test
 	void testLiveModelSnapshotReadOnly ( ) {
 		// First, create a domain with readAndWrite to establish a snapshot
-		MockBoundedContext domain = domainWithLiveModelMode(5, "readAndWrite");
+		Mock domain = domainWithLiveModelMode(5, "readAndWrite");
 
 		for ( int i = 0; i < 10; i++ ) {
 			domain.event(new FirstDomainEvent("test " + i));
@@ -175,7 +175,7 @@ public class LiveModelSnapshotTest extends AbstractMockDomainTest {
 		domain.stop();
 
 		// Now create a new domain with readOnly mode
-		MockBoundedContext domain2 = domainWithLiveModelMode(5, "readOnly");
+		Mock domain2 = domainWithLiveModelMode(5, "readOnly");
 		model = domain2.read(SnapshotLiveModel.class, "myModel");
 		assertEquals(10, model.getCounter());
 		assertEquals(0, model.getEventsOnTopOfSnapshot()); // snapshot was loaded
@@ -184,7 +184,7 @@ public class LiveModelSnapshotTest extends AbstractMockDomainTest {
 
 	@Test
 	void testLiveModelSnapshotWriteOnly ( ) {
-		MockBoundedContext domain = domainWithLiveModelMode(5, "writeOnly");
+		Mock domain = domainWithLiveModelMode(5, "writeOnly");
 
 		for ( int i = 0; i < 10; i++ ) {
 			domain.event(new FirstDomainEvent("test " + i));
@@ -196,13 +196,13 @@ public class LiveModelSnapshotTest extends AbstractMockDomainTest {
 	}
 
 
-	MockBoundedContext domainWithLiveModel ( int snapshotAfterEventCount ) {
+	Mock domainWithLiveModel ( int snapshotAfterEventCount ) {
 		return domainWithLiveModelMode(snapshotAfterEventCount, "readAndWrite");
 	}
 
-	MockBoundedContext domainWithLiveModelMode ( int snapshotAfterEventCount, String mode ) {
+	Mock domainWithLiveModelMode ( int snapshotAfterEventCount, String mode ) {
 
-		var builder = BoundedContext.newBuilder(MockDomainEvent.class, MockInboundEvent.class, MockOutboundEvent.class)
+		var builder = BoundedContext.newBuilder(Mock.class)
 				.name("UnitTestBoundedContext")
 				.eventStorage(eventStorage)
 				.instance(InstanceFactory.determine("unittests"));

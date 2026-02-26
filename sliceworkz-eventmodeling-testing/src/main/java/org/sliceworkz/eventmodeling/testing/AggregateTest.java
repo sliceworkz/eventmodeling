@@ -69,7 +69,7 @@ public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBO
 	public abstract Class<AGGREGATE> getAggregateClass();
 
 	@Override
-	public void configure(BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContextBuilder) {
+	public void configure(BoundedContextBuilder<?> boundedContextBuilder) {
 		boundedContextBuilder.aggregate(getAggregateClass());
 	}
 

@@ -17,17 +17,11 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.openaccount;
 
-import org.sliceworkz.eventmodeling.examples.banking.BankingBoundedContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingFeatureSlice;
+import org.sliceworkz.eventmodeling.examples.banking.Banking;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
 @FeatureSlice(type = Type.STATE_CHANGE, context="banking", chapter="Account management", tags= {"online"})
-public class OpenAccountFeatureSlice implements BankingFeatureSlice {
-
-	@Override
-	public void configure(BankingBoundedContext boundedContext) {
-		
-	}
-
+public class OpenAccountFeatureSlice implements Slice<Banking> {
 }

@@ -17,21 +17,22 @@
  */
 package org.sliceworkz.eventmodeling.module.snapshots;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.module.snapshots.SnapshotSpecificationImpl.READ_AND_OR_WRITE;
 import org.sliceworkz.eventmodeling.snapshots.LiveModelSnapshotSpecification;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 
-public class LiveModelSnapshotSpecificationImpl<SNAPSHOT_TYPE, DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> implements LiveModelSnapshotSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+public class LiveModelSnapshotSpecificationImpl<SNAPSHOT_TYPE, C extends BoundedContext<?,?,?>> implements LiveModelSnapshotSpecification<C> {
 
 	public static final int DEFAULT_EVENT_COUNT_THRESHOLD = 100;
 
 	private SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage;
 	private READ_AND_OR_WRITE readAndOrWrite = READ_AND_OR_WRITE.READ_WRITE;
 	private int eventCountThreshold = DEFAULT_EVENT_COUNT_THRESHOLD;
-	private BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> parent;
+	private BoundedContextBuilder<C> parent;
 
-	public LiveModelSnapshotSpecificationImpl ( BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> parent, SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage ) {
+	public LiveModelSnapshotSpecificationImpl ( BoundedContextBuilder<C> parent, SnapshotStorage<SNAPSHOT_TYPE> snapshotStorage ) {
 		this.parent = parent;
 		this.snapshotStorage = snapshotStorage;
 		if ( snapshotStorage != null ) {
@@ -42,7 +43,7 @@ public class LiveModelSnapshotSpecificationImpl<SNAPSHOT_TYPE, DOMAIN_EVENT_TYPE
 	}
 
 	@Override
-	public LiveModelSnapshotSpecification<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> eventCountThreshold ( int eventCountThreshold ) {
+	public LiveModelSnapshotSpecification<C> eventCountThreshold ( int eventCountThreshold ) {
 		validateSnapshotStorage();
 		if ( eventCountThreshold <= 0 ) {
 			throw new IllegalArgumentException("eventCountThreshold must be above 0");
@@ -52,21 +53,21 @@ public class LiveModelSnapshotSpecificationImpl<SNAPSHOT_TYPE, DOMAIN_EVENT_TYPE
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readAndWrite ( ) {
+	public BoundedContextBuilder<C> readAndWrite ( ) {
 		validateSnapshotStorage();
 		this.readAndOrWrite = READ_AND_OR_WRITE.READ_WRITE;
 		return parent;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> readOnly ( ) {
+	public BoundedContextBuilder<C> readOnly ( ) {
 		validateSnapshotStorage();
 		this.readAndOrWrite = READ_AND_OR_WRITE.READ_ONLY;
 		return parent;
 	}
 
 	@Override
-	public BoundedContextBuilder<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> writeOnly ( ) {
+	public BoundedContextBuilder<C> writeOnly ( ) {
 		validateSnapshotStorage();
 		this.readAndOrWrite = READ_AND_OR_WRITE.WRITE_ONLY;
 		return parent;

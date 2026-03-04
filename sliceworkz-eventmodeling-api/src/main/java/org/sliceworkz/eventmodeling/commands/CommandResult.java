@@ -22,7 +22,36 @@ import org.sliceworkz.eventstore.events.Tags;
 public interface CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
 	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags );
-	
+
 	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags, String idempotencyKey );
+
+	/**
+	 * Requires that an idempotency key was externally provided by the caller.
+	 * Throws {@link IllegalStateException} if no external key was provided.
+	 */
+	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> requireIdempotencyKey ( );
+
+	/**
+	 * Sets an idempotency key for this command, ignoring any externally provided key.
+	 */
+	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> idempotencyKey ( String key );
+
+	/**
+	 * Sets a fallback idempotency key for this command. If the caller also provided
+	 * an external key, the external key takes precedence.
+	 */
+	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> fallbackIdempotencyKey ( String key );
+
+	/**
+	 * Sets an idempotency key for this command. Throws {@link IllegalStateException}
+	 * if the caller also provided an external key.
+	 */
+	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> exclusiveIdempotencyKey ( String key );
+
+	/**
+	 * Forbids an externally provided idempotency key. Throws {@link IllegalStateException}
+	 * if the caller provided an external key.
+	 */
+	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> forbidIdempotencyKey ( );
 
 }

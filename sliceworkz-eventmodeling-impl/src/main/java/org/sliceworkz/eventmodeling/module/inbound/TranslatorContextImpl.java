@@ -48,12 +48,32 @@ public class TranslatorContextImpl<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE,OUTBOUN
 	}
 
 	@Override
+	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey) {
+		return delegate.execute(command, idempotencyKey);
+	}
+
+	@Override
+	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing) {
+		return delegate.execute(command, idempotencyKey, tracing);
+	}
+
+	@Override
 	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> command) {
 		throw new UnsupportedOperationException("a Translator cannot raise outbound events");
 	}
 
 	@Override
 	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> command, Tracing tracing) {
+		throw new UnsupportedOperationException("a Translator cannot raise outbound events");
+	}
+
+	@Override
+	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> command, String idempotencyKey) {
+		throw new UnsupportedOperationException("a Translator cannot raise outbound events");
+	}
+
+	@Override
+	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing) {
 		throw new UnsupportedOperationException("a Translator cannot raise outbound events");
 	}
 

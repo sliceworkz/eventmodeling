@@ -66,14 +66,22 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	}
 	
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return executeInternal(command, tracing, domainEventStream);
-	}
-	
-	public Optional<EventReference>  execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, Tracing tracing ) {
-		return executeInternal(command, tracing, outboundEventStream);
+		return executeInternal(command, tracing, domainEventStream, null);
 	}
 
-	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeInternal ( AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream ) {
+	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
+		return executeInternal(command, tracing, domainEventStream, idempotencyKey);
+	}
+
+	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, Tracing tracing ) {
+		return executeInternal(command, tracing, outboundEventStream, null);
+	}
+
+	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
+		return executeInternal(command, tracing, outboundEventStream, idempotencyKey);
+	}
+
+	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeInternal ( AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String idempotencyKey ) {
 		String commandName = command.getClass().getSimpleName();
 
 		Counter counter = commandCounters.computeIfAbsent(commandName, name ->
@@ -91,6 +99,12 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			// execute command and get resulting events
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracing);
 			CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = (CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE>) command.execute(commandContext);
+
+			// resolve and apply idempotency key (internal strategy vs external key)
+			String resolvedKey = commandResult.resolveIdempotencyKey(idempotencyKey);
+			if ( resolvedKey != null ) {
+				commandResult.applyIdempotencyKey(resolvedKey);
+			}
 
 			Optional<EventReference> result;
 

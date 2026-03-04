@@ -48,6 +48,16 @@ public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND
 	}
 
 	@Override
+	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey) {
+		return delegate.execute(command, idempotencyKey, tracing);
+	}
+
+	@Override
+	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing) {
+		return delegate.execute(command, idempotencyKey, tracing);
+	}
+
+	@Override
 	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command) {
 		return delegate.execute(command, tracing);
 	}
@@ -55,6 +65,16 @@ public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND
 	@Override
 	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, Tracing tracing) {
 		return delegate.execute(command, tracing);
+	}
+
+	@Override
+	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey) {
+		return delegate.execute(command, idempotencyKey, tracing);
+	}
+
+	@Override
+	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing) {
+		return delegate.execute(command, idempotencyKey, tracing);
 	}
 
 	@Override

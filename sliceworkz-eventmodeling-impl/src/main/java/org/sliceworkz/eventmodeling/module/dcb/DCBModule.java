@@ -100,9 +100,10 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracing);
 			CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = (CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE>) command.execute(commandContext);
 
-			// apply command-level idempotency key to raised events
-			if ( idempotencyKey != null ) {
-				commandResult.applyIdempotencyKey(idempotencyKey);
+			// resolve and apply idempotency key (internal strategy vs external key)
+			String resolvedKey = commandResult.resolveIdempotencyKey(idempotencyKey);
+			if ( resolvedKey != null ) {
+				commandResult.applyIdempotencyKey(resolvedKey);
 			}
 
 			Optional<EventReference> result;

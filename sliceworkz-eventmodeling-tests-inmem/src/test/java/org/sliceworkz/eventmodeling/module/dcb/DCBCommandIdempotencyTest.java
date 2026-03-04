@@ -22,14 +22,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.UndeclaredThrowableException;
-import java.util.Collections;
 import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
-import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
@@ -48,10 +46,20 @@ import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 
 /**
- * Tests for command-level idempotency support on the execute() method.
- * When a command is executed with an idempotency key, the framework applies
- * the key to the raised event(s). Duplicate executions with the same key
- * are silently ignored by the event store.
+ * Tests for command-level idempotency key support.
+ *
+ * Two mechanisms are tested:
+ * <ul>
+ *   <li><b>External key:</b> The caller provides an idempotency key via
+ *       {@code execute(command, idempotencyKey)}.</li>
+ *   <li><b>Internal key:</b> The command itself declares an idempotency key
+ *       strategy via {@code CommandResult.idempotencyKey()},
+ *       {@code requireIdempotencyKey()}, {@code exclusiveIdempotencyKey()},
+ *       or {@code overrideIdempotencyKey()}.</li>
+ * </ul>
+ *
+ * The framework resolves internal vs external keys based on the strategy chosen
+ * by the command, then applies the resolved key to the raised event(s).
  */
 public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 
@@ -133,12 +141,80 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		}
 	}
 
+	/** Command that uses {@code idempotencyKey()} — internal default, external overrides. */
+	static class DefaultKeyCommand implements Command<MockDomainEvent> {
+
+		private final String value;
+		private final String key;
+
+		DefaultKeyCommand(String value, String key) {
+			this.value = value;
+			this.key = key;
+		}
+
+		@Override
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
+				CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			return context.noDecisionModels()
+					.idempotencyKey(key)
+					.raiseEvent(new FirstDomainEvent(value), Tags.none());
+		}
+	}
+
+	/** Command that uses {@code requireIdempotencyKey()} — requires external key. */
+	static class RequireExternalKeyCommand implements Command<MockDomainEvent> {
+
+		@Override
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
+				CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			return context.noDecisionModels()
+					.requireIdempotencyKey()
+					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
+		}
+	}
+
+	/** Command that uses {@code exclusiveIdempotencyKey()} — rejects external key. */
+	static class ExclusiveKeyCommand implements Command<MockDomainEvent> {
+
+		private final String key;
+
+		ExclusiveKeyCommand(String key) {
+			this.key = key;
+		}
+
+		@Override
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
+				CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			return context.noDecisionModels()
+					.exclusiveIdempotencyKey(key)
+					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
+		}
+	}
+
+	/** Command that uses {@code overrideIdempotencyKey()} — ignores external key. */
+	static class OverrideKeyCommand implements Command<MockDomainEvent> {
+
+		private final String key;
+
+		OverrideKeyCommand(String key) {
+			this.key = key;
+		}
+
+		@Override
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
+				CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			return context.noDecisionModels()
+					.overrideIdempotencyKey(key)
+					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
+		}
+	}
+
 	// ════════════════════════════════════════════════════════════════════
-	// TESTS
+	// TESTS: External idempotency key
 	// ════════════════════════════════════════════════════════════════════
 
 	@Test
-	void executeWithIdempotencyKey_firstExecution_storesEvent() {
+	void externalKey_firstExecution_storesEvent() {
 		Mock domain = buildDomain();
 
 		Optional<EventReference> result = domain.execute(new SingleEventCommand("test"), "key-1");
@@ -148,22 +224,20 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	@Test
-	void executeWithIdempotencyKey_duplicateExecution_silentlyIgnored() {
+	void externalKey_duplicateExecution_silentlyIgnored() {
 		Mock domain = buildDomain();
 
 		Optional<EventReference> first = domain.execute(new SingleEventCommand("test"), "key-1");
 		assertTrue(first.isPresent());
 
-		// second execution with same key
 		Optional<EventReference> second = domain.execute(new SingleEventCommand("test"), "key-1");
 		assertTrue(second.isEmpty());
 
-		// only one event stored
 		assertEquals(1, countDomainEvents());
 	}
 
 	@Test
-	void executeWithIdempotencyKey_differentKeys_bothStored() {
+	void externalKey_differentKeys_bothStored() {
 		Mock domain = buildDomain();
 
 		domain.execute(new SingleEventCommand("test-1"), "key-1");
@@ -173,7 +247,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	@Test
-	void executeWithoutIdempotencyKey_duplicateCommands_bothStored() {
+	void noKey_duplicateCommands_bothStored() {
 		Mock domain = buildDomain();
 
 		domain.execute(new SingleEventCommand("test"));
@@ -183,7 +257,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	@Test
-	void executeWithIdempotencyKey_noEventsRaised_returnsEmpty() {
+	void externalKey_noEventsRaised_returnsEmpty() {
 		Mock domain = buildDomain();
 
 		Optional<EventReference> result = domain.execute(new NoEventCommand(), "key-1");
@@ -193,7 +267,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	@Test
-	void executeWithIdempotencyKey_multipleEvents_throwsException() {
+	void externalKey_multipleEvents_throwsException() {
 		Mock domain = buildDomain();
 
 		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class,
@@ -205,10 +279,9 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	@Test
-	void executeWithIdempotencyKey_eventAlreadyHasKey_preservesEventKey() {
+	void externalKey_eventAlreadyHasKey_preservesEventKey() {
 		Mock domain = buildDomain();
 
-		// command that sets its own idempotency key on the event
 		Command<MockDomainEvent> cmd = new Command<>() {
 			@Override
 			public CommandResult<MockDomainEvent, MockDomainEvent> execute(
@@ -218,16 +291,153 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 			}
 		};
 
-		// first execution with event-level key
 		Optional<EventReference> first = domain.execute(cmd, "command-level-key");
 		assertTrue(first.isPresent());
 
-		// second execution - the event-level key was preserved (not overwritten by command key),
-		// so re-executing with same event-level key should be deduplicated
+		// event-level key preserved; re-executing deduplicates based on that key
 		Optional<EventReference> second = domain.execute(cmd, "command-level-key");
 		assertTrue(second.isEmpty());
 
 		assertEquals(1, countDomainEvents());
+	}
+
+	// ════════════════════════════════════════════════════════════════════
+	// TESTS: idempotencyKey() — internal default, external overrides
+	// ════════════════════════════════════════════════════════════════════
+
+	@Test
+	void defaultKey_noExternalKey_usesInternalKey() {
+		Mock domain = buildDomain();
+
+		domain.execute(new DefaultKeyCommand("test", "internal-key"));
+
+		// duplicate with same internal key is deduplicated
+		Optional<EventReference> second = domain.execute(new DefaultKeyCommand("test", "internal-key"));
+		assertTrue(second.isEmpty());
+
+		assertEquals(1, countDomainEvents());
+	}
+
+	@Test
+	void defaultKey_withExternalKey_externalOverrides() {
+		Mock domain = buildDomain();
+
+		// first execution uses external key
+		domain.execute(new DefaultKeyCommand("test", "internal-key"), "external-key");
+
+		// second execution with same internal key but no external — not deduplicated
+		// because the first event was stored with the external key
+		Optional<EventReference> second = domain.execute(new DefaultKeyCommand("test", "internal-key"));
+		assertTrue(second.isPresent());
+
+		assertEquals(2, countDomainEvents());
+	}
+
+	@Test
+	void defaultKey_withExternalKey_duplicateExternal_deduplicated() {
+		Mock domain = buildDomain();
+
+		domain.execute(new DefaultKeyCommand("test", "internal-key"), "external-key");
+
+		// same external key deduplicates regardless of internal key
+		Optional<EventReference> second = domain.execute(new DefaultKeyCommand("test", "different-internal"), "external-key");
+		assertTrue(second.isEmpty());
+
+		assertEquals(1, countDomainEvents());
+	}
+
+	// ════════════════════════════════════════════════════════════════════
+	// TESTS: requireIdempotencyKey() — requires external key
+	// ════════════════════════════════════════════════════════════════════
+
+	@Test
+	void requireKey_withExternalKey_succeeds() {
+		Mock domain = buildDomain();
+
+		Optional<EventReference> result = domain.execute(new RequireExternalKeyCommand(), "external-key");
+		assertTrue(result.isPresent());
+		assertEquals(1, countDomainEvents());
+	}
+
+	@Test
+	void requireKey_withoutExternalKey_throwsException() {
+		Mock domain = buildDomain();
+
+		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class,
+				() -> domain.execute(new RequireExternalKeyCommand()));
+
+		Throwable cause = e.getCause().getCause();
+		assertTrue(cause instanceof IllegalStateException,
+				"Expected IllegalStateException but got: " + cause.getClass().getName());
+	}
+
+	// ════════════════════════════════════════════════════════════════════
+	// TESTS: exclusiveIdempotencyKey() — rejects external key
+	// ════════════════════════════════════════════════════════════════════
+
+	@Test
+	void exclusiveKey_noExternalKey_usesInternalKey() {
+		Mock domain = buildDomain();
+
+		domain.execute(new ExclusiveKeyCommand("my-key"));
+
+		Optional<EventReference> second = domain.execute(new ExclusiveKeyCommand("my-key"));
+		assertTrue(second.isEmpty());
+
+		assertEquals(1, countDomainEvents());
+	}
+
+	@Test
+	void exclusiveKey_withExternalKey_throwsException() {
+		Mock domain = buildDomain();
+
+		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class,
+				() -> domain.execute(new ExclusiveKeyCommand("my-key"), "external-key"));
+
+		Throwable cause = e.getCause().getCause();
+		assertTrue(cause instanceof IllegalStateException,
+				"Expected IllegalStateException but got: " + cause.getClass().getName());
+	}
+
+	// ════════════════════════════════════════════════════════════════════
+	// TESTS: overrideIdempotencyKey() — ignores external key
+	// ════════════════════════════════════════════════════════════════════
+
+	@Test
+	void overrideKey_noExternalKey_usesInternalKey() {
+		Mock domain = buildDomain();
+
+		domain.execute(new OverrideKeyCommand("my-key"));
+
+		Optional<EventReference> second = domain.execute(new OverrideKeyCommand("my-key"));
+		assertTrue(second.isEmpty());
+
+		assertEquals(1, countDomainEvents());
+	}
+
+	@Test
+	void overrideKey_withExternalKey_internalWins() {
+		Mock domain = buildDomain();
+
+		// internal key "my-key" is used, external key ignored
+		domain.execute(new OverrideKeyCommand("my-key"), "external-key");
+
+		// same internal key, different external — still deduplicated by internal
+		Optional<EventReference> second = domain.execute(new OverrideKeyCommand("my-key"), "different-external");
+		assertTrue(second.isEmpty());
+
+		assertEquals(1, countDomainEvents());
+	}
+
+	@Test
+	void overrideKey_differentInternalKeys_bothStored() {
+		Mock domain = buildDomain();
+
+		domain.execute(new OverrideKeyCommand("key-a"), "same-external");
+		domain.execute(new OverrideKeyCommand("key-b"), "same-external");
+
+		// different internal keys means different events stored, despite same external
+		assertEquals(2, countDomainEvents());
 	}
 
 }

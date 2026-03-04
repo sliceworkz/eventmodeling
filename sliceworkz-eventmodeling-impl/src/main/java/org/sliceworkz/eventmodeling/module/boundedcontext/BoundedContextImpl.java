@@ -301,6 +301,16 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	}
 
 	@Override
+	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey ) {
+		return execute(command, idempotencyKey, Tracing.init(instance));
+	}
+
+	@Override
+	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
+		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
+	}
+
+	@Override
 	public Optional<EventReference>  execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command ) {
 		return this.execute(command, Tracing.init(instance));
 	}
@@ -308,6 +318,16 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, Tracing tracing) {
 		return dcbDomainModule.execute(command, tracing.instance(instance));
+	}
+
+	@Override
+	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey ) {
+		return this.execute(command, idempotencyKey, Tracing.init(instance));
+	}
+
+	@Override
+	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing) {
+		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
 	}
 
 

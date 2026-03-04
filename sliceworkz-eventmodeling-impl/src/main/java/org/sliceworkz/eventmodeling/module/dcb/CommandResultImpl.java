@@ -59,6 +59,17 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 		return raiseEvent(event, tags, null);
 	}
 
+	public void applyIdempotencyKey ( String idempotencyKey ) {
+		if ( events.size() == 1 ) {
+			EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event = events.get(0);
+			if ( event.idempotencyKey() == null ) {
+				events.set(0, event.withIdempotencyKey(idempotencyKey));
+			}
+		} else if ( events.size() > 1 ) {
+			throw new IllegalArgumentException("command-level idempotency key cannot be used with commands that raise multiple events");
+		}
+	}
+
 	public List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> raisedEvents ( ) {
 		return events;
 	}

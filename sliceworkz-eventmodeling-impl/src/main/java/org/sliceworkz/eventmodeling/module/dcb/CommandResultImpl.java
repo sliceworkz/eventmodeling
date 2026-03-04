@@ -38,7 +38,8 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 	enum IdempotencyKeyStrategy {
 		NONE,
 		REQUIRE_EXTERNAL,
-		DEFAULT,
+		FORBID_EXTERNAL,
+		FALLBACK,
 		EXCLUSIVE,
 		OVERRIDE
 	}
@@ -85,7 +86,14 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
 	@Override
 	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> idempotencyKey ( String key ) {
-		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.DEFAULT;
+		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.OVERRIDE;
+		this.internalIdempotencyKey = key;
+		return this;
+	}
+
+	@Override
+	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> fallbackIdempotencyKey ( String key ) {
+		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.FALLBACK;
 		this.internalIdempotencyKey = key;
 		return this;
 	}
@@ -98,9 +106,8 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 	}
 
 	@Override
-	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> overrideIdempotencyKey ( String key ) {
-		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.OVERRIDE;
-		this.internalIdempotencyKey = key;
+	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> forbidIdempotencyKey ( ) {
+		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.FORBID_EXTERNAL;
 		return this;
 	}
 
@@ -116,7 +123,13 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 				}
 				yield externalKey;
 			}
-			case DEFAULT -> externalKey != null ? externalKey : internalIdempotencyKey;
+			case FORBID_EXTERNAL -> {
+				if ( externalKey != null ) {
+					throw new IllegalStateException("command does not accept an externally provided idempotency key");
+				}
+				yield null;
+			}
+			case FALLBACK -> externalKey != null ? externalKey : internalIdempotencyKey;
 			case EXCLUSIVE -> {
 				if ( externalKey != null ) {
 					throw new IllegalStateException("command provides its own idempotency key and does not accept an external one");

@@ -87,7 +87,10 @@ public class RenderLiveModelTest extends AbstractMockDomainTest {
 	}
 
 	private void testLiveModelWithDifferentNumberOfEvents ( Mock boundedContext, int eventCount ) {
-		int expectedQueries = (eventCount - 1) / Projector.Builder.DEFAULT_MAX_EVENTS_PER_QUERY + 2;
+		int expectedQueries = (eventCount - 1) / Projector.Builder.DEFAULT_MAX_EVENTS_PER_QUERY + 1;
+		if (eventCount % Projector.Builder.DEFAULT_MAX_EVENTS_PER_QUERY == 0) {
+			expectedQueries++;
+		}
 		
 //		System.out.println("assuming "  + expectedQueries + " queries for " + eventCount + " events");
 		

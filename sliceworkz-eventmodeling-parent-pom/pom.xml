@@ -38,7 +38,7 @@
 		<slf4j.version>2.0.17</slf4j.version>
 		<junit-jupiter.version>6.0.3</junit-jupiter.version>
 		<postgresql.jdbc.version>42.7.10</postgresql.jdbc.version>
-		<micrometer.version>1.16.3</micrometer.version>
+		<micrometer.version>1.16.4</micrometer.version>
 		
 		<testcontainers.postgresql.version>1.21.4</testcontainers.postgresql.version>
 		<archunit.version>1.4.1</archunit.version>

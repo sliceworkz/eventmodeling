@@ -26,6 +26,8 @@ import java.util.List;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.commands.Command;
+import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -45,15 +47,21 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 	
 	// TODO should,'t we be able to verify correct Tags on events also?
 	public interface TestResult<DOMAIN_EVENT_TYPE> {
-		
+
 		void event ( DOMAIN_EVENT_TYPE event );
-		
+
 		void events ( @SuppressWarnings("unchecked") DOMAIN_EVENT_TYPE... events );
 
 		void error ( String expectedMessage );
-		
+
 		void noEvents ( );
-		
+
+	}
+
+	public interface TestResultWithResponse<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> extends TestResult<DOMAIN_EVENT_TYPE> {
+
+		RESPONSE_TYPE response ( );
+
 	}
 	
 	public class TestDefinition {
@@ -78,7 +86,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		public TestDefinition when ( Command<DOMAIN_EVENT_TYPE> command ) {
 			try {
 				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), null, Limit.none()).reduce((first, second)->second).map(Event::reference).orElse(null);
-				kernel().execute(command);			
+				kernel().execute(command);
 				@SuppressWarnings("unchecked")
 				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark, Limit.none()).map(e->(Event<DOMAIN_EVENT_TYPE>)e).toList();
 				this.result = new TestResultImpl ( newEvents );
@@ -87,7 +95,20 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 			}
 			return this;
 		}
-		
+
+		public <RESPONSE_TYPE> TestDefinition when ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command ) {
+			try {
+				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), null, Limit.none()).reduce((first, second)->second).map(Event::reference).orElse(null);
+				CommandExecutionResult<RESPONSE_TYPE> executionResult = kernel().execute(command);
+				@SuppressWarnings("unchecked")
+				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark, Limit.none()).map(e->(Event<DOMAIN_EVENT_TYPE>)e).toList();
+				this.result = new TestResultWithResponseImpl<> ( newEvents, executionResult.response() );
+			} catch (Exception exception) {
+				this.result = new TestResultImpl ( exception );
+			}
+			return this;
+		}
+
 		public TestResult<DOMAIN_EVENT_TYPE> then ( ) {
 			if ( result == null ) {
 				fail("result not yet present - has Command even been executed?");
@@ -170,5 +191,20 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 			}
 		}
 	}
-		
+
+	public class TestResultWithResponseImpl<RESPONSE_TYPE> extends TestResultImpl implements TestResultWithResponse<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> {
+
+		private final RESPONSE_TYPE response;
+
+		public TestResultWithResponseImpl ( List<Event<DOMAIN_EVENT_TYPE>> producedEvents, RESPONSE_TYPE response ) {
+			super(producedEvents);
+			this.response = response;
+		}
+
+		@Override
+		public RESPONSE_TYPE response ( ) {
+			return response;
+		}
+	}
+
 }

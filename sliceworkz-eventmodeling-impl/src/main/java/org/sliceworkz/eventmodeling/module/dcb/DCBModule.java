@@ -25,6 +25,8 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.commands.AbstractCommand;
 import org.sliceworkz.eventmodeling.commands.Command;
+import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
@@ -66,24 +68,94 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	}
 	
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return executeInternal(command, tracing, domainEventStream, null);
+		return executeAbstractCommand(command, command.commandName(), tracing, domainEventStream, null);
 	}
 
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return executeInternal(command, tracing, domainEventStream, idempotencyKey);
+		return executeAbstractCommand(command, command.commandName(), tracing, domainEventStream, idempotencyKey);
 	}
 
 	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, Tracing tracing ) {
-		return executeInternal(command, tracing, outboundEventStream, null);
+		return executeAbstractCommand(command, command.commandName(), tracing, outboundEventStream, null);
 	}
 
 	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return executeInternal(command, tracing, outboundEventStream, idempotencyKey);
+		return executeAbstractCommand(command, command.commandName(), tracing, outboundEventStream, idempotencyKey);
 	}
 
-	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeInternal ( AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String idempotencyKey ) {
-		String commandName = command.getClass().getSimpleName();
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing ) {
+		return executeCommandWithResult(command, tracing, null);
+	}
 
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing ) {
+		return executeCommandWithResult(command, tracing, idempotencyKey);
+	}
+
+	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeAbstractCommand ( AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command, String commandName, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String idempotencyKey ) {
+		return timed(commandName, () -> {
+			long start = System.currentTimeMillis();
+
+			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracing);
+			command.execute(commandContext);
+			CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = commandContext.getCommandResult();
+
+			Optional<EventReference> eventReference = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, tracing);
+
+			logPerformance(commandContext, commandName, start);
+
+			return eventReference;
+		});
+	}
+
+	private <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> executeCommandWithResult ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing, String idempotencyKey ) {
+		String commandName = command.commandName();
+		return timed(commandName, () -> {
+			long start = System.currentTimeMillis();
+
+			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracing);
+			RESPONSE_TYPE response = command.execute(commandContext);
+			CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
+
+			Optional<EventReference> eventReference = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, tracing);
+
+			logPerformance(commandContext, commandName, start);
+
+			return new CommandExecutionResult<>(eventReference, response);
+		});
+	}
+
+	private <PRODUCED_EVENT_TYPE> Optional<EventReference> persistAndRecord ( CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String commandName, String idempotencyKey, Tracing tracing ) {
+		// resolve and apply idempotency key (internal strategy vs external key)
+		String resolvedKey = commandResult.resolveIdempotencyKey(idempotencyKey);
+		if ( resolvedKey != null ) {
+			commandResult.applyIdempotencyKey(resolvedKey);
+		}
+
+		if ( !commandResult.raisedEvents().isEmpty() ) {
+			// append to the event store (with optimistic locking the DCB way)
+			// and return the last event reference produced (for bookmarking purposes etc ...)
+			Optional<EventReference> result = targetEventStream.append(commandResult.appendCriteria(), commandResult.raisedEvents())
+					.stream().reduce((first,second)->second).map(Event::reference);
+
+			// Record metrics for each raised domain event
+			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
+			for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : commandResult.raisedEvents()) {
+				String eventName = event.data().getClass().getSimpleName();
+				String cacheKey = eventName + ":" + channel;
+				Counter eventCounter = domainEventCounters.computeIfAbsent(cacheKey, key ->
+					meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
+						io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "channel", channel, "source", "dcb")));
+				eventCounter.increment();
+			}
+
+			return result;
+		} else {
+			LOGGER.debug("no events raised by command {}", commandName);
+			return Optional.empty();
+		}
+	}
+
+	private <T> T timed ( String commandName, java.util.function.Supplier<T> action ) {
 		Counter counter = commandCounters.computeIfAbsent(commandName, name ->
 			meterRegistry.counter("sliceworkz.eventmodeling.command.execute",
 				io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
@@ -93,50 +165,15 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			meterRegistry.timer("sliceworkz.eventmodeling.command.duration",
 				io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
 
-		return timer.record(() -> {
-			long start = System.currentTimeMillis();
+		return timer.record(action);
+	}
 
-			// execute command and get resulting events
-			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracing);
-			CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = (CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE>) command.execute(commandContext);
-
-			// resolve and apply idempotency key (internal strategy vs external key)
-			String resolvedKey = commandResult.resolveIdempotencyKey(idempotencyKey);
-			if ( resolvedKey != null ) {
-				commandResult.applyIdempotencyKey(resolvedKey);
-			}
-
-			Optional<EventReference> result;
-
-			if ( !commandResult.raisedEvents().isEmpty() ) {
-				// append to the event store (with optimistic locking the DCB way)
-				// and return the last event reference produced (for bookmarking purposes etc ...)
-				result = targetEventStream.append(commandResult.appendCriteria(), commandResult.raisedEvents())
-						.stream().reduce((first,second)->second).map(Event::reference);
-
-				// Record metrics for each raised domain event
-				String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-				for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : commandResult.raisedEvents()) {
-					String eventName = event.data().getClass().getSimpleName();
-					String cacheKey = eventName + ":" + channel;
-					Counter eventCounter = domainEventCounters.computeIfAbsent(cacheKey, key ->
-						meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
-							io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "channel", channel, "source", "dcb")));
-					eventCounter.increment();
-				}
-			} else {
-				LOGGER.debug("no events raised by command {}", command.getClass());
-				result = Optional.empty();
-			}
-
-			long finish = System.currentTimeMillis();
-			long duration = finish - start;
-			ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
-			PerformanceLogger.Metrics metrics = new PerformanceLogger.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
-			PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("command.execute").command(command.commandName()).log();
-
-			return result;
-		});
+	private void logPerformance ( DCBCommandContextImpl<?,?> commandContext, String commandName, long start ) {
+		long finish = System.currentTimeMillis();
+		long duration = finish - start;
+		ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
+		PerformanceLogger.Metrics metrics = new PerformanceLogger.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+		PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("command.execute").command(commandName).log();
 	}
 	
 	@Override

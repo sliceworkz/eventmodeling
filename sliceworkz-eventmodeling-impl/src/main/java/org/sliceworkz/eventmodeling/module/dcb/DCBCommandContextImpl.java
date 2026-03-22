@@ -43,7 +43,8 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	private ReadModelModule<CONSUMED_EVENT_TYPE> readModelModule;
 	
 	private ProjectorMetrics projectorMetrics;
-	
+	private CommandResultImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult;
+
 	private boolean decisionModelsDetermined = false;
 	
 	public DCBCommandContextImpl ( String boundedContext, ReadModelModule<CONSUMED_EVENT_TYPE> readModelModule, EventStream<CONSUMED_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, Tracing tracing ) {
@@ -111,7 +112,12 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 		projectorMetrics = accumulatedMetrics;
 
-		return new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery.filter(), lastEventReference);
+		commandResult = new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery.filter(), lastEventReference);
+		return commandResult;
+	}
+
+	public CommandResultImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> getCommandResult ( ) {
+		return commandResult;
 	}
 
 	public Tracing tracing ( ) {

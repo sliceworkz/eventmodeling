@@ -15,12 +15,12 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.examples.banking.features.openaccount;
+package org.sliceworkz.eventmodeling.examples.banking.features.openaccountwithresult;
 
 import java.time.LocalDate;
 
-import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain;
@@ -28,16 +28,24 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomain
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
 import org.sliceworkz.eventstore.events.Tags;
 
-public class OpenAccountCommand implements Command<BankingDomainEvent> {
-	
-	private DomainConceptId customerId;
-	
-	public OpenAccountCommand ( DomainConceptId customerId ) {
+/**
+ * Opens a new bank account and returns the generated account ID directly to the caller.
+ * <p>
+ * This is the {@link CommandWithResult} variant of
+ * {@link org.sliceworkz.eventmodeling.examples.banking.features.openaccount.OpenAccountCommand OpenAccountCommand}.
+ * Instead of requiring the caller to query the event stream to discover the generated account ID,
+ * the ID is returned synchronously after events are persisted.
+ */
+public class OpenAccountWithResultCommand implements CommandWithResult<BankingDomainEvent, DomainConceptId> {
+
+	private final DomainConceptId customerId;
+
+	public OpenAccountWithResultCommand ( DomainConceptId customerId ) {
 		this.customerId = customerId;
 	}
 
 	@Override
-	public void execute(CommandContext<BankingDomainEvent, BankingDomainEvent> context) {
+	public DomainConceptId execute ( CommandContext<BankingDomainEvent, BankingDomainEvent> context ) {
 
 		var result = context.noDecisionModels();
 
@@ -49,6 +57,8 @@ public class OpenAccountCommand implements Command<BankingDomainEvent> {
 						DomainConceptTag.of(BankingDomain.CONCEPT_CUSTOMER, customerId)
 				)
 			);
+
+		return accountId;
 	}
-	
+
 }

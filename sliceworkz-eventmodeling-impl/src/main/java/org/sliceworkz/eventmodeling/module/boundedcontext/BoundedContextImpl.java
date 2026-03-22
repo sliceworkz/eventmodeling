@@ -29,6 +29,8 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.commands.Command;
+import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
@@ -330,8 +332,28 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
 	}
 
+	@Override
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command) {
+		return execute(command, Tracing.init(instance));
+	}
 
-	
+	@Override
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing) {
+		return dcbDomainModule.execute(command, tracing.instance(instance));
+	}
+
+	@Override
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey) {
+		return execute(command, idempotencyKey, Tracing.init(instance));
+	}
+
+	@Override
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing) {
+		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
+	}
+
+
+
 	/*
 	 * AGGREGATE SUPPORT
 	 */

@@ -22,6 +22,8 @@ import java.util.Optional;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.commands.Command;
+import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -74,6 +76,26 @@ public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND
 
 	@Override
 	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing) {
+		return delegate.execute(command, idempotencyKey, tracing);
+	}
+
+	@Override
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command) {
+		return delegate.execute(command, tracing);
+	}
+
+	@Override
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing) {
+		return delegate.execute(command, tracing);
+	}
+
+	@Override
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey) {
+		return delegate.execute(command, idempotencyKey, tracing);
+	}
+
+	@Override
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing) {
 		return delegate.execute(command, idempotencyKey, tracing);
 	}
 

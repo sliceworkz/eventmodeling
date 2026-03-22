@@ -15,29 +15,33 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.benchmark.features.dispatchorder;
+package org.sliceworkz.eventmodeling.mock.boundedcontext;
 
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent.OrderProcessed;
+import java.util.List;
+
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventstore.events.Tags;
 
-public class RegisterOrderDispatched implements OutboundCommand<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> {
+public class MockCommandWithResult<R> implements CommandWithResult<MockDomainEvent, R> {
 
-	private long orderId;
-	
-	public RegisterOrderDispatched ( long orderId ) {
-		this.orderId = orderId;
+	private final List<MockDomainEvent> events;
+	private final R response;
+
+	public MockCommandWithResult ( List<MockDomainEvent> events, R response ) {
+		this.events = events;
+		this.response = response;
 	}
-	
+
 	@Override
-	public void execute(
-			CommandContext<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> context) {
+	public R execute ( CommandContext<MockDomainEvent, MockDomainEvent> context ) {
 		var result = context.noDecisionModels();
 
-		result.raiseEvent(new OrderProcessed(orderId), Tags.none(), "order/outbound/" + orderId);
+		for ( var event : events ) {
+			result.raiseEvent(event, Tags.none());
+		}
+
+		return response;
 	}
-	
+
 }

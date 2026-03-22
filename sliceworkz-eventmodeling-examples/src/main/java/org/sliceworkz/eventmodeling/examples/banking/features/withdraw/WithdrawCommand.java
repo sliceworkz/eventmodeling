@@ -21,7 +21,6 @@ import java.math.BigDecimal;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
@@ -53,8 +52,7 @@ public class WithdrawCommand implements Command<BankingEvent> {
 	}
 
 	@Override
-	public CommandResult<BankingEvent, BankingEvent> execute(
-			CommandContext<BankingEvent, BankingEvent> context) {
+	public void execute(CommandContext<BankingEvent, BankingEvent> context) {
 
 		var period = new ActivePeriodDecisionModel(accountId);
 		var result = context.decisionModels(period);
@@ -71,7 +69,7 @@ public class WithdrawCommand implements Command<BankingEvent> {
 				"Insufficient balance: " + period.balance() + " < " + amount);
 		}
 
-		return result.raiseEvent(
+		result.raiseEvent(
 			new MoneyWithdrawn(accountId, period.activeMonth(), amount, description),
 			Tags.of(
 				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),

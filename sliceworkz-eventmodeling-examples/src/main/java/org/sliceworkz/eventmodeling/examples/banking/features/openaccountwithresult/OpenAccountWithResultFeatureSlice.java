@@ -15,14 +15,13 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.commands;
+package org.sliceworkz.eventmodeling.examples.banking.features.openaccountwithresult;
 
-public sealed interface AbstractCommand<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> permits Command, OutboundCommand {
+import org.sliceworkz.eventmodeling.examples.banking.Banking;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
-	default String commandName ( ) {
-		return this.getClass().getSimpleName();
-	}
-	
-	void execute ( CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> context );
-
+@FeatureSlice(type = Type.STATE_CHANGE, context="banking", chapter="Account management", tags= {"online"})
+public class OpenAccountWithResultFeatureSlice implements Slice<Banking> {
 }

@@ -17,12 +17,27 @@
  */
 package org.sliceworkz.eventmodeling.commands;
 
-public sealed interface AbstractCommand<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> permits Command, OutboundCommand {
+/**
+ * A command that synchronously returns a response value after successful execution
+ * and event persistence.
+ * <p>
+ * Unlike {@link Command}, which returns {@code void} via {@link AbstractCommand#execute},
+ * this interface allows the command to compute a response value during execution (e.g., a
+ * generated ID) that is delivered to the caller only after events have been successfully
+ * persisted.
+ * <p>
+ * The command should use the {@link CommandContext} to set up decision models and raise
+ * events as usual, and return the response value from the {@code execute} method.
+ *
+ * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context
+ * @param <RESPONSE_TYPE> the type of the response value returned to the caller
+ */
+public interface CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> {
 
 	default String commandName ( ) {
 		return this.getClass().getSimpleName();
 	}
-	
-	void execute ( CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> context );
+
+	RESPONSE_TYPE execute ( CommandContext<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> context );
 
 }

@@ -21,26 +21,23 @@ import java.util.List;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventstore.events.Tags;
 
 public class MockCommand implements Command<MockDomainEvent> {
 
-	private List<MockDomainEvent> events; 
-	
+	private List<MockDomainEvent> events;
+
 	public MockCommand ( List<MockDomainEvent> events ) {
 		this.events = events;
 	}
-	
+
 	@Override
-	public CommandResult<MockDomainEvent,MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+	public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 		var result = context.noDecisionModels();
-		
+
 		for ( var event: events ) {
 			result.raiseEvent(event, Tags.none());
 		}
-		
-		return result;
 	}
 
 }

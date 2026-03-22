@@ -17,12 +17,18 @@
  */
 package org.sliceworkz.eventmodeling.commands;
 
-public sealed interface AbstractCommand<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> permits Command, OutboundCommand {
+import java.util.Optional;
 
-	default String commandName ( ) {
-		return this.getClass().getSimpleName();
-	}
-	
-	void execute ( CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> context );
+import org.sliceworkz.eventstore.events.EventReference;
+
+/**
+ * The result of executing a {@link CommandWithResult}, containing both the event reference
+ * (if events were persisted) and the synchronous response value computed by the command.
+ *
+ * @param <RESPONSE_TYPE> the type of the response value
+ * @param eventReference reference to the last persisted event, or empty if no events were raised
+ * @param response the response value computed by the command during execution
+ */
+public record CommandExecutionResult<RESPONSE_TYPE> ( Optional<EventReference> eventReference, RESPONSE_TYPE response ) {
 
 }

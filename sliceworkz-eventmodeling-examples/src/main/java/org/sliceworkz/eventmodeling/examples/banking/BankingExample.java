@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -29,6 +30,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomain
 import org.sliceworkz.eventmodeling.examples.banking.features.accountdetails.AccountDetailsReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountoverview.AccountOverviewReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.openaccount.OpenAccountCommand;
+import org.sliceworkz.eventmodeling.examples.banking.features.openaccountwithresult.OpenAccountWithResultCommand;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
@@ -110,7 +112,20 @@ public class BankingExample {
 		
 		// Also print out the eventually consistent readmodel on all accounts
 		System.out.println(AccountOverviewReadModel.INSTANCE.getAccounts());
-		
+
+		/*
+		 * Open another account using CommandWithResult — the generated account ID
+		 * is returned directly, no need to query the event stream.
+		 */
+		CommandExecutionResult<DomainConceptId> openResult =
+				bc.execute(new OpenAccountWithResultCommand(DomainConceptId.create()));
+
+		DomainConceptId accountId = openResult.response();
+		System.out.println("Account opened with ID: " + accountId);
+
+		AccountDetailsReadModel rm2 = bc.read(AccountDetailsReadModel.class, accountId);
+		System.out.println(rm2.getAccountDetails());
+
 		try {
 			Thread.sleep(1000);
 		} catch (InterruptedException e1) {

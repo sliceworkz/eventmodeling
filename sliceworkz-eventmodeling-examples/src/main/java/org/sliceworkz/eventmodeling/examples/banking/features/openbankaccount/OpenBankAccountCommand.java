@@ -22,7 +22,6 @@ import java.time.YearMonth;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
@@ -53,14 +52,13 @@ public class OpenBankAccountCommand implements Command<BankingEvent> {
 	}
 
 	@Override
-	public CommandResult<BankingEvent, BankingEvent> execute(
-			CommandContext<BankingEvent, BankingEvent> context) {
+	public void execute(CommandContext<BankingEvent, BankingEvent> context) {
 
 		var result = context.noDecisionModels();
 
 		DomainConceptId accountId = DomainConceptId.create();
 
-		return result.raiseEvent(
+		result.raiseEvent(
 			new AccountOpened(accountId, customerId, initialMonth, LocalDate.now()),
 			Tags.of(
 				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),

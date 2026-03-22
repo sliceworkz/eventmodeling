@@ -21,7 +21,6 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent.OrderProcessed;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventstore.events.Tags;
 
@@ -34,13 +33,11 @@ public class RegisterOrderDispatched implements OutboundCommand<OrderProcessingD
 	}
 	
 	@Override
-	public CommandResult<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> execute(
+	public void execute(
 			CommandContext<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> context) {
 		var result = context.noDecisionModels();
-		
+
 		result.raiseEvent(new OrderProcessed(orderId), Tags.none(), "order/outbound/" + orderId);
-		
-		return result;
 	}
 	
 }

@@ -23,6 +23,6 @@ public sealed interface AbstractCommand<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE
 		return this.getClass().getSimpleName();
 	}
 	
-	CommandResult<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> execute ( CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> context );
+	void execute ( CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> context );
 
 }

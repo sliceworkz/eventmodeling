@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.testing;
 
 import java.util.Arrays;
+import java.util.function.Consumer;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
@@ -48,6 +49,7 @@ public abstract class LiveModelTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUN
 		void liveModelIs ( Object expectedModel );
 		TestResult<DOMAIN_EVENT_TYPE> liveModel ( DataMapper dataMapper );
 		TestResult<DOMAIN_EVENT_TYPE> is ( Object expectedModel );
+		void satisfies ( Consumer<Object> assertion );
 	}
 	
 	public class TestDefinition {
@@ -103,6 +105,11 @@ public abstract class LiveModelTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUN
 		public TestResult<DOMAIN_EVENT_TYPE> is(Object expectedModel) {
 			assertCompareObjects(expectedModel, mappedActualModel, "live model");
 			return this;
+		}
+
+		@Override
+		public void satisfies(Consumer<Object> assertion) {
+			assertion.accept(mappedActualModel);
 		}
 
 	}

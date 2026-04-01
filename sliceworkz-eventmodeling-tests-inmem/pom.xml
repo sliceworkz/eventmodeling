@@ -54,6 +54,12 @@
 			<groupId>org.sliceworkz</groupId>
 			<artifactId>sliceworkz-eventmodeling-testing</artifactId>
 			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>com.tngtech.archunit</groupId>
+					<artifactId>archunit-junit5</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 
 	</dependencies>

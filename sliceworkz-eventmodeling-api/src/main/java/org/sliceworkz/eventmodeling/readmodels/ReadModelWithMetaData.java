@@ -33,10 +33,11 @@ public interface ReadModelWithMetaData<DOMAIN_EVENT_TYPE> extends Projection<DOM
 	/**
 	 * Indicates whether this read model uses ephemeral storage.
 	 * Ephemeral storage exists only for the lifetime of the process and is cleared on restart.
-	 * Override this method to return true for in-memory or transient read models.
+	 * Defaults to true as most read models are memory-based.
+	 * Override this method to return false for persistent (e.g. SQL-backed) read models.
 	 */
 	default boolean ephemeral () {
-		return false;
+		return true;
 	}
 
 }

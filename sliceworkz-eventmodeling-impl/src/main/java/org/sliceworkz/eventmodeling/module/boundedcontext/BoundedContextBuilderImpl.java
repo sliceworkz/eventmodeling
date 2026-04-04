@@ -438,7 +438,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	public class LongLivedReadModelSpecificationImpl implements LongLivedReadModelSpecification<C> {
 
 		private boolean shared = true;
-		private boolean ephemeral = false;
 		private BoundedContextBuilder<C> builder;
 		private ReadModelWithMetaData<?> readModel;
 
@@ -458,28 +457,15 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 
 		@Override
-		public LongLivedReadModelSpecification<C> ephemeral ( ) {
-			this.shared = false;
-			this.ephemeral = true;
-			return this;
-		}
-
-		@Override
 		public LongLivedReadModelSpecification<C> local ( ) {
 			this.shared = false;
-			this.ephemeral = false;
 			return this;
 		}
 
 		@Override
 		public LongLivedReadModelSpecification<C> shared ( ) {
 			this.shared = true;
-			this.ephemeral = false;
 			return this;
-		}
-
-		public boolean isEphemeral ( ) {
-			return ephemeral;
 		}
 
 		public boolean isShared ( ) {

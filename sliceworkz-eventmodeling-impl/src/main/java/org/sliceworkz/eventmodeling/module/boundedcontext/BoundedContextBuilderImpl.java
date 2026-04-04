@@ -335,8 +335,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 
 		Collection<ReadModelWithMetaData> eventuallyConsistentSharedReadModels = longLivedReadModelSpecs.stream().filter(s->s.isShared()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&!s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&s.isEphemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		Collection<ReadModelWithMetaData> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&!s.readModel().ephemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		Collection<ReadModelWithMetaData> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&s.readModel().ephemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 
 		Collection<Translator> translators = translatorSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
 		InboundModule im = new InboundModule(name, inboundEventStream, translators, instance, meterRegistry);

@@ -335,8 +335,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 
 		Collection<ReadModelWithMetaData> eventuallyConsistentSharedReadModels = longLivedReadModelSpecs.stream().filter(s->s.isShared()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&!s.readModel().ephemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData> eventuallyConsistentEphemeralReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()&&s.readModel().ephemeral()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		Collection<ReadModelWithMetaData> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 
 		Collection<Translator> translators = translatorSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
 		InboundModule im = new InboundModule(name, inboundEventStream, translators, instance, meterRegistry);
@@ -346,7 +345,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, meterRegistry);
 
-		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels, instance, meterRegistry);
+		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, instance, meterRegistry);
 		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, outboundEventStream, meterRegistry);
 
 		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, meterRegistry);

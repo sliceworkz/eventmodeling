@@ -90,7 +90,6 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			List<LMSI> liveModelSpecs,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels,
-			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentEphemeralReadModels,
 			Instance instance,
 			MeterRegistry meterRegistry
 		) {
@@ -131,39 +130,38 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentLocalReadModel : eventuallyConsistentLocalReadModels ) {
 			this.eventuallyConsistentLocalReadModels.add(eventuallyConsistentLocalReadModel);
 		}
-		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentEphemeralReadModel : eventuallyConsistentEphemeralReadModels ) {
-			this.eventuallyConsistentLocalReadModels.add(eventuallyConsistentEphemeralReadModel);
-		}
 
 		this.meterRegistry = meterRegistry;
 
-		this.projectorProcessors = createProjectorProcessors(eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, eventuallyConsistentEphemeralReadModels);
+		this.projectorProcessors = createProjectorProcessors(eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels);
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(ProcessorIdentification.TYPE_READMODEL, this.projectorProcessors);
 
 		LOGGER.info("live readmodels: %s".formatted(liveModels.keySet()));
 	}
 
-	Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> createProjectorProcessors ( Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> shared, Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> local, Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> ephemeral ) {
+	Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> createProjectorProcessors ( Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> shared, Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> local ) {
 		Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> result = new ArrayList<>();
 
-		shared.forEach(rm -> result.add(new ProjectorProcessor<>(
-				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).shared().build(),
+		shared.forEach(rm -> {
+			Storage storage = rm.ephemeral() ? Storage.EPHEMERAL : Storage.SHARED;
+			var pidBuilder = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName());
+			result.add(new ProjectorProcessor<>(
+				rm.ephemeral() ? pidBuilder.ephemeral().build() : pidBuilder.shared().build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
-				new ReadModelAdapter<>(rm, boundedContext, Storage.SHARED, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
+				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				ProcessorMode.RUNNING_ON_SINGLE_LEADER,
-				instance)));
-		local.forEach(rm -> result.add(new ProjectorProcessor<>(
-				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).local().build(),
+				instance));
+		});
+		local.forEach(rm -> {
+			Storage storage = rm.ephemeral() ? Storage.EPHEMERAL : Storage.LOCAL;
+			var pidBuilder = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName());
+			result.add(new ProjectorProcessor<>(
+				rm.ephemeral() ? pidBuilder.ephemeral().build() : pidBuilder.local().build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
-				new ReadModelAdapter<>(rm, boundedContext, Storage.LOCAL, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
+				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				ProcessorMode.RUNNING_ON_ALL_INSTANCES,
-				instance)));
-		ephemeral.forEach(rm -> result.add(new ProjectorProcessor<>(
-				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName()).ephemeral().build(),
-				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
-				new ReadModelAdapter<>(rm, boundedContext, Storage.EPHEMERAL, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
-				ProcessorMode.RUNNING_ON_ALL_INSTANCES,
-				instance)));
+				instance));
+		});
 
 		return result;
 	}

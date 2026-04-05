@@ -41,7 +41,7 @@
 		<micrometer.version>1.16.4</micrometer.version>
 		
 		<testcontainers.postgresql.version>1.21.4</testcontainers.postgresql.version>
-		<h2.version>2.3.232</h2.version>
+		<h2.version>2.4.240</h2.version>
 		<hikaricp.version>7.0.2</hikaricp.version>
 		<archunit.version>1.4.1</archunit.version>
 		<awaitility.version>4.3.0</awaitility.version>

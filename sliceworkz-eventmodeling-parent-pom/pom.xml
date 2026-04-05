@@ -41,6 +41,8 @@
 		<micrometer.version>1.16.4</micrometer.version>
 		
 		<testcontainers.postgresql.version>1.21.4</testcontainers.postgresql.version>
+		<h2.version>2.3.232</h2.version>
+		<hikaricp.version>7.0.2</hikaricp.version>
 		<archunit.version>1.4.1</archunit.version>
 		<awaitility.version>4.3.0</awaitility.version>
 
@@ -104,6 +106,20 @@
 			    <scope>test</scope>
 			</dependency>
 			
+			<!-- H2 Database -->
+			<dependency>
+				<groupId>com.h2database</groupId>
+				<artifactId>h2</artifactId>
+				<version>${h2.version}</version>
+			</dependency>
+
+			<!-- HikariCP Connection Pool -->
+			<dependency>
+				<groupId>com.zaxxer</groupId>
+				<artifactId>HikariCP</artifactId>
+				<version>${hikaricp.version}</version>
+			</dependency>
+
 			<!-- ArchUnit Testing -->
 			<dependency>
 			    <groupId>com.tngtech.archunit</groupId>

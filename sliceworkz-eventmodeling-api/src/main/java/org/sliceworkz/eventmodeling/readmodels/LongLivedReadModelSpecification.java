@@ -26,8 +26,6 @@ public interface LongLivedReadModelSpecification<C extends BoundedContext<?,?,?>
 
 	BoundedContextBuilder<C> eventuallyConsistent();
 
-	LongLivedReadModelSpecification<C> ephemeral();
-
 	LongLivedReadModelSpecification<C> local();
 
 	LongLivedReadModelSpecification<C> shared();

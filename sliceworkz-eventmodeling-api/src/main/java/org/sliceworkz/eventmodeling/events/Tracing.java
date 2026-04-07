@@ -35,8 +35,8 @@ public record Tracing ( Instance instance, String actor, String channel ) {
 	public static final String AUTOMATION_ACTOR = "automation";
 	public static final String AUTOMATION_CHANNEL = "automation";
 
-	public static final String KERNEL_ACTOR = "kernel";
-	public static final String KERNEL_CHANNEL = null;
+	public static final String SYSTEM_ACTOR = "system";
+	public static final String SYSTEM_CHANNEL = null;
 
 
 	private static final String TAG_INSTANCE_LOGICAL = "x-instance-logical";
@@ -70,7 +70,7 @@ public record Tracing ( Instance instance, String actor, String channel ) {
 	}
 
 	public static final Tracing kernel ( Instance instance ) {
-		return new Tracing(instance, KERNEL_ACTOR, KERNEL_CHANNEL);
+		return new Tracing(instance, SYSTEM_ACTOR, SYSTEM_CHANNEL);
 	}
 
 	public static final <T> Event<T> removeFrom ( Event<T> event ) {

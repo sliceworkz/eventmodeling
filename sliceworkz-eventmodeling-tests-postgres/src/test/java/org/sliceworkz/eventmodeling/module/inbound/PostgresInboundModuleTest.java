@@ -21,7 +21,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorage;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorageImpl;
-import org.sliceworkz.eventstore.infra.postgres.util.PostgresContainer;
+import org.sliceworkz.eventmodeling.testing.postgres.PostgresContainer;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
 public class PostgresInboundModuleTest extends InboundModuleTest {

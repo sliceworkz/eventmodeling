@@ -56,10 +56,15 @@
 		</dependency>
 		<dependency>
 			<groupId>org.sliceworkz</groupId>
-			<artifactId>sliceworkz-eventstore-infra-postgres</artifactId>
-			<type>test-jar</type>
-			<!-- needed because a BOM import does not work for test-jar scoped dependencies -->
-			<version>${sliceworkz.eventstore.version}</version>
+			<artifactId>sliceworkz-eventmodeling-testing</artifactId>
+			<scope>test</scope>
+			<version>${project.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>com.tngtech.archunit</groupId>
+					<artifactId>archunit-junit5</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.sliceworkz</groupId>

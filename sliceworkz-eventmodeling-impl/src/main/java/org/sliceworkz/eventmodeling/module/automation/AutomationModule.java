@@ -19,7 +19,11 @@ package org.sliceworkz.eventmodeling.module.automation;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
@@ -33,6 +37,8 @@ import org.sliceworkz.eventstore.stream.EventStream;
 import io.micrometer.core.instrument.MeterRegistry;
 
 public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
+
+	private static Logger LOGGER = LoggerFactory.getLogger(AutomationModule.class);
 
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 
@@ -64,6 +70,15 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 	
 	Collection<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> createAutomationProcessors ( Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations ) {
 		Collection<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> result = new ArrayList<>();
+
+		Set<String> seenNames = new HashSet<>();
+		for ( Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> a : automations ) {
+			String name = a.getClass().getSimpleName();
+			if ( !seenNames.add(name) ) {
+				LOGGER.error("duplicate automation name '%s' registered".formatted(name));
+				throw new IllegalArgumentException("duplicate automation name '%s' - bookmarks would collide".formatted(name));
+			}
+		}
 
 		automations.forEach(a->result.add(new AutomationProcessor<>(
 				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)

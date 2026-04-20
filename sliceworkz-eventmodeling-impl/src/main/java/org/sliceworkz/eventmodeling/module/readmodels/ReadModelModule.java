@@ -22,8 +22,10 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -124,10 +126,25 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 					counterSnapshotWrite));
 		}
 
+		Set<String> seenNames = new HashSet<>();
+		for ( Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> liveClass : this.liveModels.keySet() ) {
+			seenNames.add(liveClass.getSimpleName());
+		}
+
 		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentSharedReadModel : eventuallyConsistentSharedReadModels ) {
+			String name = eventuallyConsistentSharedReadModel.readmodelName();
+			if ( !seenNames.add(name) ) {
+				LOGGER.error("duplicate readmodel name '%s' registered".formatted(name));
+				throw new IllegalArgumentException("duplicate readmodel name '%s' - bookmarks would collide".formatted(name));
+			}
 			this.eventuallyConsistentSharedReadModels.add(eventuallyConsistentSharedReadModel);
 		}
 		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentLocalReadModel : eventuallyConsistentLocalReadModels ) {
+			String name = eventuallyConsistentLocalReadModel.readmodelName();
+			if ( !seenNames.add(name) ) {
+				LOGGER.error("duplicate readmodel name '%s' registered".formatted(name));
+				throw new IllegalArgumentException("duplicate readmodel name '%s' - bookmarks would collide".formatted(name));
+			}
 			this.eventuallyConsistentLocalReadModels.add(eventuallyConsistentLocalReadModel);
 		}
 

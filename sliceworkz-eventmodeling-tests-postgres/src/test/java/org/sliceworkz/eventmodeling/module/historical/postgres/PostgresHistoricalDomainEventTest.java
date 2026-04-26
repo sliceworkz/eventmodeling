@@ -19,34 +19,55 @@ package org.sliceworkz.eventmodeling.module.historical.postgres;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Nested;
 import org.sliceworkz.eventmodeling.module.historical.HistoricalDomainEventTest;
+import org.sliceworkz.eventmodeling.testing.postgres.PostgresContainer;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorage;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorageImpl;
-import org.sliceworkz.eventmodeling.testing.postgres.PostgresContainer;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
-public class PostgresHistoricalDomainEventTest extends HistoricalDomainEventTest {
+class PostgresHistoricalDomainEventTest {
 
-	@Override
-	public EventStorage createEventStorage ( ) {
-		return PostgresEventStorage.newBuilder().name("unit-test").dataSource(PostgresContainer.dataSource()).initializeDatabase().build();
+	@Nested
+	class OnPostgres17 extends HistoricalDomainEventTest {
+
+		@BeforeAll
+		static void startContainer ( ) { PostgresContainer.start(PostgresContainer.IMAGE_PG17); }
+
+		@AfterAll
+		static void stopContainer ( ) { PostgresContainer.stop(PostgresContainer.IMAGE_PG17); PostgresContainer.cleanup(PostgresContainer.IMAGE_PG17); }
+
+		@Override
+		public EventStorage createEventStorage ( ) {
+			return PostgresEventStorage.newBuilder().name("unit-test").dataSource(PostgresContainer.dataSource(PostgresContainer.IMAGE_PG17)).initializeDatabase().build();
+		}
+
+		@Override
+		public void destroyEventStorage ( EventStorage storage ) {
+			((PostgresEventStorageImpl)storage).stop();
+			PostgresContainer.closeDataSource(PostgresContainer.IMAGE_PG17);
+		}
 	}
 
-	@Override
-	public void destroyEventStorage ( EventStorage storage ) {
-		((PostgresEventStorageImpl)storage).stop();
-		PostgresContainer.closeDataSource();
-	}
+	@Nested
+	class OnPostgres18 extends HistoricalDomainEventTest {
 
-	@BeforeAll
-	public static void setUpBeforeAll ( ) {
-		PostgresContainer.start();
-	}
+		@BeforeAll
+		static void startContainer ( ) { PostgresContainer.start(PostgresContainer.IMAGE_PG18); }
 
-	@AfterAll
-	public static void tearDownAfterAll ( ) {
-		PostgresContainer.stop();
-		PostgresContainer.cleanup();
+		@AfterAll
+		static void stopContainer ( ) { PostgresContainer.stop(PostgresContainer.IMAGE_PG18); PostgresContainer.cleanup(PostgresContainer.IMAGE_PG18); }
+
+		@Override
+		public EventStorage createEventStorage ( ) {
+			return PostgresEventStorage.newBuilder().name("unit-test").dataSource(PostgresContainer.dataSource(PostgresContainer.IMAGE_PG18)).initializeDatabase().build();
+		}
+
+		@Override
+		public void destroyEventStorage ( EventStorage storage ) {
+			((PostgresEventStorageImpl)storage).stop();
+			PostgresContainer.closeDataSource(PostgresContainer.IMAGE_PG18);
+		}
 	}
 
 }

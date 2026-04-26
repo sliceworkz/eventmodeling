@@ -19,34 +19,55 @@ package org.sliceworkz.eventmodeling.module.readmodels.postgres;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Nested;
 import org.sliceworkz.eventmodeling.module.readmodels.EventDispatchingToReadModelsTest;
+import org.sliceworkz.eventmodeling.testing.postgres.PostgresContainer;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorage;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorageImpl;
-import org.sliceworkz.eventmodeling.testing.postgres.PostgresContainer;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
-public class PostgresEventDispatchingToReadModelTest extends EventDispatchingToReadModelsTest {
-	
-	@Override
-	public EventStorage createEventStorage ( ) {
-		return PostgresEventStorage.newBuilder().name("unit-test").dataSource(PostgresContainer.dataSource()).initializeDatabase().build();
-	}	
-	
-	@Override
-	public void destroyEventStorage ( EventStorage storage ) {
-		((PostgresEventStorageImpl)storage).stop();
-		PostgresContainer.closeDataSource();
-	}
-	
-	@BeforeAll
-	public static void setUpBeforeAll ( ) {
-		PostgresContainer.start();
+class PostgresEventDispatchingToReadModelTest {
+
+	@Nested
+	class OnPostgres17 extends EventDispatchingToReadModelsTest {
+
+		@BeforeAll
+		static void startContainer ( ) { PostgresContainer.start(PostgresContainer.IMAGE_PG17); }
+
+		@AfterAll
+		static void stopContainer ( ) { PostgresContainer.stop(PostgresContainer.IMAGE_PG17); PostgresContainer.cleanup(PostgresContainer.IMAGE_PG17); }
+
+		@Override
+		public EventStorage createEventStorage ( ) {
+			return PostgresEventStorage.newBuilder().name("unit-test").dataSource(PostgresContainer.dataSource(PostgresContainer.IMAGE_PG17)).initializeDatabase().build();
+		}
+
+		@Override
+		public void destroyEventStorage ( EventStorage storage ) {
+			((PostgresEventStorageImpl)storage).stop();
+			PostgresContainer.closeDataSource(PostgresContainer.IMAGE_PG17);
+		}
 	}
 
-	@AfterAll
-	public static void tearDownAfterAll ( ) {
-		PostgresContainer.stop();
-		PostgresContainer.cleanup();
+	@Nested
+	class OnPostgres18 extends EventDispatchingToReadModelsTest {
+
+		@BeforeAll
+		static void startContainer ( ) { PostgresContainer.start(PostgresContainer.IMAGE_PG18); }
+
+		@AfterAll
+		static void stopContainer ( ) { PostgresContainer.stop(PostgresContainer.IMAGE_PG18); PostgresContainer.cleanup(PostgresContainer.IMAGE_PG18); }
+
+		@Override
+		public EventStorage createEventStorage ( ) {
+			return PostgresEventStorage.newBuilder().name("unit-test").dataSource(PostgresContainer.dataSource(PostgresContainer.IMAGE_PG18)).initializeDatabase().build();
+		}
+
+		@Override
+		public void destroyEventStorage ( EventStorage storage ) {
+			((PostgresEventStorageImpl)storage).stop();
+			PostgresContainer.closeDataSource(PostgresContainer.IMAGE_PG18);
+		}
 	}
-	
+
 }

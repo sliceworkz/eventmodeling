@@ -81,7 +81,13 @@
 		    <artifactId>postgresql</artifactId>
 		    <scope>test</scope>
 		</dependency>
-				
+		<dependency>
+		    <!-- needed for PostgresLegacyEventStorageImpl when shared tests run against PostgreSQL 17 -->
+		    <groupId>com.github.f4b6a3</groupId>
+		    <artifactId>uuid-creator</artifactId>
+		    <scope>test</scope>
+		</dependency>
+
 	</dependencies>
 	
 	<build>

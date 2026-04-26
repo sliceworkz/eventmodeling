@@ -45,6 +45,7 @@
 		<hikaricp.version>7.0.2</hikaricp.version>
 		<archunit.version>1.4.2</archunit.version>
 		<awaitility.version>4.3.0</awaitility.version>
+		<uuid-creator.version>6.1.1</uuid-creator.version>
 
 		<maven.maven-surefire-plugin.version>3.5.5</maven.maven-surefire-plugin.version>
 		<maven.maven-compiler-plugin.version>3.15.0</maven.maven-compiler-plugin.version>
@@ -104,6 +105,20 @@
 			    <artifactId>postgresql</artifactId>
 			    <version>${testcontainers.postgresql.version}</version>
 			    <scope>test</scope>
+			</dependency>
+
+			<!--
+			  uuid-creator: only needed by sliceworkz-eventstore's PostgresLegacyEventStorageImpl
+			  for Java-side uuidv7 generation against PostgreSQL 13-17. Marked optional so
+			  applications targeting PostgreSQL 18+ (where uuidv7() is server-side) do not pull
+			  it in transitively. Modules in this build that exercise PG17 (tests-postgres,
+			  benchmark) declare it explicitly.
+			-->
+			<dependency>
+			    <groupId>com.github.f4b6a3</groupId>
+			    <artifactId>uuid-creator</artifactId>
+			    <version>${uuid-creator.version}</version>
+			    <optional>true</optional>
 			</dependency>
 			
 			<!-- H2 Database -->

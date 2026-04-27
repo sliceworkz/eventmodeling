@@ -19,7 +19,11 @@ package org.sliceworkz.eventmodeling.testing;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -28,6 +32,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
@@ -44,6 +49,15 @@ import com.tngtech.archunit.lang.SimpleConditionEvent;
  * A feature package is any package that contains a class implementing
  * {@link Slice} (directly or via extending). Classes in
  * subpackages of a feature package are considered part of the same feature.
+ *
+ * Value Object Creation:
+ * 		- whether records that expose static factory methods are not
+ * 		  instantiated directly via their constructor from the outside.
+ *
+ * A "value object" is detected as a record that declares at least one
+ * static factory method returning its own type (e.g. {@code of(...)},
+ * {@code create(...)}). Direct {@code new ValueObject(...)} calls from
+ * classes other than the record itself are flagged.
  *
  * Overriding is done with an empty class, in the right base package.
  * (see "CoursesArchUnitTest" in the "courses" example for reference)
@@ -110,6 +124,62 @@ public abstract class AbstractBoundedContextArchUnitTest {
 			@Override
 			public boolean test(JavaClass javaClass) {
 				return findOwningFeaturePackage(javaClass.getPackageName(), featurePackages) != null;
+			}
+		};
+	}
+
+	@Test
+	void valueObjectsShouldBeCreatedViaFactoryMethods() {
+		ArchRule rule = noClasses()
+				.should(callConstructorOfValueObjectsFromOutside())
+				.because("Value objects (records exposing static factory methods) "
+						+ "must be created through those factory methods, not via direct constructor calls");
+
+		rule.check(CLASSES);
+	}
+
+	private static ArchCondition<JavaClass> callConstructorOfValueObjectsFromOutside() {
+		return new ArchCondition<>("call value object constructors directly from outside the value object") {
+			private final Map<String, Boolean> valueObjectCache = new HashMap<>();
+
+			@Override
+			public void check(JavaClass javaClass, ConditionEvents events) {
+				for (JavaConstructorCall call : javaClass.getConstructorCallsFromSelf()) {
+					String targetOwner = call.getTargetOwner().getName();
+					if (targetOwner.equals(javaClass.getName())) {
+						continue;
+					}
+					if (!isValueObjectWithFactoryMethod(targetOwner)) {
+						continue;
+					}
+					String message = "Class %s directly invokes constructor of value object %s at %s - use a static factory method instead".formatted(
+							javaClass.getName(),
+							targetOwner,
+							call.getSourceCodeLocation());
+					events.add(SimpleConditionEvent.satisfied(call, message));
+				}
+			}
+
+			private boolean isValueObjectWithFactoryMethod(String className) {
+				return valueObjectCache.computeIfAbsent(className, this::resolveIsValueObject);
+			}
+
+			private boolean resolveIsValueObject(String className) {
+				try {
+					Class<?> clazz = Class.forName(className, false, getClass().getClassLoader());
+					if (!clazz.isRecord()) {
+						return false;
+					}
+					for (Method method : clazz.getDeclaredMethods()) {
+						if (Modifier.isStatic(method.getModifiers())
+								&& method.getReturnType().equals(clazz)) {
+							return true;
+						}
+					}
+					return false;
+				} catch (Throwable t) {
+					return false;
+				}
 			}
 		};
 	}

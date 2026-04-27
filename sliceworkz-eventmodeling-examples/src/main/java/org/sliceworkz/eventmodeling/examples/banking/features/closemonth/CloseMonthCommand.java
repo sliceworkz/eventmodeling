@@ -88,7 +88,7 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 		Tags currentMonthTags = Tags.of(
 			DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
 			DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-				new DomainConceptId(monthToClose.toString()))
+				DomainConceptId.of(monthToClose.toString()))
 		);
 
 		result.raiseEvent(
@@ -112,7 +112,7 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 		Tags nextMonthTags = Tags.of(
 			DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
 			DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-				new DomainConceptId(nextMonth.toString()))
+				DomainConceptId.of(nextMonth.toString()))
 		);
 
 		result.raiseEvent(

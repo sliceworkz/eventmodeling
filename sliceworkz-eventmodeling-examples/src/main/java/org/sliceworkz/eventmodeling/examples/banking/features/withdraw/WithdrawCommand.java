@@ -74,7 +74,7 @@ public class WithdrawCommand implements Command<BankingEvent> {
 			Tags.of(
 				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
 				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-					new DomainConceptId(period.activeMonth().toString()))
+					DomainConceptId.of(period.activeMonth().toString()))
 			)
 		);
 	}

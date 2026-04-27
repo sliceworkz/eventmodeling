@@ -77,7 +77,7 @@ public class MonthStatementReadModel implements ReadModel<BankingEvent> {
 			Tags.of(
 				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
 				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-					new DomainConceptId(month.toString()))
+					DomainConceptId.of(month.toString()))
 			)
 		);
 	}

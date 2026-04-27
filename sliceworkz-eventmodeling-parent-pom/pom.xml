@@ -40,7 +40,7 @@
 		<postgresql.jdbc.version>42.7.10</postgresql.jdbc.version>
 		<micrometer.version>1.16.5</micrometer.version>
 		
-		<testcontainers.postgresql.version>1.21.4</testcontainers.postgresql.version>
+		<testcontainers.postgresql.version>2.0.5</testcontainers.postgresql.version>
 		<h2.version>2.4.240</h2.version>
 		<hikaricp.version>7.0.2</hikaricp.version>
 		<archunit.version>1.4.2</archunit.version>
@@ -102,7 +102,7 @@
 			</dependency>
 			<dependency>
 			    <groupId>org.testcontainers</groupId>
-			    <artifactId>postgresql</artifactId>
+			    <artifactId>testcontainers-postgresql</artifactId>
 			    <version>${testcontainers.postgresql.version}</version>
 			    <scope>test</scope>
 			</dependency>

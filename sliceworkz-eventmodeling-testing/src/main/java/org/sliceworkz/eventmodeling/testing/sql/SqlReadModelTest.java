@@ -38,7 +38,7 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.EventStreamId;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -87,8 +87,8 @@ import com.zaxxer.hikari.HikariDataSource;
 public abstract class SqlReadModelTest<T> {
 
 	@SuppressWarnings("resource")
-	private static final PostgreSQLContainer<?> POSTGRES =
-		new PostgreSQLContainer<>("postgres:17")
+	private static final PostgreSQLContainer POSTGRES =
+		new PostgreSQLContainer("postgres:17")
 			.withDatabaseName("readmodel-test")
 			.withUsername("test")
 			.withPassword("test");

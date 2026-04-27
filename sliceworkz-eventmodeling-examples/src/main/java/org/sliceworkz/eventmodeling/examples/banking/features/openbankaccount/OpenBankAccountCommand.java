@@ -63,7 +63,7 @@ public class OpenBankAccountCommand implements Command<BankingEvent> {
 			Tags.of(
 				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
 				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-					new DomainConceptId(initialMonth.toString()))
+					DomainConceptId.of(initialMonth.toString()))
 			)
 		);
 	}

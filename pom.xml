@@ -22,7 +22,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.sliceworkz</groupId>
 	<artifactId>sliceworkz-eventmodeling</artifactId>
-	<version>0.5.2</version>
+	<version>0.5.3-SNAPSHOT</version>
 	
 	<name>${project.artifactId}</name>
 	<description>An opinionated Event Modeling framework in Java</description>

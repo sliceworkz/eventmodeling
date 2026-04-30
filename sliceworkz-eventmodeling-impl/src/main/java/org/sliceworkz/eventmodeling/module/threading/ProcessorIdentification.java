@@ -248,11 +248,6 @@ public record ProcessorIdentification ( String context, String type, String id, 
 
 	public Tags toTags ( Instance instance ) {
 		Tags tags = Tags.of(
-				Tag.of("x-context", context()),
-				Tag.of("x-type", type()),
-				Tag.of("x-id", id()),
-				Tag.of("x-storage", storage().label()),
-				Tag.of("x-location", location()),
 				Tag.of("x-instance-logical", instance.logical()),
 				Tag.of("x-instance-physical", instance.physical()),
 				Tag.of("x-instance-process", instance.process())

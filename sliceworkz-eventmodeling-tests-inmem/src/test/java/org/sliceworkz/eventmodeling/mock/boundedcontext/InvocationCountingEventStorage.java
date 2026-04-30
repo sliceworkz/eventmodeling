@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+import org.sliceworkz.eventstore.events.Bookmark;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -84,5 +85,10 @@ public class InvocationCountingEventStorage implements EventStorage {
 	public void removeBookmark(String reader) {
 		wrapped.removeBookmark(reader);
 	}
-	
+
+	@Override
+	public List<Bookmark> getBookmarks() {
+		return wrapped.getBookmarks();
+	}
+
 }

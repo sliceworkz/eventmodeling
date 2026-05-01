@@ -95,11 +95,12 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		return timed(commandName, () -> {
 			long start = System.currentTimeMillis();
 
-			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracing);
+			Tracing tracingWithCommand = tracing.command(commandName);
+			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracingWithCommand);
 			command.execute(commandContext);
 			CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-			Optional<EventReference> eventReference = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, tracing);
+			Optional<EventReference> eventReference = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, tracingWithCommand);
 
 			logPerformance(commandContext, commandName, start);
 
@@ -112,11 +113,12 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		return timed(commandName, () -> {
 			long start = System.currentTimeMillis();
 
-			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracing);
+			Tracing tracingWithCommand = tracing.command(commandName);
+			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand);
 			RESPONSE_TYPE response = command.execute(commandContext);
 			CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-			Optional<EventReference> eventReference = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, tracing);
+			Optional<EventReference> eventReference = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, tracingWithCommand);
 
 			logPerformance(commandContext, commandName, start);
 

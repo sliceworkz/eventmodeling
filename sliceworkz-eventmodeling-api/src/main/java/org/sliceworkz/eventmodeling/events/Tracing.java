@@ -26,7 +26,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
-public record Tracing ( Instance instance, String actor, String channel ) {
+public record Tracing ( Instance instance, String actor, String channel, String command ) {
 
 	public static final String UNKNOWN_ACTOR = null;
 	public static final String UNKNOWN_CHANNEL = null;
@@ -38,39 +38,46 @@ public record Tracing ( Instance instance, String actor, String channel ) {
 	public static final String SYSTEM_ACTOR = "system";
 	public static final String SYSTEM_CHANNEL = null;
 
+	public static final String NO_COMMAND = null;
+
 
 	private static final String TAG_INSTANCE_LOGICAL = "x-instance-logical";
 	private static final String TAG_INSTANCE_PHYSICAL = "x-instance-physical";
 	private static final String TAG_INSTANCE_PROCESS = "x-instance-process";
 	private static final String TAG_CHANNEL = "x-channel";
 	private static final String TAG_ACTOR = "x-actor";
+	private static final String TAG_COMMAND = "x-command";
 
 	public Tracing actor ( String actor ) {
-		return new Tracing ( instance, actor, channel );
+		return new Tracing ( instance, actor, channel, command );
 	}
 
 	public Tracing channel ( String channel ) {
-		return new Tracing ( instance, actor, channel );
+		return new Tracing ( instance, actor, channel, command );
+	}
+
+	public Tracing command ( String command ) {
+		return new Tracing ( instance, actor, channel, command );
 	}
 
 	public static final Tracing init ( Instance instance ) {
-		return new Tracing(instance, UNKNOWN_ACTOR, UNKNOWN_CHANNEL);
+		return new Tracing(instance, UNKNOWN_ACTOR, UNKNOWN_CHANNEL, NO_COMMAND);
 	}
 
 	public Tracing instance ( Instance instance ) {
-		return new Tracing(instance, actor, channel);
+		return new Tracing(instance, actor, channel, command);
 	}
 
 	public static final Tracing actorAndChannel ( String actor, String channel ) {
-		return new Tracing ( null, actor, channel);
+		return new Tracing ( null, actor, channel, NO_COMMAND);
 	}
 
 	public static final Tracing automation ( Instance instance ) {
-		return new Tracing(instance, AUTOMATION_ACTOR, AUTOMATION_CHANNEL);
+		return new Tracing(instance, AUTOMATION_ACTOR, AUTOMATION_CHANNEL, NO_COMMAND);
 	}
 
 	public static final Tracing kernel ( Instance instance ) {
-		return new Tracing(instance, SYSTEM_ACTOR, SYSTEM_CHANNEL);
+		return new Tracing(instance, SYSTEM_ACTOR, SYSTEM_CHANNEL, NO_COMMAND);
 	}
 
 	public static final <T> Event<T> removeFrom ( Event<T> event ) {
@@ -78,7 +85,7 @@ public record Tracing ( Instance instance, String actor, String channel ) {
 		cleaned.removeIf(t->t.key().startsWith("x-"));
 		return event.withTags(new Tags(cleaned));
 	}
-	
+
 	public static final Tracing readFrom ( Event<?> event ) {
 		Instance instance = new Instance(
 				tagValue(event, TAG_INSTANCE_LOGICAL).orElse(null),
@@ -87,20 +94,21 @@ public record Tracing ( Instance instance, String actor, String channel ) {
 				);
 		String actor = tagValue(event, TAG_ACTOR).orElse(null);
 		String channel = tagValue(event, TAG_CHANNEL).orElse(null);
+		String command = tagValue(event, TAG_COMMAND).orElse(null);
 
-		return new Tracing(instance, actor, channel);
+		return new Tracing(instance, actor, channel, command);
 	}
 
 	private static final Optional<String> tagValue ( Event<?> event, String tagName ) {
 		return event.tags().tag(tagName).map(Tag::value);
 	}
-	
+
 	private static final void addTag ( Set<Tag> tags, String name, String value) {
 		if ( value != null ) {
 			tags.add(Tag.of(name, value));
 		}
 	}
-	
+
 	@SuppressWarnings("unchecked")
 	public final <T> EphemeralEvent<T> storeOn ( EphemeralEvent<? extends T> event ) {
 		Set<Tag> tags = new HashSet<>();
@@ -111,10 +119,11 @@ public record Tracing ( Instance instance, String actor, String channel ) {
 		}
 		addTag(tags, TAG_CHANNEL, channel);
 		addTag(tags, TAG_ACTOR, actor);
-		
+		addTag(tags, TAG_COMMAND, command);
+
 		Tags extraTags = new Tags(tags);
 		Tags mergedTags = event.tags().merge(extraTags);
-				
+
 		return (EphemeralEvent<T>) event.withTags(mergedTags);
 	}
 

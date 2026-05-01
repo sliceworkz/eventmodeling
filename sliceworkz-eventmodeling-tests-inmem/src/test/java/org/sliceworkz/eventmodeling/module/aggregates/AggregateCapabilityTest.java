@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.module.aggregates;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.UndeclaredThrowableException;
@@ -104,7 +105,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		
 		List<? extends Event<MockDomainEvent>> all = allStream.query(EventQuery.matchAll()).toList();
 		assertEquals(1, all.size());
-		assertEquals(Tags.of("businessObject", "123"), all.get(0).tags());
+		assertTrue(all.get(0).tags().containsAll(Tags.of("businessObject", "123")));
 		
 		assertEquals(1,bo123.getCounter());
 		assertEquals(0,bo456.getCounter());

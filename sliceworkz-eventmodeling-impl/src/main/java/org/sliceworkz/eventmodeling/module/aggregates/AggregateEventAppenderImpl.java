@@ -69,7 +69,11 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 
 	@Override
 	public AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> add(DOMAIN_EVENT_TYPE event, String idempotencyKey) {
-		events.add(Event.of(event, identity).withIdempotencyKey(idempotencyKey));
+		EphemeralEvent<DOMAIN_EVENT_TYPE> ephemeralEvent = Event.of(event, identity).withIdempotencyKey(idempotencyKey);
+		if ( tracing != null ) {
+			ephemeralEvent = tracing.storeOn(ephemeralEvent);
+		}
+		events.add(ephemeralEvent);
 		return this;
 	}
 

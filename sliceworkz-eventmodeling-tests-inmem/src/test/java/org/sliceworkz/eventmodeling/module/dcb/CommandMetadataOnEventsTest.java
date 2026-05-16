@@ -112,7 +112,7 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		var events = domainEvents();
 		assertEquals(1, events.size());
 		assertTrue(events.get(0).tags().tag(X_COMMAND).isPresent());
-		assertEquals("RaiseDomainCommand", events.get(0).tags().tag(X_COMMAND).get().value());
+		assertEquals("RaiseDomain", events.get(0).tags().tag(X_COMMAND).get().value());
 	}
 
 	@Test
@@ -134,7 +134,18 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 
 		var events = outboundEvents();
 		assertEquals(1, events.size());
-		assertEquals("RaiseOutboundCommand", events.get(0).tags().tag(X_COMMAND).get().value());
+		assertEquals("RaiseOutbound", events.get(0).tags().tag(X_COMMAND).get().value());
+	}
+
+	@Test
+	void commandNameWithoutCommandSuffix_isUsedAsIs() {
+		Mock domain = buildDomain();
+
+		domain.execute(new RaiseDomainAction("v1"));
+
+		var events = domainEvents();
+		assertEquals(1, events.size());
+		assertEquals("RaiseDomainAction", events.get(0).tags().tag(X_COMMAND).get().value());
 	}
 
 	@Test
@@ -219,6 +230,20 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		public String execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			context.noDecisionModels().raiseEvent(new FirstDomainEvent(value), Tags.none());
 			return "ok:" + value;
+		}
+	}
+
+	static class RaiseDomainAction implements Command<MockDomainEvent> {
+
+		private final String value;
+
+		RaiseDomainAction(String value) {
+			this.value = value;
+		}
+
+		@Override
+		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			context.noDecisionModels().raiseEvent(new FirstDomainEvent(value), Tags.none());
 		}
 	}
 

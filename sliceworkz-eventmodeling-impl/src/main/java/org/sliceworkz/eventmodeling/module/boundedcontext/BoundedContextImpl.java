@@ -95,6 +95,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			boolean startQueries,
 			boolean startAutomations,
 			boolean startProjections,
+			boolean lifecycleEventsEnabled,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventStream<INBOUND_EVENT_TYPE> inboundEventStream,
 			EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream,
@@ -132,18 +133,20 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.adapterRegistry = adapterRegistry;
 		this.instance = instance;
 
-		EphemeralEvent<KernelEvent> kernelEvent = Event.of(
-				new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), map(deployedFeatureSlices), map(undeployedFeatureSlices)), 
-				Tags.none()
-			);
-		kernelEvent = (EphemeralEvent<KernelEvent>)Tracing.kernel(instance).storeOn(kernelEvent);
+		if ( lifecycleEventsEnabled ) {
+			EphemeralEvent<KernelEvent> kernelEvent = Event.of(
+					new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), map(deployedFeatureSlices), map(undeployedFeatureSlices)),
+					Tags.none()
+				);
+			kernelEvent = (EphemeralEvent<KernelEvent>)Tracing.kernel(instance).storeOn(kernelEvent);
 
-		kernelLoggingEventStream.append(
-				AppendCriteria.none(), 
-				Collections.singletonList(
-						kernelEvent
-				)
-		);
+			kernelLoggingEventStream.append(
+					AppendCriteria.none(),
+					Collections.singletonList(
+							kernelEvent
+					)
+			);
+		}
 	}
 	
 	void setSelfReference(BoundedContext<?,?,?> selfReference) {

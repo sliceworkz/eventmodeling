@@ -55,6 +55,8 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
 	FeaturesSpecification<C> features ( );
 
+	ObservabilitySpecification<C> observability ( );
+
 	AggregateSpecification<C> aggregate(Class<? extends Aggregate<?>> aggregateClass);
 
 	LiveModelSpecification<C> readmodel(Class<? extends ReadModelWithMetaData<?>> readModelClass);

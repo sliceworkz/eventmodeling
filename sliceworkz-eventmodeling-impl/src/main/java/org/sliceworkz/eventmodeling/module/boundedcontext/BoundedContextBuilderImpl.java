@@ -39,6 +39,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.AdapterBinding;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
+import org.sliceworkz.eventmodeling.boundedcontext.ObservabilitySpecification;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
@@ -102,6 +103,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	private FeaturesSpecificationImpl<C> featuresSpecification = new FeaturesSpecificationImpl<>(this);
 
+	private ObservabilitySpecificationImpl<C> observabilitySpecification = new ObservabilitySpecificationImpl<>(this);
+
 	private MeterRegistry meterRegistry = Metrics.globalRegistry;
 
 	private EventStorage eventStorage;
@@ -149,6 +152,11 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	@Override
 	public FeaturesSpecification<C> features ( ) {
 		return featuresSpecification;
+	}
+
+	@Override
+	public ObservabilitySpecification<C> observability ( ) {
+		return observabilitySpecification;
 	}
 
 	@Override
@@ -356,6 +364,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployQueries(),
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
+						observabilitySpecification.lifecycleEventsEnabled(),
 						domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry, adapterRegistry);
 
 		// this is only possible after creation

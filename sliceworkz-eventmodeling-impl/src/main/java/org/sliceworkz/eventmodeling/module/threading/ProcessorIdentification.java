@@ -223,6 +223,21 @@ public record ProcessorIdentification ( String context, String type, String id, 
 			return this;
 		}
 
+		/**
+		 * Conditionally promotes the storage to {@link Storage#EPHEMERAL}.
+		 * <p>
+		 * Intended to be chained after {@link #shared()} or {@link #local()} so the call site
+		 * can express "shared/local by default, ephemeral if a runtime flag says so" without
+		 * branching. When {@code ephemeral} is {@code false} the previously-set storage is
+		 * left untouched; when {@code true} it is overridden to ephemeral.
+		 */
+		public ProcessorIdentificationBuilder ephemeralIf ( boolean ephemeral ) {
+			if ( ephemeral ) {
+				this.storage = Storage.EPHEMERAL;
+			}
+			return this;
+		}
+
 		public ProcessorIdentification build ( ) {
 			String location = null;
 			switch ( storage ) {

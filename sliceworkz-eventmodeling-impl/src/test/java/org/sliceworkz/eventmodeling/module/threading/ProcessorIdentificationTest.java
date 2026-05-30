@@ -113,4 +113,42 @@ public class ProcessorIdentificationTest {
 		ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance).context("test").readmodel().name("testReadModel").local().build().toString();
 	}
 
+	@Test
+	void testEphemeralIfTruePromotesSharedToEphemeral ( ) {
+		ProcessorIdentification epi = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance)
+				.context("ctx").readmodel().name("TodoList")
+				.shared().ephemeralIf(true)
+				.build();
+		assertEquals(Storage.EPHEMERAL, epi.storage());
+		assertEquals("ctx/readmodel/TodoList[ephemeral:someLogicalInstance#somePhysicalInstance]", epi.toString());
+	}
+
+	@Test
+	void testEphemeralIfFalseLeavesSharedAlone ( ) {
+		ProcessorIdentification epi = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance)
+				.context("ctx").readmodel().name("TodoList")
+				.shared().ephemeralIf(false)
+				.build();
+		assertEquals(Storage.SHARED, epi.storage());
+		assertEquals("ctx/readmodel/TodoList[shared]", epi.toString());
+	}
+
+	@Test
+	void testEphemeralIfTruePromotesLocalToEphemeral ( ) {
+		ProcessorIdentification epi = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance)
+				.context("ctx").readmodel().name("TodoList")
+				.local().ephemeralIf(true)
+				.build();
+		assertEquals(Storage.EPHEMERAL, epi.storage());
+	}
+
+	@Test
+	void testEphemeralIfFalseLeavesLocalAlone ( ) {
+		ProcessorIdentification epi = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance)
+				.context("ctx").readmodel().name("TodoList")
+				.local().ephemeralIf(false)
+				.build();
+		assertEquals(Storage.LOCAL, epi.storage());
+	}
+
 }

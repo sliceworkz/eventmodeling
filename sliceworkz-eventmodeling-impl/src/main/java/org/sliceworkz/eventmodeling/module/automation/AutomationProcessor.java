@@ -59,6 +59,8 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER; // TOOD implement leader selection on processors
 	private Instance instance;
 
+	private boolean monitoredBookmarkMissingWarned = false;
+
 	private final String boundedContext;
 	private final MeterRegistry meterRegistry;
 	private final Counter batchCounter;
@@ -159,6 +161,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 						
 						if ( monitoredBookmark.isPresent() && ( lastReference.isEmpty() || (monitoredBookmark.get().position() >= lastReference.get().position()) ) ) {
 							LOGGER.debug("monitoredBookmark is at {}, our own bookmark is at {}, processing can continue", monitoredBookmark.get(), lastReference.orElse(null));
+							monitoredBookmarkMissingWarned = false; // monitored projector is alive — re-arm the warning for any future disappearance
 							
 							try {
 								if ( monitoredBookmark.isPresent() ) {
@@ -218,7 +221,23 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 							}
 						} else {
 							// risk of handling item twice ...
-							LOGGER.debug("monitoredBookmark is {}, our own bookmark is {}, processing cannot continue until readmodel has kept up", monitoredBookmark, lastReference);
+							if ( monitoredBookmark.isEmpty() ) {
+								// No bookmark at all for the read model we follow. Two likely causes:
+								//  - The monitored projector has never persisted a position yet (cold start, no
+								//    events to process).
+								//  - Our monitoredProcessorIdentification doesn't match the id the projector
+								//    actually writes (e.g. a storage-class mismatch between SHARED/EPHEMERAL/LOCAL).
+								// We warn once so the second case is loud at boot; the flag is reset as soon as
+								// a bookmark appears so a genuine "no events yet" stays quiet.
+								if ( !monitoredBookmarkMissingWarned ) {
+									LOGGER.warn("no bookmark found for monitored read-model processor '{}' — if the read model has events to project, check that its registered processor id matches (e.g. storage class shared vs ephemeral vs local)", monitoredProcessorIdentification);
+									monitoredBookmarkMissingWarned = true;
+								} else {
+									LOGGER.debug("monitoredBookmark still absent for {}, waiting", monitoredProcessorIdentification);
+								}
+							} else {
+								LOGGER.debug("monitoredBookmark is {}, our own bookmark is {}, processing cannot continue until readmodel has kept up", monitoredBookmark, lastReference);
+							}
 							try {
 								synchronized ( this ) {
 									this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);

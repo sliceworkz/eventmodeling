@@ -161,9 +161,11 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 		shared.forEach(rm -> {
 			Storage storage = rm.ephemeral() ? Storage.EPHEMERAL : Storage.SHARED;
-			var pidBuilder = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName());
 			result.add(new ProjectorProcessor<>(
-				rm.ephemeral() ? pidBuilder.ephemeral().build() : pidBuilder.shared().build(),
+				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)
+					.context(boundedContext).readmodel().name(rm.readmodelName())
+					.shared().ephemeralIf(rm.ephemeral())
+					.build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
 				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				ProcessorMode.RUNNING_ON_SINGLE_LEADER,
@@ -171,9 +173,11 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		});
 		local.forEach(rm -> {
 			Storage storage = rm.ephemeral() ? Storage.EPHEMERAL : Storage.LOCAL;
-			var pidBuilder = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance).context(boundedContext).readmodel().name(rm.readmodelName());
 			result.add(new ProjectorProcessor<>(
-				rm.ephemeral() ? pidBuilder.ephemeral().build() : pidBuilder.local().build(),
+				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)
+					.context(boundedContext).readmodel().name(rm.readmodelName())
+					.local().ephemeralIf(rm.ephemeral())
+					.build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
 				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				ProcessorMode.RUNNING_ON_ALL_INSTANCES,

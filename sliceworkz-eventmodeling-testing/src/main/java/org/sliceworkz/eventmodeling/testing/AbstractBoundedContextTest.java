@@ -37,9 +37,12 @@ import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectWriter;
+import tools.jackson.databind.json.JsonMapper;
 
 public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
 
@@ -97,8 +100,10 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 	}
 
 	public void assertCompareJsonString ( Object expected, Object actual, String objectDescription ) {
-		ObjectWriter mapper = new JsonMapper()
-			.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.FIELD, com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.ANY)
+		// Jackson 3.x: JsonMapper is immutable and configured via its builder.
+		ObjectWriter mapper = JsonMapper.builder()
+			.changeDefaultVisibility(vc -> vc.withVisibility(PropertyAccessor.FIELD, Visibility.ANY))
+			.build()
 			.writerWithDefaultPrettyPrinter();
 
 		assertEquals(expected.getClass(), actual.getClass(), "type for %s not as expected".formatted(objectDescription));
@@ -111,15 +116,17 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 
 			assertEquals(expectedAsPrettyPrintString, actualAsPrettyPrintString);
 
-		} catch (JsonProcessingException e) {
+		} catch (JacksonException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
 	public void assertCompareObjects ( Object expected, Object actual, String objectDescription ) {
-		ObjectWriter mapper = new JsonMapper()
-			.findAndRegisterModules()
-			.setVisibility(com.fasterxml.jackson.annotation.PropertyAccessor.FIELD, com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility.ANY)
+		// Jackson 3.x: JsonMapper is immutable and configured via its builder; modules
+		// (incl. java.time) auto-register, so findAndRegisterModules() is gone.
+		ObjectWriter mapper = JsonMapper.builder()
+			.changeDefaultVisibility(vc -> vc.withVisibility(PropertyAccessor.FIELD, Visibility.ANY))
+			.build()
 			.writerWithDefaultPrettyPrinter();
 
 		assertEquals(expected.getClass(), actual.getClass(), "type for %s not as expected".formatted(objectDescription));
@@ -154,7 +161,7 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 			}
 			assertEquals(expectedToCompare, actualToCompare);
 
-		} catch (JsonProcessingException e) {
+		} catch (JacksonException e) {
 			throw new RuntimeException(e);
 		}
 	}

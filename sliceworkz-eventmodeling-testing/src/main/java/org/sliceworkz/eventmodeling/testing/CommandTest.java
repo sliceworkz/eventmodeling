@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.testing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.ArrayList;
@@ -45,10 +46,16 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		return new TestDefinition().given(events);
 	}
 	
-	// TODO should,'t we be able to verify correct Tags on events also?
 	public interface TestResult<DOMAIN_EVENT_TYPE> {
 
 		void event ( DOMAIN_EVENT_TYPE event );
+
+		/**
+		 * Asserts a single event was produced, equal to {@code event}, and that it carries (at least)
+		 * all of {@code expectedTags}. Extra tags on the produced event (e.g. tracing tags added by the
+		 * kernel) are allowed, so the assertion stays focused on the domain tags the command must raise.
+		 */
+		void event ( DOMAIN_EVENT_TYPE event, Tags expectedTags );
 
 		void events ( @SuppressWarnings("unchecked") DOMAIN_EVENT_TYPE... events );
 
@@ -135,6 +142,16 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		@Override
 		public void event(DOMAIN_EVENT_TYPE event) {
 			events(event);
+		}
+
+		@Override
+		public void event(DOMAIN_EVENT_TYPE event, Tags expectedTags) {
+			noException();
+			assertEquals(1, producedEvents.size(), "number of events not as expected");
+			Event<DOMAIN_EVENT_TYPE> actual = producedEvents.get(0);
+			assertCompareObjects(event, actual.data(), "event");
+			assertTrue(actual.tags().containsAll(expectedTags),
+				"event tags %s do not contain all expected tags %s".formatted(actual.tags().toStrings(), expectedTags.toStrings()));
 		}
 
 		

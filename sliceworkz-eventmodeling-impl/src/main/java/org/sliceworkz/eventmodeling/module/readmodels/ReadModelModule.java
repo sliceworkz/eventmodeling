@@ -31,9 +31,10 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
-import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
@@ -68,6 +69,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private Instance instance;
 
 	private MeterRegistry meterRegistry;
+	private BoundedContextEventEmitter eventEmitter;
 
 	public record LiveModelInfo<DOMAIN_EVENT_TYPE> (
 			Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass,
@@ -93,13 +95,15 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels,
 			Instance instance,
-			MeterRegistry meterRegistry
+			MeterRegistry meterRegistry,
+			BoundedContextEventEmitter eventEmitter
 		) {
 
 		this.domainEventStream = domainEventStream;
 		this.allInStorageEventStream = allInStorageEventStream;
 		this.boundedContext = boundedContext;
 		this.instance = instance;
+		this.eventEmitter = eventEmitter;
 
 		for ( LMSI spec : liveModelSpecs ) {
 			@SuppressWarnings("unchecked")
@@ -169,7 +173,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
 				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				ProcessorMode.RUNNING_ON_SINGLE_LEADER,
-				instance));
+				instance,
+				ecRunListener(rm, storage)));
 		});
 		local.forEach(rm -> {
 			Storage storage = rm.ephemeral() ? Storage.EPHEMERAL : Storage.LOCAL;
@@ -181,10 +186,28 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
 				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				ProcessorMode.RUNNING_ON_ALL_INSTANCES,
-				instance));
+				instance,
+				ecRunListener(rm, storage)));
 		});
 
 		return result;
+	}
+
+	/**
+	 * Builds a run listener that emits an {@link BoundedContextEvent.EventuallyConsistentReadModelUpdated}
+	 * after each projector catch-up that handled at least one event. The metrics come from the projector
+	 * run, so {@code queriesDone}/{@code eventsStreamed} are accurate — including the full rebuild of an
+	 * ephemeral read model on processor start (which spans several query batches).
+	 */
+	private ProjectorProcessor.RunListener ecRunListener ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> rm, Storage storage ) {
+		// the projector runs on its own (system) thread, not on behalf of any user operation, so the
+		// event is emitted with kernel tracing (actor "system", no channel)
+		return (metrics, durationMs) -> {
+			if ( eventEmitter.enabled() && metrics.eventsHandled() > 0 ) {
+				BoundedContextEvent.Metrics m = new BoundedContextEvent.Metrics(durationMs, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
+				eventEmitter.emit(new BoundedContextEvent.EventuallyConsistentReadModelUpdated(boundedContext, rm.readmodelName(), storage.label(), m, eventEmitter.sliceFor(rm.getClass())));
+			}
+		};
 	}
 
 	@SuppressWarnings("unchecked")
@@ -197,7 +220,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
 
 			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				return (T) projectLiveModel(domainEventStream, readModelClass, info, constructorParams);
+				return (T) projectLiveModel(domainEventStream, readModelClass, info, tracing, constructorParams);
 			});
 
 		} else {
@@ -215,7 +238,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
 
 			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				return (T) projectLiveModel(allInStorageEventStream, readModelClass, info, constructorParams);
+				return (T) projectLiveModel(allInStorageEventStream, readModelClass, info, tracing, constructorParams);
 			});
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
@@ -223,7 +246,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private ReadModelWithMetaData<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Object[] constructorParams ) {
+	private ReadModelWithMetaData<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams ) {
 		long start = System.currentTimeMillis();
 		try {
 			ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel = (ReadModelWithMetaData<DOMAIN_EVENT_TYPE>) selectConstructor(readModelClass, constructorParams).newInstance(constructorParams);
@@ -249,10 +272,12 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			// Save snapshot if configured and threshold met
 			saveSnapshotIfNeeded(readModel, info, projectorMetrics, constructorParams);
 
-			long finish = System.currentTimeMillis();
-			long duration = finish - start;
-			PerformanceLogger.Metrics metrics = new PerformanceLogger.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
-			PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("readmodel.live").readmodel(readModel.readmodelName()).log();
+			if ( eventEmitter.enabled() ) {
+				long finish = System.currentTimeMillis();
+				long duration = finish - start;
+				BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+				eventEmitter.emit(new BoundedContextEvent.LiveModelProjected(boundedContext, readModel.readmodelName(), metrics, eventEmitter.sliceFor(readModel.getClass())), tracing);
+			}
 
 			return readModel;
 		} catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {

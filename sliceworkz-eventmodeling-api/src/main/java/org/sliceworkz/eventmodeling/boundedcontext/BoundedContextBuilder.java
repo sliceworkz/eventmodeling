@@ -55,7 +55,18 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
 	FeaturesSpecification<C> features ( );
 
-	ObservabilitySpecification<C> observability ( );
+	/**
+	 * Registers a listener notified of {@link BoundedContextEvent}s produced by the kernel of this
+	 * bounded context (lifecycle, commands executed, read models updated, ...).
+	 * <p>
+	 * When no listener is registered no kernel events are produced and there is no overhead. Two
+	 * ready-to-use implementations are provided: {@link StreamAppendingBoundedContextListener} and
+	 * {@link LoggingBoundedContextListener}.
+	 *
+	 * @param listener the listener to notify; must not be {@code null}
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> listener ( BoundedContextListener listener );
 
 	AggregateSpecification<C> aggregate(Class<? extends Aggregate<?>> aggregateClass);
 

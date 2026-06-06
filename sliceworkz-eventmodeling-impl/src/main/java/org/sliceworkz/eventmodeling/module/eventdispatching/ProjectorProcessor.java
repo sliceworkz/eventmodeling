@@ -48,6 +48,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	private final Projector<EVENT_TYPE> projector;
 	private final ProcessorIdentification processorIdentification;
 	private final ProcessorMode originalProcessorMode;
+	private final RunListener runListener;
 
 	private volatile ProcessorMode processorMode;
 	private volatile ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER;
@@ -59,10 +60,21 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 			Projection<EVENT_TYPE> projection,
 			ProcessorMode processorMode,
 			Instance instance ) {
+		this(processorIdentification, eventSource, projection, processorMode, instance, null);
+	}
+
+	public ProjectorProcessor (
+			ProcessorIdentification processorIdentification,
+			EventSource<EVENT_TYPE> eventSource,
+			Projection<EVENT_TYPE> projection,
+			ProcessorMode processorMode,
+			Instance instance,
+			RunListener runListener ) {
 
 		this.processorIdentification = processorIdentification;
 		this.originalProcessorMode = processorMode;
 		this.processorMode = ProcessorMode.STOPPED;
+		this.runListener = runListener;
 
 		// Clean up stale bookmarks for ephemeral storage before building the projector
 		if ( processorIdentification.storage() == Storage.EPHEMERAL ) {
@@ -136,10 +148,20 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 					if ( processorMode == ProcessorMode.RUNNING_ON_ALL_INSTANCES || instanceMode == ProcessorInstanceMode.LEADER ) {
 
 						try {
+							long runStartMs = System.currentTimeMillis();
 							ProjectorMetrics metrics = projector.run();
+							long runDurationMs = System.currentTimeMillis() - runStartMs;
 
 							LOGGER.debug("projector run completed: {} events streamed, {} handled, last reference {}",
 									metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
+
+							if ( runListener != null ) {
+								try {
+									runListener.onRun(metrics, runDurationMs);
+								} catch ( Throwable t ) {
+									LOGGER.warn("projector run listener failed: {}", t.getMessage(), t);
+								}
+							}
 
 							// Caught up with the stream — wait for new events or timeout
 							synchronized ( this ) {
@@ -185,6 +207,19 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 		LOGGER.info("{} gracefully terminated", processorIdentification);
 	}
 
+
+	/**
+	 * Notified after each {@link Projector#run()} cycle with the metrics of that cycle (events
+	 * streamed, handled, queries done, last reference) and the wall-clock duration in milliseconds.
+	 * <p>
+	 * A run corresponds to a full catch-up with the stream — possibly spanning several query batches,
+	 * such as the complete rebuild of an ephemeral read model on processor start — so the supplied
+	 * metrics aggregate all queries performed during that catch-up.
+	 */
+	@FunctionalInterface
+	public interface RunListener {
+		void onRun ( ProjectorMetrics metrics, long durationMs );
+	}
 
 	public enum ProcessorMode {
 		STOPPED, 					// processing will not run at all

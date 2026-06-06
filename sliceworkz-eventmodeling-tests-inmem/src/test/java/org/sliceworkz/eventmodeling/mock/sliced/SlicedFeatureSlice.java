@@ -15,18 +15,18 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.module.boundedcontext;
+package org.sliceworkz.eventmodeling.mock.sliced;
 
-import java.util.Set;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
-public sealed interface KernelEvent {
-	
-	record BoundedContextStarted ( String boundedContext, String logical, String physical, String process, Set<FeatureSlice> enabledFeatures, Set<FeatureSlice> disabledFeatures ) implements KernelEvent { }
-
-	/*
-	 * Value objects used by Events
-	 */
-	
-	record FeatureSlice ( String name, String type, String context, String chapter, Set<String> tags ) { }
-	
+/**
+ * Marker feature slice used to verify package-convention slice attribution on
+ * {@code BoundedContextEvent}s. {@link SlicedCommand} lives in the same package and is therefore
+ * attributed to this slice.
+ */
+@FeatureSlice(type = Type.STATE_CHANGE, context = "mock", chapter = "Sliced", tags = {"unit-test"})
+public class SlicedFeatureSlice implements Slice<Mock> {
 }

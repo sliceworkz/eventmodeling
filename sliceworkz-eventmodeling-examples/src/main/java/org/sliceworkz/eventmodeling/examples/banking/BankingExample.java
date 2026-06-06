@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.LoggingBoundedContextListener;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -60,17 +61,21 @@ public class BankingExample {
 			.name("banking")
 			.eventStorage(eventStorage)
 			.instance(instance)
+			.listener(new LoggingBoundedContextListener())
 			.features()
 				.rootPackage(BankingExample.class.getPackage())
 				.done()
 			.build();
-		
+
 		bc.start();
-		
+
 		EventStream<BankingDomainEvent> eventStream = eventStore.getEventStream(EventStreamId.forContext("banking").withPurpose("domain"), BankingDomainEvent.class);
-		
+
 		/*
-		 * At this point, only an Obserability event (BoundedContextStarted) will be present 
+		 * Kernel events (BoundedContextStarted, CommandExecuted, ...) are no longer persisted by
+		 * default: they are delivered to the BoundedContextListener registered above (here simply
+		 * logged). Pass a StreamAppendingBoundedContextListener instead to persist them to a stream.
+		 * So at this point the event store is still empty.
 		 */
 		eventStore.getEventStream(EventStreamId.anyContext()).query(EventQuery.matchAll()).forEach(System.out::println);
 		

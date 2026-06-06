@@ -24,8 +24,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -66,8 +68,9 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private final Counter batchCounter;
 	private final Counter itemsHandledCounter;
 	private final Timer batchTimer;
+	private final BoundedContextEventEmitter eventEmitter;
 
-	public AutomationProcessor ( ProcessorIdentification processorIdentification, ProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, MeterRegistry meterRegistry ) {
+	public AutomationProcessor ( ProcessorIdentification processorIdentification, ProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
 		this.automationContextFactory = automationContextFactory;
 		this.automation = automation;
 		this.originalProcessorMode = processorMode;
@@ -78,6 +81,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		this.instance = instance;
 		this.boundedContext = boundedContext;
 		this.meterRegistry = meterRegistry;
+		this.eventEmitter = eventEmitter;
 
 		// Initialize metrics with base tags
 		Tags baseTags = Tags.of("context", boundedContext)
@@ -178,12 +182,19 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 									// Time the batch processing and count items
 									Timer.Sample sample = Timer.start(meterRegistry);
+									long batchStartMs = System.currentTimeMillis();
 									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(item->automation.handle(item, context)).flatMap(Optional::stream).reduce((first,second)->second);
 									sample.stop(batchTimer);
 
 									// Record metrics
 									batchCounter.increment();
 									itemsHandledCounter.increment(counter.get());
+
+									if ( counter.get() > 0 && eventEmitter.enabled() ) {
+										long duration = System.currentTimeMillis() - batchStartMs;
+										BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, 0, counter.get(), counter.get(), lastProducedEvent.orElse(null));
+										eventEmitter.emit(new BoundedContextEvent.AutomationProcessed(boundedContext, processorIdentification.id(), metrics, eventEmitter.sliceFor(automation.getClass())), tracing);
+									}
 		
 									if ( lastProducedEvent.isPresent() ) {
 										// set our position to the last event we produced, we won't do a new run until the readmodel has been updated

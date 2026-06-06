@@ -32,11 +32,12 @@ import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarted;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
 import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
-import org.sliceworkz.eventmodeling.module.boundedcontext.KernelEvent.BoundedContextStarted;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
 import org.sliceworkz.eventmodeling.module.inbound.InboundModule;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
@@ -45,7 +46,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventmodeling.readmodels.UnboundedReadModelCapability;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
-import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -95,11 +95,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			boolean startQueries,
 			boolean startAutomations,
 			boolean startProjections,
-			boolean lifecycleEventsEnabled,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventStream<INBOUND_EVENT_TYPE> inboundEventStream,
 			EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream,
-			EventStream<KernelEvent> kernelLoggingEventStream,
+			BoundedContextEventEmitter eventEmitter,
 			DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule,
 			AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule,
 			ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule,
@@ -133,28 +132,15 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.adapterRegistry = adapterRegistry;
 		this.instance = instance;
 
-		if ( lifecycleEventsEnabled ) {
-			EphemeralEvent<KernelEvent> kernelEvent = Event.of(
-					new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), map(deployedFeatureSlices), map(undeployedFeatureSlices)),
-					Tags.none()
-				);
-			kernelEvent = (EphemeralEvent<KernelEvent>)Tracing.kernel(instance).storeOn(kernelEvent);
-
-			kernelLoggingEventStream.append(
-					AppendCriteria.none(),
-					Collections.singletonList(
-							kernelEvent
-					)
-			);
-		}
+		eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), map(deployedFeatureSlices), map(undeployedFeatureSlices)));
 	}
 	
 	void setSelfReference(BoundedContext<?,?,?> selfReference) {
 		this.selfReference = selfReference;
 	}
 
-	private Set<KernelEvent.FeatureSlice> map ( List<? extends Slice<? extends BoundedContext<?,?,?>>> featureSlices ) {
-		return featureSlices.stream().map(fs->new KernelEvent.FeatureSlice(fs.name(), fs.type().name(), fs.context(), fs.chapter(), fs.tags())).collect(Collectors.toSet());
+	private Set<BoundedContextEvent.FeatureSlice> map ( List<? extends Slice<? extends BoundedContext<?,?,?>>> featureSlices ) {
+		return featureSlices.stream().map(fs->new BoundedContextEvent.FeatureSlice(fs.name(), fs.type(), fs.context(), fs.chapter(), fs.tags())).collect(Collectors.toSet());
 	}
 
 	@SuppressWarnings({"unchecked", "rawtypes"})

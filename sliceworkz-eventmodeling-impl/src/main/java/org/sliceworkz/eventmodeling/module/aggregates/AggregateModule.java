@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -50,12 +51,14 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 	private Instance instance;
 	private MeterRegistry meterRegistry;
 	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
+	private BoundedContextEventEmitter eventEmitter;
 
-	public AggregateModule ( String boundedContext, Instance instance, List<? extends AggregateSpecificationImpl<?>> aggregateSpecifications, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, MeterRegistry meterRegistry ) {
+	public AggregateModule ( String boundedContext, Instance instance, List<? extends AggregateSpecificationImpl<?>> aggregateSpecifications, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.domainEventStream = domainEventStream;
 		this.meterRegistry = meterRegistry;
+		this.eventEmitter = eventEmitter;
 		
 		io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
 				.of("context", boundedContext);
@@ -155,7 +158,8 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 							aggregateInfo.counterSnapshotWrite,
 							meterRegistry,
 							domainEventCounters,
-							finalTracing);
+							finalTracing,
+							eventEmitter);
 					result.setContext(aci);
 					aci.updateFromStream();
 

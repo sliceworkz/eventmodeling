@@ -17,20 +17,26 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
+
 /**
- * Configuration for observability features of a bounded context.
- * <p>
- * Lifecycle events (currently {@code BoundedContextStarted}) are appended to the
- * observability event stream when a bounded context is built. They are enabled by
- * default; disable them when an application does not want kernel events written to
- * the event store.
+ * A {@link BoundedContextListener} that logs every {@link BoundedContextEvent} via SLF4J on the
+ * {@code BOUNDEDCONTEXT} logger at {@code INFO} level. This replaces the previous {@code PERFORMANCE}
+ * logger and can be wired explicitly when log output of kernel events is desired:
+ * <pre>
+ *   .listener(new LoggingBoundedContextListener())
+ * </pre>
  */
-public interface ObservabilitySpecification<C extends BoundedContext<?,?,?>> {
+public class LoggingBoundedContextListener implements BoundedContextListener {
 
-	BoundedContextBuilder<C> enableLifecycleEvents ( );
+	public static final Logger LOGGER = LoggerFactory.getLogger("BOUNDEDCONTEXT");
 
-	BoundedContextBuilder<C> enableLifecycleEvents ( boolean enableLifecycleEvents );
-
-	BoundedContextBuilder<C> disableLifecycleEvents ( );
+	@Override
+	public void on ( EphemeralEvent<BoundedContextEvent> event ) {
+		LOGGER.info("log=boundedcontext type={} data={} tags={}",
+				event.data().getClass().getSimpleName(), event.data(), event.tags());
+	}
 
 }

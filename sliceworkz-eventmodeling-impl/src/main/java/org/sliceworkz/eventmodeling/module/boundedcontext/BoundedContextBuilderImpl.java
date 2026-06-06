@@ -38,8 +38,8 @@ import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.boundedcontext.AdapterBinding;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextListener;
 import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
-import org.sliceworkz.eventmodeling.boundedcontext.ObservabilitySpecification;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
@@ -81,7 +81,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private static final String PURPOSE_DOMAIN = "domain";
 	private static final String PURPOSE_INBOUND = "inbound";
 	private static final String PURPOSE_OUTBOUND = "outbound";
-	private static final String PURPOSE_OBSERVABILITY = "observability";
 
 	private Class<C> contextType;
 	private String name;
@@ -103,7 +102,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	private FeaturesSpecificationImpl<C> featuresSpecification = new FeaturesSpecificationImpl<>(this);
 
-	private ObservabilitySpecificationImpl<C> observabilitySpecification = new ObservabilitySpecificationImpl<>(this);
+	private BoundedContextListener boundedContextListener = BoundedContextListener.NO_OP;
 
 	private MeterRegistry meterRegistry = Metrics.globalRegistry;
 
@@ -155,8 +154,12 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	@Override
-	public ObservabilitySpecification<C> observability ( ) {
-		return observabilitySpecification;
+	public BoundedContextBuilder<C> listener ( BoundedContextListener listener ) {
+		if ( listener == null ) {
+			throw new IllegalArgumentException("listener must not be null");
+		}
+		this.boundedContextListener = listener;
+		return this;
 	}
 
 	@Override
@@ -293,7 +296,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		EventStream domainEventStream;
 		EventStream inboundEventStream;
 		EventStream outboundEventStream;
-		EventStream<KernelEvent> observabilityEventStream;
 
 		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage, meterRegistry);
 		domainEventStream = historicalDomainEventRootType != null
@@ -305,7 +307,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		outboundEventStream = historicalOutboundEventRootType != null
 			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OUTBOUND), outboundEventRootType, historicalOutboundEventRootType)
 			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OUTBOUND), outboundEventRootType);
-		observabilityEventStream = eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OBSERVABILITY), KernelEvent.class);
 		readAllInStoreEventStream = eventStore.getEventStream(EventStreamId.anyContext().anyPurpose());
 
 		List<Slice<C>> deployedFeatureSlices = Collections.emptyList();
@@ -342,6 +343,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			LOGGER.warn("no features rootPackage");
 		}
 
+		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices));
+
 		Collection<ReadModelWithMetaData> eventuallyConsistentSharedReadModels = longLivedReadModelSpecs.stream().filter(s->s.isShared()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 		Collection<ReadModelWithMetaData> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 
@@ -351,12 +354,12 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		Collection<Dispatcher> dispatchers = dispatcherSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
 		OutboundModule om = new OutboundModule(name, outboundEventStream, dispatchers, instance, meterRegistry);
 
-		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, meterRegistry);
+		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, meterRegistry, eventEmitter);
 
-		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, instance, meterRegistry);
-		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, outboundEventStream, meterRegistry);
+		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, instance, meterRegistry, eventEmitter);
+		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, outboundEventStream, meterRegistry, eventEmitter);
 
-		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, meterRegistry);
+		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, meterRegistry, eventEmitter);
 
 		BoundedContextImpl bc =
 				new BoundedContextImpl(name, deployedFeatureSlices, undeployedFeatureSlices,
@@ -364,8 +367,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployQueries(),
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
-						observabilitySpecification.lifecycleEventsEnabled(),
-						domainEventStream, inboundEventStream, outboundEventStream, observabilityEventStream, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry, adapterRegistry);
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry, adapterRegistry);
 
 		// this is only possible after creation
 		am.setCapabilitiesDelegate(bc);

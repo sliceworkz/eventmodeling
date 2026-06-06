@@ -28,9 +28,10 @@ import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
-import org.sliceworkz.eventmodeling.module.boundedcontext.PerformanceLogger;
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
@@ -58,13 +59,16 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	private ConcurrentHashMap<String, Timer> commandTimers = new ConcurrentHashMap<>();
 	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
 
-	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, MeterRegistry meterRegistry ) {
+	private final BoundedContextEventEmitter eventEmitter;
+
+	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.readModelModule = readModelModule;
 		this.domainEventStream = domainEventStream;
 		this.outboundEventStream = outboundEventStream;
 		this.meterRegistry = meterRegistry;
+		this.eventEmitter = eventEmitter;
 	}
 	
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
@@ -102,7 +106,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 
 			Optional<EventReference> eventReference = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, tracingWithCommand);
 
-			logPerformance(commandContext, commandName, start);
+			logPerformance(commandContext, commandName, command.getClass(), start);
 
 			return eventReference;
 		});
@@ -120,7 +124,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 
 			Optional<EventReference> eventReference = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, tracingWithCommand);
 
-			logPerformance(commandContext, commandName, start);
+			logPerformance(commandContext, commandName, command.getClass(), start);
 
 			return new CommandExecutionResult<>(eventReference, response);
 		});
@@ -170,12 +174,15 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		return timer.record(action);
 	}
 
-	private void logPerformance ( DCBCommandContextImpl<?,?> commandContext, String commandName, long start ) {
+	private void logPerformance ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start ) {
+		if ( !eventEmitter.enabled() ) {
+			return;
+		}
 		long finish = System.currentTimeMillis();
 		long duration = finish - start;
 		ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
-		PerformanceLogger.Metrics metrics = new PerformanceLogger.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
-		PerformanceLogger.entry().context(boundedContext).instance(instance).metrics(metrics).type("command.execute").command(commandName).log();
+		BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+		eventEmitter.emit(new BoundedContextEvent.CommandExecuted(boundedContext, commandName, metrics, eventEmitter.sliceFor(commandClass)), commandContext.tracing());
 	}
 	
 	@Override

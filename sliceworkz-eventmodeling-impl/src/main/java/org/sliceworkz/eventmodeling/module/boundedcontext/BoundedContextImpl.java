@@ -84,6 +84,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private MeterRegistry meterRegistry;
 	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
 	private ConcurrentHashMap<String, Counter> inboundEventCounters = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<String, Counter> translateEventCounters = new ConcurrentHashMap<>();
 
 	private AdapterRegistry adapterRegistry;
 
@@ -275,6 +276,26 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		counter.increment();
 
 		inboundModule.incoming ( event, idempotencyKey, tracing );
+	}
+
+	@Override
+	public List<EventReference> translate(INBOUND_EVENT_TYPE event) {
+		return this.translate ( event, Tracing.init(instance) );
+	}
+
+	@Override
+	public List<EventReference> translate(INBOUND_EVENT_TYPE event, Tracing tracing) {
+		tracing = tracing.instance(instance);
+		String eventName = event.getClass().getSimpleName();
+		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
+		String cacheKey = eventName + ":" + channel;
+
+		Counter counter = translateEventCounters.computeIfAbsent(cacheKey, key ->
+			meterRegistry.counter("sliceworkz.eventmodeling.translate.event",
+				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName, "channel", channel)));
+		counter.increment();
+
+		return inboundModule.translate ( event, tracing );
 	}
 
 	/*

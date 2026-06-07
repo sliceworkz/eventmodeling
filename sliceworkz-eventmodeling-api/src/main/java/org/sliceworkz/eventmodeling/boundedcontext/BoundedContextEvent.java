@@ -54,6 +54,20 @@ public sealed interface BoundedContextEvent {
 	record CommandExecuted ( String boundedContext, String command, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
+	 * Emitted for each decision model projected while executing a command, before the
+	 * {@link CommandExecuted} event of that command.
+	 * <p>
+	 * {@code metrics.eventsStreamed()} is the total number of events streamed across all of the
+	 * command's decision-model projections (the unified/merged read), so it is identical on every
+	 * {@code DecisionModelProjected} of a single command execution; {@code metrics.eventsHandled()}
+	 * is the number of those events handled by (i.e. relevant to) this particular decision model.
+	 * <p>
+	 * {@code slice} identifies the originating feature slice (resolved by package convention) and is
+	 * {@code null} when the decision model is not located within a known slice package.
+	 */
+	record DecisionModelProjected ( String boundedContext, String decisionModel, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
 	 * Emitted after a live (on-demand) model has been projected.
 	 * <p>
 	 * {@code slice} identifies the originating feature slice (resolved by package convention) and may

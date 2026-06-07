@@ -182,6 +182,34 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 	}
 
 	/**
+	 * Classic decision model (First events) that runs the given action exactly once, the first time it
+	 * handles an event. Used to inject a concurrent append DURING this model's projection — i.e. after
+	 * the command's consistency boundary has been pinned but before a later decision model is read.
+	 */
+	static class InjectingFirstDecisionModel implements DecisionModel<MockDomainEvent> {
+
+		private final Runnable injectOnce;
+		private boolean injected = false;
+
+		InjectingFirstDecisionModel(Runnable injectOnce) {
+			this.injectOnce = injectOnce;
+		}
+
+		@Override
+		public EventQuery eventQuery() {
+			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+		}
+
+		@Override
+		public void when(Event<MockDomainEvent> event) {
+			if (!injected) {
+				injected = true;
+				injectOnce.run();
+			}
+		}
+	}
+
+	/**
 	 * Savepoint decision model (with initQuery). Uses ThirdDomainEvent as a
 	 * savepoint carrying a running total, then counts SecondDomainEvents after it.
 	 */
@@ -653,6 +681,42 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 				domain.execute(new MultiModelCommand(
 						() -> appendDirectly(new SecondDomainEvent("concurrent"))
 				))
+		);
+	}
+
+	/**
+	 * Regression test for the multi-decision-model optimistic-locking soundness gap: a conflicting event
+	 * that is appended BETWEEN the sequential reads of a multi-read command must still be detected.
+	 * <p>
+	 * The command uses a plain model (its eventQuery is a single merged read) plus a savepoint model
+	 * (its own read because of its initQuery), so two physical reads are performed and the boundary is
+	 * pinned. The plain model injects a FirstDomainEvent and then a SecondDomainEvent while it is being
+	 * projected — i.e. after the boundary but before the savepoint model's read. Without a pinned
+	 * boundary the savepoint model's read would advance the lock cursor past the injected
+	 * FirstDomainEvent (its most-recent SecondDomainEvent is more recent), so the append check would
+	 * miss it. With the boundary pinned up front and every read bounded to it, both injected events fall
+	 * after the boundary and the conflict is caught.
+	 */
+	@Test
+	void optimisticLocking_multipleModels_conflictBetweenSequentialReads_isCaught() {
+		Mock domain = buildDomain();
+		domain.event(new FirstDomainEvent("f0"));
+
+		Runnable injectBetweenReads = () -> {
+			appendDirectly(new FirstDomainEvent("concurrent-first"));
+			appendDirectly(new SecondDomainEvent("concurrent-second"));
+		};
+
+		assertOptimisticLockingException(() ->
+				domain.execute(new Command<MockDomainEvent>() {
+					@Override
+					public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+						var plain = new InjectingFirstDecisionModel(injectBetweenReads);
+						var savepoint = new SavepointDecisionModel();
+						var result = context.decisionModels(plain, savepoint);
+						result.raiseEvent(new FirstDomainEvent("my-event"), Tags.none());
+					}
+				})
 		);
 	}
 

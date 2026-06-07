@@ -45,7 +45,16 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	private ProjectorMetrics projectorMetrics;
 	private CommandResultImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult;
 
+	private final List<DecisionModelProjection> decisionModelProjections = new ArrayList<>();
+
 	private boolean decisionModelsDetermined = false;
+
+	/**
+	 * Per-decision-model projection result: the decision model's class, the wall-clock duration of its
+	 * projection and the {@link ProjectorMetrics} of its individual projector run. Used to emit a
+	 * {@code DecisionModelProjected} bounded-context event per decision model.
+	 */
+	public record DecisionModelProjection ( Class<?> decisionModelClass, long durationMs, ProjectorMetrics metrics ) { }
 	
 	public DCBCommandContextImpl ( String boundedContext, ReadModelModule<CONSUMED_EVENT_TYPE> readModelModule, EventStream<CONSUMED_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, Tracing tracing ) {
 		this.boundedContext = boundedContext;
@@ -99,8 +108,11 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 		if  ( ! decisionModels.isEmpty()  ) {
 			for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
+				long modelStart = System.currentTimeMillis();
 				Projector<CONSUMED_EVENT_TYPE> modelProjector = Projector.from(queryEventStream).towards(p).build();
 				ProjectorMetrics metrics = modelProjector.run();
+				long modelDurationMs = System.currentTimeMillis() - modelStart;
+				decisionModelProjections.add(new DecisionModelProjection(p.getClass(), modelDurationMs, metrics));
 				accumulatedMetrics = accumulatedMetrics.add(metrics);
 				if ( metrics.mostRecentEventReference() != null ) {
 					if ( lastEventReference == null || metrics.mostRecentEventReference().happenedAfter(lastEventReference) ) {
@@ -126,6 +138,14 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	
 	public ProjectorMetrics projectorMetrics ( ) {
 		return projectorMetrics == null?ProjectorMetrics.empty():projectorMetrics;
+	}
+
+	/**
+	 * @return the per-decision-model projection results captured during command execution, in the
+	 *         order the decision models were projected. Empty when the command used no decision models.
+	 */
+	public List<DecisionModelProjection> decisionModelProjections ( ) {
+		return decisionModelProjections;
 	}
 
 	@Override

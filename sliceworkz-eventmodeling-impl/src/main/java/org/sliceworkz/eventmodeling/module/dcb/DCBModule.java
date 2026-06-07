@@ -181,6 +181,16 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		long finish = System.currentTimeMillis();
 		long duration = finish - start;
 		ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
+
+		// emit a DecisionModelProjected per decision model used by the command, before the
+		// CommandExecuted; each carries that model's own physical projector read (eventsStreamed) and
+		// the subset it handled (eventsHandled)
+		for ( DCBCommandContextImpl.DecisionModelProjection projection : commandContext.decisionModelProjections() ) {
+			ProjectorMetrics pm = projection.metrics();
+			BoundedContextEvent.Metrics dmMetrics = new BoundedContextEvent.Metrics(projection.durationMs(), pm.queriesDone(), pm.eventsStreamed(), pm.eventsHandled(), pm.mostRecentEventReference());
+			eventEmitter.emit(new BoundedContextEvent.DecisionModelProjected(boundedContext, projection.decisionModelClass().getSimpleName(), dmMetrics, eventEmitter.sliceFor(projection.decisionModelClass())), commandContext.tracing());
+		}
+
 		BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
 		eventEmitter.emit(new BoundedContextEvent.CommandExecuted(boundedContext, commandName, metrics, eventEmitter.sliceFor(commandClass)), commandContext.tracing());
 	}

@@ -27,6 +27,7 @@ import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
@@ -88,8 +89,6 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 		EventQuery combinedQuery = null;
 
-		EventReference lastEventReference = null;
-
 		// loop over all decisionmodels
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
 			// combine queries into one that fetches all
@@ -100,9 +99,26 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			combinedQuery = EventQuery.matchNone();
 		}
 
+		// Number of physical eventQuery reads that will be executed against the event store. Today each
+		// decision model is projected with its own read, so this equals the number of decision models.
+		// Once the event store can reduce several decision-model eventQueries into a smaller set of
+		// merged physical queries, derive this from that reduced set (ideally 1) instead.
+		int physicalEventQueries = decisionModels.size();
+
+		// A single physical read is taken atomically by the store, so its own most-recent reference is a
+		// sound optimistic-lock boundary and no extra boundary query is needed. Two or more reads happen
+		// sequentially and are NOT atomic as a group: an append matching one model's filter can slip in
+		// between two reads and, because a later read advances the cursor past it, escape the lock check.
+		// To keep the lock sound we pin a single consistency boundary up front (the most recent event
+		// matching the combined filter) and bound every read to it, so the lock reference covers all
+		// reads. With <= 1 physical read this window does not exist and the boundary query is skipped.
+		EventReference boundary = ( physicalEventQueries > 1 ) ? pinBoundary(combinedQuery) : null;
+
 		// run a separate projector for each decision model so that each model's
 		// initQuery (if present) and eventQuery are handled independently with
 		// correct cursor management by the Projector
+
+		EventReference lastEventReference = null;
 
 		ProjectorMetrics accumulatedMetrics = ProjectorMetrics.empty();
 
@@ -110,11 +126,12 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
 				long modelStart = System.currentTimeMillis();
 				Projector<CONSUMED_EVENT_TYPE> modelProjector = Projector.from(queryEventStream).towards(p).build();
-				ProjectorMetrics metrics = modelProjector.run();
+				// bound every read to the pinned boundary so all models share one consistency position
+				ProjectorMetrics metrics = ( boundary == null ) ? modelProjector.run() : modelProjector.runUntil(boundary);
 				long modelDurationMs = System.currentTimeMillis() - modelStart;
 				decisionModelProjections.add(new DecisionModelProjection(p.getClass(), modelDurationMs, metrics));
 				accumulatedMetrics = accumulatedMetrics.add(metrics);
-				if ( metrics.mostRecentEventReference() != null ) {
+				if ( boundary == null && metrics.mostRecentEventReference() != null ) {
 					if ( lastEventReference == null || metrics.mostRecentEventReference().happenedAfter(lastEventReference) ) {
 						lastEventReference = metrics.mostRecentEventReference();
 					}
@@ -122,10 +139,28 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			}
 		}
 
+		// when a boundary was pinned it is the single, sound lock reference shared by all reads
+		if ( boundary != null ) {
+			lastEventReference = boundary;
+		}
+
 		projectorMetrics = accumulatedMetrics;
 
 		commandResult = new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, combinedQuery.filter(), lastEventReference);
 		return commandResult;
+	}
+
+	/**
+	 * Pins the optimistic-lock boundary for a multi-read command: the reference of the most recent event
+	 * currently matching the combined decision-model filter, or {@code null} when no such event exists
+	 * (in which case an empty expected reference combined with the filter still rejects any concurrently
+	 * appended matching event). Read once, up front, so all subsequent per-model reads share it.
+	 */
+	private EventReference pinBoundary ( EventQuery combinedQuery ) {
+		return queryEventStream.query(combinedQuery.backwards().limit(1))
+				.map(Event::reference)
+				.findFirst()
+				.orElse(null);
 	}
 
 	public CommandResultImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> getCommandResult ( ) {

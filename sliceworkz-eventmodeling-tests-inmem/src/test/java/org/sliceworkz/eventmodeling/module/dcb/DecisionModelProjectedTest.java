@@ -157,12 +157,15 @@ public class DecisionModelProjectedTest extends AbstractMockDomainTest {
 		assertEquals(CONTEXT_NAME, first.boundedContext());
 		assertNotNull(first.metrics());
 
-		// each event reports its own physical eventQuery read: the first model streamed/handled the
-		// 2 FirstDomainEvents, the second the 3 SecondDomainEvents
+		// the two plain models are reduced to a single merged read, so eventsStreamed is the shared
+		// unified count (the 2 FirstDomainEvents + 3 SecondDomainEvents) on both events
+		assertEquals(5, first.metrics().eventsStreamed(), "streamed is the unified merged read count");
+		assertEquals(first.metrics().eventsStreamed(), second.metrics().eventsStreamed(),
+				"both decision models share the same merged read, so the same eventsStreamed");
+
+		// eventsHandled is the subset relevant to each model
 		assertEquals(2, first.metrics().eventsHandled(), "first model handled the 2 FirstDomainEvents");
 		assertEquals(3, second.metrics().eventsHandled(), "second model handled the 3 SecondDomainEvents");
-		assertTrue(first.metrics().eventsStreamed() >= first.metrics().eventsHandled(), "streamed >= handled");
-		assertTrue(second.metrics().eventsStreamed() >= second.metrics().eventsHandled(), "streamed >= handled");
 	}
 
 	@Test

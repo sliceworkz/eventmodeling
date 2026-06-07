@@ -32,6 +32,7 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.MergedEventQueries;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> implements CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
@@ -51,11 +52,13 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	private boolean decisionModelsDetermined = false;
 
 	/**
-	 * Per-decision-model projection result: the decision model's class, the wall-clock duration of its
-	 * projection and the {@link ProjectorMetrics} of its individual projector run. Used to emit a
-	 * {@code DecisionModelProjected} bounded-context event per decision model.
+	 * Per-decision-model projection result emitted as a {@code DecisionModelProjected} bounded-context
+	 * event. {@code eventsStreamed}/{@code queriesDone}/{@code durationMs}/{@code until} describe the
+	 * physical read the model was projected from (shared by all models that were read together via a
+	 * single merged query); {@code eventsHandled} is the number of those events relevant to (handled by)
+	 * this particular decision model.
 	 */
-	public record DecisionModelProjection ( Class<?> decisionModelClass, long durationMs, ProjectorMetrics metrics ) { }
+	public record DecisionModelProjection ( Class<?> decisionModelClass, long durationMs, long queriesDone, long eventsStreamed, long eventsHandled, EventReference until ) { }
 	
 	public DCBCommandContextImpl ( String boundedContext, ReadModelModule<CONSUMED_EVENT_TYPE> readModelModule, EventStream<CONSUMED_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, Tracing tracing ) {
 		this.boundedContext = boundedContext;
@@ -87,62 +90,92 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 	private CommandResult<CONSUMED_EVENT_TYPE,PRODUCED_EVENT_TYPE> executeDecisionModels ( ) {
 
+		// combined filter (union of every decision model's eventQuery) used as the optimistic-lock filter
 		EventQuery combinedQuery = null;
-
-		// loop over all decisionmodels
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
-			// combine queries into one that fetches all
 			combinedQuery = (combinedQuery==null)?p.eventQuery():combinedQuery.combineWith(p.eventQuery());
 		}
-
 		if ( combinedQuery == null ) {
 			combinedQuery = EventQuery.matchNone();
 		}
 
-		// Number of physical eventQuery reads that will be executed against the event store. Today each
-		// decision model is projected with its own read, so this equals the number of decision models.
-		// Once the event store can reduce several decision-model eventQueries into a smaller set of
-		// merged physical queries, derive this from that reduced set (ideally 1) instead.
-		int physicalEventQueries = decisionModels.size();
+		// Partition the decision models. Models with a savepoint (initQuery) keep their own projector so
+		// the Projector handles their initQuery/eventQuery cursor management; their eventQuery replay must
+		// start after the savepoint and therefore cannot be merged with other reads. Plain models (no
+		// initQuery) can have their eventQueries reduced by the event store into the minimal set of merged
+		// physical queries and projected together through a single composite read per merged query.
+		List<DecisionModel<CONSUMED_EVENT_TYPE>> savepointModels = new ArrayList<>();
+		List<DecisionModel<CONSUMED_EVENT_TYPE>> plainModels = new ArrayList<>();
+		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
+			EventQuery initQuery = p.initQuery();
+			if ( initQuery != null && !initQuery.isMatchNone() ) {
+				savepointModels.add(p);
+			} else {
+				plainModels.add(p);
+			}
+		}
+
+		List<EventQuery> plainQueries = new ArrayList<>();
+		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: plainModels ) {
+			plainQueries.add(p.eventQuery());
+		}
+		MergedEventQueries mergedPlainQueries = EventQuery.merge(plainQueries);
+
+		// Number of physical reads that will actually be executed against the store: one per merged plain
+		// query plus one per savepoint model.
+		int physicalReads = mergedPlainQueries.mergedCount() + savepointModels.size();
 
 		// A single physical read is taken atomically by the store, so its own most-recent reference is a
 		// sound optimistic-lock boundary and no extra boundary query is needed. Two or more reads happen
 		// sequentially and are NOT atomic as a group: an append matching one model's filter can slip in
 		// between two reads and, because a later read advances the cursor past it, escape the lock check.
 		// To keep the lock sound we pin a single consistency boundary up front (the most recent event
-		// matching the combined filter) and bound every read to it, so the lock reference covers all
-		// reads. With <= 1 physical read this window does not exist and the boundary query is skipped.
-		EventReference boundary = ( physicalEventQueries > 1 ) ? pinBoundary(combinedQuery) : null;
-
-		// run a separate projector for each decision model so that each model's
-		// initQuery (if present) and eventQuery are handled independently with
-		// correct cursor management by the Projector
-
-		EventReference lastEventReference = null;
+		// matching the combined filter) and bound every read to it, so the lock reference covers all reads.
+		// With <= 1 physical read this window does not exist and the boundary query is skipped.
+		EventReference boundary = ( physicalReads > 1 ) ? pinBoundary(combinedQuery) : null;
 
 		ProjectorMetrics accumulatedMetrics = ProjectorMetrics.empty();
+		EventReference singleReadMostRecent = null;
 
-		if  ( ! decisionModels.isEmpty()  ) {
-			for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
-				long modelStart = System.currentTimeMillis();
-				Projector<CONSUMED_EVENT_TYPE> modelProjector = Projector.from(queryEventStream).towards(p).build();
-				// bound every read to the pinned boundary so all models share one consistency position
-				ProjectorMetrics metrics = ( boundary == null ) ? modelProjector.run() : modelProjector.runUntil(boundary);
-				long modelDurationMs = System.currentTimeMillis() - modelStart;
-				decisionModelProjections.add(new DecisionModelProjection(p.getClass(), modelDurationMs, metrics));
-				accumulatedMetrics = accumulatedMetrics.add(metrics);
-				if ( boundary == null && metrics.mostRecentEventReference() != null ) {
-					if ( lastEventReference == null || metrics.mostRecentEventReference().happenedAfter(lastEventReference) ) {
-						lastEventReference = metrics.mostRecentEventReference();
-					}
+		// project the plain models: one composite read per merged query, dispatching each event to the
+		// plain models whose own eventQuery matches it
+		for ( EventQuery mergedQuery: mergedPlainQueries.mergedQueries() ) {
+			List<DecisionModel<CONSUMED_EVENT_TYPE>> modelsForRead = new ArrayList<>();
+			for ( DecisionModel<CONSUMED_EVENT_TYPE> p: plainModels ) {
+				if ( mergedQuery.equals(mergedPlainQueries.mergedFor(p.eventQuery())) ) {
+					modelsForRead.add(p);
 				}
+			}
+			CompositeDecisionModel<CONSUMED_EVENT_TYPE> composite = new CompositeDecisionModel<>(mergedQuery, modelsForRead);
+			long start = System.currentTimeMillis();
+			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).towards(composite).build();
+			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
+			long durationMs = System.currentTimeMillis() - start;
+			accumulatedMetrics = accumulatedMetrics.add(metrics);
+			singleReadMostRecent = metrics.mostRecentEventReference();
+			for ( int i = 0; i < modelsForRead.size(); i++ ) {
+				decisionModelProjections.add(new DecisionModelProjection(
+						modelsForRead.get(i).getClass(), durationMs, metrics.queriesDone(),
+						metrics.eventsStreamed(), composite.handledBy(i), metrics.mostRecentEventReference()));
 			}
 		}
 
-		// when a boundary was pinned it is the single, sound lock reference shared by all reads
-		if ( boundary != null ) {
-			lastEventReference = boundary;
+		// project each savepoint model through its own projector so its initQuery savepoint is honoured
+		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: savepointModels ) {
+			long start = System.currentTimeMillis();
+			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).towards(p).build();
+			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
+			long durationMs = System.currentTimeMillis() - start;
+			accumulatedMetrics = accumulatedMetrics.add(metrics);
+			singleReadMostRecent = metrics.mostRecentEventReference();
+			decisionModelProjections.add(new DecisionModelProjection(
+					p.getClass(), durationMs, metrics.queriesDone(),
+					metrics.eventsStreamed(), metrics.eventsHandled(), metrics.mostRecentEventReference()));
 		}
+
+		// the lock reference: the pinned boundary when several reads were performed, otherwise the single
+		// read's most-recent reference (null when no decision models / no matching events were read)
+		EventReference lastEventReference = ( boundary != null ) ? boundary : singleReadMostRecent;
 
 		projectorMetrics = accumulatedMetrics;
 
@@ -154,13 +187,51 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	 * Pins the optimistic-lock boundary for a multi-read command: the reference of the most recent event
 	 * currently matching the combined decision-model filter, or {@code null} when no such event exists
 	 * (in which case an empty expected reference combined with the filter still rejects any concurrently
-	 * appended matching event). Read once, up front, so all subsequent per-model reads share it.
+	 * appended matching event). Read once, up front, so all subsequent reads share it.
 	 */
 	private EventReference pinBoundary ( EventQuery combinedQuery ) {
 		return queryEventStream.query(combinedQuery.backwards().limit(1))
 				.map(Event::reference)
 				.findFirst()
 				.orElse(null);
+	}
+
+	/**
+	 * A {@link Projection} over a merged eventQuery that dispatches each streamed event to the plain
+	 * decision models whose own eventQuery matches it, recording per-model how many events each handled.
+	 * Used to project several merged plain decision models from a single physical read.
+	 */
+	private static final class CompositeDecisionModel<E> implements org.sliceworkz.eventstore.projection.Projection<E> {
+
+		private final EventQuery mergedQuery;
+		private final List<DecisionModel<E>> models;
+		private final long[] handled;
+
+		CompositeDecisionModel ( EventQuery mergedQuery, List<DecisionModel<E>> models ) {
+			this.mergedQuery = mergedQuery;
+			this.models = models;
+			this.handled = new long[models.size()];
+		}
+
+		@Override
+		public EventQuery eventQuery ( ) {
+			return mergedQuery;
+		}
+
+		@Override
+		public void when ( Event<E> event ) {
+			for ( int i = 0; i < models.size(); i++ ) {
+				DecisionModel<E> model = models.get(i);
+				if ( model.eventQuery().matches(event) ) {
+					model.when(event);
+					handled[i]++;
+				}
+			}
+		}
+
+		long handledBy ( int i ) {
+			return handled[i];
+		}
 	}
 
 	public CommandResultImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> getCommandResult ( ) {

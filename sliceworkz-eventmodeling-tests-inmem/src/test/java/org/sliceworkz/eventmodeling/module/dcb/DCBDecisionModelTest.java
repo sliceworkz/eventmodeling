@@ -686,14 +686,16 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	/**
 	 * Regression test for the multi-decision-model optimistic-locking soundness gap: a conflicting event
-	 * that is appended BETWEEN the sequential per-model reads must still be detected.
+	 * that is appended BETWEEN the sequential reads of a multi-read command must still be detected.
 	 * <p>
-	 * The first model injects a FirstDomainEvent and then a SecondDomainEvent while it is being
-	 * projected. Without a pinned boundary the second model's read would advance the lock cursor past
-	 * the injected FirstDomainEvent (its most-recent SecondDomainEvent is more recent), so the append
-	 * check — "any combined-filter event after the max cursor" — would miss it. With a single boundary
-	 * pinned up front and every read bounded to it, both injected events fall after the boundary and the
-	 * conflict is caught.
+	 * The command uses a plain model (its eventQuery is a single merged read) plus a savepoint model
+	 * (its own read because of its initQuery), so two physical reads are performed and the boundary is
+	 * pinned. The plain model injects a FirstDomainEvent and then a SecondDomainEvent while it is being
+	 * projected — i.e. after the boundary but before the savepoint model's read. Without a pinned
+	 * boundary the savepoint model's read would advance the lock cursor past the injected
+	 * FirstDomainEvent (its most-recent SecondDomainEvent is more recent), so the append check would
+	 * miss it. With the boundary pinned up front and every read bounded to it, both injected events fall
+	 * after the boundary and the conflict is caught.
 	 */
 	@Test
 	void optimisticLocking_multipleModels_conflictBetweenSequentialReads_isCaught() {
@@ -709,9 +711,9 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 				domain.execute(new Command<MockDomainEvent>() {
 					@Override
 					public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
-						var first = new InjectingFirstDecisionModel(injectBetweenReads);
-						var second = new SecondCountingDecisionModel();
-						var result = context.decisionModels(first, second);
+						var plain = new InjectingFirstDecisionModel(injectBetweenReads);
+						var savepoint = new SavepointDecisionModel();
+						var result = context.decisionModels(plain, savepoint);
 						result.raiseEvent(new FirstDomainEvent("my-event"), Tags.none());
 					}
 				})

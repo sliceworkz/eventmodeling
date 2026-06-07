@@ -141,6 +141,10 @@ features/
 **Translators:**
 - Implement `Translator<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>`
 - Convert external events to domain events
+- Registered with the bounded context via a `@FeatureSlice(type = TRANSLATION)` slice (`builder.translator(...)`)
+- Two ways to run a translation, both reusing the same registered `Translator` implementations:
+  - `boundedContext.incoming(inboundEvent)`: eventually-consistent. Appends the inbound event to the inbound stream; matching translators run asynchronously via projectors. Supports idempotency keys.
+  - `boundedContext.translate(inboundEvent)`: interactive. Runs every matching translator synchronously in the calling thread, does **not** persist the inbound event, and returns the `List<EventReference>` of domain events raised. Throws `NoTranslatorRegisteredException` if no registered translator matches the event. Useful for integration scenarios that need to act immediately on the produced domain events.
 
 **Dispatchers:**
 - Implement `Dispatcher<OUTBOUND_EVENT_TYPE>`

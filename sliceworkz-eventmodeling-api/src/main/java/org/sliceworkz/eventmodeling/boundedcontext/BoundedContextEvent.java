@@ -71,7 +71,7 @@ public sealed interface BoundedContextEvent {
 	 * {@code slice} identifies the feature slice the command belongs to (resolved by package
 	 * convention) and is {@code null} when the command is not located within a known slice package.
 	 */
-	record CommandExecuted ( String boundedContext, String command, List<EventReference> eventReferences, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+	record CommandExecuted ( String boundedContext, String command, List<EventReference> raisedEvents, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted for each decision model projected while executing a command, before the

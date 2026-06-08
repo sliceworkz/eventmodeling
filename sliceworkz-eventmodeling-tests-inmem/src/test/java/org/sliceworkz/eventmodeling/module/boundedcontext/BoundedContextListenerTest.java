@@ -76,7 +76,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 	@AfterEach
 	protected void tearDown() {
 		if (boundedContext() != null) {
-			boundedContext().stop();
+			boundedContext().terminate();
 		}
 	}
 
@@ -102,6 +102,24 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 				.orElseThrow(() -> new AssertionError("expected a BoundedContextStarted event, got: " + received));
 
 		assertEquals(CONTEXT_NAME, started.boundedContext());
+	}
+
+	@Test
+	void listenerReceivesStoppingThenStoppedOnTerminate() {
+		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
+
+		buildDomain(event -> received.add(event.data())).terminate();
+
+		int stopping = -1;
+		int stopped = -1;
+		for (int i = 0; i < received.size(); i++) {
+			if (received.get(i) instanceof BoundedContextEvent.BoundedContextStopping) stopping = i;
+			if (received.get(i) instanceof BoundedContextEvent.BoundedContextStopped) stopped = i;
+		}
+
+		assertTrue(stopping >= 0, "expected a BoundedContextStopping event, got: " + received);
+		assertTrue(stopped >= 0, "expected a BoundedContextStopped event, got: " + received);
+		assertTrue(stopping < stopped, "Stopping should be emitted before Stopped");
 	}
 
 	@Test

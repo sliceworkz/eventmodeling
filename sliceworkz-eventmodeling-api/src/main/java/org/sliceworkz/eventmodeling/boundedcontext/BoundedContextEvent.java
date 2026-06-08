@@ -46,6 +46,25 @@ public sealed interface BoundedContextEvent {
 			Set<FeatureSlice> disabledFeatures ) implements BoundedContextEvent { }
 
 	/**
+	 * Emitted when a bounded context begins shutting down, before its modules are stopped (while the
+	 * context and its listener are still fully operational).
+	 */
+	record BoundedContextStopping (
+			String boundedContext,
+			String logical,
+			String physical,
+			String process ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a bounded context has shut down: its modules and processor threads have stopped.
+	 */
+	record BoundedContextStopped (
+			String boundedContext,
+			String logical,
+			String physical,
+			String process ) implements BoundedContextEvent { }
+
+	/**
 	 * Emitted after a command has been executed and its events persisted.
 	 * <p>
 	 * {@code slice} identifies the feature slice the command belongs to (resolved by package

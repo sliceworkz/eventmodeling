@@ -33,47 +33,54 @@ public class ProcessorThreadManager<EVENT_TYPE> implements LifecycleCapability {
 	
 	private static final int SHUTDOWN_TIMEOUT_SECONDS = 5;
 	
-	private Collection<? extends Processor> processors;
-	
+	private final String name;
+	private final Collection<? extends Processor> processors;
+	private final ExecutorService executor;
+
 	public ProcessorThreadManager ( String name, Collection<? extends Processor> processors ) {
+		this.name = name;
 		this.processors = processors;
 		if (processors.size() > 0 ) {
 			LOGGER.info("creating threads for {} processors in {}", processors.size(), name);
 
 			ThreadFactory threadFactory = Thread.ofVirtual().name("processor-thread").factory(); // name will be overridden by processor itself
-			ExecutorService executor = Executors.newThreadPerTaskExecutor(threadFactory); // factory delivers virtual threads
+			this.executor = Executors.newThreadPerTaskExecutor(threadFactory); // factory delivers virtual threads
 			processors.forEach(executor::submit);
-
-			Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-				LOGGER.info("shutting down threads for {}", name);
-				terminate();
-			    executor.shutdown();
-			    try {
-			        if (!executor.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-			            executor.shutdownNow();
-			        }
-			    } catch (InterruptedException e) {
-			        executor.shutdownNow();
-			    }
-			}, "ShutdownThread/" + name));
 		} else {
+			this.executor = null;
 			LOGGER.info("no processors needed for {}.", name);
 		}
 	}
-	
+
 	@Override
 	public void start ( ) {
 		processors.forEach(Processor::start);
 	}
-	
+
 	@Override
 	public void stop ( ) {
 		processors.forEach(Processor::stop);
 	}
 
+	/**
+	 * Terminates the processors and drains their thread pool. Invoked through the bounded context's
+	 * shutdown sequence (which registers a single JVM shutdown hook) rather than a per-manager hook.
+	 */
 	@Override
 	public void terminate ( ) {
 		processors.forEach(Processor::terminate);
+		if (executor != null) {
+			LOGGER.info("shutting down threads for {}", name);
+			executor.shutdown();
+			try {
+				if (!executor.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+					executor.shutdownNow();
+				}
+			} catch (InterruptedException e) {
+				executor.shutdownNow();
+				Thread.currentThread().interrupt();
+			}
+		}
 	}
 
 }

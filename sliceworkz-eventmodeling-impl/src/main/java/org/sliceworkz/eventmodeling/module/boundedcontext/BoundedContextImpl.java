@@ -80,6 +80,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	private String name;
 	private Instance instance;
+	private BoundedContextEventEmitter eventEmitter;
+	private volatile boolean stopped = false;
 
 	private MeterRegistry meterRegistry;
 	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
@@ -132,8 +134,13 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 		this.adapterRegistry = adapterRegistry;
 		this.instance = instance;
+		this.eventEmitter = eventEmitter;
 
 		eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), map(deployedFeatureSlices), map(undeployedFeatureSlices)));
+
+		// single per-bounded-context JVM shutdown hook drives the orderly shutdown (Stopping -> stop
+		// modules / drain threads -> Stopped); replaces the per-processor-thread-manager hooks.
+		Runtime.getRuntime().addShutdownHook(new Thread(this::terminate, "bc-shutdown/" + name));
 	}
 	
 	void setSelfReference(BoundedContext<?,?,?> selfReference) {
@@ -175,14 +182,20 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	}
 	
 	@Override
-	public void terminate ( ) {
+	public synchronized void terminate ( ) {
+		if (stopped) {
+			return;
+		}
+		stopped = true;
 		LOGGER.info("terminating bounded context '{}'...", name);
+		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopping(name, instance.logical(), instance.physical(), instance.process()));
 		this.inboundModule.terminate();
 		this.outboundModule.terminate();
 		this.dcbDomainModule.terminate();
 		this.automationModule.terminate();
 		this.readmodelModule.terminate();
-		LOGGER.info("terminating bounded context '{}'.", name);
+		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopped(name, instance.logical(), instance.physical(), instance.process()));
+		LOGGER.info("terminated bounded context '{}'.", name);
 	}
 	/*
 	 * LIVE MODEL CONSULTATION

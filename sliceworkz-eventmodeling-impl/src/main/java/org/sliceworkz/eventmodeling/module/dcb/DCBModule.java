@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -104,11 +105,11 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			command.execute(commandContext);
 			CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-			Optional<EventReference> eventReference = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, tracingWithCommand);
+			List<EventReference> eventReferences = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, tracingWithCommand);
 
-			logPerformance(commandContext, commandName, command.getClass(), start);
+			logPerformance(commandContext, commandName, command.getClass(), start, eventReferences);
 
-			return eventReference;
+			return eventReferences.isEmpty() ? Optional.empty() : Optional.of(eventReferences.get(eventReferences.size() - 1));
 		});
 	}
 
@@ -122,15 +123,16 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			RESPONSE_TYPE response = command.execute(commandContext);
 			CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-			Optional<EventReference> eventReference = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, tracingWithCommand);
+			List<EventReference> eventReferences = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, tracingWithCommand);
 
-			logPerformance(commandContext, commandName, command.getClass(), start);
+			logPerformance(commandContext, commandName, command.getClass(), start, eventReferences);
 
+			Optional<EventReference> eventReference = eventReferences.isEmpty() ? Optional.empty() : Optional.of(eventReferences.get(eventReferences.size() - 1));
 			return new CommandExecutionResult<>(eventReference, response);
 		});
 	}
 
-	private <PRODUCED_EVENT_TYPE> Optional<EventReference> persistAndRecord ( CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String commandName, String idempotencyKey, Tracing tracing ) {
+	private <PRODUCED_EVENT_TYPE> List<EventReference> persistAndRecord ( CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String commandName, String idempotencyKey, Tracing tracing ) {
 		// resolve and apply idempotency key (internal strategy vs external key)
 		String resolvedKey = commandResult.resolveIdempotencyKey(idempotencyKey);
 		if ( resolvedKey != null ) {
@@ -140,8 +142,8 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		if ( !commandResult.raisedEvents().isEmpty() ) {
 			// append to the event store (with optimistic locking the DCB way)
 			// and return the last event reference produced (for bookmarking purposes etc ...)
-			Optional<EventReference> result = targetEventStream.append(commandResult.appendCriteria(), commandResult.raisedEvents())
-					.stream().reduce((first,second)->second).map(Event::reference);
+			List<EventReference> references = targetEventStream.append(commandResult.appendCriteria(), commandResult.raisedEvents())
+					.stream().map(Event::reference).toList();
 
 			// Record metrics for each raised domain event
 			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
@@ -154,10 +156,10 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 				eventCounter.increment();
 			}
 
-			return result;
+			return references;
 		} else {
 			LOGGER.debug("no events raised by command {}", commandName);
-			return Optional.empty();
+			return List.of();
 		}
 	}
 
@@ -174,7 +176,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		return timer.record(action);
 	}
 
-	private void logPerformance ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start ) {
+	private void logPerformance ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, List<EventReference> eventReferences ) {
 		if ( !eventEmitter.enabled() ) {
 			return;
 		}
@@ -191,7 +193,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		}
 
 		BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
-		eventEmitter.emit(new BoundedContextEvent.CommandExecuted(boundedContext, commandName, metrics, eventEmitter.sliceFor(commandClass)), commandContext.tracing());
+		eventEmitter.emit(new BoundedContextEvent.CommandExecuted(boundedContext, commandName, eventReferences, metrics, eventEmitter.sliceFor(commandClass)), commandContext.tracing());
 	}
 	
 	@Override

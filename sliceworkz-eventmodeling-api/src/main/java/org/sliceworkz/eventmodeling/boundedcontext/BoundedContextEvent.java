@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+import java.util.List;
 import java.util.Set;
 
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
@@ -70,7 +71,7 @@ public sealed interface BoundedContextEvent {
 	 * {@code slice} identifies the feature slice the command belongs to (resolved by package
 	 * convention) and is {@code null} when the command is not located within a known slice package.
 	 */
-	record CommandExecuted ( String boundedContext, String command, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+	record CommandExecuted ( String boundedContext, String command, List<EventReference> eventReferences, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted for each decision model projected while executing a command, before the

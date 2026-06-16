@@ -20,9 +20,7 @@ package org.sliceworkz.eventmodeling.module.inbound;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.reflect.UndeclaredThrowableException;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -114,15 +112,11 @@ public class TranslateTest extends AbstractMockDomainTest {
 	}
 
 	/**
-	 * The bounded context proxy wraps exceptions in UndeclaredThrowableException (see other DCB tests),
-	 * so this helper unwraps and asserts the root cause is a NoTranslatorRegisteredException, returning it.
+	 * The bounded context proxy propagates the real exception to the caller, so this helper asserts a
+	 * NoTranslatorRegisteredException is thrown and returns it.
 	 */
 	private NoTranslatorRegisteredException assertTranslateThrows ( Runnable action ) {
-		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class, action::run);
-		Throwable cause = e.getCause().getCause();
-		assertTrue(cause instanceof NoTranslatorRegisteredException,
-			"Expected NoTranslatorRegisteredException but got: " + cause.getClass().getName());
-		return (NoTranslatorRegisteredException) cause;
+		return assertThrows(NoTranslatorRegisteredException.class, action::run);
 	}
 
 	private EventStream<MockDomainEvent> domainStream ( ) {

@@ -19,9 +19,7 @@ package org.sliceworkz.eventmodeling.module.dcb;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.reflect.UndeclaredThrowableException;
 import java.util.Collections;
 
 import org.junit.jupiter.api.AfterEach;
@@ -123,14 +121,10 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 	/**
 	 * Asserts that executing the given runnable throws an OptimisticLockingException.
-	 * The bounded context proxy wraps exceptions in UndeclaredThrowableException,
-	 * so this helper unwraps and checks the root cause.
+	 * The bounded context proxy propagates the real exception to the caller.
 	 */
 	private void assertOptimisticLockingException(Runnable action) {
-		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class, action::run);
-		Throwable cause = e.getCause().getCause();
-		assertTrue(cause instanceof OptimisticLockingException,
-				"Expected OptimisticLockingException but got: " + cause.getClass().getName());
+		assertThrows(OptimisticLockingException.class, action::run);
 	}
 
 	// ════════════════════════════════════════════════════════════════════

@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.reflect.UndeclaredThrowableException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -331,12 +330,9 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 	void failingCommand_propagatesException() {
 		Mock domain = buildDomain();
 
-		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class,
+		RuntimeException cause = assertThrows(RuntimeException.class,
 				() -> domain.execute(new FailingCommandWithResult()));
 
-		Throwable cause = e.getCause().getCause();
-		assertTrue(cause instanceof RuntimeException,
-				"Expected RuntimeException but got: " + cause.getClass().getName());
 		assertEquals("command execution failed", cause.getMessage());
 	}
 

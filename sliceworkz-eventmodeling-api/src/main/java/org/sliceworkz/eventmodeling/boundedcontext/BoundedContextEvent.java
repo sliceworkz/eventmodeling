@@ -66,12 +66,43 @@ public sealed interface BoundedContextEvent {
 			String process ) implements BoundedContextEvent { }
 
 	/**
-	 * Emitted after a command has been executed and its events persisted.
+	 * Emitted after a command has been executed successfully and its events persisted.
+	 * <p>
+	 * Failures are reported separately: an optimistic-locking conflict on append produces a
+	 * {@link CommandFailedOnOptimisticLocking}, any other exception a {@link CommandFailed}.
 	 * <p>
 	 * {@code slice} identifies the feature slice the command belongs to (resolved by package
 	 * convention) and is {@code null} when the command is not located within a known slice package.
 	 */
 	record CommandExecuted ( String boundedContext, String command, List<EventReference> raisedEvents, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a command execution failed because of an optimistic-locking conflict on append:
+	 * relevant events were appended concurrently after the command made its decision. This is an
+	 * expected, retryable outcome of the Dynamic Consistency Boundary (DCB) pattern under contention,
+	 * not a defect, which is why it is reported separately from {@link CommandFailed}.
+	 * <p>
+	 * {@code expectedLastEvent} is the reference the command expected to still be the last relevant
+	 * event when it appended; it is {@code null} when the command expected an empty stream (no matching
+	 * events) but found some. The exception is rethrown to the caller after this event is emitted.
+	 * <p>
+	 * {@code slice} identifies the feature slice the command belongs to (resolved by package
+	 * convention) and is {@code null} when the command is not located within a known slice package.
+	 */
+	record CommandFailedOnOptimisticLocking ( String boundedContext, String command, EventReference expectedLastEvent, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a command execution failed with an exception other than an optimistic-locking
+	 * conflict (validation errors, infrastructure failures, bugs, ...). The exception is rethrown to
+	 * the caller after this event is emitted.
+	 * <p>
+	 * {@code failure} captures the exception in a serialization-friendly form (type, message and
+	 * rendered stack trace) so a listener can persist or forward it.
+	 * <p>
+	 * {@code slice} identifies the feature slice the command belongs to (resolved by package
+	 * convention) and is {@code null} when the command is not located within a known slice package.
+	 */
+	record CommandFailed ( String boundedContext, String command, Failure failure, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted for each decision model projected while executing a command, before the
@@ -128,6 +159,15 @@ public sealed interface BoundedContextEvent {
 	 * {@code context}/{@code chapter}/{@code tags} declared on its {@code @FeatureSlice} annotation.
 	 */
 	record FeatureSlice ( String name, Type type, String context, String chapter, Set<String> tags ) { }
+
+	/**
+	 * A serialization-friendly description of an exception raised during command execution.
+	 *
+	 * @param type       the fully qualified class name of the exception
+	 * @param message    the exception message (may be {@code null})
+	 * @param stackTrace the full rendered stack trace
+	 */
+	record Failure ( String type, String message, String stackTrace ) { }
 
 	/**
 	 * Performance metrics describing the work performed by an operation.

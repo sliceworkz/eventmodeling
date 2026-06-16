@@ -39,6 +39,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
+import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -102,14 +103,22 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 
 			Tracing tracingWithCommand = tracing.command(commandName);
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracingWithCommand);
-			command.execute(commandContext);
-			CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = commandContext.getCommandResult();
+			try {
+				command.execute(commandContext);
+				CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-			List<EventReference> eventReferences = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, tracingWithCommand);
+				List<EventReference> eventReferences = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, tracingWithCommand);
 
-			logPerformance(commandContext, commandName, command.getClass(), start, eventReferences);
+				emitCommandExecuted(commandContext, commandName, command.getClass(), start, eventReferences);
 
-			return eventReferences.isEmpty() ? Optional.empty() : Optional.of(eventReferences.get(eventReferences.size() - 1));
+				return eventReferences.isEmpty() ? Optional.empty() : Optional.of(eventReferences.get(eventReferences.size() - 1));
+			} catch ( OptimisticLockingException ole ) {
+				emitCommandFailedOnOptimisticLocking(commandContext, commandName, command.getClass(), start, ole);
+				throw ole;
+			} catch ( RuntimeException e ) {
+				emitCommandFailed(commandContext, commandName, command.getClass(), start, e);
+				throw e;
+			}
 		});
 	}
 
@@ -120,15 +129,23 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 
 			Tracing tracingWithCommand = tracing.command(commandName);
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand);
-			RESPONSE_TYPE response = command.execute(commandContext);
-			CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
+			try {
+				RESPONSE_TYPE response = command.execute(commandContext);
+				CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-			List<EventReference> eventReferences = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, tracingWithCommand);
+				List<EventReference> eventReferences = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, tracingWithCommand);
 
-			logPerformance(commandContext, commandName, command.getClass(), start, eventReferences);
+				emitCommandExecuted(commandContext, commandName, command.getClass(), start, eventReferences);
 
-			Optional<EventReference> eventReference = eventReferences.isEmpty() ? Optional.empty() : Optional.of(eventReferences.get(eventReferences.size() - 1));
-			return new CommandExecutionResult<>(eventReference, response);
+				Optional<EventReference> eventReference = eventReferences.isEmpty() ? Optional.empty() : Optional.of(eventReferences.get(eventReferences.size() - 1));
+				return new CommandExecutionResult<>(eventReference, response);
+			} catch ( OptimisticLockingException ole ) {
+				emitCommandFailedOnOptimisticLocking(commandContext, commandName, command.getClass(), start, ole);
+				throw ole;
+			} catch ( RuntimeException e ) {
+				emitCommandFailed(commandContext, commandName, command.getClass(), start, e);
+				throw e;
+			}
 		});
 	}
 
@@ -176,24 +193,53 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		return timer.record(action);
 	}
 
-	private void logPerformance ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, List<EventReference> eventReferences ) {
+	private void emitCommandExecuted ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, List<EventReference> eventReferences ) {
+		emitOutcome(commandContext, commandClass, start, (metrics, slice) ->
+			new BoundedContextEvent.CommandExecuted(boundedContext, commandName, eventReferences, metrics, slice));
+	}
+
+	private void emitCommandFailedOnOptimisticLocking ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, OptimisticLockingException ole ) {
+		EventReference expectedLastEvent = ole.getExpectedLastEventReference() != null ? ole.getExpectedLastEventReference().orElse(null) : null;
+		emitOutcome(commandContext, commandClass, start, (metrics, slice) ->
+			new BoundedContextEvent.CommandFailedOnOptimisticLocking(boundedContext, commandName, expectedLastEvent, metrics, slice));
+	}
+
+	private void emitCommandFailed ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, Throwable failure ) {
+		BoundedContextEvent.Failure failureInfo = failureOf(failure);
+		emitOutcome(commandContext, commandClass, start, (metrics, slice) ->
+			new BoundedContextEvent.CommandFailed(boundedContext, commandName, failureInfo, metrics, slice));
+	}
+
+	/**
+	 * Emits the per-decision-model {@link BoundedContextEvent.DecisionModelProjected} events (the reads
+	 * the command performed, which happen on both the success and failure paths) followed by the
+	 * terminal command outcome produced by {@code terminal}. Does nothing when no listener is registered.
+	 * <p>
+	 * For each {@code DecisionModelProjected}, {@code eventsStreamed} is the physical read the model was
+	 * projected from (shared by models read together through one merged query) and {@code eventsHandled}
+	 * the subset relevant to that model.
+	 */
+	private void emitOutcome ( DCBCommandContextImpl<?,?> commandContext, Class<?> commandClass, long start,
+			java.util.function.BiFunction<BoundedContextEvent.Metrics, BoundedContextEvent.FeatureSlice, BoundedContextEvent> terminal ) {
 		if ( !eventEmitter.enabled() ) {
 			return;
 		}
-		long finish = System.currentTimeMillis();
-		long duration = finish - start;
+		long duration = System.currentTimeMillis() - start;
 		ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
 
-		// emit a DecisionModelProjected per decision model used by the command, before the CommandExecuted;
-		// eventsStreamed is the physical read the model was projected from (shared by models read together
-		// through one merged query) and eventsHandled the subset relevant to that model
 		for ( DCBCommandContextImpl.DecisionModelProjection projection : commandContext.decisionModelProjections() ) {
 			BoundedContextEvent.Metrics dmMetrics = new BoundedContextEvent.Metrics(projection.durationMs(), projection.queriesDone(), projection.eventsStreamed(), projection.eventsHandled(), projection.until());
 			eventEmitter.emit(new BoundedContextEvent.DecisionModelProjected(boundedContext, projection.decisionModelClass().getSimpleName(), dmMetrics, eventEmitter.sliceFor(projection.decisionModelClass())), commandContext.tracing());
 		}
 
 		BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
-		eventEmitter.emit(new BoundedContextEvent.CommandExecuted(boundedContext, commandName, eventReferences, metrics, eventEmitter.sliceFor(commandClass)), commandContext.tracing());
+		eventEmitter.emit(terminal.apply(metrics, eventEmitter.sliceFor(commandClass)), commandContext.tracing());
+	}
+
+	private static BoundedContextEvent.Failure failureOf ( Throwable failure ) {
+		java.io.StringWriter stackTrace = new java.io.StringWriter();
+		failure.printStackTrace(new java.io.PrintWriter(stackTrace));
+		return new BoundedContextEvent.Failure(failure.getClass().getName(), failure.getMessage(), stackTrace.toString());
 	}
 	
 	@Override

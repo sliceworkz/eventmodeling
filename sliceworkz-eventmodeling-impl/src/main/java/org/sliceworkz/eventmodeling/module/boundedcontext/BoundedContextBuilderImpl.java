@@ -387,7 +387,14 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		return (T) Proxy.newProxyInstance(Thread.currentThread().getContextClassLoader(), new Class[] {interfaceClass}, new InvocationHandler() {
 			@Override
 			public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-				return method.invoke(boundedContext, args);
+				try {
+					return method.invoke(boundedContext, args);
+				} catch (InvocationTargetException e) {
+					// unwrap the reflective wrapper so callers see the real exception (e.g. an
+					// OptimisticLockingException they can catch and retry) instead of having it
+					// re-wrapped by the proxy as an UndeclaredThrowableException
+					throw e.getCause();
+				}
 			}
 		});
 	}

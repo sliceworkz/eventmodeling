@@ -21,8 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.UndeclaredThrowableException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -209,10 +207,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		
 		Mock domain = domainWithAggregate(Collections.emptyList(), 0);
 		
-		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class, ()->domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123")));
-		assertEquals(InvocationTargetException.class, e.getCause().getClass());
-		assertEquals(IllegalArgumentException.class, e.getCause().getCause().getClass());
-		IllegalArgumentException iae = (IllegalArgumentException) e.getCause().getCause();
+		IllegalArgumentException iae = assertThrows(IllegalArgumentException.class, ()->domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123")));
 		assertEquals("aggregate class 'class org.sliceworkz.eventmodeling.module.aggregates.MockAggregate' not registered in bounded context 'UnitTestBoundedContext'", iae.getMessage());
 	}		
 

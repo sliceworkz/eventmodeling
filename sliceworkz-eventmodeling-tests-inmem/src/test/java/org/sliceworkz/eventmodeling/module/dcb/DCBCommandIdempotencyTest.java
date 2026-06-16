@@ -21,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.lang.reflect.UndeclaredThrowableException;
 import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
@@ -280,12 +279,8 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void externalKey_multipleEvents_throwsException() {
 		Mock domain = buildDomain();
 
-		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class,
+		assertThrows(IllegalArgumentException.class,
 				() -> domain.execute(new MultiEventCommand(), "key-1"));
-
-		Throwable cause = e.getCause().getCause();
-		assertTrue(cause instanceof IllegalArgumentException,
-				"Expected IllegalArgumentException but got: " + cause.getClass().getName());
 	}
 
 	@Test
@@ -373,12 +368,8 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void requireKey_withoutExternalKey_throwsException() {
 		Mock domain = buildDomain();
 
-		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class,
+		assertThrows(IllegalStateException.class,
 				() -> domain.execute(new RequireExternalKeyCommand()));
-
-		Throwable cause = e.getCause().getCause();
-		assertTrue(cause instanceof IllegalStateException,
-				"Expected IllegalStateException but got: " + cause.getClass().getName());
 	}
 
 	// ════════════════════════════════════════════════════════════════════
@@ -401,12 +392,8 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void exclusiveKey_withExternalKey_throwsException() {
 		Mock domain = buildDomain();
 
-		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class,
+		assertThrows(IllegalStateException.class,
 				() -> domain.execute(new ExclusiveKeyCommand("my-key"), "external-key"));
-
-		Throwable cause = e.getCause().getCause();
-		assertTrue(cause instanceof IllegalStateException,
-				"Expected IllegalStateException but got: " + cause.getClass().getName());
 	}
 
 	// ════════════════════════════════════════════════════════════════════
@@ -467,12 +454,8 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void forbidKey_withExternalKey_throwsException() {
 		Mock domain = buildDomain();
 
-		UndeclaredThrowableException e = assertThrows(UndeclaredThrowableException.class,
+		assertThrows(IllegalStateException.class,
 				() -> domain.execute(new ForbidExternalKeyCommand(), "external-key"));
-
-		Throwable cause = e.getCause().getCause();
-		assertTrue(cause instanceof IllegalStateException,
-				"Expected IllegalStateException but got: " + cause.getClass().getName());
 	}
 
 }

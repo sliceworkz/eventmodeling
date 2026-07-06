@@ -26,7 +26,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
-public record Tracing ( Instance instance, String actor, String channel, String command ) {
+public record Tracing ( Instance instance, String actor, String channel, String command, String agentId, String agentName ) {
 
 	public static final String UNKNOWN_ACTOR = null;
 	public static final String UNKNOWN_CHANNEL = null;
@@ -47,37 +47,47 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	private static final String TAG_CHANNEL = "x-channel";
 	private static final String TAG_ACTOR = "x-actor";
 	private static final String TAG_COMMAND = "x-command";
+	private static final String TAG_AGENT_ID = "x-agent-id";
+	private static final String TAG_AGENT_NAME = "x-agent-name";
 
 	public Tracing actor ( String actor ) {
-		return new Tracing ( instance, actor, channel, command );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName );
 	}
 
 	public Tracing channel ( String channel ) {
-		return new Tracing ( instance, actor, channel, command );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName );
 	}
 
 	public Tracing command ( String command ) {
-		return new Tracing ( instance, actor, channel, command );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName );
+	}
+
+	/**
+	 * Returns a copy stamped with the acting agent's identity, for calls made through an agent key
+	 * (MCP). Both values are optional; a {@code null} pair leaves no agent tags on the event.
+	 */
+	public Tracing agent ( String agentId, String agentName ) {
+		return new Tracing ( instance, actor, channel, command, agentId, agentName );
 	}
 
 	public static final Tracing init ( Instance instance ) {
-		return new Tracing(instance, UNKNOWN_ACTOR, UNKNOWN_CHANNEL, NO_COMMAND);
+		return new Tracing(instance, UNKNOWN_ACTOR, UNKNOWN_CHANNEL, NO_COMMAND, null, null);
 	}
 
 	public Tracing instance ( Instance instance ) {
-		return new Tracing(instance, actor, channel, command);
+		return new Tracing(instance, actor, channel, command, agentId, agentName);
 	}
 
 	public static final Tracing actorAndChannel ( String actor, String channel ) {
-		return new Tracing ( null, actor, channel, NO_COMMAND);
+		return new Tracing ( null, actor, channel, NO_COMMAND, null, null);
 	}
 
 	public static final Tracing automation ( Instance instance ) {
-		return new Tracing(instance, AUTOMATION_ACTOR, AUTOMATION_CHANNEL, NO_COMMAND);
+		return new Tracing(instance, AUTOMATION_ACTOR, AUTOMATION_CHANNEL, NO_COMMAND, null, null);
 	}
 
 	public static final Tracing kernel ( Instance instance ) {
-		return new Tracing(instance, SYSTEM_ACTOR, SYSTEM_CHANNEL, NO_COMMAND);
+		return new Tracing(instance, SYSTEM_ACTOR, SYSTEM_CHANNEL, NO_COMMAND, null, null);
 	}
 
 	public static final <T> Event<T> removeFrom ( Event<T> event ) {
@@ -95,8 +105,10 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 		String actor = tagValue(event, TAG_ACTOR).orElse(null);
 		String channel = tagValue(event, TAG_CHANNEL).orElse(null);
 		String command = tagValue(event, TAG_COMMAND).orElse(null);
+		String agentId = tagValue(event, TAG_AGENT_ID).orElse(null);
+		String agentName = tagValue(event, TAG_AGENT_NAME).orElse(null);
 
-		return new Tracing(instance, actor, channel, command);
+		return new Tracing(instance, actor, channel, command, agentId, agentName);
 	}
 
 	private static final Optional<String> tagValue ( Event<?> event, String tagName ) {
@@ -120,6 +132,8 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 		addTag(tags, TAG_CHANNEL, channel);
 		addTag(tags, TAG_ACTOR, actor);
 		addTag(tags, TAG_COMMAND, command);
+		addTag(tags, TAG_AGENT_ID, agentId);
+		addTag(tags, TAG_AGENT_NAME, agentName);
 
 		Tags extraTags = new Tags(tags);
 		Tags mergedTags = event.tags().merge(extraTags);

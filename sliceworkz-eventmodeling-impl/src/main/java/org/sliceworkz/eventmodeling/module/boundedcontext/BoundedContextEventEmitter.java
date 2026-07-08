@@ -80,7 +80,8 @@ public final class BoundedContextEventEmitter {
 		if ( enabled() ) {
 			Tracing kernelTracing = ( tracing == null || tracing.actor() == null )
 					? Tracing.kernel(instance)
-					: Tracing.init(instance).actor(tracing.actor()).channel(tracing.channel()).command(tracing.command());
+					: Tracing.init(instance).actor(tracing.actor()).channel(tracing.channel()).command(tracing.command())
+							.agent(tracing.agentId(), tracing.agentName());
 			EphemeralEvent<BoundedContextEvent> ephemeralEvent =
 					kernelTracing.storeOn(EphemeralEvent.of(event, Tags.none()));
 			listener.on(ephemeralEvent);

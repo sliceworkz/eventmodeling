@@ -18,15 +18,15 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+<project xmlns="http://maven.apache.org/POM/4.1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd" root="true">
+	
 	<groupId>org.sliceworkz</groupId>
 	<artifactId>sliceworkz-eventmodeling</artifactId>
 	<version>0.7.0-SNAPSHOT</version>
 	
 	<name>${project.artifactId}</name>
 	<description>An opinionated Event Modeling framework in Java</description>
-	<url>https://sliceworkz.github.io/eventmodeling</url>
+	<url child.project.url.inherit.append.path="false">https://sliceworkz.github.io/eventmodeling</url>
 	
 	<packaging>pom</packaging>
 
@@ -36,14 +36,14 @@
 
 		<sliceworkz.eventstore.version>0.9.1</sliceworkz.eventstore.version>
 		
-		<maven.minimal-version>3.6.3</maven.minimal-version>
+		<maven.minimal-version>4.0.0-rc-5</maven.minimal-version>
 		
 		<maven.maven-pgp-plugin.version>3.2.8</maven.maven-pgp-plugin.version>
 		<maven.maven-versions-plugin.version>2.21.0</maven.maven-versions-plugin.version>
 		<maven.maven-enforcer-plugin.version>3.6.3</maven.maven-enforcer-plugin.version>
 		<maven.mycila-license-plugin.version>5.0.0</maven.mycila-license-plugin.version>
 		<maven.maven-central-publishing-plugin.version>0.11.0</maven.maven-central-publishing-plugin.version>
-		<maven.flatten-plugin.version>1.7.0</maven.flatten-plugin.version>
+		<maven.maven-deploy-plugin.version>3.1.3</maven.maven-deploy-plugin.version>
 		
 		<maven.compiler.release>21</maven.compiler.release>
 
@@ -51,52 +51,7 @@
 		<maven.deploy.skip>true</maven.deploy.skip>
 	</properties>
 	
-	<modules>
-		<module>sliceworkz-eventmodeling-bom</module>
-		<module>sliceworkz-eventmodeling-parent-pom</module>
-		<module>sliceworkz-eventmodeling-api</module>
-		<module>sliceworkz-eventmodeling-impl</module>
-		<module>sliceworkz-eventmodeling-testing</module>
-		<module>sliceworkz-eventmodeling-tests-inmem</module>
-		<module>sliceworkz-eventmodeling-tests-postgres</module>
-		<module>sliceworkz-eventmodeling-benchmark</module>
-		<module>sliceworkz-eventmodeling-examples</module>
-	</modules>
-	
 	<build>
-		<pluginManagement>
-			<plugins>
-				<!--
-					flatten-maven-plugin produces self-contained consumer POMs (no parent,
-					inlined versions) for the PUBLISHED modules only. It is opt-in via
-					pluginManagement rather than applied to every module, because ossrh mode
-					strips custom properties (e.g. sliceworkz.eventstore.version) from a
-					flattened parent POM, which would then break resolution of the external
-					eventstore-bom import for the client modules. Leaving the parent POMs
-					un-flattened keeps that property resolvable. Relies on Maven 3.
-				-->
-				<plugin>
-				    <groupId>org.codehaus.mojo</groupId>
-				    <artifactId>flatten-maven-plugin</artifactId>
-				    <version>${maven.flatten-plugin.version}</version>
-				    <configuration>
-						<flattenMode>ossrh</flattenMode>
-				    </configuration>
-				    <executions>
-						<execution>
-							<id>flatten</id>
-							<phase>process-resources</phase>
-							<goals><goal>flatten</goal></goals>
-						</execution>
-						<execution>
-							<id>flatten.clean</id>
-							<phase>clean</phase>
-							<goals><goal>clean</goal></goals>
-						</execution>
-				    </executions>
-				</plugin>
-			</plugins>
-		</pluginManagement>
 		<plugins>
 			<plugin>
 			    <groupId>org.codehaus.mojo</groupId>
@@ -175,6 +130,35 @@
 					<excludeArtifact>sliceworkz-eventmodeling-tests-inmem</excludeArtifact>
 					<excludeArtifact>sliceworkz-eventmodeling-tests-postgres</excludeArtifact>
 				</excludeArtifacts>
+			    </configuration>
+			    <!--
+			    	Bind 'publish' to the deploy phase EXPLICITLY. central-publishing
+			    	normally injects this via its lifecycle participant, but Maven 4 does
+			    	not honour that model mutation, so the deploy phase would otherwise run
+			    	nothing. A POM-declared execution is honoured; it also makes the
+			    	participant stand down (see maven-deploy-plugin below).
+			    -->
+			    <executions>
+					<execution>
+						<id>injected-central-publishing</id>
+						<phase>deploy</phase>
+						<goals><goal>publish</goal></goals>
+					</execution>
+			    </executions>
+			</plugin>
+
+			<!--
+				The explicit publish binding makes the central lifecycle participant stand
+				down, so it no longer clears maven-deploy-plugin. Disable it here so the
+				Central build does not also try to deploy to a distributionManagement repo.
+				The cloudrepo profile re-enables it (honouring per-module maven.deploy.skip).
+			-->
+			<plugin>
+			    <groupId>org.apache.maven.plugins</groupId>
+			    <artifactId>maven-deploy-plugin</artifactId>
+			    <version>${maven.maven-deploy-plugin.version}</version>
+			    <configuration>
+					<skip>true</skip>
 			    </configuration>
 			</plugin>
 
@@ -306,6 +290,18 @@
 							</execution>
 						</executions>
 					</plugin>
+					<!--
+						Re-enable maven-deploy-plugin (the base build disables it for the
+						Central path). Honour per-module maven.deploy.skip so only the
+						client-facing modules deploy to cloudrepo.
+					-->
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-deploy-plugin</artifactId>
+						<configuration>
+							<skip>${maven.deploy.skip}</skip>
+						</configuration>
+					</plugin>
 				</plugins>
 			</build>
 		</profile>
@@ -326,7 +322,7 @@
 		</developer>
 	</developers>
 	
-	<scm>
+	<scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false" child.scm.url.inherit.append.path="false">
 		<connection>https://github.com/sliceworkz/eventmodeling.git</connection>
 		<developerConnection>scm:git:git://github.com/sliceworkz/eventmodeling.git</developerConnection>
 		<url>https://github.com/sliceworkz/eventmodeling</url>

@@ -16,3 +16,7 @@ buildNumber.properties
 nohup.out
 jte-classes
 db.properties
+
+# flatten-maven-plugin output
+.flattened-pom.xml
+**/.flattened-pom.xml

@@ -33,7 +33,29 @@
 
 	<artifactId>sliceworkz-eventmodeling-bom</artifactId>
 	<packaging>pom</packaging>
+
+	<properties>
+		<!-- client-facing: publish to the configured repository -->
+		<maven.deploy.skip>false</maven.deploy.skip>
+	</properties>
 	
+	<build>
+		<plugins>
+			<!-- Keep dependencyManagement (and drop the parent) in the flattened
+			     consumer POM; the default flattenMode 'ossrh' would strip it. -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>flatten-maven-plugin</artifactId>
+				<configuration>
+					<flattenMode>bom</flattenMode>
+					<pomElements>
+						<build>remove</build>
+					</pomElements>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
 	<dependencyManagement>
 		<dependencies>
 			<dependency>
@@ -59,16 +81,6 @@
 				<artifactId>sliceworkz-eventmodeling-testing</artifactId>
 				<version>${project.version}</version>
 			</dependency>
-			<dependency>
-				<groupId>org.sliceworkz</groupId>
-				<artifactId>sliceworkz-eventmodeling-tests-inmem</artifactId>
-				<version>${project.version}</version>
-			</dependency>	
-			<dependency>
-				<groupId>org.sliceworkz</groupId>
-				<artifactId>sliceworkz-eventmodeling-tests-postgres</artifactId>
-				<version>${project.version}</version>
-			</dependency>	
 	
 		</dependencies>
 	</dependencyManagement>

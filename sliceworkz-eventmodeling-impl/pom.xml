@@ -29,6 +29,11 @@
 		<relativePath>../sliceworkz-eventmodeling-parent-pom</relativePath>
 	</parent>
 
+	<properties>
+		<!-- client-facing: publish to the configured repository -->
+		<maven.deploy.skip>false</maven.deploy.skip>
+	</properties>
+
 	<name>${project.artifactId}</name>
 	<description>An opinionated Event Modeling framework in Java</description>
 	<url>https://sliceworkz.github.io/eventmodeling</url>
@@ -55,6 +60,12 @@
 	            <filtering>true</filtering>
 	        </resource>
 	    </resources>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>flatten-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
 	</build>
-	
+
 </project>

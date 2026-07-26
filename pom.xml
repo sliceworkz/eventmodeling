@@ -43,8 +43,12 @@
 		<maven.maven-enforcer-plugin.version>3.6.3</maven.maven-enforcer-plugin.version>
 		<maven.mycila-license-plugin.version>5.0.0</maven.mycila-license-plugin.version>
 		<maven.maven-central-publishing-plugin.version>0.11.0</maven.maven-central-publishing-plugin.version>
+		<maven.flatten-plugin.version>1.7.0</maven.flatten-plugin.version>
 		
 		<maven.compiler.release>21</maven.compiler.release>
+
+		<!-- Publish only client-facing modules; opt-in per module below -->
+		<maven.deploy.skip>true</maven.deploy.skip>
 	</properties>
 	
 	<modules>
@@ -60,6 +64,39 @@
 	</modules>
 	
 	<build>
+		<pluginManagement>
+			<plugins>
+				<!--
+					flatten-maven-plugin produces self-contained consumer POMs (no parent,
+					inlined versions) for the PUBLISHED modules only. It is opt-in via
+					pluginManagement rather than applied to every module, because ossrh mode
+					strips custom properties (e.g. sliceworkz.eventstore.version) from a
+					flattened parent POM, which would then break resolution of the external
+					eventstore-bom import for the client modules. Leaving the parent POMs
+					un-flattened keeps that property resolvable. Relies on Maven 3.
+				-->
+				<plugin>
+				    <groupId>org.codehaus.mojo</groupId>
+				    <artifactId>flatten-maven-plugin</artifactId>
+				    <version>${maven.flatten-plugin.version}</version>
+				    <configuration>
+						<flattenMode>ossrh</flattenMode>
+				    </configuration>
+				    <executions>
+						<execution>
+							<id>flatten</id>
+							<phase>process-resources</phase>
+							<goals><goal>flatten</goal></goals>
+						</execution>
+						<execution>
+							<id>flatten.clean</id>
+							<phase>clean</phase>
+							<goals><goal>clean</goal></goals>
+						</execution>
+				    </executions>
+				</plugin>
+			</plugins>
+		</pluginManagement>
 		<plugins>
 			<plugin>
 			    <groupId>org.codehaus.mojo</groupId>
@@ -123,8 +160,24 @@
 			    <configuration>
 				<publishingServerId>central</publishingServerId>
 				<deploymentName>eventmodeling-${project.version}</deploymentName>				
+				<!--
+					central-publishing bundles the whole reactor and does NOT honour
+					maven.deploy.skip, so the build constructs (aggregator, parent-pom)
+					and non-client modules (examples, benchmark, integration tests) must be
+					excluded explicitly here to publish only the client-facing set to Central.
+				-->
+				<!-- matched against each artifact's artifactId (exact) -->
+				<excludeArtifacts>
+					<excludeArtifact>sliceworkz-eventmodeling</excludeArtifact>
+					<excludeArtifact>sliceworkz-eventmodeling-parent-pom</excludeArtifact>
+					<excludeArtifact>sliceworkz-eventmodeling-examples</excludeArtifact>
+					<excludeArtifact>sliceworkz-eventmodeling-benchmark</excludeArtifact>
+					<excludeArtifact>sliceworkz-eventmodeling-tests-inmem</excludeArtifact>
+					<excludeArtifact>sliceworkz-eventmodeling-tests-postgres</excludeArtifact>
+				</excludeArtifacts>
 			    </configuration>
 			</plugin>
+
       		
 			<plugin>
 			    <groupId>com.mycila</groupId>
@@ -210,6 +263,52 @@
 				</repository>
 			</repositories>
 		  </profile>
+
+		<!--
+			Deploy SNAPSHOT artifacts to the sliceworkz cloudrepo instead of Maven
+			Central. Activated by the build-and-deploy-snapshot-cloudrepo workflow.
+
+			The central-publishing-maven-plugin installs a lifecycle participant that
+			normally clears maven-deploy-plugin and takes over the deploy phase. It
+			stands down as soon as the central plugin has an explicit execution binding
+			the 'publish' goal. We add exactly that (phase 'none'; skipPublishing as
+			belt-and-suspenders) so the standard maven-deploy-plugin handles the
+			cloudrepo distributionManagement. The default build is untouched, so Maven
+			Central publishing keeps working.
+		-->
+		<profile>
+			<id>cloudrepo</id>
+			<distributionManagement>
+				<repository>
+					<id>cloudrepo</id>
+					<url>https://xti.mycloudrepo.io/repositories/sliceworkz</url>
+				</repository>
+				<snapshotRepository>
+					<id>cloudrepo</id>
+					<url>https://xti.mycloudrepo.io/repositories/sliceworkz</url>
+				</snapshotRepository>
+			</distributionManagement>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.sonatype.central</groupId>
+						<artifactId>central-publishing-maven-plugin</artifactId>
+						<configuration>
+							<skipPublishing>true</skipPublishing>
+						</configuration>
+						<executions>
+							<execution>
+								<id>cloudrepo-stand-down</id>
+								<phase>none</phase>
+								<goals>
+									<goal>publish</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
 
 	</profiles>
 	

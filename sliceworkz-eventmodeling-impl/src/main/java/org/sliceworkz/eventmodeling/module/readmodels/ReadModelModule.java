@@ -40,6 +40,7 @@ import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.P
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
@@ -63,8 +64,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private EventSource<DOMAIN_EVENT_TYPE> domainEventStream;
 	private EventSource<Object> allInStorageEventStream;
 	private Map<Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>, LiveModelInfo<DOMAIN_EVENT_TYPE>> liveModels = new HashMap<>();
-	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels = new ArrayList<>();
-	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels = new ArrayList<>();
+	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels = new ArrayList<>();
 	private String boundedContext;
 	private Instance instance;
 
@@ -92,8 +92,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventStream<Object> allInStorageEventStream,
 			List<LMSI> liveModelSpecs,
-			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentSharedReadModels,
-			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentLocalReadModels,
+			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels,
 			Instance instance,
 			MeterRegistry meterRegistry,
 			BoundedContextEventEmitter eventEmitter
@@ -135,62 +134,52 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			seenNames.add(liveClass.getSimpleName());
 		}
 
-		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentSharedReadModel : eventuallyConsistentSharedReadModels ) {
-			String name = eventuallyConsistentSharedReadModel.readmodelName();
+		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentReadModel : eventuallyConsistentReadModels ) {
+			String name = eventuallyConsistentReadModel.readmodelName();
 			if ( !seenNames.add(name) ) {
 				LOGGER.error("duplicate readmodel name '%s' registered".formatted(name));
 				throw new IllegalArgumentException("duplicate readmodel name '%s' - bookmarks would collide".formatted(name));
 			}
-			this.eventuallyConsistentSharedReadModels.add(eventuallyConsistentSharedReadModel);
-		}
-		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentLocalReadModel : eventuallyConsistentLocalReadModels ) {
-			String name = eventuallyConsistentLocalReadModel.readmodelName();
-			if ( !seenNames.add(name) ) {
-				LOGGER.error("duplicate readmodel name '%s' registered".formatted(name));
-				throw new IllegalArgumentException("duplicate readmodel name '%s' - bookmarks would collide".formatted(name));
-			}
-			this.eventuallyConsistentLocalReadModels.add(eventuallyConsistentLocalReadModel);
+			this.eventuallyConsistentReadModels.add(eventuallyConsistentReadModel);
 		}
 
 		this.meterRegistry = meterRegistry;
 
-		this.projectorProcessors = createProjectorProcessors(eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels);
+		this.projectorProcessors = createProjectorProcessors(this.eventuallyConsistentReadModels);
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(ProcessorIdentification.TYPE_READMODEL, this.projectorProcessors);
 
 		LOGGER.info("live readmodels: %s".formatted(liveModels.keySet()));
 	}
 
-	Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> createProjectorProcessors ( Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> shared, Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> local ) {
+	Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> createProjectorProcessors ( Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModels ) {
 		Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> result = new ArrayList<>();
 
-		shared.forEach(rm -> {
-			Storage storage = rm.ephemeral() ? Storage.EPHEMERAL : Storage.SHARED;
+		readModels.forEach(rm -> {
+			ReadModelStorage readModelStorage = rm.storage();
+			Storage storage = Storage.of(readModelStorage);
 			result.add(new ProjectorProcessor<>(
 				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)
 					.context(boundedContext).readmodel().name(rm.readmodelName())
-					.shared().ephemeralIf(rm.ephemeral())
+					.storage(readModelStorage)
 					.build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
 				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
-				ProcessorMode.RUNNING_ON_SINGLE_LEADER,
-				instance,
-				ecRunListener(rm, storage)));
-		});
-		local.forEach(rm -> {
-			Storage storage = rm.ephemeral() ? Storage.EPHEMERAL : Storage.LOCAL;
-			result.add(new ProjectorProcessor<>(
-				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)
-					.context(boundedContext).readmodel().name(rm.readmodelName())
-					.local().ephemeralIf(rm.ephemeral())
-					.build(),
-				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
-				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
-				ProcessorMode.RUNNING_ON_ALL_INSTANCES,
+				processorModeFor(readModelStorage),
 				instance,
 				ecRunListener(rm, storage)));
 		});
 
 		return result;
+	}
+
+	/**
+	 * Only shared state is written once, so only a shared read model is projected by a single elected
+	 * leader. Ephemeral and local state lives per instance and has to be projected by each of them —
+	 * projecting those on the leader alone would leave every other instance answering reads from a
+	 * model nobody ever filled.
+	 */
+	static ProcessorMode processorModeFor ( ReadModelStorage storage ) {
+		return storage.projectedOnEveryInstance() ? ProcessorMode.RUNNING_ON_ALL_INSTANCES : ProcessorMode.RUNNING_ON_SINGLE_LEADER;
 	}
 
 	/**

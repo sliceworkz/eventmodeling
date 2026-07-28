@@ -132,6 +132,14 @@ features/
 - Implement `ReadModel<DOMAIN_EVENT_TYPE>` which extends `EventHandler<DOMAIN_EVENT_TYPE>`
 - Define which events to handle via `when(EventType event)` methods
 - Can be queried via `boundedContext.read(ReadModelClass.class, ...)`
+- A read model declares where it keeps its state via `ReadModelWithMetaData.storage()`, returning a `ReadModelStorage`:
+  - `EPHEMERAL` (default): in-memory, gone with the process. Every instance projects its own copy and stale bookmarks are dropped at startup
+  - `LOCAL`: durable but private to one instance. Every instance projects its own copy and resumes from its own bookmark
+  - `SHARED`: durable storage the whole deployment reads and writes. A single elected leader projects
+- The storage class also decides how the read model is projected, so registration does not repeat it:
+  `builder.readmodel(readModel).eventuallyConsistent()`. `SqlReadModelProjector` derives it from its
+  DataSource (in-memory H2 → `EPHEMERAL`, anything else → `SHARED`); override `storage()` for a
+  database that is durable but private to one instance
 
 **Automations:**
 - Implement `Automation<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE>`

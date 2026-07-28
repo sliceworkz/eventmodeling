@@ -345,8 +345,9 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices));
 
-		Collection<ReadModelWithMetaData> eventuallyConsistentSharedReadModels = longLivedReadModelSpecs.stream().filter(s->s.isShared()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
-		Collection<ReadModelWithMetaData> eventuallyConsistentLocalReadModels = longLivedReadModelSpecs.stream().filter(s->s.isLocal()).map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		// how each of these is projected (every instance or a single leader) follows from the read
+		// model's own storage class, see ReadModelModule.createProjectorProcessors
+		Collection<ReadModelWithMetaData> eventuallyConsistentReadModels = longLivedReadModelSpecs.stream().map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 
 		Collection<Translator> translators = translatorSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
 		InboundModule im = new InboundModule(name, inboundEventStream, translators, instance, meterRegistry);
@@ -356,7 +357,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, meterRegistry, eventEmitter);
 
-		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentSharedReadModels, eventuallyConsistentLocalReadModels, instance, meterRegistry, eventEmitter);
+		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentReadModels, instance, meterRegistry, eventEmitter);
 		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, outboundEventStream, meterRegistry, eventEmitter);
 
 		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, meterRegistry, eventEmitter);
@@ -454,7 +455,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	public class LongLivedReadModelSpecificationImpl implements LongLivedReadModelSpecification<C> {
 
-		private boolean shared = true;
 		private BoundedContextBuilder<C> builder;
 		private ReadModelWithMetaData<?> readModel;
 
@@ -471,26 +471,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		@Override
 		public BoundedContextBuilder<C> eventuallyConsistent ( ) {
 			return builder;
-		}
-
-		@Override
-		public LongLivedReadModelSpecification<C> local ( ) {
-			this.shared = false;
-			return this;
-		}
-
-		@Override
-		public LongLivedReadModelSpecification<C> shared ( ) {
-			this.shared = true;
-			return this;
-		}
-
-		public boolean isShared ( ) {
-			return shared;
-		}
-
-		public boolean isLocal ( ) {
-			return !isShared();
 		}
 
 		public ReadModelWithMetaData<?> readModel ( ) {

@@ -44,6 +44,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDo
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.ThirdDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.readmodels.LongLivedReadModelSpecification;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -65,14 +66,14 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 	protected void setUp ( ) {
 		super.setUp();
 		this.eventStorage = createEventStorage();
-		this.eventuallyConsistentSharedModel = new MockReadModel("eventually consistent shared model, all domain events");
-		this.eventuallyConsistentSharedModelOnlyFirstEventType = new MockReadModel("eventually consistent shared model, only first domain event type", Arrays.asList(new Class[] {FirstDomainEvent.class}));
-		this.eventuallyConsistentSharedModelOnlySecondEventType = new MockReadModel("eventually consistent shared model, only second domain event type", Arrays.asList(new Class[] {SecondDomainEvent.class}));
-		this.eventuallyConsistentSharedModelOnlyThirdEventType = new MockReadModel("eventually consistent shared model, only third domain event type", Arrays.asList(new Class[] {ThirdDomainEvent.class}));
-		this.eventuallyConsistentLocalModel = new MockReadModel("eventually consistent local model, all domain events");
-		this.eventuallyConsistentLocalModelOnlyFirstEventType = new MockReadModel("eventually consistent local model, only first domain event type", Arrays.asList(new Class[] {FirstDomainEvent.class}));
-		this.eventuallyConsistentLocalModelOnlySecondEventType = new MockReadModel("eventually consistent local model, only second domain event type", Arrays.asList(new Class[] {SecondDomainEvent.class}));
-		this.eventuallyConsistentLocalModelOnlyThirdEventType = new MockReadModel("eventually consistent local model, only third domain event type", Arrays.asList(new Class[] {ThirdDomainEvent.class}));
+		this.eventuallyConsistentSharedModel = new MockReadModel("eventually consistent shared model, all domain events", ReadModelStorage.SHARED);
+		this.eventuallyConsistentSharedModelOnlyFirstEventType = new MockReadModel("eventually consistent shared model, only first domain event type", Arrays.asList(new Class[] {FirstDomainEvent.class}), ReadModelStorage.SHARED);
+		this.eventuallyConsistentSharedModelOnlySecondEventType = new MockReadModel("eventually consistent shared model, only second domain event type", Arrays.asList(new Class[] {SecondDomainEvent.class}), ReadModelStorage.SHARED);
+		this.eventuallyConsistentSharedModelOnlyThirdEventType = new MockReadModel("eventually consistent shared model, only third domain event type", Arrays.asList(new Class[] {ThirdDomainEvent.class}), ReadModelStorage.SHARED);
+		this.eventuallyConsistentLocalModel = new MockReadModel("eventually consistent local model, all domain events", ReadModelStorage.LOCAL);
+		this.eventuallyConsistentLocalModelOnlyFirstEventType = new MockReadModel("eventually consistent local model, only first domain event type", Arrays.asList(new Class[] {FirstDomainEvent.class}), ReadModelStorage.LOCAL);
+		this.eventuallyConsistentLocalModelOnlySecondEventType = new MockReadModel("eventually consistent local model, only second domain event type", Arrays.asList(new Class[] {SecondDomainEvent.class}), ReadModelStorage.LOCAL);
+		this.eventuallyConsistentLocalModelOnlyThirdEventType = new MockReadModel("eventually consistent local model, only third domain event type", Arrays.asList(new Class[] {ThirdDomainEvent.class}), ReadModelStorage.LOCAL);
 	}
 
 	@AfterEach
@@ -206,8 +207,9 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"));
 
 		liveModelClasses.forEach(builder::readmodel);
-		eventuallyConsistentSharedReadModels.stream().map(builder::readmodel).map(LongLivedReadModelSpecification::shared).forEach(LongLivedReadModelSpecification::eventuallyConsistent);
-		eventuallyConsistentLocalReadModels.stream().map(builder::readmodel).map(LongLivedReadModelSpecification::local).forEach(LongLivedReadModelSpecification::eventuallyConsistent);
+		// shared vs local is declared by the read models themselves (ReadModelWithMetaData.storage())
+		eventuallyConsistentSharedReadModels.stream().map(builder::readmodel).forEach(LongLivedReadModelSpecification::eventuallyConsistent);
+		eventuallyConsistentLocalReadModels.stream().map(builder::readmodel).forEach(LongLivedReadModelSpecification::eventuallyConsistent);
 
 		return buildBoundedContext ( builder );
 	}

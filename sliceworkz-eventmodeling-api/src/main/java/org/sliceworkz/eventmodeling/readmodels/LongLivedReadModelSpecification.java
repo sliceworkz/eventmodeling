@@ -20,14 +20,17 @@ package org.sliceworkz.eventmodeling.readmodels;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 
+/**
+ * Registration of a long-lived read model instance, which can only be updated eventually
+ * consistently.
+ * <p>
+ * Whether the read model is projected on every instance or on a single elected leader is not
+ * configured here: it follows from the read model's own {@link ReadModelWithMetaData#storage()}.
+ */
 public interface LongLivedReadModelSpecification<C extends BoundedContext<?,?,?>> {
 
 	BoundedContextBuilder<C> live();
 
 	BoundedContextBuilder<C> eventuallyConsistent();
-
-	LongLivedReadModelSpecification<C> local();
-
-	LongLivedReadModelSpecification<C> shared();
 
 }

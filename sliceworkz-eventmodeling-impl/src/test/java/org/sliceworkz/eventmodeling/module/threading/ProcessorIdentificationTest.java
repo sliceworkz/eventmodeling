@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.ProcessorIdentificationBuilder;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 
 public class ProcessorIdentificationTest {
 
@@ -114,41 +115,33 @@ public class ProcessorIdentificationTest {
 	}
 
 	@Test
-	void testEphemeralIfTruePromotesSharedToEphemeral ( ) {
+	void testEphemeralReadModelStorageScopesToTheInstance ( ) {
 		ProcessorIdentification epi = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance)
 				.context("ctx").readmodel().name("TodoList")
-				.shared().ephemeralIf(true)
+				.storage(ReadModelStorage.EPHEMERAL)
 				.build();
 		assertEquals(Storage.EPHEMERAL, epi.storage());
 		assertEquals("ctx/readmodel/TodoList[ephemeral:someLogicalInstance#somePhysicalInstance]", epi.toString());
 	}
 
 	@Test
-	void testEphemeralIfFalseLeavesSharedAlone ( ) {
+	void testLocalReadModelStorageScopesToTheInstance ( ) {
 		ProcessorIdentification epi = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance)
 				.context("ctx").readmodel().name("TodoList")
-				.shared().ephemeralIf(false)
+				.storage(ReadModelStorage.LOCAL)
+				.build();
+		assertEquals(Storage.LOCAL, epi.storage());
+		assertEquals("ctx/readmodel/TodoList[local:someLogicalInstance#somePhysicalInstance]", epi.toString());
+	}
+
+	@Test
+	void testSharedReadModelStorageHasNoLocation ( ) {
+		ProcessorIdentification epi = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance)
+				.context("ctx").readmodel().name("TodoList")
+				.storage(ReadModelStorage.SHARED)
 				.build();
 		assertEquals(Storage.SHARED, epi.storage());
 		assertEquals("ctx/readmodel/TodoList[shared]", epi.toString());
-	}
-
-	@Test
-	void testEphemeralIfTruePromotesLocalToEphemeral ( ) {
-		ProcessorIdentification epi = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance)
-				.context("ctx").readmodel().name("TodoList")
-				.local().ephemeralIf(true)
-				.build();
-		assertEquals(Storage.EPHEMERAL, epi.storage());
-	}
-
-	@Test
-	void testEphemeralIfFalseLeavesLocalAlone ( ) {
-		ProcessorIdentification epi = ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(mockInstance)
-				.context("ctx").readmodel().name("TodoList")
-				.local().ephemeralIf(false)
-				.build();
-		assertEquals(Storage.LOCAL, epi.storage());
 	}
 
 }

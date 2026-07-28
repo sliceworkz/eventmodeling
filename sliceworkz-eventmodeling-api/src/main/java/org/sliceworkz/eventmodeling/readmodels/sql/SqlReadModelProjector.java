@@ -23,6 +23,7 @@ import java.util.Optional;
 
 import javax.sql.DataSource;
 
+import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -50,7 +51,7 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  */
 public abstract class SqlReadModelProjector<T> extends SqlReadModel implements ReadModelWithMetaData<T>, BatchAwareProjection<T> {
 
-	private final boolean ephemeral;
+	private final ReadModelStorage storage;
 	private Connection batchConnection;
 	private EventReference currentEventReference;
 
@@ -60,21 +61,28 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 	 */
 	protected SqlReadModelProjector(DataSource dataSource, String tablePrefix) {
 		super(dataSource, tablePrefix);
-		this.ephemeral = detectEphemeral(dataSource);
+		this.storage = detectStorage(dataSource);
 	}
 
 	@Override
-	public boolean ephemeral() {
-		return ephemeral;
+	public ReadModelStorage storage() {
+		return storage;
 	}
 
-	private static boolean detectEphemeral(DataSource dataSource) {
+	/**
+	 * An in-memory H2 database dies with the process, so such a read model is ephemeral. Any other
+	 * DataSource is assumed to point at storage the whole deployment reads and writes, and is
+	 * therefore projected by a single leader. Override {@link #storage()} to return
+	 * {@link ReadModelStorage#LOCAL} for a database that is durable but private to one instance —
+	 * otherwise only the leader's copy is kept up to date.
+	 */
+	private static ReadModelStorage detectStorage(DataSource dataSource) {
 		try {
 			var method = dataSource.getClass().getMethod("getURL");
 			var url = (String) method.invoke(dataSource);
-			return url != null && url.contains(":h2:mem:");
+			return url != null && url.contains(":h2:mem:") ? ReadModelStorage.EPHEMERAL : ReadModelStorage.SHARED;
 		} catch (ReflectiveOperationException e) {
-			return false;
+			return ReadModelStorage.SHARED;
 		}
 	}
 

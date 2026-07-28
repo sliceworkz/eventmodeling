@@ -92,13 +92,13 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 				.build(),
 				// Must mirror the storage class the projector chose for this read model
 				// (see ReadModelModule.createProjectorProcessors); otherwise the automation
-				// watches a bookmark that nobody writes and handle() never fires.
+				// watches a bookmark that nobody writes and handle() never fires. Both sides
+				// derive it from the todo list itself, so they cannot drift apart.
 				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)
 					.context(boundedContext)
 					.readmodel()
 					.name(a.getTodoList().readmodelName())
-					.shared()
-					.ephemeralIf(a.getTodoList().ephemeral())
+					.storage(a.getTodoList().storage())
 				.build(),
 				domainEventStream, this::createAutomationContext, a, AutomationProcessor.ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance, boundedContext, meterRegistry, eventEmitter))
 		);

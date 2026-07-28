@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.module.threading;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.events.Instance;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
@@ -52,6 +53,22 @@ public record ProcessorIdentification ( String context, String type, String id, 
 					return SHARED;
 				default:
 					return null;
+			}
+		}
+		/**
+		 * Maps the storage class a read model declares onto the processor storage class, so a read
+		 * model's bookmark is scoped exactly the way its state is.
+		 */
+		public static Storage of ( ReadModelStorage readModelStorage ) {
+			switch ( readModelStorage ) {
+				case EPHEMERAL:
+					return EPHEMERAL;
+				case LOCAL:
+					return LOCAL;
+				case SHARED:
+					return SHARED;
+				default:
+					throw new IllegalArgumentException("unhandled read model storage " + readModelStorage);
 			}
 		}
 	}
@@ -223,19 +240,18 @@ public record ProcessorIdentification ( String context, String type, String id, 
 			return this;
 		}
 
-		/**
-		 * Conditionally promotes the storage to {@link Storage#EPHEMERAL}.
-		 * <p>
-		 * Intended to be chained after {@link #shared()} or {@link #local()} so the call site
-		 * can express "shared/local by default, ephemeral if a runtime flag says so" without
-		 * branching. When {@code ephemeral} is {@code false} the previously-set storage is
-		 * left untouched; when {@code true} it is overridden to ephemeral.
-		 */
-		public ProcessorIdentificationBuilder ephemeralIf ( boolean ephemeral ) {
-			if ( ephemeral ) {
-				this.storage = Storage.EPHEMERAL;
-			}
+		public ProcessorIdentificationBuilder storage ( Storage storage ) {
+			this.storage = storage;
 			return this;
+		}
+
+		/**
+		 * Scopes this processor the way the given read model's state is scoped. Use this rather than
+		 * picking a storage class at the call site, so a read model's projector and anything watching
+		 * its bookmark (an automation, monitoring) always agree on the identification.
+		 */
+		public ProcessorIdentificationBuilder storage ( ReadModelStorage readModelStorage ) {
+			return storage(Storage.of(readModelStorage));
 		}
 
 		public ProcessorIdentification build ( ) {

@@ -191,7 +191,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 				.eventStorage(eventStorage)
 				.instance(InstanceFactory.determine("unittests"))
 				.listener(event -> received.add(event.data()));
-		builder.readmodel(new MockReadModel("ec-model")).shared().eventuallyConsistent();
+		builder.readmodel(new MockReadModel("ec-model")).eventuallyConsistent();
 		Mock domain = buildBoundedContext(builder);
 
 		domain.execute(new MockCommand(List.of(new FirstDomainEvent("a"), new FirstDomainEvent("b"))));

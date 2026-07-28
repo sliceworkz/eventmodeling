@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.mock.boundedcontext;
 import java.util.List;
 
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
@@ -31,17 +32,33 @@ public class MockReadModel implements ReadModel<MockDomainEvent> {
 	private String name;
 	private int eventCount = 0;
 	private ThreadLocal<Integer> eventCountPerThread = new ThreadLocal<>();
-	
+
 	private EventQuery eventQuery;
-	
+	private ReadModelStorage storage;
+
 	public MockReadModel ( String name, List<Class<?>> queriedClasses ) {
+		this(name, queriedClasses, ReadModelStorage.EPHEMERAL);
+	}
+
+	public MockReadModel ( String name ) {
+		this(name, ReadModelStorage.EPHEMERAL);
+	}
+
+	public MockReadModel ( String name, ReadModelStorage storage ) {
 		this.name = name;
+		this.storage = storage;
+		this.eventQuery = EventQuery.forEvents(EventTypesFilter.any(), Tags.none());
+	}
+
+	public MockReadModel ( String name, List<Class<?>> queriedClasses, ReadModelStorage storage ) {
+		this.name = name;
+		this.storage = storage;
 		this.eventQuery = EventQuery.forEvents(EventTypesFilter.of(queriedClasses), Tags.none());
 	}
-	
-	public MockReadModel ( String name ) {
-		this.name = name;
-		this.eventQuery = EventQuery.forEvents(EventTypesFilter.any(), Tags.none());
+
+	@Override
+	public ReadModelStorage storage ( ) {
+		return storage;
 	}
 
 	@Override

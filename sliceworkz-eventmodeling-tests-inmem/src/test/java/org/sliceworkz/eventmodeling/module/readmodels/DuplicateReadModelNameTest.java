@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
@@ -52,13 +53,13 @@ public class DuplicateReadModelNameTest extends AbstractMockDomainTest {
 
 	@Test
 	void duplicateSharedEventuallyConsistentReadModelNamesRejected ( ) {
-		var rm1 = new MockReadModel("shared-collision");
-		var rm2 = new MockReadModel("shared-collision");
+		var rm1 = new MockReadModel("shared-collision", ReadModelStorage.SHARED);
+		var rm2 = new MockReadModel("shared-collision", ReadModelStorage.SHARED);
 
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
 			var builder = baseBuilder();
-			builder.readmodel(rm1).shared().eventuallyConsistent();
-			builder.readmodel(rm2).shared().eventuallyConsistent();
+			builder.readmodel(rm1).eventuallyConsistent();
+			builder.readmodel(rm2).eventuallyConsistent();
 			builder.build();
 		});
 		assertEquals("duplicate readmodel name 'shared-collision' - bookmarks would collide", e.getMessage());
@@ -66,13 +67,13 @@ public class DuplicateReadModelNameTest extends AbstractMockDomainTest {
 
 	@Test
 	void duplicateLocalEventuallyConsistentReadModelNamesRejected ( ) {
-		var rm1 = new MockReadModel("local-collision");
-		var rm2 = new MockReadModel("local-collision");
+		var rm1 = new MockReadModel("local-collision", ReadModelStorage.LOCAL);
+		var rm2 = new MockReadModel("local-collision", ReadModelStorage.LOCAL);
 
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
 			var builder = baseBuilder();
-			builder.readmodel(rm1).local().eventuallyConsistent();
-			builder.readmodel(rm2).local().eventuallyConsistent();
+			builder.readmodel(rm1).eventuallyConsistent();
+			builder.readmodel(rm2).eventuallyConsistent();
 			builder.build();
 		});
 		assertEquals("duplicate readmodel name 'local-collision' - bookmarks would collide", e.getMessage());
@@ -80,13 +81,13 @@ public class DuplicateReadModelNameTest extends AbstractMockDomainTest {
 
 	@Test
 	void sharedAndLocalEventuallyConsistentReadModelsWithSameNameRejected ( ) {
-		var sharedRm = new MockReadModel("mixed-collision");
-		var localRm = new MockReadModel("mixed-collision");
+		var sharedRm = new MockReadModel("mixed-collision", ReadModelStorage.SHARED);
+		var localRm = new MockReadModel("mixed-collision", ReadModelStorage.LOCAL);
 
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
 			var builder = baseBuilder();
-			builder.readmodel(sharedRm).shared().eventuallyConsistent();
-			builder.readmodel(localRm).local().eventuallyConsistent();
+			builder.readmodel(sharedRm).eventuallyConsistent();
+			builder.readmodel(localRm).eventuallyConsistent();
 			builder.build();
 		});
 		assertEquals("duplicate readmodel name 'mixed-collision' - bookmarks would collide", e.getMessage());
@@ -101,7 +102,7 @@ public class DuplicateReadModelNameTest extends AbstractMockDomainTest {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
 			var builder = baseBuilder();
 			builder.readmodel(MockReadModel.class);
-			builder.readmodel(collidingEc).shared().eventuallyConsistent();
+			builder.readmodel(collidingEc).eventuallyConsistent();
 			builder.build();
 		});
 		assertEquals("duplicate readmodel name 'MockReadModel' - bookmarks would collide", e.getMessage());
@@ -109,14 +110,14 @@ public class DuplicateReadModelNameTest extends AbstractMockDomainTest {
 
 	@Test
 	void distinctNamesBuildSuccessfully ( ) {
-		var rm1 = new MockReadModel("rm-alpha");
-		var rm2 = new MockReadModel("rm-beta");
-		var rm3 = new MockReadModel("rm-gamma");
+		var rm1 = new MockReadModel("rm-alpha", ReadModelStorage.SHARED);
+		var rm2 = new MockReadModel("rm-beta", ReadModelStorage.LOCAL);
+		var rm3 = new MockReadModel("rm-gamma", ReadModelStorage.EPHEMERAL);
 
 		var builder = baseBuilder();
-		builder.readmodel(rm1).shared().eventuallyConsistent();
-		builder.readmodel(rm2).local().eventuallyConsistent();
-		builder.readmodel(rm3).shared().eventuallyConsistent();
+		builder.readmodel(rm1).eventuallyConsistent();
+		builder.readmodel(rm2).eventuallyConsistent();
+		builder.readmodel(rm3).eventuallyConsistent();
 		Mock ctx = buildBoundedContext(builder);
 		assertNotNull(ctx);
 	}

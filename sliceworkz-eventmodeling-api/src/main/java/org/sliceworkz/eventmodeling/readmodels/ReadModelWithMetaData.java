@@ -31,13 +31,17 @@ public interface ReadModelWithMetaData<DOMAIN_EVENT_TYPE> extends Projection<DOM
 	}
 
 	/**
-	 * Indicates whether this read model uses ephemeral storage.
-	 * Ephemeral storage exists only for the lifetime of the process and is cleared on restart.
-	 * Defaults to true as most read models are memory-based.
-	 * Override this method to return false for persistent (e.g. SQL-backed) read models.
+	 * Where this read model keeps its projected state, which also decides how it is projected:
+	 * ephemeral and local state is projected by every instance of the bounded context, shared state
+	 * by a single elected leader.
+	 * <p>
+	 * Defaults to {@link ReadModelStorage#EPHEMERAL} as most read models are memory-based. Override
+	 * for durable read models: {@link ReadModelStorage#SHARED} when all instances read and write the
+	 * same storage (e.g. a shared database), {@link ReadModelStorage#LOCAL} when the storage is
+	 * durable but private to one instance.
 	 */
-	default boolean ephemeral () {
-		return true;
+	default ReadModelStorage storage () {
+		return ReadModelStorage.EPHEMERAL;
 	}
 
 }

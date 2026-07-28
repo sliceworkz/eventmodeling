@@ -17,6 +17,9 @@
  */
 package org.sliceworkz.eventmodeling.module.eventdispatching;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -49,6 +52,10 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	private final ProcessorIdentification processorIdentification;
 	private final ProcessorMode originalProcessorMode;
 	private final RunListener runListener;
+
+	// opens once this processor has caught up with the stream for the first time after start(), so
+	// callers can block until the projection it feeds is usable (see awaitInitialProjection)
+	private final CountDownLatch initialProjectionDone = new CountDownLatch(1);
 
 	private volatile ProcessorMode processorMode;
 	private volatile ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER;
@@ -92,6 +99,26 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 				.build();
 
 		eventSource.subscribe(this);
+	}
+
+	public ProcessorIdentification identification ( ) {
+		return processorIdentification;
+	}
+
+	/**
+	 * Blocks until this processor has completed its first full catch-up with the stream after
+	 * {@link #start()}, i.e. until the projection it feeds reflects everything that was in the
+	 * stream at start time.
+	 * <p>
+	 * The latch is also released when the projector stops on an error, so a waiter does not sit out
+	 * its whole timeout on a catch-up that is never going to finish. Waiting on a processor that
+	 * only runs on the elected leader is not supported: on a follower the latch stays closed until
+	 * the waiter times out.
+	 *
+	 * @return {@code true} if the initial catch-up completed, {@code false} on timeout
+	 */
+	public boolean awaitInitialProjection ( long timeout, TimeUnit unit ) throws InterruptedException {
+		return initialProjectionDone.await(timeout, unit);
 	}
 
 	@Override
@@ -163,6 +190,8 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 								}
 							}
 
+							initialProjectionDone.countDown(); // caught up at least once, projection is usable
+
 							// Caught up with the stream — wait for new events or timeout
 							synchronized ( this ) {
 								if ( ! potentiallyNewEventsAppended ) {
@@ -181,6 +210,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 									e.getCause());
 							LOGGER.warn("Stopping projector due to error: {}", e.getCause().getMessage(), e.getCause());
 							processorMode = ProcessorMode.STOPPED;
+							initialProjectionDone.countDown(); // no catch-up will happen anymore, release anyone waiting for it
 
 						}
 					} else {

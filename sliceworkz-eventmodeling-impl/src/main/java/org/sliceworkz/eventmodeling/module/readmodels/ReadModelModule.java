@@ -26,7 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +44,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
-import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
@@ -57,6 +56,11 @@ import io.micrometer.core.instrument.MeterRegistry;
 public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 	private static Logger LOGGER = LoggerFactory.getLogger(ReadModelModule.class);
+
+	static final String EPHEMERAL_PROJECTION_TIMEOUT_PROPERTY = "sliceworkz.eventmodeling.readmodel.ephemeral.projection.timeout.ms";
+	static final long DEFAULT_EPHEMERAL_PROJECTION_TIMEOUT_MS = 300000; // 5 minutes
+	private static final long EPHEMERAL_PROJECTION_TIMEOUT_MS = Long.getLong(EPHEMERAL_PROJECTION_TIMEOUT_PROPERTY, DEFAULT_EPHEMERAL_PROJECTION_TIMEOUT_MS);
+	private static final long PROGRESS_LOG_INTERVAL_MS = 10000;
 
 	private Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> projectorProcessors;
 	private ProcessorThreadManager<DOMAIN_EVENT_TYPE> processorThreadManager;
@@ -295,18 +299,67 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		throw new IllegalArgumentException("no public constructor found on " + readModelClass + " for parameters " + constructorParams);
 	}
 
-	// TODO is this the way?  this can be done by the processors at start also ...
 	/**
-	 * Initialized all ephemeral/inmemory models before start
-	 * Depending on the "local" or "shared" configuration of a read model, this method will be called on a single or all bounded context instances
+	 * Starts the projector processors and does not return until every ephemeral read model has been
+	 * projected completely, i.e. has caught up with the stream as it was at start time.
+	 * <p>
+	 * A read model declaring {@link org.sliceworkz.eventmodeling.readmodels.ReadModelStorage#EPHEMERAL}
+	 * storage starts empty on every process start (its bookmark is dropped when the processor is
+	 * created), so without this wait the bounded context would serve empty or partially built read
+	 * models right after {@code start()}. Durable read models ({@code LOCAL} and {@code SHARED}) keep
+	 * their bookmark across restarts and are not waited for — they continue where they left off in
+	 * the background.
 	 */
-	public void initializeEphemeralModels ( Stream<? extends Event<DOMAIN_EVENT_TYPE>> events ) {
-		// TODO implement preloading of (inmemory) models upon kernel start
-	}
-
 	@Override
 	public void start ( ) {
 		this.processorThreadManager.start();
+		awaitEphemeralReadModelsProjected();
+	}
+
+	/**
+	 * Waits for the initial catch-up of all ephemeral read model processors. They all run
+	 * concurrently on their own threads, so the wait takes as long as the slowest one, not the sum.
+	 * <p>
+	 * The deadline is shared over all of them and defaults to {@value #DEFAULT_EPHEMERAL_PROJECTION_TIMEOUT_MS}
+	 * ms; it can be changed with the {@code sliceworkz.eventmodeling.readmodel.ephemeral.projection.timeout.ms}
+	 * system property. When it expires the startup continues (with a warning) rather than blocking
+	 * the process forever — the read models involved keep catching up in the background.
+	 */
+	private void awaitEphemeralReadModelsProjected ( ) {
+		List<ProjectorProcessor<DOMAIN_EVENT_TYPE>> ephemeralProcessors = projectorProcessors.stream()
+				.filter(p -> p.identification().storage() == Storage.EPHEMERAL)
+				.toList();
+
+		if ( ephemeralProcessors.isEmpty() ) {
+			return;
+		}
+
+		LOGGER.info("waiting for {} ephemeral readmodel(s) to be projected ...", ephemeralProcessors.size());
+		long start = System.currentTimeMillis();
+		long deadline = start + EPHEMERAL_PROJECTION_TIMEOUT_MS;
+
+		for ( ProjectorProcessor<DOMAIN_EVENT_TYPE> processor : ephemeralProcessors ) {
+			try {
+				while ( true ) {
+					long remainingMs = deadline - System.currentTimeMillis();
+					if ( remainingMs <= 0 ) {
+						LOGGER.warn("ephemeral readmodel '{}' was not projected completely within {} ms, continuing startup - it keeps catching up in the background",
+								processor.identification(), EPHEMERAL_PROJECTION_TIMEOUT_MS);
+						break;
+					}
+					if ( processor.awaitInitialProjection(Math.min(PROGRESS_LOG_INTERVAL_MS, remainingMs), TimeUnit.MILLISECONDS) ) {
+						break;
+					}
+					LOGGER.info("still waiting for ephemeral readmodel '{}' to be projected ...", processor.identification());
+				}
+			} catch ( InterruptedException e ) {
+				Thread.currentThread().interrupt();
+				LOGGER.warn("interrupted while waiting for ephemeral readmodels to be projected");
+				return;
+			}
+		}
+
+		LOGGER.info("ephemeral readmodels projected in {} ms", System.currentTimeMillis() - start);
 	}
 
 	@Override

@@ -34,6 +34,7 @@ import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarted;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarting;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
@@ -136,8 +137,6 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.instance = instance;
 		this.eventEmitter = eventEmitter;
 
-		eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), map(deployedFeatureSlices), map(undeployedFeatureSlices)));
-
 		// single per-bounded-context JVM shutdown hook drives the orderly shutdown (Stopping -> stop
 		// modules / drain threads -> Stopped); replaces the per-processor-thread-manager hooks.
 		Runtime.getRuntime().addShutdownHook(new Thread(this::terminate, "bc-shutdown/" + name));
@@ -155,6 +154,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public void start ( ) {
 		LOGGER.info("starting bounded context '{}' ...", name);
+		long startedAt = System.currentTimeMillis();
+		eventEmitter.emit(new BoundedContextStarting(name, instance.logical(), instance.physical(), instance.process(), map(deployedFeatureSlices), map(undeployedFeatureSlices)));
 		for (var slice : deployedFeatureSlices) {
 			Slice raw = (Slice) slice;
 			if (startCommands) raw.startCommand(selfReference);
@@ -166,8 +167,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.outboundModule.start();
 		this.dcbDomainModule.start();
 		this.automationModule.start();
-		this.readmodelModule.start();
-		LOGGER.info("started bounded context '{}'.", name);
+		this.readmodelModule.start(); // blocks until the ephemeral readmodels have been projected
+		long startupDurationMs = System.currentTimeMillis() - startedAt;
+		eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), startupDurationMs));
+		LOGGER.info("started bounded context '{}' in {} ms.", name, startupDurationMs);
 	}
 	
 	@Override

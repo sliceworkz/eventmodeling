@@ -23,6 +23,10 @@ import java.util.Set;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventstore.events.EventReference;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
+
 /**
  * Events emitted by the kernel of a bounded context describing what happens inside it:
  * its lifecycle as well as the work it performs (commands executed, read models projected,
@@ -32,19 +36,67 @@ import org.sliceworkz.eventstore.events.EventReference;
  * {@link BoundedContextBuilder}. The listener decides what to do with them (append to an
  * event stream, log, forward to a monitoring system, ...). When no listener is registered
  * no events are produced and there is no overhead.
+ *
+ * <h2>Reading back what an older version wrote</h2>
+ * A listener that persists these events produces a stream that outlives the framework version that
+ * wrote it, and that is typically read by a different process (a monitoring dashboard) running a
+ * version of its own. These records therefore evolve: {@code BoundedContextStarted} used to carry the
+ * feature slice inventory that {@link BoundedContextStarting} carries now.
+ * <p>
+ * {@code @JsonIgnoreProperties(ignoreUnknown = true)} - inherited by every record below - makes a
+ * stored event whose payload has properties these records no longer declare deserialize instead of
+ * being rejected by the event store's (deliberately strict) deserializer; the dropped properties are
+ * ignored and a property added since reads as null. Only the payload shape is covered: an event type
+ * added after the reader was built still has no record to bind to, and fails.
+ * <p>
+ * A property added as a <em>primitive</em> needs one thing more: null cannot bind onto it, so the
+ * stored event would be rejected despite the annotation above. Such a component carries
+ * {@code @JsonSetter(nulls = Nulls.AS_EMPTY)} to read as its zero value instead — see
+ * {@link BoundedContextStarted#startupDurationMs()}. Prefer a boxed type where "absent" and "zero"
+ * mean different things to a reader.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface BoundedContextEvent {
 
 	/**
-	 * Emitted once, when a bounded context is built/started.
+	 * Emitted when a bounded context begins starting up, before its modules are started. It announces
+	 * what is being started: the feature slices that are deployed and the ones that are not.
+	 * <p>
+	 * The context is not usable yet at this point. What happens between this event and the
+	 * {@link BoundedContextStarted} that follows it is the startup work — most notably projecting the
+	 * ephemeral read models, which {@code start()} waits for.
 	 */
-	record BoundedContextStarted (
+	record BoundedContextStarting (
 			String boundedContext,
 			String logical,
 			String physical,
 			String process,
 			Set<FeatureSlice> enabledFeatures,
 			Set<FeatureSlice> disabledFeatures ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a bounded context has started: its modules are running and its ephemeral read
+	 * models have been projected, so it is effectively available.
+	 * <p>
+	 * {@code startupDurationMs} is the wall-clock time spent in {@code start()}, i.e. the delay
+	 * between the preceding {@link BoundedContextStarting} and this event. Note that startup
+	 * continues (with a warning) when an ephemeral read model does not finish projecting within its
+	 * timeout, so a large duration paired with such a warning means the context came up before all of
+	 * its read models were complete.
+	 * <p>
+	 * {@code @JsonSetter(nulls = AS_EMPTY)} is what makes it read as {@code 0} on an event stored
+	 * before this property existed. Without it such an event fails to deserialize altogether: an
+	 * absent property binds as null, and the store's deserializer cannot map null onto a primitive.
+	 * Note that the {@code 0} it then reads is indistinguishable from a startup that really took no
+	 * measurable time — pair it with the presence of a {@link BoundedContextStarting} to tell a
+	 * pre-split event apart from a fast one.
+	 */
+	record BoundedContextStarted (
+			String boundedContext,
+			String logical,
+			String physical,
+			String process,
+			@JsonSetter(nulls = Nulls.AS_EMPTY) long startupDurationMs ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted when a bounded context begins shutting down, before its modules are stopped (while the

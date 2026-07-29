@@ -140,6 +140,7 @@ features/
   `builder.readmodel(readModel).eventuallyConsistent()`. `SqlReadModelProjector` derives it from its
   DataSource (in-memory H2 → `EPHEMERAL`, anything else → `SHARED`); override `storage()` for a
   database that is durable but private to one instance
+- `boundedContext.start()` does not return until every `EPHEMERAL` read model has been projected completely, so those are usable right after start. `LOCAL` and `SHARED` read models keep their bookmark and catch up in the background without blocking startup. The wait has a safety timeout (default 5 minutes, `-Dsliceworkz.eventmodeling.readmodel.ephemeral.projection.timeout.ms=...`) after which startup continues with a warning
 
 **Automations:**
 - Implement `Automation<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE>`

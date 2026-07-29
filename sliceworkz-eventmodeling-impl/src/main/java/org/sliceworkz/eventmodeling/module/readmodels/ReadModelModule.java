@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -334,32 +335,43 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			return;
 		}
 
-		LOGGER.info("waiting for {} ephemeral readmodel(s) to be projected ...", ephemeralProcessors.size());
+		LOGGER.info("waiting for {} ephemeral readmodel(s) to be projected: {}", ephemeralProcessors.size(), names(ephemeralProcessors));
 		long start = System.currentTimeMillis();
 		long deadline = start + EPHEMERAL_PROJECTION_TIMEOUT_MS;
 
-		for ( ProjectorProcessor<DOMAIN_EVENT_TYPE> processor : ephemeralProcessors ) {
+		List<ProjectorProcessor<DOMAIN_EVENT_TYPE>> outstanding = new ArrayList<>(ephemeralProcessors);
+		while ( !outstanding.isEmpty() ) {
+			long remainingMs = deadline - System.currentTimeMillis();
+			if ( remainingMs <= 0 ) {
+				LOGGER.warn("{} ephemeral readmodel(s) not projected completely within {} ms, continuing startup - they keep catching up in the background: {}",
+						outstanding.size(), EPHEMERAL_PROJECTION_TIMEOUT_MS, names(outstanding));
+				return;
+			}
+
+			boolean caughtUp;
 			try {
-				while ( true ) {
-					long remainingMs = deadline - System.currentTimeMillis();
-					if ( remainingMs <= 0 ) {
-						LOGGER.warn("ephemeral readmodel '{}' was not projected completely within {} ms, continuing startup - it keeps catching up in the background",
-								processor.identification(), EPHEMERAL_PROJECTION_TIMEOUT_MS);
-						break;
-					}
-					if ( processor.awaitInitialProjection(Math.min(PROGRESS_LOG_INTERVAL_MS, remainingMs), TimeUnit.MILLISECONDS) ) {
-						break;
-					}
-					LOGGER.info("still waiting for ephemeral readmodel '{}' to be projected ...", processor.identification());
-				}
+				// wait on one of them at a time, but never longer than the progress interval, so the
+				// readmodels still outstanding are reported while a long catch-up is going on
+				caughtUp = outstanding.get(0).awaitInitialProjection(Math.min(PROGRESS_LOG_INTERVAL_MS, remainingMs), TimeUnit.MILLISECONDS);
 			} catch ( InterruptedException e ) {
 				Thread.currentThread().interrupt();
-				LOGGER.warn("interrupted while waiting for ephemeral readmodels to be projected");
+				LOGGER.warn("interrupted while waiting for ephemeral readmodels to be projected, still outstanding: {}", names(outstanding));
 				return;
+			}
+
+			outstanding.removeIf(ProjectorProcessor::initialProjectionDone);
+
+			if ( !caughtUp && !outstanding.isEmpty() ) {
+				LOGGER.info("after {} ms, still waiting for {} ephemeral readmodel(s) to be projected: {}",
+						System.currentTimeMillis() - start, outstanding.size(), names(outstanding));
 			}
 		}
 
-		LOGGER.info("ephemeral readmodels projected in {} ms", System.currentTimeMillis() - start);
+		LOGGER.info("all {} ephemeral readmodel(s) projected in {} ms", ephemeralProcessors.size(), System.currentTimeMillis() - start);
+	}
+
+	private String names ( Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> processors ) {
+		return processors.stream().map(p -> p.identification().id()).collect(Collectors.joining(", "));
 	}
 
 	@Override

@@ -121,6 +121,14 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 		return initialProjectionDone.await(timeout, unit);
 	}
 
+	/**
+	 * Whether the initial catch-up is behind us, without blocking. Lets a waiter report which
+	 * processors are still outstanding.
+	 */
+	public boolean initialProjectionDone ( ) {
+		return initialProjectionDone.getCount() == 0;
+	}
+
 	@Override
 	public void terminate ( ) {
 		this.instanceMode = ProcessorInstanceMode.TERMINATING;
@@ -175,9 +183,22 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 					if ( processorMode == ProcessorMode.RUNNING_ON_ALL_INSTANCES || instanceMode == ProcessorInstanceMode.LEADER ) {
 
 						try {
+							// the first run after start() rebuilds/catches up the projection from its bookmark
+							// (from scratch for ephemeral storage) and is what start() may be waiting for, so
+							// it is reported at info level, unlike the incremental runs that follow
+							boolean initialRun = !initialProjectionDone();
+							if ( initialRun ) {
+								LOGGER.info("'{}' starting initial catch-up ...", processorIdentification);
+							}
+
 							long runStartMs = System.currentTimeMillis();
 							ProjectorMetrics metrics = projector.run();
 							long runDurationMs = System.currentTimeMillis() - runStartMs;
+
+							if ( initialRun ) {
+								LOGGER.info("'{}' initial catch-up completed in {} ms: {} events handled, {} streamed in {} queries, last reference {}",
+										processorIdentification, runDurationMs, metrics.eventsHandled(), metrics.eventsStreamed(), metrics.queriesDone(), metrics.lastEventReference());
+							}
 
 							LOGGER.debug("projector run completed: {} events streamed, {} handled, last reference {}",
 									metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());

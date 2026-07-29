@@ -23,6 +23,8 @@ import java.util.Set;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventstore.events.EventReference;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * Events emitted by the kernel of a bounded context describing what happens inside it:
  * its lifecycle as well as the work it performs (commands executed, read models projected,
@@ -32,7 +34,20 @@ import org.sliceworkz.eventstore.events.EventReference;
  * {@link BoundedContextBuilder}. The listener decides what to do with them (append to an
  * event stream, log, forward to a monitoring system, ...). When no listener is registered
  * no events are produced and there is no overhead.
+ *
+ * <h2>Reading back what an older version wrote</h2>
+ * A listener that persists these events produces a stream that outlives the framework version that
+ * wrote it, and that is typically read by a different process (a monitoring dashboard) running a
+ * version of its own. These records therefore evolve: {@code BoundedContextStarted} used to carry the
+ * feature slice inventory that {@link BoundedContextStarting} carries now.
+ * <p>
+ * {@code @JsonIgnoreProperties(ignoreUnknown = true)} - inherited by every record below - makes a
+ * stored event whose payload has properties these records no longer declare deserialize instead of
+ * being rejected by the event store's (deliberately strict) deserializer; the dropped properties are
+ * ignored and any property added since reads as its default. Only the payload shape is covered: an
+ * event type added after the reader was built still has no record to bind to, and fails.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface BoundedContextEvent {
 
 	/**

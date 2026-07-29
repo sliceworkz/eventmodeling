@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,9 +52,13 @@ import org.sliceworkz.eventmodeling.mock.sliced.SlicedFeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
+import org.sliceworkz.eventstore.events.EventType;
+import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.spi.EventStorage;
+import org.sliceworkz.eventstore.spi.EventStorage.EventToStore;
+import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
@@ -251,6 +256,36 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 
 		assertTrue(persisted.stream().anyMatch(e -> e instanceof BoundedContextStarted),
 				"expected a persisted BoundedContextStarted event, got: " + persisted);
+	}
+
+	@Test
+	void readsBackAKernelEventStoredByAnOlderVersionOfTheFramework() {
+		// A persisted kernel stream outlives the version that wrote it, and is typically read by another
+		// process (a monitoring dashboard) running a version of its own: a BoundedContextStarted stored
+		// before the event was split into Starting/Started still carries the feature slice inventory.
+		// Binding it to the current record must not fail - that is what @JsonIgnoreProperties(ignoreUnknown)
+		// on BoundedContextEvent is for; without it the store's strict deserializer rejects the event and
+		// every reader of the stream breaks on the history it already has.
+		EventStreamId streamId = EventStreamId.forContext(CONTEXT_NAME).withPurpose("kernel");
+		eventStorage.append(AppendCriteria.none(), Optional.of(streamId), List.of(new EventToStore(streamId,
+				EventType.of(BoundedContextStarted.class),
+				"""
+				{"boundedContext":"orders","logical":"orders","physical":"orders-1","process":"p123",\
+				"enabledFeatures":[{"name":"PlaceOrder","type":"STATE_CHANGE","context":"orders","chapter":"checkout","tags":[]}],\
+				"disabledFeatures":[]}""",
+				null, Tags.none(), null)));
+
+		EventStream<BoundedContextEvent> kernelStream = EventStoreFactory.get().eventStore(eventStorage)
+				.getEventStream(streamId, BoundedContextEvent.class);
+		List<BoundedContextEvent> persisted = kernelStream.query(EventQuery.matchAll())
+				.map(org.sliceworkz.eventstore.events.Event::data)
+				.toList();
+
+		assertEquals(1, persisted.size());
+		BoundedContextStarted started = (BoundedContextStarted) persisted.getFirst();
+		assertEquals("orders", started.boundedContext());
+		assertEquals("orders-1", started.physical());
+		assertEquals(0, started.startupDurationMs()); // the property did not exist when the event was written
 	}
 
 }

@@ -24,6 +24,8 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventstore.events.EventReference;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 
 /**
  * Events emitted by the kernel of a bounded context describing what happens inside it:
@@ -44,8 +46,14 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  * {@code @JsonIgnoreProperties(ignoreUnknown = true)} - inherited by every record below - makes a
  * stored event whose payload has properties these records no longer declare deserialize instead of
  * being rejected by the event store's (deliberately strict) deserializer; the dropped properties are
- * ignored and any property added since reads as its default. Only the payload shape is covered: an
- * event type added after the reader was built still has no record to bind to, and fails.
+ * ignored and a property added since reads as null. Only the payload shape is covered: an event type
+ * added after the reader was built still has no record to bind to, and fails.
+ * <p>
+ * A property added as a <em>primitive</em> needs one thing more: null cannot bind onto it, so the
+ * stored event would be rejected despite the annotation above. Such a component carries
+ * {@code @JsonSetter(nulls = Nulls.AS_EMPTY)} to read as its zero value instead — see
+ * {@link BoundedContextStarted#startupDurationMs()}. Prefer a boxed type where "absent" and "zero"
+ * mean different things to a reader.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface BoundedContextEvent {
@@ -75,13 +83,20 @@ public sealed interface BoundedContextEvent {
 	 * continues (with a warning) when an ephemeral read model does not finish projecting within its
 	 * timeout, so a large duration paired with such a warning means the context came up before all of
 	 * its read models were complete.
+	 * <p>
+	 * {@code @JsonSetter(nulls = AS_EMPTY)} is what makes it read as {@code 0} on an event stored
+	 * before this property existed. Without it such an event fails to deserialize altogether: an
+	 * absent property binds as null, and the store's deserializer cannot map null onto a primitive.
+	 * Note that the {@code 0} it then reads is indistinguishable from a startup that really took no
+	 * measurable time — pair it with the presence of a {@link BoundedContextStarting} to tell a
+	 * pre-split event apart from a fast one.
 	 */
 	record BoundedContextStarted (
 			String boundedContext,
 			String logical,
 			String physical,
 			String process,
-			long startupDurationMs ) implements BoundedContextEvent { }
+			@JsonSetter(nulls = Nulls.AS_EMPTY) long startupDurationMs ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted when a bounded context begins shutting down, before its modules are stopped (while the

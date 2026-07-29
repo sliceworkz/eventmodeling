@@ -36,15 +36,37 @@ import org.sliceworkz.eventstore.events.EventReference;
 public sealed interface BoundedContextEvent {
 
 	/**
-	 * Emitted once, when a bounded context is built/started.
+	 * Emitted when a bounded context begins starting up, before its modules are started. It announces
+	 * what is being started: the feature slices that are deployed and the ones that are not.
+	 * <p>
+	 * The context is not usable yet at this point. What happens between this event and the
+	 * {@link BoundedContextStarted} that follows it is the startup work — most notably projecting the
+	 * ephemeral read models, which {@code start()} waits for.
 	 */
-	record BoundedContextStarted (
+	record BoundedContextStarting (
 			String boundedContext,
 			String logical,
 			String physical,
 			String process,
 			Set<FeatureSlice> enabledFeatures,
 			Set<FeatureSlice> disabledFeatures ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a bounded context has started: its modules are running and its ephemeral read
+	 * models have been projected, so it is effectively available.
+	 * <p>
+	 * {@code startupDurationMs} is the wall-clock time spent in {@code start()}, i.e. the delay
+	 * between the preceding {@link BoundedContextStarting} and this event. Note that startup
+	 * continues (with a warning) when an ephemeral read model does not finish projecting within its
+	 * timeout, so a large duration paired with such a warning means the context came up before all of
+	 * its read models were complete.
+	 */
+	record BoundedContextStarted (
+			String boundedContext,
+			String logical,
+			String physical,
+			String process,
+			long startupDurationMs ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted when a bounded context begins shutting down, before its modules are stopped (while the

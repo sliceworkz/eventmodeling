@@ -51,6 +51,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.mock.sliced.SlicedCommand;
 import org.sliceworkz.eventmodeling.mock.sliced.SlicedFeatureSlice;
+import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
@@ -235,7 +236,11 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("expected the Sliced feature slice, got: " + starting.enabledFeatures()));
 
-		assertEquals(Set.of(new BoundedContextEvent.SliceMember("Sliced", BoundedContextEvent.MemberKind.COMMAND)), sliced.members());
+		assertEquals(Set.of(new BoundedContextEvent.SliceMember("Sliced", BoundedContextEvent.MemberKind.COMMAND, Aspect.COMMAND)), sliced.members(),
+				"the command is declared, and attributed to the aspect it was registered in");
+
+		// the deployment announces which aspects it runs, which is the other half of knowing where a member runs
+		assertEquals(Set.of(Aspect.COMMAND, Aspect.QUERY, Aspect.AUTOMATION, Aspect.PROJECTION), starting.aspects());
 
 		// and the declared name is the one the command reports when it actually runs
 		domain.execute(new SlicedCommand());
@@ -245,6 +250,41 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("expected a CommandExecuted event, got: " + received));
 		assertEquals(sliced.members().iterator().next().name(), executed.command());
+	}
+
+	@Test
+	void anInstanceRunningOnlySomeAspectsAnnouncesThoseAndDeclaresOnlyTheirMembers() {
+		// The point of the aspects: parts of one slice run on different instances. An instance that
+		// serves queries but runs no commands must say so, and must not claim the command members it
+		// never configured - otherwise a reader cannot tell what actually runs where.
+		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
+
+		var builder = BoundedContext.newBuilder(Mock.class)
+				.name(CONTEXT_NAME)
+				.eventStorage(eventStorage)
+				.instance(InstanceFactory.determine("unittests"))
+				.listener(event -> received.add(event.data()))
+				.features()
+					.rootPackage(SlicedFeatureSlice.class.getPackage())
+					.disableCommands()
+					.done();
+		buildBoundedContext(builder);
+
+		BoundedContextEvent.BoundedContextStarting starting = received.stream()
+				.filter(e -> e instanceof BoundedContextEvent.BoundedContextStarting)
+				.map(e -> (BoundedContextEvent.BoundedContextStarting) e)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected a BoundedContextStarting event, got: " + received));
+
+		assertEquals(Set.of(Aspect.QUERY, Aspect.AUTOMATION, Aspect.PROJECTION), starting.aspects(),
+				"an instance must announce exactly the aspects it runs");
+
+		BoundedContextEvent.FeatureSlice sliced = starting.enabledFeatures().stream()
+				.filter(slice -> slice.name().equals("Sliced"))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected the Sliced feature slice"));
+		assertTrue(sliced.members().isEmpty(),
+				"the slice is deployed here, but its command aspect is not, so it declares no command");
 	}
 
 	@Test

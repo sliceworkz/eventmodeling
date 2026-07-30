@@ -65,6 +65,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventmodeling.snapshots.LiveModelSnapshotSpecification;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventmodeling.slices.AnnotationBasedDiscoveryAndConfiguration;
+import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventstore.EventStore;
@@ -102,6 +103,14 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	/** The slice currently being configured, or {@code null} outside the configuration callbacks. */
 	private Slice<C> configuringSlice;
+
+	/**
+	 * The aspect currently being configured, which is what a registration is attributed to. Knowing it
+	 * is the whole point of attributing during the callbacks: the same read model registered from
+	 * {@code configureQuery} and from {@code configureProjection} is two members that run in different
+	 * places, and only the callback in progress tells them apart.
+	 */
+	private Aspect configuringAspect;
 
 	private List<LiveModelSpecificationImpl> liveModelSpecs = new ArrayList<>();
 	private List<LongLivedReadModelSpecificationImpl> longLivedReadModelSpecs = new ArrayList<>();
@@ -302,16 +311,26 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		return aggregateSpecification;
 	}
 
+	/** Runs one of a slice's configuration callbacks, marking what registers during it as that aspect's. */
+	private void configure ( Aspect aspect, Runnable configuration ) {
+		configuringAspect = aspect;
+		try {
+			configuration.run();
+		} finally {
+			configuringAspect = null;
+		}
+	}
+
 	/**
-	 * Attributes a registration to the feature slice currently being configured, so
-	 * {@link BoundedContextEvent.FeatureSlice#members()} can announce what a slice is made of before
-	 * any of it has run. Registrations made outside a slice's configuration (directly on the builder)
-	 * belong to no slice and are ignored.
+	 * Attributes a registration to the feature slice and aspect currently being configured, so
+	 * {@link BoundedContextEvent.FeatureSlice#members()} can announce what a slice is made of, and
+	 * which part of it each member belongs to, before any of it has run. Registrations made outside a
+	 * slice's configuration (directly on the builder) belong to no slice and are ignored.
 	 */
 	private void recordSliceMember ( String name, BoundedContextEvent.MemberKind kind ) {
 		if ( configuringSlice != null && name != null ) {
 			sliceMembers.computeIfAbsent(configuringSlice, slice -> new LinkedHashSet<>())
-					.add(new BoundedContextEvent.SliceMember(name, kind));
+					.add(new BoundedContextEvent.SliceMember(name, kind, configuringAspect));
 		}
 	}
 
@@ -378,21 +397,22 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 					featuresSpecification.rootPackage(),
 					featuresSpecification.filter(),
 					slice -> {
-							// Everything registered while this is set is attributed to this slice, which
-							// is how a slice can announce its members before it has done any work.
+							// Everything registered while this is set is attributed to this slice and to the
+							// aspect being configured, which is how a slice can announce what it is made of,
+							// and where each part of it runs, before it has done any work.
 							configuringSlice = slice;
 							try {
 								if ( featuresSpecification.mustDeployCommands() ) {
-									slice.configureCommand(this);
+									configure(Aspect.COMMAND, () -> slice.configureCommand(this));
 								}
 								if ( featuresSpecification.mustDeployQueries() ) {
-									slice.configureQuery(this);
+									configure(Aspect.QUERY, () -> slice.configureQuery(this));
 								}
 								if ( featuresSpecification.mustDeployAutomations() ) {
-									slice.configureAutomation(this);
+									configure(Aspect.AUTOMATION, () -> slice.configureAutomation(this));
 								}
 								if ( featuresSpecification.mustDeployProjections() ) {
-									slice.configureProjection(this);
+									configure(Aspect.PROJECTION, () -> slice.configureProjection(this));
 								}
 							} finally {
 								configuringSlice = null;

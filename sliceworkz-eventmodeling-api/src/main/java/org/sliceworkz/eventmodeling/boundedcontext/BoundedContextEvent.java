@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.boundedcontext;
 import java.util.List;
 import java.util.Set;
 
+import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventstore.events.EventReference;
 
@@ -60,7 +61,13 @@ public sealed interface BoundedContextEvent {
 
 	/**
 	 * Emitted when a bounded context begins starting up, before its modules are started. It announces
-	 * what is being started: the feature slices that are deployed and the ones that are not.
+	 * what is being started: the feature slices that are deployed and the ones that are not, and which
+	 * {@link Aspect}s of them this deployment runs.
+	 * <p>
+	 * The two are separate axes. The slice sets say <em>which</em> slices this instance carries; the
+	 * aspects say <em>which parts</em> of them it runs, so a component of a deployed slice still only
+	 * runs here when its aspect is among these. {@code aspects} is {@code null} on an event written
+	 * before deployments announced them - meaning unknown, not "none".
 	 * <p>
 	 * The context is not usable yet at this point. What happens between this event and the
 	 * {@link BoundedContextStarted} that follows it is the startup work — most notably projecting the
@@ -72,7 +79,15 @@ public sealed interface BoundedContextEvent {
 			String physical,
 			String process,
 			Set<FeatureSlice> enabledFeatures,
-			Set<FeatureSlice> disabledFeatures ) implements BoundedContextEvent { }
+			Set<FeatureSlice> disabledFeatures,
+			Set<Aspect> aspects ) implements BoundedContextEvent {
+
+		public BoundedContextStarting {
+			// null is kept, and means "written before a deployment announced its aspects" - which is not
+			// the same as an instance that runs none of them, so it must not be normalized away.
+			aspects = aspects == null ? null : Set.copyOf(aspects);
+		}
+	}
 
 	/**
 	 * Emitted when a bounded context has started: its modules are running and its ephemeral read
@@ -234,8 +249,15 @@ public sealed interface BoundedContextEvent {
 	 * A component a feature slice registers on its bounded context, named the way the events
 	 * reporting its work name it (e.g. a read model by its {@code readmodelName()}), so a reader can
 	 * match what a slice declares against what it observes.
+	 * <p>
+	 * {@code aspect} is the facet of the slice it was registered in, which together with the aspects a
+	 * deployment announces is what says where the component actually runs. It matters because the same
+	 * read model class can be registered in more than one aspect - projected on demand to answer a
+	 * query on one instance, kept up to date by a projector on another - and those are different
+	 * members that happen to share a name. It is {@code null} on an event written before members
+	 * carried their aspect.
 	 */
-	record SliceMember ( String name, MemberKind kind ) { }
+	record SliceMember ( String name, MemberKind kind, Aspect aspect ) { }
 
 	/** What a {@link SliceMember} is. */
 	enum MemberKind {

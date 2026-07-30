@@ -21,6 +21,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextListener;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Tags;
 
@@ -58,6 +59,14 @@ public final class BoundedContextEventEmitter {
 	 */
 	public BoundedContextEvent.FeatureSlice sliceFor ( Class<?> componentClass ) {
 		return sliceRegistry.resolve(componentClass);
+	}
+
+	/**
+	 * Describes a feature slice - deployed or not - for the lifecycle inventory, including the
+	 * members it registered.
+	 */
+	public BoundedContextEvent.FeatureSlice describe ( Slice<?> slice ) {
+		return sliceRegistry.describe(slice);
 	}
 
 	/**

@@ -147,7 +147,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	}
 
 	private Set<BoundedContextEvent.FeatureSlice> map ( List<? extends Slice<? extends BoundedContext<?,?,?>>> featureSlices ) {
-		return featureSlices.stream().map(fs->new BoundedContextEvent.FeatureSlice(fs.name(), fs.type(), fs.context(), fs.chapter(), fs.tags())).collect(Collectors.toSet());
+		return featureSlices.stream().map(eventEmitter::describe).collect(Collectors.toSet());
 	}
 
 	@SuppressWarnings({"unchecked", "rawtypes"})

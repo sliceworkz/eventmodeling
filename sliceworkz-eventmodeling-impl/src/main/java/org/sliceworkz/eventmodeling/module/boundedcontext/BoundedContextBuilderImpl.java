@@ -25,7 +25,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -38,6 +42,7 @@ import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.boundedcontext.AdapterBinding;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextListener;
 import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -84,6 +89,17 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	private Class<C> contextType;
 	private String name;
+
+	/**
+	 * The components every feature slice registers, keyed by slice instance (identity: two slices are
+	 * never the same registration even if they compare equal). Filled by {@link #recordSliceMember}
+	 * while {@link #configuringSlice} points at the slice whose {@code configure...} methods are
+	 * running, which is the only window in which a registration can be attributed to a slice.
+	 */
+	private final Map<Slice<?>, Set<BoundedContextEvent.SliceMember>> sliceMembers = new IdentityHashMap<>();
+
+	/** The slice currently being configured, or {@code null} outside the configuration callbacks. */
+	private Slice<C> configuringSlice;
 
 	private List<LiveModelSpecificationImpl> liveModelSpecs = new ArrayList<>();
 	private List<LongLivedReadModelSpecificationImpl> longLivedReadModelSpecs = new ArrayList<>();
@@ -188,6 +204,9 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	public LiveModelSpecification<C> readmodel ( Class<? extends ReadModelWithMetaData<?>> readModelClass ) {
 		var m = new LiveModelSpecificationImpl(this, readModelClass);
 		liveModelSpecs.add(m);
+		// A live model is instantiated per projection, so only its class is known here. That matches
+		// the name the LiveModelProjected events carry unless the read model overrides readmodelName().
+		recordSliceMember(readModelClass.getSimpleName(), BoundedContextEvent.MemberKind.READ_MODEL);
 		return m;
 	}
 
@@ -195,18 +214,21 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	public LongLivedReadModelSpecification<C> readmodel ( ReadModelWithMetaData<?> readModel ) {
 		var m = new LongLivedReadModelSpecificationImpl(this, readModel);
 		longLivedReadModelSpecs.add(m);
+		recordSliceMember(readModel.readmodelName(), BoundedContextEvent.MemberKind.READ_MODEL);
 		return m;
 	}
 
 	@Override
 	public BoundedContextBuilder<C> automation ( Automation<?,?,?> automation ) {
 		automations.add(automation);
+		recordSliceMember(automation.getClass().getSimpleName(), BoundedContextEvent.MemberKind.AUTOMATION);
 		return this;
 	}
 
 	@Override
 	public BoundedContextBuilder<C> translator ( Translator<?,?> translator ) {
 		translatorSpecs.add(translator);
+		recordSliceMember(translator.getClass().getSimpleName(), BoundedContextEvent.MemberKind.TRANSLATOR);
 		return this;
 	}
 
@@ -228,6 +250,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	@Override
 	public BoundedContextBuilder<C> dispatcher ( Dispatcher<?> dispatcher ) {
 		dispatcherSpecs.add(dispatcher);
+		recordSliceMember(dispatcher.getClass().getSimpleName(), BoundedContextEvent.MemberKind.DISPATCHER);
 		return this;
 	}
 
@@ -253,7 +276,21 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 		var aggregateSpecification = new AggregateSpecificationImpl(this, aggregateClass);
 		this.aggregateSpecifications.add(aggregateSpecification);
+		recordSliceMember(aggregateClass.getSimpleName(), BoundedContextEvent.MemberKind.AGGREGATE);
 		return aggregateSpecification;
+	}
+
+	/**
+	 * Attributes a registration to the feature slice currently being configured, so
+	 * {@link BoundedContextEvent.FeatureSlice#members()} can announce what a slice is made of before
+	 * any of it has run. Registrations made outside a slice's configuration (directly on the builder)
+	 * belong to no slice and are ignored.
+	 */
+	private void recordSliceMember ( String name, BoundedContextEvent.MemberKind kind ) {
+		if ( configuringSlice != null && name != null ) {
+			sliceMembers.computeIfAbsent(configuringSlice, slice -> new LinkedHashSet<>())
+					.add(new BoundedContextEvent.SliceMember(name, kind));
+		}
 	}
 
 	@Override
@@ -319,17 +356,24 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 					featuresSpecification.rootPackage(),
 					featuresSpecification.filter(),
 					slice -> {
-							if ( featuresSpecification.mustDeployCommands() ) {
-								slice.configureCommand(this);
-							}
-							if ( featuresSpecification.mustDeployQueries() ) {
-								slice.configureQuery(this);
-							}
-							if ( featuresSpecification.mustDeployAutomations() ) {
-								slice.configureAutomation(this);
-							}
-							if ( featuresSpecification.mustDeployProjections() ) {
-								slice.configureProjection(this);
+							// Everything registered while this is set is attributed to this slice, which
+							// is how a slice can announce its members before it has done any work.
+							configuringSlice = slice;
+							try {
+								if ( featuresSpecification.mustDeployCommands() ) {
+									slice.configureCommand(this);
+								}
+								if ( featuresSpecification.mustDeployQueries() ) {
+									slice.configureQuery(this);
+								}
+								if ( featuresSpecification.mustDeployAutomations() ) {
+									slice.configureAutomation(this);
+								}
+								if ( featuresSpecification.mustDeployProjections() ) {
+									slice.configureProjection(this);
+								}
+							} finally {
+								configuringSlice = null;
 							}
 						});
 
@@ -343,7 +387,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			LOGGER.warn("no features rootPackage");
 		}
 
-		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices));
+		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices, sliceMembers));
 
 		// how each of these is projected (every instance or a single leader) follows from the read
 		// model's own storage class, see ReadModelModule.createProjectorProcessors

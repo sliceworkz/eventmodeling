@@ -207,10 +207,42 @@ public sealed interface BoundedContextEvent {
 	 */
 
 	/**
-	 * A feature slice descriptor: the slice name, its event-modeling {@link Type}, and the
-	 * {@code context}/{@code chapter}/{@code tags} declared on its {@code @FeatureSlice} annotation.
+	 * A feature slice descriptor: the slice name, its event-modeling {@link Type}, the
+	 * {@code context}/{@code chapter}/{@code tags} declared on its {@code @FeatureSlice} annotation,
+	 * and the components the slice registered on the bounded context.
+	 * <p>
+	 * {@code members} is what the slice declares while the bounded context is built: the read models,
+	 * automations, translators, dispatchers and aggregates it registers in its {@code configure...}
+	 * methods. Commands are deliberately absent — they are not registered anywhere, but instantiated
+	 * per execution and attributed to a slice by package convention, so a reader learns of them from
+	 * the {@link CommandExecuted} events instead. An undeployed slice is never configured and
+	 * therefore declares no members at all.
+	 * <p>
+	 * An event stored before this property existed reads it as {@code null}; the compact constructor
+	 * normalizes that to an empty set so readers never have to null-check it.
 	 */
-	record FeatureSlice ( String name, Type type, String context, String chapter, Set<String> tags ) { }
+	record FeatureSlice ( String name, Type type, String context, String chapter, Set<String> tags, Set<SliceMember> members ) {
+
+		public FeatureSlice {
+			members = members == null ? Set.of() : Set.copyOf(members);
+		}
+	}
+
+	/**
+	 * A component a feature slice registers on its bounded context, named the way the events
+	 * reporting its work name it (e.g. a read model by its {@code readmodelName()}), so a reader can
+	 * match what a slice declares against what it observes.
+	 */
+	record SliceMember ( String name, MemberKind kind ) { }
+
+	/** What a {@link SliceMember} is. */
+	enum MemberKind {
+		READ_MODEL,
+		AUTOMATION,
+		TRANSLATOR,
+		DISPATCHER,
+		AGGREGATE
+	}
 
 	/**
 	 * A serialization-friendly description of an exception raised during command execution.

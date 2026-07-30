@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.module.boundedcontext;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.slices.Slice;
@@ -31,14 +32,25 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * <p>
  * Built from the deployed feature slices of a bounded context. Components located outside any known
  * slice package resolve to {@code null}.
+ * <p>
+ * This is also the single place a {@link BoundedContextEvent.FeatureSlice} descriptor is built, so
+ * the slice a work event reports and the slice the lifecycle inventory announces cannot drift apart.
  */
 public final class SliceRegistry {
 
 	private final Map<String, BoundedContextEvent.FeatureSlice> byPackage = new HashMap<>();
+	private final Map<Slice<?>, Set<BoundedContextEvent.SliceMember>> members;
 
-	public SliceRegistry ( Collection<? extends Slice<?>> slices ) {
+	/**
+	 * @param slices  the deployed feature slices, which is what a component is attributed to
+	 * @param members what each slice registered while it was configured, keyed by slice instance;
+	 *                slices absent from the map (notably the undeployed ones, which are never
+	 *                configured) declare no members
+	 */
+	public SliceRegistry ( Collection<? extends Slice<?>> slices, Map<Slice<?>, Set<BoundedContextEvent.SliceMember>> members ) {
+		this.members = members == null ? Map.of() : members;
 		for ( Slice<?> slice : slices ) {
-			byPackage.putIfAbsent(slice.getClass().getPackageName(), toFeatureSlice(slice));
+			byPackage.putIfAbsent(slice.getClass().getPackageName(), describe(slice));
 		}
 	}
 
@@ -50,8 +62,12 @@ public final class SliceRegistry {
 		return componentClass == null ? null : byPackage.get(componentClass.getPackageName());
 	}
 
-	private static BoundedContextEvent.FeatureSlice toFeatureSlice ( Slice<?> slice ) {
-		return new BoundedContextEvent.FeatureSlice(slice.name(), slice.type(), slice.context(), slice.chapter(), slice.tags());
+	/**
+	 * Describes any feature slice - deployed or not - as it is announced on the wire.
+	 */
+	public BoundedContextEvent.FeatureSlice describe ( Slice<?> slice ) {
+		return new BoundedContextEvent.FeatureSlice(slice.name(), slice.type(), slice.context(), slice.chapter(), slice.tags(),
+				members.getOrDefault(slice, Set.of()));
 	}
 
 }

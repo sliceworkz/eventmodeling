@@ -127,6 +127,11 @@ features/
 - Implement `Command<DOMAIN_EVENT_TYPE>`
 - Return `CommandResult` containing raised events
 - Access bounded context capabilities via constructor injection
+- Unlike every other component, a command is not wired into the bounded context: it is instantiated by
+  the caller, executed ad hoc, and attributed to its feature slice by package convention. A slice can
+  still declare its commands from `configureCommand` with `builder.command(PlaceOrderCommand.class)`,
+  which is purely declarative — it only adds them to the slice's `members` on `BoundedContextStarting`,
+  so an observer (the dashboard) shows them from startup instead of after their first execution
 
 **ReadModels:**
 - Implement `ReadModel<DOMAIN_EVENT_TYPE>` which extends `EventHandler<DOMAIN_EVENT_TYPE>`

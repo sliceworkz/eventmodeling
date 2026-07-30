@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.closemonth;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.banking.Banking;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
@@ -39,4 +40,10 @@ import org.sliceworkz.eventmodeling.slices.Slice;
 @FeatureSlice(type = Type.AUTOMATION, context = "banking", chapter = "Closing The Books",
 	tags = {"closing-the-books", "month-end"})
 public class CloseMonthFeatureSlice implements Slice<Banking> {
+
+	@Override
+	public void configureCommand(BoundedContextBuilder<Banking> builder) {
+		builder.command(CloseMonthCommand.class);
+	}
+
 }

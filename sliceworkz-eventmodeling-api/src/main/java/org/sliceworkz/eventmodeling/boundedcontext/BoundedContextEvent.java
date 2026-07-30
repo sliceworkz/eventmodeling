@@ -211,12 +211,14 @@ public sealed interface BoundedContextEvent {
 	 * {@code context}/{@code chapter}/{@code tags} declared on its {@code @FeatureSlice} annotation,
 	 * and the components the slice registered on the bounded context.
 	 * <p>
-	 * {@code members} is what the slice declares while the bounded context is built: the read models,
-	 * automations, translators, dispatchers and aggregates it registers in its {@code configure...}
-	 * methods. Commands are deliberately absent — they are not registered anywhere, but instantiated
-	 * per execution and attributed to a slice by package convention, so a reader learns of them from
-	 * the {@link CommandExecuted} events instead. An undeployed slice is never configured and
-	 * therefore declares no members at all.
+	 * {@code members} is what the slice declares while the bounded context is built: the commands, read
+	 * models, automations, translators, dispatchers and aggregates it registers in its
+	 * {@code configure...} methods. An undeployed slice is never configured and therefore declares no
+	 * members at all.
+	 * <p>
+	 * Registering a command is purely declarative: a command is executed ad hoc and attributed to a
+	 * slice by package convention either way. A slice that does not register its commands still
+	 * reports them, but only from their first {@link CommandExecuted} onwards.
 	 * <p>
 	 * An event stored before this property existed reads it as {@code null}; the compact constructor
 	 * normalizes that to an empty set so readers never have to null-check it.
@@ -237,6 +239,7 @@ public sealed interface BoundedContextEvent {
 
 	/** What a {@link SliceMember} is. */
 	enum MemberKind {
+		COMMAND,
 		READ_MODEL,
 		AUTOMATION,
 		TRANSLATOR,

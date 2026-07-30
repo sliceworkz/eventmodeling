@@ -20,10 +20,24 @@ package org.sliceworkz.eventmodeling.commands;
 public sealed interface AbstractCommand<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> permits Command, OutboundCommand {
 
 	default String commandName ( ) {
-		String simpleName = this.getClass().getSimpleName();
+		return commandNameOf(this.getClass());
+	}
+
+	/**
+	 * The name a command is reported under: its simple class name without the conventional
+	 * {@code Command} suffix.
+	 * <p>
+	 * Single definition of the convention, shared by {@link CommandWithResult} and by the command
+	 * registration on the bounded context builder, so that a command declared on a feature slice
+	 * before it has ever run and the same command observed running are named identically. A command
+	 * that overrides {@link #commandName()} breaks that correspondence, since the override cannot be
+	 * consulted without an instance.
+	 */
+	static String commandNameOf ( Class<?> commandClass ) {
+		String simpleName = commandClass.getSimpleName();
 		return simpleName.endsWith("Command") ? simpleName.substring(0, simpleName.length() - "Command".length()) : simpleName;
 	}
-	
+
 	void execute ( CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> context );
 
 }

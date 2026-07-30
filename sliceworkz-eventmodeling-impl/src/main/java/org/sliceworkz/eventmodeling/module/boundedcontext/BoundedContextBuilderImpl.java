@@ -39,6 +39,8 @@ import org.sliceworkz.eventmodeling.EventTypes; // retained for javadoc/logging
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
+import org.sliceworkz.eventmodeling.commands.AbstractCommand;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.boundedcontext.AdapterBinding;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
@@ -267,6 +269,26 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		} catch (IllegalAccessException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	@Override
+	public BoundedContextBuilder<C> command ( Class<?>... commandClasses ) {
+		if ( commandClasses == null ) {
+			throw new IllegalArgumentException("commandClasses must not be null");
+		}
+		for ( Class<?> commandClass : commandClasses ) {
+			if ( commandClass == null ) {
+				throw new IllegalArgumentException("command class must not be null");
+			}
+			if ( !AbstractCommand.class.isAssignableFrom(commandClass) && !CommandWithResult.class.isAssignableFrom(commandClass) ) {
+				throw new IllegalArgumentException("%s is not a command: it implements neither %s nor %s"
+						.formatted(commandClass.getName(), AbstractCommand.class.getSimpleName(), CommandWithResult.class.getSimpleName()));
+			}
+			// Nothing to wire: a command is instantiated by the caller and executed ad hoc. This only
+			// declares it, so its slice reports it before it has ever run.
+			recordSliceMember(AbstractCommand.commandNameOf(commandClass), BoundedContextEvent.MemberKind.COMMAND);
+		}
+		return this;
 	}
 
 	@Override

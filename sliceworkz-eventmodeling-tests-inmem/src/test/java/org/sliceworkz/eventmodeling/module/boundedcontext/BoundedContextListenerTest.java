@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -205,6 +207,72 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 	}
 
 	@Test
+	void startingDeclaresTheCommandsOfASliceBeforeAnyHasRun() {
+		// A command is not wired into anything, so without declaring it a slice can only be seen to
+		// contain it once it has been executed. Declared, it is in the inventory from the start - and
+		// under exactly the name the CommandExecuted will later carry, which is what lets an observer
+		// match the two instead of reporting the command twice.
+		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
+
+		var builder = BoundedContext.newBuilder(Mock.class)
+				.name(CONTEXT_NAME)
+				.eventStorage(eventStorage)
+				.instance(InstanceFactory.determine("unittests"))
+				.listener(event -> received.add(event.data()))
+				.features()
+					.rootPackage(SlicedFeatureSlice.class.getPackage())
+					.done();
+		Mock domain = buildBoundedContext(builder);
+
+		BoundedContextEvent.BoundedContextStarting starting = received.stream()
+				.filter(e -> e instanceof BoundedContextEvent.BoundedContextStarting)
+				.map(e -> (BoundedContextEvent.BoundedContextStarting) e)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected a BoundedContextStarting event, got: " + received));
+
+		BoundedContextEvent.FeatureSlice sliced = starting.enabledFeatures().stream()
+				.filter(slice -> slice.name().equals("Sliced"))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected the Sliced feature slice, got: " + starting.enabledFeatures()));
+
+		assertEquals(Set.of(new BoundedContextEvent.SliceMember("Sliced", BoundedContextEvent.MemberKind.COMMAND)), sliced.members());
+
+		// and the declared name is the one the command reports when it actually runs
+		domain.execute(new SlicedCommand());
+		CommandExecuted executed = received.stream()
+				.filter(e -> e instanceof CommandExecuted)
+				.map(e -> (CommandExecuted) e)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected a CommandExecuted event, got: " + received));
+		assertEquals(sliced.members().iterator().next().name(), executed.command());
+	}
+
+	@Test
+	void aCommandDeclaredOutsideASliceBelongsToNoneAndACommandThatIsNotOneIsRejected() {
+		// Registering straight on the builder (not from within a slice's configuration) has nothing to
+		// attribute the command to, so it is quietly ignored rather than landing on an arbitrary slice.
+		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
+
+		var builder = BoundedContext.newBuilder(Mock.class)
+				.name(CONTEXT_NAME)
+				.eventStorage(eventStorage)
+				.instance(InstanceFactory.determine("unittests"))
+				.listener(event -> received.add(event.data()));
+		builder.command(MockCommand.class);
+		buildBoundedContext(builder);
+
+		BoundedContextEvent.BoundedContextStarting starting = received.stream()
+				.filter(e -> e instanceof BoundedContextEvent.BoundedContextStarting)
+				.map(e -> (BoundedContextEvent.BoundedContextStarting) e)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected a BoundedContextStarting event, got: " + received));
+		assertTrue(starting.enabledFeatures().stream().allMatch(slice -> slice.members().isEmpty()));
+
+		assertThrows(IllegalArgumentException.class, () -> builder.command(MockReadModel.class),
+				"a class that is not a command must be rejected where it is registered, not silently reported as one");
+	}
+
+	@Test
 	void emittedEventsCarryTracingTags() {
 		List<EphemeralEvent<BoundedContextEvent>> received = Collections.synchronizedList(new ArrayList<>());
 
@@ -286,6 +354,31 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		assertEquals("orders", started.boundedContext());
 		assertEquals("orders-1", started.physical());
 		assertEquals(0, started.startupDurationMs()); // the property did not exist when the event was written
+	}
+
+	@Test
+	void readsBackASliceInventoryStoredBeforeSlicesDeclaredTheirMembers() {
+		// Same concern one level down: a BoundedContextStarting written before FeatureSlice carried its
+		// members must still bind, with the absent property reading as "declares nothing" rather than
+		// null - otherwise every reader has to null-check a collection that is never null going forward.
+		EventStreamId streamId = EventStreamId.forContext(CONTEXT_NAME).withPurpose("kernel-legacy-slices");
+		eventStorage.append(AppendCriteria.none(), Optional.of(streamId), List.of(new EventToStore(streamId,
+				EventType.of(BoundedContextEvent.BoundedContextStarting.class),
+				"""
+				{"boundedContext":"orders","logical":"orders","physical":"orders-1","process":"p123",\
+				"enabledFeatures":[{"name":"PlaceOrder","type":"STATE_CHANGE","context":"orders","chapter":"checkout","tags":[]}],\
+				"disabledFeatures":[]}""",
+				null, Tags.none(), null)));
+
+		EventStream<BoundedContextEvent> kernelStream = EventStoreFactory.get().eventStore(eventStorage)
+				.getEventStream(streamId, BoundedContextEvent.class);
+		BoundedContextEvent.BoundedContextStarting starting = (BoundedContextEvent.BoundedContextStarting)
+				kernelStream.query(EventQuery.matchAll()).map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
+
+		BoundedContextEvent.FeatureSlice placeOrder = starting.enabledFeatures().iterator().next();
+		assertEquals("PlaceOrder", placeOrder.name());
+		assertNotNull(placeOrder.members(), "an absent members property must read as an empty set, not null");
+		assertTrue(placeOrder.members().isEmpty());
 	}
 
 }

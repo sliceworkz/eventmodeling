@@ -21,6 +21,10 @@ import org.sliceworkz.eventmodeling.EventTypes; // retained for javadoc referenc
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
+import org.sliceworkz.eventmodeling.commands.AbstractCommand;
+import org.sliceworkz.eventmodeling.commands.Command;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
+import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
@@ -67,6 +71,36 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * @return this builder
 	 */
 	BoundedContextBuilder<C> listener ( BoundedContextListener listener );
+
+	/**
+	 * Declares the commands a feature slice contains, so that the slice reports them from the moment
+	 * the bounded context starts instead of only after each has been executed once.
+	 * <p>
+	 * Purely declarative. Unlike every other registration on this builder, a command is not wired into
+	 * anything: it is instantiated by the caller and executed ad hoc, and attributed to its slice by
+	 * package convention whether or not it is declared here. Declaring it only fills in
+	 * {@link BoundedContextEvent.FeatureSlice#members()}, which is what an observer (a monitoring
+	 * dashboard) reads to show a slice's contents before it has done any work.
+	 * <p>
+	 * Call it from {@link org.sliceworkz.eventmodeling.slices.Slice#configureCommand}, so the commands
+	 * are attributed to that slice and are only declared where commands are actually deployed:
+	 * <pre>{@code
+	 * @FeatureSlice(type = Type.STATE_CHANGE)
+	 * public class PlaceOrderFeatureSlice implements Slice<Orders> {
+	 *     @Override
+	 *     public void configureCommand ( BoundedContextBuilder<Orders> builder ) {
+	 *         builder.command(PlaceOrderCommand.class, CancelOrderCommand.class);
+	 *     }
+	 * }
+	 * }</pre>
+	 * A command declared outside a slice's configuration belongs to no slice and is ignored.
+	 *
+	 * @param commandClasses the command classes; each must implement {@link AbstractCommand}
+	 *                       (so {@link Command} or {@link OutboundCommand}) or {@link CommandWithResult}
+	 * @return this builder
+	 * @throws IllegalArgumentException if a class is {@code null} or is not a command
+	 */
+	BoundedContextBuilder<C> command(Class<?>... commandClasses);
 
 	AggregateSpecification<C> aggregate(Class<? extends Aggregate<?>> aggregateClass);
 

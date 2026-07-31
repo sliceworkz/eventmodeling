@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -45,6 +46,7 @@ import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventmodeling.readmodels.UnboundedReadModelCapability;
+import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventstore.events.Event;
@@ -147,7 +149,21 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	}
 
 	private Set<BoundedContextEvent.FeatureSlice> map ( List<? extends Slice<? extends BoundedContext<?,?,?>>> featureSlices ) {
-		return featureSlices.stream().map(fs->new BoundedContextEvent.FeatureSlice(fs.name(), fs.type(), fs.context(), fs.chapter(), fs.tags())).collect(Collectors.toSet());
+		return featureSlices.stream().map(eventEmitter::describe).collect(Collectors.toSet());
+	}
+
+	/**
+	 * The aspects of its feature slices this deployment runs. Together with the aspect each member was
+	 * registered in, this is what tells a reader where a given component actually runs - the same slice
+	 * can have its queries served here and its projections kept up to date elsewhere.
+	 */
+	private Set<Aspect> deployedAspects ( ) {
+		Set<Aspect> aspects = EnumSet.noneOf(Aspect.class);
+		if ( startCommands ) aspects.add(Aspect.COMMAND);
+		if ( startQueries ) aspects.add(Aspect.QUERY);
+		if ( startAutomations ) aspects.add(Aspect.AUTOMATION);
+		if ( startProjections ) aspects.add(Aspect.PROJECTION);
+		return aspects;
 	}
 
 	@SuppressWarnings({"unchecked", "rawtypes"})
@@ -155,7 +171,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	public void start ( ) {
 		LOGGER.info("starting bounded context '{}' ...", name);
 		long startedAt = System.currentTimeMillis();
-		eventEmitter.emit(new BoundedContextStarting(name, instance.logical(), instance.physical(), instance.process(), map(deployedFeatureSlices), map(undeployedFeatureSlices)));
+		eventEmitter.emit(new BoundedContextStarting(name, instance.logical(), instance.physical(), instance.process(),
+				map(deployedFeatureSlices), map(undeployedFeatureSlices), deployedAspects()));
 		for (var slice : deployedFeatureSlices) {
 			Slice raw = (Slice) slice;
 			if (startCommands) raw.startCommand(selfReference);

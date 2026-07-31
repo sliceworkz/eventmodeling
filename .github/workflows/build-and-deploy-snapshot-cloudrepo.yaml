@@ -23,6 +23,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    # Job-wide rather than per-step: the cloudrepo is where this project RESOLVES the
+    # eventstore SNAPSHOTs from as well as where it deploys to (see the <repositories>
+    # entry in the root POM), so setup-java's ${env.CLOUDREPO_*} placeholders have to be
+    # filled in for every mvn invocation. With them only on the deploy step, the version
+    # check below sent the literal placeholder as its username and died on an HTTP 401
+    # while reading sliceworkz-eventstore-bom.
+    env:
+      CLOUDREPO_USERNAME: ${{ secrets.CLOUDREPO_USERNAME }}
+      CLOUDREPO_PASSWORD: ${{ secrets.CLOUDREPO_PASSWORD }}
+
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
@@ -51,6 +61,3 @@ jobs:
 
       - name: Build and deploy to cloudrepo
         run: mvn -B -Pcloudrepo -DskipTests clean deploy
-        env:
-          CLOUDREPO_USERNAME: ${{ secrets.CLOUDREPO_USERNAME }}
-          CLOUDREPO_PASSWORD: ${{ secrets.CLOUDREPO_PASSWORD }}

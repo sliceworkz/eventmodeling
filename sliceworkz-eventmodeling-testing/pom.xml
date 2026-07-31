@@ -47,6 +47,17 @@
 			<groupId>org.sliceworkz</groupId>
 			<artifactId>sliceworkz-eventstore-infra-inmem</artifactId>
 		</dependency>
+		<!--
+			The eventstore's own testing support: the backend harness (EventStoreBackend,
+			@ForEachBackend) and, used here, its Testcontainers-managed PostgresContainer. Compile
+			scope because it is part of what this module publishes to its consumers — a test
+			extending SqlReadModelTest gets the container without declaring anything extra.
+		-->
+		<dependency>
+			<groupId>org.sliceworkz</groupId>
+			<artifactId>sliceworkz-eventstore-testing</artifactId>
+			<scope>compile</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter-api</artifactId>

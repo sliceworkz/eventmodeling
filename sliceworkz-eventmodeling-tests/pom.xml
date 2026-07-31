@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
+    Copyright © 2025-2026 Sliceworkz / XTi (info@sliceworkz.org)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.sliceworkz</groupId>
+		<artifactId>sliceworkz-eventmodeling-parent-pom</artifactId>
+		<version>0.7.0-SNAPSHOT</version>
+		<relativePath>../sliceworkz-eventmodeling-parent-pom</relativePath>
+	</parent>
+
+	<name>${project.artifactId}</name>
+	<description>An opinionated Event Modeling framework in Java</description>
+	<url>https://sliceworkz.github.io/eventmodeling</url>
+
+	<artifactId>sliceworkz-eventmodeling-tests</artifactId>
+	<packaging>jar</packaging>
+
+	<!--
+		The framework's integration tests, run against every event storage the eventstore ships.
+
+		Scenarios that must hold whatever the storage is are annotated @ForEachBackend (from
+		sliceworkz-eventstore-testing) and run once per backend registered in
+		src/test/resources/META-INF/services/org.sliceworkz.eventstore.testing.EventStoreBackend —
+		that file is the whole configuration. This replaces the former tests-inmem/tests-postgres
+		split, where every Postgres run needed a hand-written @Nested OnPostgres17/OnPostgres18
+		subclass per scenario.
+
+		Skip the containers in a local run with -Deventstore.testing.backends=inmem.
+	-->
+	<dependencies>
+		<dependency>
+			<groupId>org.sliceworkz</groupId>
+			<artifactId>sliceworkz-eventmodeling-impl</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.sliceworkz</groupId>
+			<artifactId>sliceworkz-eventstore-impl</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.sliceworkz</groupId>
+			<artifactId>sliceworkz-eventmodeling-testing</artifactId>
+			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>com.tngtech.archunit</groupId>
+					<artifactId>archunit-junit5</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.sliceworkz</groupId>
+			<artifactId>sliceworkz-eventstore-testing</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- the storages the registered backends build on -->
+		<dependency>
+			<groupId>org.sliceworkz</groupId>
+			<artifactId>sliceworkz-eventstore-infra-inmem</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.sliceworkz</groupId>
+			<artifactId>sliceworkz-eventstore-infra-inmem-fs</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.sliceworkz</groupId>
+			<artifactId>sliceworkz-eventstore-infra-postgres</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<!--
+			sliceworkz-eventstore-testing declares these <optional> so a consumer using only the
+			in-memory backend does not inherit Testcontainers. Running the Postgres backends here
+			means declaring them explicitly.
+		-->
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.zaxxer</groupId>
+			<artifactId>HikariCP</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<!-- needed for PostgresLegacyEventStorageImpl when scenarios run against PostgreSQL 17 -->
+			<groupId>com.github.f4b6a3</groupId>
+			<artifactId>uuid-creator</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+	</dependencies>
+
+</project>

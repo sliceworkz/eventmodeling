@@ -111,7 +111,7 @@
 			  uuid-creator: only needed by sliceworkz-eventstore's PostgresLegacyEventStorageImpl
 			  for Java-side uuidv7 generation against PostgreSQL 13-17. Marked optional so
 			  applications targeting PostgreSQL 18+ (where uuidv7() is server-side) do not pull
-			  it in transitively. Modules in this build that exercise PG17 (tests-postgres,
+			  it in transitively. Modules in this build that exercise PG17 (tests,
 			  benchmark) declare it explicitly.
 			-->
 			<dependency>

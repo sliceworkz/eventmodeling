@@ -93,6 +93,14 @@
 			</releases>
 			<snapshots>
 				<enabled>true</enabled>
+				<!--
+					Check for a newer snapshot on every build, instead of Maven's default of once a day.
+					The eventstore snapshot this tracks moves several times a day, and the CI workflows
+					restore ~/.m2 from setup-java's maven cache: with the default policy a runner keeps
+					compiling against whichever snapshot it cached earlier that day, which shows up as a
+					compile error against an API that has since changed rather than as a stale download.
+				-->
+				<updatePolicy>always</updatePolicy>
 			</snapshots>
 		</repository>
 	</repositories>

@@ -34,7 +34,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-		<sliceworkz.eventstore.version>0.9.1</sliceworkz.eventstore.version>
+		<sliceworkz.eventstore.version>0.10.0-SNAPSHOT</sliceworkz.eventstore.version>
 		
 		<maven.minimal-version>3.6.3</maven.minimal-version>
 		
@@ -57,8 +57,7 @@
 		<module>sliceworkz-eventmodeling-api</module>
 		<module>sliceworkz-eventmodeling-impl</module>
 		<module>sliceworkz-eventmodeling-testing</module>
-		<module>sliceworkz-eventmodeling-tests-inmem</module>
-		<module>sliceworkz-eventmodeling-tests-postgres</module>
+		<module>sliceworkz-eventmodeling-tests</module>
 		<module>sliceworkz-eventmodeling-benchmark</module>
 		<module>sliceworkz-eventmodeling-examples</module>
 	</modules>
@@ -172,8 +171,7 @@
 					<excludeArtifact>sliceworkz-eventmodeling-parent-pom</excludeArtifact>
 					<excludeArtifact>sliceworkz-eventmodeling-examples</excludeArtifact>
 					<excludeArtifact>sliceworkz-eventmodeling-benchmark</excludeArtifact>
-					<excludeArtifact>sliceworkz-eventmodeling-tests-inmem</excludeArtifact>
-					<excludeArtifact>sliceworkz-eventmodeling-tests-postgres</excludeArtifact>
+					<excludeArtifact>sliceworkz-eventmodeling-tests</excludeArtifact>
 				</excludeArtifacts>
 			    </configuration>
 			</plugin>

@@ -10,15 +10,15 @@ This is a Java-based Event Modeling framework implementing event-sourcing patter
 - `sliceworkz-eventmodeling-api`: Public API defining interfaces and abstractions
 - `sliceworkz-eventmodeling-impl`: Framework implementation using ServiceLoader pattern
 - `sliceworkz-eventmodeling-testing`: Base classes and utilities for testing
-- `sliceworkz-eventmodeling-tests-inmem`: Integration tests using in-memory event storage
-- `sliceworkz-eventmodeling-tests-postgres`: Integration tests using PostgreSQL
+- `sliceworkz-eventmodeling-tests`: Integration tests, run against every event storage backend (in-memory, in-memory-fs, PostgreSQL 17/18)
 - `sliceworkz-eventmodeling-examples`: Example applications (banking domain)
 - `sliceworkz-eventmodeling-bom`: Bill of Materials for dependency management
 - `sliceworkz-eventmodeling-parent-pom`: Parent POM with shared configuration
 
 **External Dependencies:**
-- Uses `org.sliceworkz:sliceworkz-eventstore` library (version 0.3.3) for event storage abstraction
-- EventStore provides PostgreSQL and in-memory implementations
+- Uses `org.sliceworkz:sliceworkz-eventstore` library (version in `sliceworkz.eventstore.version`, root pom) for event storage abstraction
+- EventStore provides PostgreSQL, in-memory and file-backed in-memory implementations
+- `sliceworkz-eventstore-testing` supplies the backend harness this project's tests run on (see Testing Approach)
 
 ## Build Commands
 
@@ -194,12 +194,19 @@ The framework supports the 4 Event Modeling patterns:
 
 ## Testing Approach
 
-**Test Modules:**
-- `tests-inmem`: Uses in-memory event storage (fast, no external dependencies)
-- `tests-postgres`: Uses PostgreSQL via Testcontainers (integration tests)
+**Test Module:**
+- `sliceworkz-eventmodeling-tests`: the framework's integration tests, run against every event storage the eventstore ships
+
+**Running against every backend:**
+The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published test support:
+- A scenario that must hold whatever the storage is is annotated `@ForEachBackend` instead of `@Test`. It runs once per registered `EventStoreBackend`, and each invocation is reported under the backend that produced it (`myScenario [postgres:18]`)
+- The backend set is data, not code: `src/test/resources/META-INF/services/org.sliceworkz.eventstore.testing.EventStoreBackend` lists `InMemoryBackend`, `InMemoryFsBackend`, `Postgres17Backend`, `Postgres18Backend`. Adding a storage to the matrix is a line in that file and nothing else
+- A plain `@Test` runs once against the in-memory store. Use it when the scenario is about the framework rather than about storage behaviour (duplicate-name validation, listener wiring), so it does not cost a container run per backend
+- Skip the containers in a local run: `mvn test -Deventstore.testing.backends=inmem`
 
 **Base Classes:**
-- Tests extend framework-provided base test classes from `sliceworkz-eventmodeling-testing`
+- `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves
+- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `SqlReadModelTest`)
 - Use JUnit 5 (Jupiter)
 
 ## EventStore Integration

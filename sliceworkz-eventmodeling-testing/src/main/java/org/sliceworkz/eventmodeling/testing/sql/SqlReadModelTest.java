@@ -26,9 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.sql.DataSource;
 
 import org.h2.jdbcx.JdbcDataSource;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.sliceworkz.eventmodeling.readmodels.sql.SqlReadModelProjector;
 import org.sliceworkz.eventmodeling.readmodels.sql.SqlReadModelQuery;
@@ -38,10 +36,7 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.EventStreamId;
-import org.testcontainers.postgresql.PostgreSQLContainer;
-
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
+import org.sliceworkz.eventstore.testing.backend.PostgresContainer;
 
 /**
  * Base class for testing SQL-backed read models against both H2 and PostgreSQL.
@@ -86,22 +81,12 @@ import com.zaxxer.hikari.HikariDataSource;
  */
 public abstract class SqlReadModelTest<T> {
 
-	@SuppressWarnings("resource")
-	private static final PostgreSQLContainer POSTGRES =
-		new PostgreSQLContainer("postgres:17")
-			.withDatabaseName("readmodel-test")
-			.withUsername("test")
-			.withPassword("test");
-
-	@BeforeAll
-	static void startPostgres() {
-		POSTGRES.start();
-	}
-
-	@AfterAll
-	static void stopPostgres() {
-		POSTGRES.stop();
-	}
+	/**
+	 * The PostgreSQL image {@link #postgresDataSource()} runs against. Deliberately one of the
+	 * images {@link PostgresContainer} already manages, so a build that also runs event store
+	 * scenarios against PostgreSQL reuses that container rather than starting a second one.
+	 */
+	private static final String POSTGRES_IMAGE = PostgresContainer.IMAGE_PG17;
 
 	/**
 	 * Creates an H2 in-memory DataSource with PostgreSQL compatibility mode.
@@ -114,17 +99,14 @@ public abstract class SqlReadModelTest<T> {
 	}
 
 	/**
-	 * Creates a HikariCP DataSource connected to the shared PostgreSQL testcontainer.
-	 * The returned DataSource must be closed after each test (handled automatically
-	 * by {@link AbstractSqlReadModelTests#tearDown()}).
+	 * The pooled DataSource of the shared PostgreSQL testcontainer, started on first use.
+	 * <p>
+	 * The container and its pool are managed by {@link PostgresContainer} for the lifetime of the
+	 * JVM, so nothing here needs starting or closing: per-test isolation comes from
+	 * {@link AbstractSqlReadModelTests#tablesToDrop()}, not from a fresh database.
 	 */
 	protected static DataSource postgresDataSource() {
-		HikariConfig config = new HikariConfig();
-		config.setJdbcUrl(POSTGRES.getJdbcUrl());
-		config.setUsername(POSTGRES.getUsername());
-		config.setPassword(POSTGRES.getPassword());
-		config.setMaximumPoolSize(2);
-		return new HikariDataSource(config);
+		return PostgresContainer.dataSource(POSTGRES_IMAGE);
 	}
 
 	/**
@@ -182,9 +164,9 @@ public abstract class SqlReadModelTest<T> {
 
 		@AfterEach
 		void tearDown() {
-			if (dataSource instanceof HikariDataSource hds) {
-				hds.close();
-			}
+			// nothing to release: H2 databases are per-test and disposable, and the PostgreSQL pool
+			// is owned by PostgresContainer for the lifetime of the JVM
+			dataSource = null;
 		}
 
 		/**

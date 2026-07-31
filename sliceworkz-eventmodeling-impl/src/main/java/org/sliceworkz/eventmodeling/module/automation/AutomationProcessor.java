@@ -206,7 +206,12 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 										LOGGER.debug("not directly querying again, waiting for {} seconds", (WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS/1000));
 										try {
 											synchronized ( this ) {
-												this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
+												// re-check before parking: the terminate() that set TERMINATING notified
+												// us while we were handling the batch above, when nothing was waiting to
+												// hear it, and parking anyway makes shutdown sit out this whole timeout
+												if ( instanceMode != ProcessorInstanceMode.TERMINATING ) {
+													this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
+												}
 											}
 											LOGGER.debug("done waiting, or notified that readmodel was updated and new items could be present");
 										} catch (InterruptedException e) {
@@ -251,7 +256,9 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 							}
 							try {
 								synchronized ( this ) {
-									this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
+									if ( instanceMode != ProcessorInstanceMode.TERMINATING ) { // same lost-notify race as above
+										this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
+									}
 								}
 								LOGGER.debug("done waiting, or notified that readmodel was updated and new items could be present");
 							} catch (InterruptedException e) {
@@ -269,7 +276,9 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 					try {
 						// TODO maybe synchronize on other object than to allow notify() upon state change from STOPPED to RUNNING again, independently of notifies for new events in stream? 
 						synchronized ( this ) {
-							this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
+							if ( instanceMode != ProcessorInstanceMode.TERMINATING ) { // same lost-notify race as above
+								this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
+							}
 						}
 						LOGGER.debug("done waiting or notified, checking new instructions");
 					} catch (InterruptedException e) {

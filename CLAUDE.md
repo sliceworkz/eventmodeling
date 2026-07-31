@@ -205,7 +205,7 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 - Skip the containers in a local run: `mvn test -Deventstore.testing.backends=inmem`
 
 **Base Classes:**
-- `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves
+- `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves. The release *terminates* the context rather than stopping it, because terminating is what closes the `EventStore` the context built and drains its processor threads — see "Shutdown — who closes what" below
 - Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `SqlReadModelTest`)
 - Use JUnit 5 (Jupiter)
 
@@ -232,6 +232,34 @@ EventStream<DomainEvent> stream = eventStore.getEventStream(
     EventStreamId.forContext("context-name").withPurpose("domain"),
     DomainEvent.class
 );
+```
+
+**Shutdown — who closes what:**
+
+`EventStorage` and `EventStore` are `AutoCloseable`, and closing them releases real resources
+(the Postgres backend's LISTEN/NOTIFY monitor threads and their connections; a store's notification
+executors). Ownership decides who closes which:
+
+- The bounded context builds its own `EventStore` over the storage it is given, and closes that store
+  on `terminate()`. It never closes the storage: that came from outside, one storage can back several
+  contexts, and it usually outlives them.
+- The storage is the caller's to close, after terminating every context on it. Anything the caller
+  supplied to the storage (a DataSource, say) is closed after the storage, not before.
+- A bounded context also terminates itself from a JVM shutdown hook, so a process that just exits
+  strands nothing. Terminating explicitly is what an application or test that outlives its context
+  must do — and it deregisters that hook, so the context can be collected.
+- Operations on a closed storage — or on streams from a closed store — throw
+  `EventStorageClosedException` rather than quietly reading on, since a projector whose notifications
+  have stopped would otherwise stall unnoticed.
+
+```java
+EventStorage storage = PostgresEventStorage.newBuilder().dataSource(pool).build();
+Banking bc = BoundedContext.newBuilder(Banking.class).eventStorage(storage)/* ... */.build();
+bc.start();
+...
+bc.terminate();   // closes the store the context built; storage untouched
+storage.close();  // ours to close, once no context is running on it
+pool.close();     // supplied by us, so closed after the storage
 ```
 
 ## Important Design Principles

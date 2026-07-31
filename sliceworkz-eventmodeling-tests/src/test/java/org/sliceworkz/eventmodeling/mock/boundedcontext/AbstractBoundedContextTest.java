@@ -66,13 +66,17 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 	}
 
 	/**
-	 * Releases the bounded context before the storage under it goes away — one left running would
-	 * keep projecting against a store that is being torn down. Override to
-	 * {@link BoundedContext#terminate() terminate} instead of stopping.
+	 * Releases the bounded context before the storage under it goes away — one left running would keep
+	 * projecting against a store that is being torn down.
+	 * <p>
+	 * {@link BoundedContext#terminate() Terminates} rather than merely stopping, because that is what
+	 * releases what the context created: its processor threads, its shutdown hook, and the
+	 * {@code EventStore} it built over {@link #eventStorage()}. Stopping leaves those behind, once per
+	 * test method.
 	 */
 	protected void releaseBoundedContext ( ) {
 		if ( boundedContext != null ) {
-			boundedContext.stop();
+			boundedContext.terminate();
 			boundedContext = null;
 		}
 	}
@@ -89,10 +93,18 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 		return hasBoundBackend() ? super.createEventStorage() : InMemoryEventStorage.newBuilder().build();
 	}
 
+	/**
+	 * Releases the storage {@link #createEventStorage()} produced: through the backend that built it,
+	 * or by closing it ourselves when we built the in-memory one above. The base class releases only
+	 * what a bound backend gave it, so without this branch the storage of every plain {@code @Test}
+	 * would stay open.
+	 */
 	@Override
 	protected void destroyEventStorage ( EventStorage storage ) {
 		if ( hasBoundBackend() ) {
 			super.destroyEventStorage(storage);
+		} else {
+			storage.close();
 		}
 	}
 

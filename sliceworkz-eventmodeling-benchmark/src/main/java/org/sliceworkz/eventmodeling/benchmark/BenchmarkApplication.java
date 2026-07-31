@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent.OrderRegistered;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -111,7 +112,10 @@ public class BenchmarkApplication {
 		
 		bc.start();
 
-		EventStream<Object> domainStream = EventStoreFactory.get().eventStore(eventStorage).getEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("domain"));
+		// a second store on the same storage, for the progress queries below -- named so it can be
+		// closed at the end, since the bounded context only closes the store it built itself
+		EventStore progressEventStore = EventStoreFactory.get().eventStore(eventStorage);
+		EventStream<Object> domainStream = progressEventStore.getEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("domain"));
 
 
 		ExecutorService executor = Executors.newFixedThreadPool(PARALLEL_PRODUCERS);
@@ -185,13 +189,29 @@ public class BenchmarkApplication {
 		
 		bc.stop();
 		LOGGER.info("done.  press any key");
-		
+
 		try {
 			System.in.read();
 		} catch (IOException e) {
 		}
-		
+
 		javalin.stop();
+
+		// Release in ownership order: the bounded context first (it closes the store it built over this
+		// storage), then the store this method built itself, then the storage -- which shuts down its
+		// LISTEN/NOTIFY monitors and hands their connections back to the pool. The pool came from
+		// DataSourceFactory here, so the storage leaves it alone and it is ours to close, after the
+		// storage rather than before.
+		bc.terminate();
+		progressEventStore.close();
+		eventStorage.close();
+		if ( dataSource instanceof AutoCloseable pool ) {
+			try {
+				pool.close();
+			} catch (Exception closingThePool) {
+				LOGGER.warn("could not close the datasource", closingThePool);
+			}
+		}
 
 		LOGGER.info("exited.");
 	}

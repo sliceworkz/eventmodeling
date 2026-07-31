@@ -49,6 +49,7 @@ import org.sliceworkz.eventmodeling.readmodels.UnboundedReadModelCapability;
 import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -61,9 +62,15 @@ import io.micrometer.core.instrument.MeterRegistry;
 public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, UnboundedReadModelCapability<DOMAIN_EVENT_TYPE> {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(BoundedContextImpl.class);
-	
+
+	/**
+	 * The store this context runs on, built by the builder over the storage the caller supplied. Held
+	 * only to close it on {@link #terminate()}: it is ours, the storage under it is not.
+	 */
+	private EventStore eventStore;
+
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
-	
+
 	private ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule;
 	private DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbDomainModule;
 	private AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule;
@@ -85,6 +92,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private Instance instance;
 	private BoundedContextEventEmitter eventEmitter;
 	private volatile boolean stopped = false;
+	private final Thread shutdownHook;
 
 	private MeterRegistry meterRegistry;
 	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
@@ -101,6 +109,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			boolean startQueries,
 			boolean startAutomations,
 			boolean startProjections,
+			EventStore eventStore,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventStream<INBOUND_EVENT_TYPE> inboundEventStream,
 			EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream,
@@ -123,7 +132,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.startQueries = startQueries;
 		this.startAutomations = startAutomations;
 		this.startProjections = startProjections;
-		
+
+		this.eventStore = eventStore;
 		this.domainEventStream = domainEventStream;
 		
 		this.readmodelModule = readmodelModule;
@@ -140,8 +150,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.eventEmitter = eventEmitter;
 
 		// single per-bounded-context JVM shutdown hook drives the orderly shutdown (Stopping -> stop
-		// modules / drain threads -> Stopped); replaces the per-processor-thread-manager hooks.
-		Runtime.getRuntime().addShutdownHook(new Thread(this::terminate, "bc-shutdown/" + name));
+		// modules / drain threads -> Stopped); replaces the per-processor-thread-manager hooks. Kept in
+		// a field so terminate() can deregister it, see there.
+		this.shutdownHook = new Thread(this::terminate, "bc-shutdown/" + name);
+		Runtime.getRuntime().addShutdownHook(shutdownHook);
 	}
 	
 	void setSelfReference(BoundedContext<?,?,?> selfReference) {
@@ -207,6 +219,14 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			return;
 		}
 		stopped = true;
+		// Deregister the hook now that we are shutting down by hand: it holds a reference to this
+		// context, so a JVM that builds contexts and terminates them -- a test suite, above all --
+		// would keep every one of them, and everything it reaches, alive until it exits.
+		try {
+			Runtime.getRuntime().removeShutdownHook(shutdownHook);
+		} catch (IllegalStateException weAreTheHook) {
+			// terminate() was called *by* the hook, during shutdown: nothing left to deregister
+		}
 		LOGGER.info("terminating bounded context '{}'...", name);
 		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopping(name, instance.logical(), instance.physical(), instance.process()));
 		this.inboundModule.terminate();
@@ -215,6 +235,14 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.automationModule.terminate();
 		this.readmodelModule.terminate();
 		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopped(name, instance.logical(), instance.physical(), instance.process()));
+		// The store is ours: the builder created it over the storage it was handed, and nothing outside
+		// this context holds it. Closing it releases the notification machinery it started -- left
+		// running, its executors and their listener registration outlive the context that needed them.
+		// The storage stays open: it is the caller's, it can back other stores, and it usually outlives
+		// this context. Closing the store no longer takes it down with it, which is what makes this
+		// safe to do here at all. Last of all, because every stream handed to the modules above throws
+		// EventStorageClosedException from the moment the store closes.
+		this.eventStore.close();
 		LOGGER.info("terminated bounded context '{}'.", name);
 	}
 	/*

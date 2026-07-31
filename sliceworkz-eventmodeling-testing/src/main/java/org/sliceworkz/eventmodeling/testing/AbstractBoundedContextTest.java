@@ -25,6 +25,7 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.sliceworkz.eventmodeling.Untyped;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
@@ -77,6 +78,30 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 		configure(builder);
 
 		this.boundedContext = (BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>) builder.build();
+	}
+
+	/**
+	 * Releases everything {@link #setUp()} created, in ownership order: the bounded context (which
+	 * closes the store it built for itself), then the store handed to the test through
+	 * {@link #eventStore()}, then the storage that backs both.
+	 * <p>
+	 * Without this every test method would leave a bounded context and two stores behind, each with
+	 * its own processor and notification threads, for the rest of the JVM's life.
+	 */
+	@AfterEach
+	void tearDown ( ) {
+		if ( boundedContext != null ) {
+			boundedContext.terminate();
+			boundedContext = null;
+		}
+		if ( eventStore != null ) {
+			eventStore.close();
+			eventStore = null;
+		}
+		if ( eventStorage != null ) {
+			eventStorage.close();
+			eventStorage = null;
+		}
 	}
 
 	public abstract Class<DOMAIN_EVENT_TYPE> domainEventType ( );

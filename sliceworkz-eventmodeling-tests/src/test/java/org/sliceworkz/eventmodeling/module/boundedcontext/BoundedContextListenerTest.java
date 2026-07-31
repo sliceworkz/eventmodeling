@@ -68,15 +68,6 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 
 	private static final String CONTEXT_NAME = "ListenerTestBoundedContext";
 
-	@Override
-	protected void releaseBoundedContext ( ) {
-		// this scenario asserts on the terminated lifecycle, not the stopped one
-		if ( boundedContext != null ) {
-			boundedContext.terminate();
-			boundedContext = null;
-		}
-	}
-
 	private Mock buildDomain(BoundedContextListener listener) {
 		var builder = BoundedContext.newBuilder(Mock.class)
 				.name(CONTEXT_NAME)

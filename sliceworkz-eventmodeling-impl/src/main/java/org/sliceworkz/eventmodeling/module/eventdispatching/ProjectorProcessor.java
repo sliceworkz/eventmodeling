@@ -215,7 +215,11 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 
 							// Caught up with the stream — wait for new events or timeout
 							synchronized ( this ) {
-								if ( ! potentiallyNewEventsAppended ) {
+								// The terminate() that set TERMINATING notified us while we were in the run
+								// above, with nothing waiting to hear it. Re-check the flag before parking:
+								// otherwise that notification is lost, shutdown sits out this whole timeout,
+								// and the thread manager's grace period ends in an interrupt instead.
+								if ( ! potentiallyNewEventsAppended && instanceMode != ProcessorInstanceMode.TERMINATING ) {
 									LOGGER.debug("no new events pending, waiting for {} seconds", (WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS / 1000));
 									this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS);
 									LOGGER.debug("done waiting, or notified that new events could be present");
@@ -242,7 +246,9 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 					LOGGER.debug("not running, waiting for further instructions, checking back in {} seconds", (WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS / 1000));
 					try {
 						synchronized ( this ) {
-							this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
+							if ( instanceMode != ProcessorInstanceMode.TERMINATING ) { // same lost-notify race as above
+								this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
+							}
 						}
 						LOGGER.debug("done waiting or notified, checking new instructions");
 					} catch (InterruptedException e) {
@@ -250,6 +256,17 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 					}
 				}
 
+			} catch ( InterruptedException interrupted ) {
+				// The abrupt half of shutdown: whatever is still parked when the thread manager's grace
+				// period runs out gets interrupted. On that path the loop condition below ends the run --
+				// reporting it as an unexpected throwable, stack trace and all, made a clean stop look
+				// like a failure.
+				if ( instanceMode == ProcessorInstanceMode.TERMINATING ) {
+					LOGGER.debug("interrupted while terminating");
+					Thread.currentThread().interrupt(); // pass it on, we are on our way out anyway
+				} else {
+					LOGGER.warn("'{}' interrupted while running", processorIdentification, interrupted);
+				}
 			} catch ( Throwable t ) {
 				LOGGER.error("unexpected throwable during processor run: " + t.getMessage() , t);
 			}

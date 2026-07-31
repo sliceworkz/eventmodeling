@@ -50,6 +50,16 @@ public class InvocationCountingEventStorage implements EventStorage {
 		return wrapped.name();
 	}
 
+	/**
+	 * Forwards to the wrapped storage. {@code EventStorage.close()} defaults to a no-op, which is right
+	 * for a storage holding nothing, but a decorator that inherited that default would silently keep
+	 * the storage it wraps open.
+	 */
+	@Override
+	public void close() {
+		wrapped.close();
+	}
+
 	@Override
 	public Stream<StoredEvent> query(EventQuery query, Optional<EventStreamId> stream, EventReference from, Limit limit, QueryDirection queryDirection) {
 		queries++;

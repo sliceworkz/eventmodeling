@@ -136,5 +136,16 @@ public class BankingExample {
 		} catch (InterruptedException e1) {
 			e1.printStackTrace();
 		}
+
+		/*
+		 * Shut down from the outside in: terminate the bounded context (which closes the EventStore it
+		 * built for itself), then the store this example built to read the stream directly, and only
+		 * then the storage that backs both. This process would exit cleanly without any of it -- a
+		 * shutdown hook terminates the context -- but an application that keeps running after its
+		 * bounded context is done has to release these, and the storage is never released for it.
+		 */
+		bc.terminate();
+		eventStore.close();
+		eventStorage.close();
 	}
 }

@@ -55,6 +55,14 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
 	BoundedContextBuilder<C> meterRegistry(MeterRegistry meterRegistry);
 
+	/**
+	 * The storage the bounded context keeps its events in.
+	 * <p>
+	 * The storage stays yours: the context builds its own {@code EventStore} over it and closes only
+	 * that one on {@link LifecycleCapability#terminate() terminate()}. Closing the storage — and
+	 * anything you supplied it, such as a DataSource, in that order — is the caller's business, once
+	 * every context on it has been terminated. One storage can back several bounded contexts.
+	 */
 	BoundedContextBuilder<C> eventStorage(EventStorage eventStorage);
 
 	FeaturesSpecification<C> features ( );

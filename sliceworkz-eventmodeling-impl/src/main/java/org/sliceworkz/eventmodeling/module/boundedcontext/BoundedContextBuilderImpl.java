@@ -454,6 +454,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployQueries(),
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
+						eventStore,
 						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry, adapterRegistry);
 
 		// this is only possible after creation

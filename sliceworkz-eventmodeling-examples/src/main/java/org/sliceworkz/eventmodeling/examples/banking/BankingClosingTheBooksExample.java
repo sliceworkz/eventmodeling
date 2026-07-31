@@ -276,6 +276,15 @@ public class BankingClosingTheBooksExample {
 		MonthStatementReadModel febStatementModel = bc.read(MonthStatementReadModel.class, accountId, february);
 		febStatementModel.getStatement().ifPresent(BankingClosingTheBooksExample::printStatement);
 		System.out.println();
+
+		/*
+		 * Shut down from the outside in: the bounded context (which closes the EventStore it built for
+		 * itself), then the store this example built to read the stream directly, then the storage that
+		 * backs both -- it is ours, and nothing else closes it.
+		 */
+		bc.terminate();
+		eventStore.close();
+		eventStorage.close();
 	}
 
 	private static void printStatement(MonthStatement statement) {

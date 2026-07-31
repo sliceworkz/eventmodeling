@@ -61,7 +61,42 @@
 		<module>sliceworkz-eventmodeling-benchmark</module>
 		<module>sliceworkz-eventmodeling-examples</module>
 	</modules>
-	
+
+	<!--
+		Resolve org.sliceworkz SNAPSHOTs from the sliceworkz cloudrepo. The eventstore
+		this project builds on publishes its SNAPSHOTs there (see its
+		build-and-deploy-snapshot-cloudrepo workflow), not to Maven Central's snapshot
+		repository, so a build cannot find e.g. sliceworkz-eventstore-bom:0.10.0-SNAPSHOT
+		without this. A local build only appeared to work because the eventstore had been
+		mvn install'ed into ~/.m2.
+
+		Declared here rather than in a profile on purpose: every build needs it while
+		sliceworkz.eventstore.version is a SNAPSHOT, and an activeByDefault profile would
+		silently switch off as soon as a build passes -P (gpg-ci, cloudrepo, ...).
+
+		Reading it needs the 'cloudrepo' server credentials in settings.xml; in CI those
+		come from setup-java's server-id (see build-and-deploy-snapshot-cloudrepo.yaml).
+		A workflow that does not provide them cannot build against a SNAPSHOT eventstore.
+
+		Releases are disabled: those come from Maven Central like any other dependency,
+		so the credentialed repository is only consulted for the SNAPSHOTs that are
+		exclusively there. The published consumer POMs are unaffected — flattenMode
+		ossrh strips repositories.
+	-->
+	<repositories>
+		<repository>
+			<name>Sliceworkz CloudRepo</name>
+			<id>cloudrepo</id>
+			<url>https://xti.mycloudrepo.io/repositories/sliceworkz</url>
+			<releases>
+				<enabled>false</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</repository>
+	</repositories>
+
 	<build>
 		<pluginManagement>
 			<plugins>

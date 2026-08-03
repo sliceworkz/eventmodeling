@@ -205,6 +205,48 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		public int count() { return count; }
 	}
 
+	/**
+	 * Decision model that derives its eventQuery from what its initQuery hands it: the newest
+	 * ThirdDomainEvent names the event type this model watches. The Projector calls {@code eventQuery()}
+	 * only after the initQuery events have reached {@code when()}, so this is a supported shape — but
+	 * until that read has happened the model cannot say what it is interested in, and its eventQuery is
+	 * matchNone. That makes the optimistic-lock filter observable: a matchNone filter is exactly
+	 * {@code AppendCriteria.none()}, so a lock built from the query as it looked before the read is no
+	 * lock at all.
+	 */
+	static class ParameterizingDecisionModel implements DecisionModel<MockDomainEvent> {
+
+		private String watching = null;
+		private int count = 0;
+
+		@Override
+		public EventQuery initQuery() {
+			return EventQuery.forEvents(EventTypesFilter.of(ThirdDomainEvent.class), Tags.none())
+					.backwards().limit(1);
+		}
+
+		@Override
+		public EventQuery eventQuery() {
+			if (watching == null) {
+				return EventQuery.matchNone();
+			}
+			return EventQuery.forEvents(
+					EventTypesFilter.of("first".equals(watching) ? FirstDomainEvent.class : SecondDomainEvent.class),
+					Tags.none());
+		}
+
+		@Override
+		public void when(Event<MockDomainEvent> event) {
+			switch (event.data()) {
+				case ThirdDomainEvent t -> watching = t.value();
+				case FirstDomainEvent f -> count++;
+				case SecondDomainEvent s -> count++;
+			}
+		}
+
+		public int count() { return count; }
+	}
+
 	// ════════════════════════════════════════════════════════════════════
 	// COMMANDS
 	// ════════════════════════════════════════════════════════════════════
@@ -327,6 +369,58 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 		public CountingDecisionModel countingModel() { return countingModel; }
 		public SavepointDecisionModel savepointModel() { return savepointModel; }
+	}
+
+	/**
+	 * Command with a single decision model that parameterizes its eventQuery from its initQuery. One
+	 * decision model means one physical read, so no boundary is pinned and the lock reference comes from
+	 * that read alone.
+	 */
+	static class ParameterizingModelCommand implements Command<MockDomainEvent> {
+
+		private ParameterizingDecisionModel model;
+		private final Runnable afterDecisionModels;
+
+		ParameterizingModelCommand(Runnable afterDecisionModels) {
+			this.afterDecisionModels = afterDecisionModels;
+		}
+
+		@Override
+		public void execute(
+				CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			model = new ParameterizingDecisionModel();
+			var result = context.decisionModels(model);
+
+			// Simulate concurrent modification: inject event after reading state
+			afterDecisionModels.run();
+
+			// raises an event of a type this model does not watch, so only the injected event can conflict
+			result.raiseEvent(new SecondDomainEvent("param-" + model.count()), Tags.none());
+		}
+
+		public ParameterizingDecisionModel model() { return model; }
+	}
+
+	/**
+	 * Command pairing the parameterizing model with a plain one, so two physical reads are performed and
+	 * a consistency boundary is pinned before either of them runs.
+	 */
+	static class ParameterizingWithPlainModelCommand implements Command<MockDomainEvent> {
+
+		private ParameterizingDecisionModel parameterizingModel;
+		private SecondCountingDecisionModel plainModel;
+
+		@Override
+		public void execute(
+				CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			parameterizingModel = new ParameterizingDecisionModel();
+			plainModel = new SecondCountingDecisionModel();
+			var result = context.decisionModels(parameterizingModel, plainModel);
+
+			result.raiseEvent(new ThirdDomainEvent("done"), Tags.none());
+		}
+
+		public ParameterizingDecisionModel parameterizingModel() { return parameterizingModel; }
 	}
 
 	/**
@@ -716,6 +810,45 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		assertEquals(99, cmd.savepointModel().count());
 		// CountingDecisionModel sees the 1 FirstDomainEvent from the first execute
 		assertEquals(1, cmd.countingModel().count());
+	}
+
+	// ════════════════════════════════════════════════════════════════════
+	// TESTS: eventQuery parameterized by initQuery
+	// ════════════════════════════════════════════════════════════════════
+
+	@ForEachBackend
+	void parameterizedEventQuery_locksOnWhatTheModelWasActuallyReadWith() {
+		Mock domain = buildDomain();
+
+		// savepoint naming FirstDomainEvent as what the model watches
+		domain.event(new ThirdDomainEvent("first"));
+
+		// A FirstDomainEvent appended after the model was read is a new relevant fact. The model only
+		// says so once its initQuery has run, so a lock filter taken before that read is matchNone —
+		// which is AppendCriteria.none(), and the append would silently succeed unlocked.
+		var cmd = new ParameterizingModelCommand(() -> appendDirectly(new FirstDomainEvent("concurrent")));
+		assertOptimisticLockingException(() -> domain.execute(cmd));
+	}
+
+	@ForEachBackend
+	void parameterizedEventQuery_boundaryDoesNotHideWhatTheParameterizedReadShouldSee() {
+		Mock domain = buildDomain();
+
+		domain.event(new ThirdDomainEvent("first"));
+		// the plain model's own filter matches this one, so the boundary has somewhere to land
+		domain.event(new SecondDomainEvent("plain-model-fact"));
+		domain.event(new FirstDomainEvent("after-savepoint"));
+
+		// Two decision models, so a boundary is pinned before either read. Pinned from the eventQueries
+		// as they look up front it lands on the plain model's newest fact — the parameterized query is not
+		// known yet and contributes nothing — hiding the FirstDomainEvent that follows it. The model would
+		// then decide on state it should have seen, and (locking correctly on the parameterized filter)
+		// find that same event beyond its reference on append: a conflict that re-executing cannot
+		// resolve, because the next attempt pins in exactly the same place.
+		var cmd = new ParameterizingWithPlainModelCommand();
+		domain.execute(cmd);
+
+		assertEquals(1, cmd.parameterizingModel().count());
 	}
 
 	// ════════════════════════════════════════════════════════════════════

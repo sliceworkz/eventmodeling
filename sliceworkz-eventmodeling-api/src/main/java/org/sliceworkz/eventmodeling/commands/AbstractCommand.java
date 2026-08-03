@@ -32,10 +32,22 @@ public sealed interface AbstractCommand<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE
 	 * before it has ever run and the same command observed running are named identically. A command
 	 * that overrides {@link #commandName()} breaks that correspondence, since the override cannot be
 	 * consulted without an instance.
+	 * <p>
+	 * The name is never empty. A command declared as an anonymous class has no simple name, and a
+	 * class named exactly {@code Command} is nothing but the suffix; both would otherwise be reported
+	 * — and traced onto their events — under no name at all. Those fall back to the last segment of
+	 * the binary name, which still says where the command was declared ({@code MyTest$1}).
 	 */
 	static String commandNameOf ( Class<?> commandClass ) {
 		String simpleName = commandClass.getSimpleName();
-		return simpleName.endsWith("Command") ? simpleName.substring(0, simpleName.length() - "Command".length()) : simpleName;
+		String withoutSuffix = simpleName.endsWith("Command")
+				? simpleName.substring(0, simpleName.length() - "Command".length())
+				: simpleName;
+		if ( !withoutSuffix.isEmpty() ) {
+			return withoutSuffix;
+		}
+		String binaryName = commandClass.getName();
+		return binaryName.substring(binaryName.lastIndexOf('.') + 1);
 	}
 
 	void execute ( CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> context );

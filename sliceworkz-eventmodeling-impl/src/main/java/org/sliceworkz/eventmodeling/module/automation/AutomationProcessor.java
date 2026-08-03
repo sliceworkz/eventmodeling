@@ -17,13 +17,16 @@
  */
 package org.sliceworkz.eventmodeling.module.automation;
 
+import java.util.Iterator;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
+import org.sliceworkz.eventmodeling.automation.AutomationFailureAction;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
@@ -45,9 +48,13 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(AutomationProcessor.class);
 
-	private static final Limit MAX_BATCH_SIZE = Limit.to(50); // TODO this should be configurable via a builder, avoid direct ctr
 	private static final long WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS = 10000;
 	private static final long WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS = 30000;
+
+	private static final int MAX_ITEM_ATTEMPTS = 3; // an item asking to be retried is tried this many times in total
+	private static final long FIRST_RETRY_BACKOFF_MS = 100; // doubled per further attempt
+
+	private final Limit batchSize;
 
 	private EventSource<DOMAIN_EVENT_TYPE> eventSource;
 	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation;
@@ -67,6 +74,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private final MeterRegistry meterRegistry;
 	private final Counter batchCounter;
 	private final Counter itemsHandledCounter;
+	private final Counter itemsFailedCounter;
 	private final Timer batchTimer;
 	private final BoundedContextEventEmitter eventEmitter;
 
@@ -83,12 +91,19 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		this.meterRegistry = meterRegistry;
 		this.eventEmitter = eventEmitter;
 
+		int declaredBatchSize = automation.batchSize();
+		if ( declaredBatchSize <= 0 ) {
+			throw new IllegalArgumentException("batch size %d of automation '%s' is invalid, should be larger than 0".formatted(declaredBatchSize, automation.getClass().getSimpleName()));
+		}
+		this.batchSize = Limit.to(declaredBatchSize);
+
 		// Initialize metrics with base tags
 		Tags baseTags = Tags.of("context", boundedContext)
 				.and("automation", processorIdentification.id());
 
 		this.batchCounter = meterRegistry.counter("sliceworkz.eventmodeling.automation.batch", baseTags);
 		this.itemsHandledCounter = meterRegistry.counter("sliceworkz.eventmodeling.automation.items.handled", baseTags);
+		this.itemsFailedCounter = meterRegistry.counter("sliceworkz.eventmodeling.automation.items.failed", baseTags);
 		this.batchTimer = meterRegistry.timer("sliceworkz.eventmodeling.automation.batch.duration", baseTags);
 
 		eventSource.subscribe(this);
@@ -170,12 +185,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 							try {
 								if ( monitoredBookmark.isPresent() ) {
 									LOGGER.debug("monitored bookmark is at {}", monitoredBookmark.get());
-									
+
 									Tracing tracing = Tracing.init(instance).channel(processorIdentification.type()).actor(processorIdentification.id());
-									
-									LOGGER.debug("starting processing of max {} items at a time", MAX_BATCH_SIZE);
-		
-									ItemCounter counter = new ItemCounter();
+
+									LOGGER.debug("starting processing of max {} items at a time", batchSize);
 
 									// Create automation context with tracing for proper correlation
 									AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context = automationContextFactory.apply(tracing);
@@ -183,57 +196,54 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 									// Time the batch processing and count items
 									Timer.Sample sample = Timer.start(meterRegistry);
 									long batchStartMs = System.currentTimeMillis();
-									Optional<EventReference> lastProducedEvent = automation.getTodoList().streamItems(MAX_BATCH_SIZE).map(i->{counter.increment(); return i;}).map(item->automation.handle(item, context)).flatMap(Optional::stream).reduce((first,second)->second);
+									BatchOutcome outcome = handleBatch(context);
 									sample.stop(batchTimer);
 
 									// Record metrics
 									batchCounter.increment();
-									itemsHandledCounter.increment(counter.get());
+									itemsHandledCounter.increment(outcome.handled);
+									itemsFailedCounter.increment(outcome.failed);
 
-									if ( counter.get() > 0 && eventEmitter.enabled() ) {
+									if ( outcome.streamed > 0 && eventEmitter.enabled() ) {
 										long duration = System.currentTimeMillis() - batchStartMs;
-										BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, 0, counter.get(), counter.get(), lastProducedEvent.orElse(null));
+										BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, 0, outcome.streamed, outcome.handled, outcome.lastProducedEvent);
 										eventEmitter.emit(new BoundedContextEvent.AutomationProcessed(boundedContext, processorIdentification.id(), metrics, eventEmitter.sliceFor(automation.getClass())), tracing);
 									}
-		
-									if ( lastProducedEvent.isPresent() ) {
+
+									if ( outcome.lastProducedEvent != null ) {
 										// set our position to the last event we produced, we won't do a new run until the readmodel has been updated
-										eventSource.placeBookmark(processorIdentification.toString(), lastProducedEvent.get(), processorIdentification.toTags(instance));
+										eventSource.placeBookmark(processorIdentification.toString(), outcome.lastProducedEvent, processorIdentification.toTags(instance));
 									}
-		
-									if ( counter.get() < MAX_BATCH_SIZE.value() ) {
+
+									if ( outcome.stopAutomation ) {
+										LOGGER.warn("stopping automation '{}' as its failure handling asked for it - it will not run again until the bounded context is started", processorIdentification);
+										processorMode = ProcessorMode.STOPPED;
+									} else if ( outcome.streamed >= batchSize.value() && outcome.lastProducedEvent != null ) {
+										// A full window and a bookmark that moved: there is plausibly more behind it, and the
+										// guard at the top of the loop now has something to hold us against. Without a moved
+										// bookmark that guard cannot engage, so going straight round again would re-read the
+										// same window at full speed for as long as it stays unchanged.
+										LOGGER.debug("not at end of list - doing new batch of {}", batchSize);
+									} else {
 										LOGGER.debug("no new todo items to handle");
 										LOGGER.debug("not directly querying again, waiting for {} seconds", (WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS/1000));
-										try {
-											synchronized ( this ) {
-												// re-check before parking: the terminate() that set TERMINATING notified
-												// us while we were handling the batch above, when nothing was waiting to
-												// hear it, and parking anyway makes shutdown sit out this whole timeout
-												if ( instanceMode != ProcessorInstanceMode.TERMINATING ) {
-													this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
-												}
-											}
-											LOGGER.debug("done waiting, or notified that readmodel was updated and new items could be present");
-										} catch (InterruptedException e) {
-											LOGGER.debug("interrupted while waiting");
-										}
-									} else {
-										LOGGER.debug("not at end of list - doing new batch of {}", MAX_BATCH_SIZE);
+										waitForWork(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
+										LOGGER.debug("done waiting, or notified that readmodel was updated and new items could be present");
 									}
-									
-									
+
+
 								} else {
 									LOGGER.debug("monitored bookmark is not set yet, no readmodel to process");
-			
+
 								}
-		
+
 							} catch (Throwable t ) {
+								// Reaching here is a failure of the batch machinery itself: everything a todo item can
+								// throw is contained per item in handleBatch. Reading the todo list or bookmarking is
+								// what is left, and both are worth another round rather than retiring the automation.
 								Throwable r = determineRootCause(t);
-								LOGGER.error("problem in handler: rootcause {} : {}", r.getClass(), r.getMessage(), r );
-		
-								LOGGER.warn("Stopping handler due to error: {}", t.getMessage());
-								processorMode = ProcessorMode.STOPPED;
-								
+								LOGGER.error("problem running batch of automation '{}': rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), r );
+								waitForWork(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
 							}
 						} else {
 							// risk of handling item twice ...
@@ -254,16 +264,8 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 							} else {
 								LOGGER.debug("monitoredBookmark is {}, our own bookmark is {}, processing cannot continue until readmodel has kept up", monitoredBookmark, lastReference);
 							}
-							try {
-								synchronized ( this ) {
-									if ( instanceMode != ProcessorInstanceMode.TERMINATING ) { // same lost-notify race as above
-										this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
-									}
-								}
-								LOGGER.debug("done waiting, or notified that readmodel was updated and new items could be present");
-							} catch (InterruptedException e) {
-								LOGGER.debug("interrupted while waiting");
-							}
+							waitForWork(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
+							LOGGER.debug("done waiting, or notified that readmodel was updated and new items could be present");
 						}
 	
 					} else {
@@ -273,18 +275,9 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 				} else {
 					mustFetchBookmark = true;
 					LOGGER.debug("not running, waiting for further instructions, checking back in {} seconds", (WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS/1000));
-					try {
-						// TODO maybe synchronize on other object than to allow notify() upon state change from STOPPED to RUNNING again, independently of notifies for new events in stream? 
-						synchronized ( this ) {
-							if ( instanceMode != ProcessorInstanceMode.TERMINATING ) { // same lost-notify race as above
-								this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
-							}
-						}
-						LOGGER.debug("done waiting or notified, checking new instructions");
-					} catch (InterruptedException e) {
-						LOGGER.debug("interrupted while waiting in stopped state");
-						mustFetchBookmark = true;
-					}
+					// TODO maybe synchronize on other object than to allow notify() upon state change from STOPPED to RUNNING again, independently of notifies for new events in stream?
+					waitForWork(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
+					LOGGER.debug("done waiting or notified, checking new instructions");
 				}
 			} catch ( Throwable t ) {
 				LOGGER.error("unexpected throwable during processor run: " + determineRootCause(t), t);
@@ -294,17 +287,126 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		LOGGER.info("{} gracefully terminated", processorIdentification.toString());
 	}
 	
-	private class ItemCounter {
-		long value;
-		public long increment ( ) {
-			value++;
-			return get();
+	/**
+	 * Handles one batch of todo items, containing whatever a single item throws.
+	 * <p>
+	 * Items are pulled from the todo list one at a time, and the next one is only taken once the current
+	 * one has been handled. That is deliberate rather than incidental: handling an item may raise events
+	 * that cancel or supersede the items behind it, and a todo list is allowed to anticipate its own
+	 * projection to withhold them (see {@code TodoListReadModel.streamItems}).
+	 */
+	private BatchOutcome handleBatch ( AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context ) {
+		BatchOutcome outcome = new BatchOutcome();
+
+		try ( Stream<TODO_ITEM_TYPE> items = automation.getTodoList().streamItems(batchSize) ) {
+			Iterator<TODO_ITEM_TYPE> iterator = items.iterator();
+			while ( iterator.hasNext() ) {
+				if ( instanceMode == ProcessorInstanceMode.TERMINATING || processorMode == ProcessorMode.STOPPED ) {
+					LOGGER.debug("abandoning the rest of the batch, this processor is stopping");
+					return outcome;
+				}
+				TODO_ITEM_TYPE item = iterator.next();
+				outcome.streamed++;
+				if ( !handleItem(item, context, outcome) ) {
+					return outcome; // the batch was abandoned, either for this round or for good
+				}
+			}
 		}
-		public long get ( ) {
-			return value;
+		return outcome;
+	}
+
+	/**
+	 * Handles a single todo item, applying the automation's own failure policy to anything it throws.
+	 *
+	 * @return {@code true} if the batch should continue with the next item
+	 */
+	private boolean handleItem ( TODO_ITEM_TYPE item, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context, BatchOutcome outcome ) {
+		for ( int attempt = 1; ; attempt++ ) {
+			try {
+				Optional<EventReference> produced = automation.handle(item, context);
+				outcome.handled++;
+				if ( produced != null && produced.isPresent() ) {
+					outcome.lastProducedEvent = produced.get();
+				}
+				return true;
+			} catch ( Throwable t ) {
+				outcome.failed++;
+				AutomationFailureAction action = determineFailureAction(item, t, context);
+				Throwable r = determineRootCause(t);
+
+				if ( action == AutomationFailureAction.RETRY_ITEM && attempt >= MAX_ITEM_ATTEMPTS ) {
+					LOGGER.error("automation '{}' failed on a todo item {} times, leaving it for a later round: rootcause {} : {}", processorIdentification, attempt, r.getClass(), r.getMessage(), t);
+					return true;
+				}
+
+				switch ( action ) {
+					case RETRY_ITEM -> {
+						long backoff = FIRST_RETRY_BACKOFF_MS << (attempt - 1);
+						LOGGER.warn("automation '{}' failed on a todo item (attempt {} of {}), retrying in {} ms: rootcause {} : {}", processorIdentification, attempt, MAX_ITEM_ATTEMPTS, backoff, r.getClass(), r.getMessage(), t);
+						waitForWork(backoff);
+						if ( instanceMode == ProcessorInstanceMode.TERMINATING ) {
+							return false;
+						}
+					}
+					case SKIP_ITEM -> {
+						LOGGER.error("automation '{}' failed on a todo item, leaving it for a later round: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
+						return true;
+					}
+					case STOP_BATCH -> {
+						LOGGER.error("automation '{}' failed on a todo item, abandoning the rest of this batch: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
+						return false;
+					}
+					case STOP_AUTOMATION -> {
+						LOGGER.error("automation '{}' failed on a todo item: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
+						outcome.stopAutomation = true;
+						return false;
+					}
+				}
+			}
 		}
-	}	
-	
+	}
+
+	private AutomationFailureAction determineFailureAction ( TODO_ITEM_TYPE item, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context ) {
+		try {
+			AutomationFailureAction action = automation.onFailure(item, cause, context);
+			return action != null ? action : AutomationFailureAction.SKIP_ITEM;
+		} catch ( Throwable t ) {
+			LOGGER.error("failure handler of automation '{}' threw, leaving the todo item for a later round", processorIdentification, t);
+			return AutomationFailureAction.SKIP_ITEM;
+		}
+	}
+
+	/**
+	 * Parks this thread for at most {@code timeoutMs}, waking early on a bookmark move or on a state
+	 * change. Re-checks for termination before parking: the {@code terminate()} that set TERMINATING may
+	 * have notified while nothing was waiting to hear it, and parking anyway makes shutdown sit out the
+	 * whole timeout.
+	 */
+	private void waitForWork ( long timeoutMs ) {
+		try {
+			synchronized ( this ) {
+				if ( instanceMode != ProcessorInstanceMode.TERMINATING ) {
+					this.wait(timeoutMs);
+				}
+			}
+		} catch (InterruptedException e) {
+			// deliberately not restoring the flag: this loop parks again on its next pass, and a set
+			// flag would make that throw immediately and spin. An interrupt here comes from the thread
+			// manager giving up on a terminate() that has already set TERMINATING, so the loop ends anyway
+			LOGGER.debug("interrupted while waiting");
+		}
+	}
+
+	/** What one batch did, and what the loop around it should do next. */
+	private static class BatchOutcome {
+		long streamed;
+		long handled;
+		long failed;
+		EventReference lastProducedEvent;
+		boolean stopAutomation;
+	}
+
+
 	public enum ProcessorMode {
 		STOPPED, 					// processing will not run at all
 		RUNNING_ON_SINGLE_LEADER, 	// processing will run, on instance selected be via leader election

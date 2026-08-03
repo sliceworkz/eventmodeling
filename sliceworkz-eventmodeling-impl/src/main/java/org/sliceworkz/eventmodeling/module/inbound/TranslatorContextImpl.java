@@ -119,4 +119,19 @@ public class TranslatorContextImpl<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE,OUTBOUN
 		return delegate.event(event, tags, tracing);
 	}
 
+	@Override
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey) {
+		return delegate.event(event, idempotencyKey);
+	}
+
+	@Override
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey) {
+		return delegate.event(event, tags, idempotencyKey);
+	}
+
+	@Override
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing) {
+		return delegate.event(event, tags, idempotencyKey, tracing);
+	}
+
 }

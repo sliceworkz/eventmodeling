@@ -50,6 +50,7 @@ import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventstore.EventStore;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -289,7 +290,22 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	}
 
 	@Override
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey ) {
+		return event(event, Tags.none(), idempotencyKey, Tracing.init(instance));
+	}
+
+	@Override
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
+		return event(event, tags, idempotencyKey, Tracing.init(instance));
+	}
+
+	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
+		return event(event, tags, null, tracing);
+	}
+
+	@Override
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing ) {
 		tracing = tracing.instance(instance);
 		String eventName = event.getClass().getSimpleName();
 		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
@@ -300,8 +316,13 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName, "channel", channel)));
 		counter.increment();
 
-		// store event, no append criteria as we don't have any context for it
-		List<? extends Event<? extends DOMAIN_EVENT_TYPE>> result = domainEventStream.append(AppendCriteria.none(), Collections.singletonList(tracing.storeOn(Event.of(event, tags))));
+		// store event, no append criteria as we don't have any context for it. An idempotency key already
+		// used on this stream makes storage ignore the append silently, which comes back as an empty result
+		EphemeralEvent<DOMAIN_EVENT_TYPE> ephemeral = Event.of(event, tags);
+		if ( idempotencyKey != null ) {
+			ephemeral = ephemeral.withIdempotencyKey(idempotencyKey);
+		}
+		List<? extends Event<? extends DOMAIN_EVENT_TYPE>> result = domainEventStream.append(AppendCriteria.none(), Collections.singletonList(tracing.storeOn(ephemeral)));
 		return result.stream().findFirst().map(Event::reference);
 	}
 

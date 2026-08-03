@@ -145,4 +145,19 @@ class CapturingTranslatorContext<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> implemen
 		return capture(delegate.event(event, tags, tracing));
 	}
 
+	@Override
+	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, String idempotencyKey ) {
+		return capture(delegate.event(event, idempotencyKey));
+	}
+
+	@Override
+	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
+		return capture(delegate.event(event, tags, idempotencyKey));
+	}
+
+	@Override
+	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing ) {
+		return capture(delegate.event(event, tags, idempotencyKey, tracing));
+	}
+
 }

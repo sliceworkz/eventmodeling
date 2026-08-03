@@ -205,11 +205,24 @@ features/
   stop the items behind it, a retriable failure is retried inside the batch, `STOP_BATCH`/`STOP_AUTOMATION`
   do what they say, a no-event handler does not spin, and an item cancelling its successors under
   `batchSize(1)` really does prevent them being handled
+- **The catch-up guard compares the total `(tx, position, index)` order**, through
+  `EventReference.happenedAfter` in `AutomationProcessor.hasCaughtUp`, not `position()` alone. The two are
+  genuinely different orders — a position is a `bigserial` and a transaction id an `xid8`, assigned
+  independently, so an event can hold a lower position and a higher transaction than one that committed
+  before it — and comparing positions reported the projector as caught up while it was not, re-reading a
+  todo list that still held items already handled. `AutomationCatchUpOrderingTest` pins it, including the
+  inclusive boundary (the event we produced counts as projected) and the `index` tiebreak upcasting produces
+- **`ProvidedEventCapability.event(...)` takes an idempotency key**, so an automation raising events
+  directly has the dedup lever a command already had through `CommandResult.idempotencyKey`. The key is
+  scoped to the stream, and a repeat is silently ignored by storage — which surfaces as `Optional.empty()`,
+  the same value as "not appended", the two being deliberately not distinguished (for an automation the
+  work is done either way, and the todo list drops the item once the original event is projected). Derive
+  the key from the todo item, never from the attempt, or every replay gets a fresh key and dedups nothing.
+  The overloads are on the shared capability, so translators get them too. `ProvidedEventIdempotencyTest`
+  covers it per backend plus end to end through an automation handed the same item twice
 - Still missing, deliberately out of scope here: leader election (`instanceMode` is hardcoded to `LEADER`
-  while the bookmark is `[shared]`, so a second instance duplicates every item), the catch-up guard
-  comparing `position()` alone rather than the `(tx, position, index)` order `EventReference.happenedAfter`
-  defines, an idempotency-key overload on `AutomationContext.event(...)`, and a bounded-context event for
-  a stopped automation (only the `sliceworkz.eventmodeling.automation.items.failed` counter exists)
+  while the bookmark is `[shared]`, so a second instance duplicates every item), and a bounded-context event
+  for a stopped automation (only the `sliceworkz.eventmodeling.automation.items.failed` counter exists)
 
 **Translators:**
 - Implement `Translator<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>`

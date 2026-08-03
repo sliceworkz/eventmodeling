@@ -178,7 +178,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 						
 						Optional<EventReference> monitoredBookmark = eventSource.getBookmark(monitoredProcessorIdentification.toString()); // get position up until which the readmodel has been updated
 						
-						if ( monitoredBookmark.isPresent() && ( lastReference.isEmpty() || (monitoredBookmark.get().position() >= lastReference.get().position()) ) ) {
+						if ( monitoredBookmark.isPresent() && hasCaughtUp(monitoredBookmark.get(), lastReference) ) {
 							LOGGER.debug("monitoredBookmark is at {}, our own bookmark is at {}, processing can continue", monitoredBookmark.get(), lastReference.orElse(null));
 							monitoredBookmarkMissingWarned = false; // monitored projector is alive — re-arm the warning for any future disappearance
 							
@@ -287,6 +287,24 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		LOGGER.info("{} gracefully terminated", processorIdentification.toString());
 	}
 	
+	/**
+	 * Whether the read model we shadow has been projected up to and including the last event we produced,
+	 * which is what makes it safe to take a fresh look at the todo list.
+	 * <p>
+	 * The comparison is over the total {@code (tx, position, index)} order the event store defines, not
+	 * over positions. The two are genuinely different orders: on Postgres a position is a {@code bigserial}
+	 * and a transaction id an {@code xid8}, assigned independently, so an event can carry a lower position
+	 * and a higher transaction than one that committed before it. Comparing positions alone reports the
+	 * projector as caught up while it is not, and the todo list is then re-read while it still holds items
+	 * this automation has already handled — a duplicate that nothing else in this loop would catch.
+	 *
+	 * @param monitoredBookmark where the read model's projector has got to
+	 * @param ourBookmark the last event we produced, empty when we have not produced one yet
+	 */
+	static boolean hasCaughtUp ( EventReference monitoredBookmark, Optional<EventReference> ourBookmark ) {
+		return ourBookmark.isEmpty() || !ourBookmark.get().happenedAfter(monitoredBookmark);
+	}
+
 	/**
 	 * Handles one batch of todo items, containing whatever a single item throws.
 	 * <p>

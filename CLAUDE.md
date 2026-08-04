@@ -73,6 +73,22 @@ The example demonstrates:
 - Querying read models (AccountDetailsReadModel, AccountOverviewReadModel)
 - Event stream subscriptions
 
+**Payments Example — an automation whose work can fail (main method):**
+```bash
+cd sliceworkz-eventmodeling-examples
+mvn compile exec:java -Dexec.mainClass="org.sliceworkz.eventmodeling.examples.payments.PaymentsExample"
+```
+
+The reference to copy when writing an automation that talks to anything outside its own context.
+`ExecutePaymentAutomation` is the file to read: its `onFailure` maps each way a payment gateway can fail
+onto an `AutomationFailureAction` *and* onto an event, with the reasoning for each pairing written down
+next to it. The example runs all four paths — a payment that works, one rejected outright into the
+dead-letter read model, one declined twice and deferred while the payments behind it proceed, and the
+gateway going down entirely so the automation backs off and then catches up by itself. Note the two
+distinct delays it shows, which are easy to conflate: `PaymentAttemptFailed.nextAttemptDueAt` defers **one
+item** and is durable because it is an event, while `delayBeforeNextBatch` paces **the whole automation**
+and deliberately is not.
+
 ## Architecture Patterns
 
 ### BoundedContext Pattern

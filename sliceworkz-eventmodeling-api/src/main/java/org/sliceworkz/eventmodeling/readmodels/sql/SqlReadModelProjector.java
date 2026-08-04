@@ -23,6 +23,8 @@ import java.util.Optional;
 
 import javax.sql.DataSource;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Event;
@@ -51,6 +53,8 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  */
 public abstract class SqlReadModelProjector<T> extends SqlReadModel implements ReadModelWithMetaData<T>, BatchAwareProjection<T> {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(SqlReadModelProjector.class);
+
 	private final ReadModelStorage storage;
 	private Connection batchConnection;
 	private EventReference currentEventReference;
@@ -71,18 +75,56 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 
 	/**
 	 * An in-memory H2 database dies with the process, so such a read model is ephemeral. Any other
-	 * DataSource is assumed to point at storage the whole deployment reads and writes, and is
-	 * therefore projected by a single leader. Override {@link #storage()} to return
-	 * {@link ReadModelStorage#LOCAL} for a database that is durable but private to one instance —
-	 * otherwise only the leader's copy is kept up to date.
+	 * DataSource — and any whose URL cannot be determined — is assumed to point at storage the whole
+	 * deployment reads and writes, and is therefore projected by a single leader. Override
+	 * {@link #storage()} to return {@link ReadModelStorage#LOCAL} for a database that is durable but
+	 * private to one instance — otherwise only the leader's copy is kept up to date.
+	 * <p>
+	 * {@code SHARED} is the deliberate fallback rather than {@code EPHEMERAL}, because the two ways of
+	 * being wrong do not cost the same: a shared read model mistaken for an ephemeral one has its
+	 * bookmark dropped on every start and reprojects its whole history into a durable database, which
+	 * duplicates rows. The other way round only leaves a follower's copy unfilled.
 	 */
 	private static ReadModelStorage detectStorage(DataSource dataSource) {
-		try {
-			var method = dataSource.getClass().getMethod("getURL");
-			var url = (String) method.invoke(dataSource);
-			return url != null && url.contains(":h2:mem:") ? ReadModelStorage.EPHEMERAL : ReadModelStorage.SHARED;
-		} catch (ReflectiveOperationException e) {
-			return ReadModelStorage.SHARED;
+		String url = jdbcUrlOf(dataSource);
+		return url != null && url.contains(":h2:mem:") ? ReadModelStorage.EPHEMERAL : ReadModelStorage.SHARED;
+	}
+
+	/**
+	 * The JDBC URL behind a DataSource, or {@code null} when it cannot be established.
+	 * <p>
+	 * There is no accessor for this on {@link DataSource} itself, so the URL has to be asked for by a
+	 * name the implementation happens to use. Probing only {@code getURL} — the name the JDK's own
+	 * {@code JdbcDataSource} and H2's use — missed the pooled case entirely: HikariCP calls it
+	 * {@code getJdbcUrl}, so every Hikari-pooled read model, in-memory H2 included, fell into the
+	 * fallback and was classified {@code SHARED}. That is silent and it matters: the read model becomes
+	 * leader-only, so no other instance ever fills its own copy, and its bookmark stops being dropped
+	 * at startup.
+	 * <p>
+	 * The known getter names are tried first because they need no database. Only when none of them
+	 * exists is a connection taken and asked for {@link java.sql.DatabaseMetaData#getURL()}, which is
+	 * authoritative and sees through any wrapper — at the cost of requiring the database to be
+	 * reachable, so it is the last resort rather than the first.
+	 */
+	private static String jdbcUrlOf(DataSource dataSource) {
+		// getJdbcUrl: HikariCP, c3p0. getURL: H2, the JDK's own JdbcDataSource, PGSimpleDataSource.
+		// getUrl: Commons DBCP, Tomcat JDBC.
+		for (String getter : new String[] { "getJdbcUrl", "getURL", "getUrl" }) {
+			try {
+				Object url = dataSource.getClass().getMethod(getter).invoke(dataSource);
+				if (url instanceof String string) {
+					return string;
+				}
+			} catch (ReflectiveOperationException | RuntimeException notThisOne) {
+				// try the next name
+			}
+		}
+		try (var connection = dataSource.getConnection()) {
+			return connection.getMetaData().getURL();
+		} catch (SQLException | RuntimeException e) {
+			LOGGER.warn("cannot determine the JDBC URL of {}, assuming its read models are SHARED - override storage() if that is wrong",
+					dataSource.getClass().getName(), e);
+			return null;
 		}
 	}
 

@@ -167,6 +167,29 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		assertEquals(0, a.getCounterOnTopOfSnapshot()); // last append should also trigger a saveSnapshot
 	}
 
+	/**
+	 * An aggregate that is kept and used, rather than re-loaded before every change, still snapshots at
+	 * the rate it was configured for.
+	 * <p>
+	 * The count of events since the last snapshot was only ever set by a load, never advanced by the
+	 * events the aggregate itself raised, so on a held instance it stood still: a freshly loaded
+	 * aggregate stayed one below any threshold above 1 and never snapshotted at all, while one loaded
+	 * near its threshold cleared it on every single raise and wrote a snapshot per event, indefinitely.
+	 */
+	@ForEachBackend
+	void testAggregateSnapshotsWhileItIsHeldRatherThanReloaded ( ) {
+		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 5);
+
+		MockAggregate a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
+
+		for ( int i = 0; i < 20; i++ ) {
+			a.doSomething(i); // same instance throughout: never re-loaded
+		}
+
+		assertEquals(20, a.getCounter());
+		assertEquals(4, snapshotStorage.getSaveInvokes(), "20 events at a threshold of 5 is 4 snapshots");
+	}
+
 	@ForEachBackend
 	void testAggregateSnapshotsChangingVersion ( ) {
 		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 5);

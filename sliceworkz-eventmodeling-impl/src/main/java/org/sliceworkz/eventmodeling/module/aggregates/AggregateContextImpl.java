@@ -60,7 +60,12 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	private Tracing tracing;
 	private BoundedContextEventEmitter eventEmitter;
 
-	private long eventsStreamedForLoading = 0;
+	/**
+	 * Events that have gone by since the last snapshot of this aggregate: what a load replayed on top of
+	 * the snapshot it started from, plus everything raised since. Reset to zero whenever a snapshot is
+	 * written, which is the only thing that makes it mean what it says.
+	 */
+	private long eventsSinceLastSnapshot = 0;
 
 	public AggregateContextImpl ( String boundedContext, Instance instance, String aggregateName, Tags identity, Aggregate<DOMAIN_EVENT_TYPE> aggregate, EventStream<DOMAIN_EVENT_TYPE> eventStream, EventReference lastEventReference, SnapshotStorage<Object> snapshotStorage, int snapshotThresholdEventCount, Counter counterSnapshotWrite, MeterRegistry meterRegistry, ConcurrentHashMap<String, Counter> domainEventCounters, Tracing tracing, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
@@ -108,11 +113,23 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 		saveSnapshotIfNeeded(lastEventReference, events.size());
 	}
 
+	/**
+	 * Writes a snapshot once enough events have gone by since the last one.
+	 * <p>
+	 * The events just appended are counted in, and the count is reset when a snapshot is written. Both
+	 * halves were missing: the count was only ever set by a load, so on an aggregate that is kept and
+	 * used rather than re-loaded before every change it stood still. A freshly loaded aggregate then sat
+	 * one event below any threshold above 1 and never snapshotted however long it was used, while one
+	 * loaded just under its threshold cleared it on every raise and wrote a snapshot per event, for as
+	 * long as the instance was held.
+	 */
 	private void saveSnapshotIfNeeded (EventReference lastEventReference, int appendedEvents) {
 		if ( lastEventReference != null ) {
-			if ( snapshotStorage != null && (eventsStreamedForLoading + appendedEvents) >= snapshotThresholdEventCount && aggregate instanceof SnapshotCapable<?> snapshotCapable) {
+			eventsSinceLastSnapshot += appendedEvents;
+			if ( snapshotStorage != null && eventsSinceLastSnapshot >= snapshotThresholdEventCount && aggregate instanceof SnapshotCapable<?> snapshotCapable) {
 				snapshotStorage.save(snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), lastEventReference);
 				counterSnapshotWrite.increment();
+				eventsSinceLastSnapshot = 0;
 			}
 		}
 	}
@@ -138,7 +155,7 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 			snapshotStorage.save(snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), metrics.until());
 			counterSnapshotWrite.increment();
 		} else {
-			eventsStreamedForLoading = projectorMetrics.eventsStreamed();
+			eventsSinceLastSnapshot = projectorMetrics.eventsStreamed();
 		}
 
 		eventEmitter.emit(new BoundedContextEvent.AggregateLoaded(boundedContext, aggregate.getClass().getSimpleName(), metrics, eventEmitter.sliceFor(aggregate.getClass())), tracing);

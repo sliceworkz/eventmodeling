@@ -201,6 +201,16 @@ features/
   same window at full speed: an automation whose `handle` returns `Optional.empty()` — explicitly allowed,
   and what an automation with a purely external effect does — spun at ~40M invocations a second against
   50 items, hammering whatever it called. It now waits like an empty batch
+- **…but it does not wait out that interval when the todo list has moved underneath it.** The bookmark
+  notification was a bare `notify()`, so one arriving *while a batch was running* had nothing waiting to
+  hear it and was lost; the processor then parked the full 10s over a todo list that had already changed.
+  `monitoredBookmarkMoved` remembers it — set by `bookmarkUpdated`, cleared when a round reads the todo
+  list, so it only ever means "changed since we looked". This is what keeps a bookmark-less batch from
+  crawling: a backlog whose appends all de-duplicate on their idempotency key bookmarks nothing at all,
+  and one poll per batch would put a 10s tax on every 50 items of it. A bookmark that has *not* moved
+  still parks, so the anti-spin guarantee is untouched.
+  `AutomationFailureRecoveryTest.aTodoListChangingDuringABatchIsNotWaitedOut` pins it, and fails by
+  timeout without the flag
 - `AutomationFailureRecoveryTest` pins all of this down: a failing item at the head of the list does not
   stop the items behind it, a retriable failure is retried inside the batch, `STOP_BATCH`/`STOP_AUTOMATION`
   do what they say, a no-event handler does not spin, and an item cancelling its successors under

@@ -70,6 +70,14 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 	private boolean monitoredBookmarkMissingWarned = false;
 
+	/**
+	 * Set when the projector filling our todo list moves its bookmark, cleared when we read that todo
+	 * list. It is what tells an unproductive batch apart from a pointless one: a batch that produced no
+	 * event of its own has nothing for the catch-up guard to hold it against, but if the todo list has
+	 * moved underneath it there is new work to see and no reason to sit out the poll interval.
+	 */
+	private volatile boolean monitoredBookmarkMoved = false;
+
 	private final String boundedContext;
 	private final MeterRegistry meterRegistry;
 	private final Counter batchCounter;
@@ -139,8 +147,12 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 		if ( processor.equals(monitoredProcessorIdentification)) {
 			LOGGER.debug("monitored event processor {} moved bookmark to  {}", processor.toString(), processedUntil);
-			
-			// always of interest to us, as we'll probably be running behind now.
+
+			// always of interest to us, as we'll probably be running behind now. Remembered rather than
+			// only signalled: a move that lands while we are handling a batch has nothing waiting to hear
+			// it, and parking afterwards for the full timeout would sit out a todo list that has already
+			// changed. Cleared when we next read the todo list, so it only ever means "changed since then"
+			monitoredBookmarkMoved = true;
 			synchronized ( this ) {
 				this.notify();
 			}
@@ -176,6 +188,9 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 							mustFetchBookmark = false; // as long as this thread is processing the next round, no need to go and fetch the bookmark again from storage
 						}
 						
+						// cleared before the read, so that a move arriving from here on is one this round has
+						// not seen and is a reason to come straight back rather than park
+						monitoredBookmarkMoved = false;
 						Optional<EventReference> monitoredBookmark = eventSource.getBookmark(monitoredProcessorIdentification.toString()); // get position up until which the readmodel has been updated
 						
 						if ( monitoredBookmark.isPresent() && hasCaughtUp(monitoredBookmark.get(), lastReference) ) {
@@ -227,7 +242,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 									} else {
 										LOGGER.debug("no new todo items to handle");
 										LOGGER.debug("not directly querying again, waiting for {} seconds", (WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS/1000));
-										waitForWork(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
+										waitForNewWork(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
 										LOGGER.debug("done waiting, or notified that readmodel was updated and new items could be present");
 									}
 
@@ -264,7 +279,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 							} else {
 								LOGGER.debug("monitoredBookmark is {}, our own bookmark is {}, processing cannot continue until readmodel has kept up", monitoredBookmark, lastReference);
 							}
-							waitForWork(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
+							waitForNewWork(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
 							LOGGER.debug("done waiting, or notified that readmodel was updated and new items could be present");
 						}
 	
@@ -392,6 +407,27 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 			LOGGER.error("failure handler of automation '{}' threw, leaving the todo item for a later round", processorIdentification, t);
 			return AutomationFailureAction.SKIP_ITEM;
 		}
+	}
+
+	/**
+	 * Waits for the todo list to be worth reading again, for at most {@code timeoutMs}.
+	 * <p>
+	 * Returns immediately when the projector filling that list has moved its bookmark since this round
+	 * read it. That is not an optimisation: the notification is a bare {@code notify()}, so one arriving
+	 * while a batch was running is lost, and parking on it afterwards means sitting out the full poll
+	 * interval with changed work already waiting. It matters most exactly where the catch-up guard cannot
+	 * help — a batch whose appends were all de-duplicated by their idempotency key, or whose handler
+	 * raised nothing, bookmarks nothing and would otherwise crawl through a backlog one poll at a time.
+	 * <p>
+	 * Note what this does <em>not</em> do: a bookmark that has not moved still parks, so a batch that can
+	 * see no new work does not spin.
+	 */
+	private void waitForNewWork ( long timeoutMs ) {
+		if ( monitoredBookmarkMoved ) {
+			LOGGER.debug("todo list moved while we were working, going straight round again");
+			return;
+		}
+		waitForWork(timeoutMs);
 	}
 
 	/**

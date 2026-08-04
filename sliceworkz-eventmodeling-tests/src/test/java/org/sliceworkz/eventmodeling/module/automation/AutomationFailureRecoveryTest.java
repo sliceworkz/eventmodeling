@@ -184,9 +184,45 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 
 		// nothing bookmarks a batch that produced no event, so the catch-up guard cannot hold this
 		// automation back — it used to go straight round again and re-handle the same full window at
-		// full speed (tens of millions of calls in these three seconds)
-		assertTrue(handled.get() <= 3 * Automation.DEFAULT_BATCH_SIZE,
+		// full speed (tens of millions of calls in these three seconds). A handful of rounds is expected
+		// while the todo list is still being projected, since a todo list that moved is a reason to look
+		// again; the bound is set well above that and still four orders of magnitude below a spin
+		assertTrue(handled.get() <= 100 * Automation.DEFAULT_BATCH_SIZE,
 			"a batch that produced no event should wait rather than re-read the same window, was " + handled.get());
+	}
+
+	/**
+	 * A batch that bookmarks nothing — every append de-duplicated on its idempotency key, or a handler
+	 * that raises nothing — has to fall back on the poll interval, because the catch-up guard has no
+	 * reference to hold it against. It must not sit out that interval when the todo list has moved in the
+	 * meantime: the bookmark notification is a bare notify(), so one arriving mid-batch used to be lost
+	 * and a backlog then advanced one batch per ten seconds.
+	 */
+	@Test
+	void aTodoListChangingDuringABatchIsNotWaitedOut ( ) {
+		TodoList todoList = new TodoList("todo-moved-during-batch");
+		Handled handled = new Handled();
+		AtomicInteger seeded = new AtomicInteger();
+
+		start(todoList, new TestAutomation(todoList, (item, context) -> {
+			if ( item.equals("seed") && seeded.incrementAndGet() == 1 ) {
+				// put new work on the todo list and make sure it has been projected -- and bookmarked --
+				// before this batch ends, so the wake-up for it lands while nothing is waiting for it
+				context.event(new FirstDomainEvent("follow-up"));
+				await().atMost(Duration.ofSeconds(10)).until(() -> todoList.items().contains("follow-up"));
+				sleep(500); // let the projector's bookmark land behind the projection itself
+				return Optional.empty(); // bookmarks nothing, exactly as a de-duplicated append would
+			}
+			handled.add(item);
+			return context.event(new MockDomainEvent.SecondDomainEvent(item));
+		}));
+
+		boundedContext.event(new FirstDomainEvent("seed"));
+
+		// without remembering that missed wake-up this only happens after the full 10s poll interval
+		await().atMost(Duration.ofSeconds(6)).untilAsserted(
+			() -> assertTrue(handled.items().contains("follow-up"),
+				"work that appeared during a batch should be picked up without waiting out the poll interval"));
 	}
 
 	@Test

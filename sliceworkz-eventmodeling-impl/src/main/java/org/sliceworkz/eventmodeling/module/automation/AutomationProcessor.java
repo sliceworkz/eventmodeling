@@ -55,9 +55,6 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private static final long WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS = 10000;
 	private static final long WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS = 30000;
 
-	private static final int MAX_ITEM_ATTEMPTS = 3; // an item asking to be retried is tried this many times in total
-	private static final long FIRST_RETRY_BACKOFF_MS = 100; // doubled per further attempt
-
 	private final Limit batchSize;
 
 	private EventSource<DOMAIN_EVENT_TYPE> eventSource;
@@ -378,61 +375,51 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * @return {@code true} if the batch should continue with the next item
 	 */
 	private boolean handleItem ( TODO_ITEM_TYPE item, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context, BatchOutcome outcome ) {
-		for ( int attempt = 1; ; attempt++ ) {
-			try {
-				Optional<EventReference> produced = automation.handle(item, context);
-				outcome.handled++;
-				if ( produced != null && produced.isPresent() ) {
-					outcome.lastProducedEvent = produced.get();
-				}
-				return true;
-			} catch ( Throwable t ) {
-				outcome.failed++;
-				outcome.lastFailure = t;
-				lastFailure = t;
-				AutomationFailureAction action = determineFailureAction(item, t, context);
-				Throwable r = determineRootCause(t);
+		try {
+			Optional<EventReference> produced = automation.handle(item, context);
+			outcome.handled++;
+			if ( produced != null && produced.isPresent() ) {
+				outcome.lastProducedEvent = produced.get();
+			}
+			return true;
+		} catch ( Throwable t ) {
+			outcome.failed++;
+			outcome.lastFailure = t;
+			lastFailure = t;
+			AutomationFailureAction action = determineFailureAction(item, t, context);
+			Throwable r = determineRootCause(t);
 
-				if ( action == AutomationFailureAction.RETRY_NOW && attempt >= MAX_ITEM_ATTEMPTS ) {
-					// out of attempts: fall back to holding the order rather than letting the rest overtake
-					LOGGER.error("automation '{}' failed on a todo item {} times, abandoning the rest of this batch: rootcause {} : {}", processorIdentification, attempt, r.getClass(), r.getMessage(), t);
+			// An item is never handled twice within one batch: a failure worth retrying in milliseconds is
+			// about whatever the handler called rather than about the item, and belongs inside handle().
+			// What is useful here is backing the whole batch off, which is what happens between batches --
+			// immediately when the todo list has moved in the meantime, after the poll interval when it has
+			// not, so a conflict with another writer comes straight back and a dead dependency does not spin
+			switch ( action ) {
+				case CONTINUE_AND_RETRY_ITEM_LATER -> {
+					LOGGER.error("automation '{}' failed on a todo item, leaving it for a later batch and carrying on: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
+					return true;
+				}
+				case RETRY_ITEM -> {
+					LOGGER.error("automation '{}' failed on a todo item, abandoning the rest of this batch so it is retried first: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
 					return false;
 				}
-
-				switch ( action ) {
-					case RETRY_NOW -> {
-						long backoff = FIRST_RETRY_BACKOFF_MS << (attempt - 1);
-						LOGGER.warn("automation '{}' failed on a todo item (attempt {} of {}), retrying in {} ms: rootcause {} : {}", processorIdentification, attempt, MAX_ITEM_ATTEMPTS, backoff, r.getClass(), r.getMessage(), t);
-						waitForWork(backoff);
-						if ( instanceMode == ProcessorInstanceMode.TERMINATING ) {
-							return false;
-						}
-					}
-					case RETRY_LATER -> {
-						LOGGER.error("automation '{}' failed on a todo item, leaving it for a later batch and carrying on: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
-						return true;
-					}
-					case STOP_BATCH -> {
-						LOGGER.error("automation '{}' failed on a todo item, abandoning the rest of this batch: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
-						return false;
-					}
-					case STOP_AUTOMATION -> {
-						LOGGER.error("automation '{}' failed on a todo item: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
-						outcome.stopAutomation = true;
-						return false;
-					}
+				case STOP_AUTOMATION -> {
+					LOGGER.error("automation '{}' failed on a todo item: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
+					outcome.stopAutomation = true;
+					return false;
 				}
 			}
+			return false;
 		}
 	}
 
 	private AutomationFailureAction determineFailureAction ( TODO_ITEM_TYPE item, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context ) {
 		try {
 			AutomationFailureAction action = automation.onFailure(item, cause, context);
-			return action != null ? action : AutomationFailureAction.STOP_BATCH;
+			return action != null ? action : AutomationFailureAction.RETRY_ITEM;
 		} catch ( Throwable t ) {
 			LOGGER.error("failure handler of automation '{}' threw, abandoning the rest of this batch", processorIdentification, t);
-			return AutomationFailureAction.STOP_BATCH;
+			return AutomationFailureAction.RETRY_ITEM;
 		}
 	}
 

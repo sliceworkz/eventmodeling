@@ -90,14 +90,14 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	 * <p>
 	 * The item is not lost whichever action is returned — a todo list is projected from events, so an
 	 * item that was not handled is still outstanding and is offered again later. What is decided here is
-	 * when it comes back, and how much of the batch waits with it.
+	 * only what happens to the rest of the work while it waits its turn again.
 	 * <p>
-	 * The default (see {@link AutomationFailureAction#defaultFor}) retries a storage failure in place and
-	 * stops the batch for anything else. It never stops the automation, and it never lets the items behind
-	 * a failing one overtake it — {@code streamItems} defines the order and the framework does not abandon
-	 * it just because something went wrong. Where the items are independent of each other, say so by
-	 * returning {@link AutomationFailureAction#RETRY_LATER}, which is what keeps one poison item from
-	 * holding up everything behind it.
+	 * The default is {@link AutomationFailureAction#RETRY_ITEM}: the automation keeps running, and the
+	 * items behind the failing one wait for it rather than overtaking it. {@code streamItems} defines the
+	 * order and the framework does not abandon that order just because something went wrong, nor can it
+	 * tell whether the items behind a failing one depend on it. Where they are independent of each other,
+	 * say so by returning {@link AutomationFailureAction#CONTINUE_AND_RETRY_ITEM_LATER} — that is what
+	 * keeps one poison item from holding up everything behind it.
 	 * <p>
 	 * The other thing worth doing here is recording the failure as a domain event through {@code context},
 	 * which the todo list then projects to defer or drop the item. That is the only durable form of a dead
@@ -105,7 +105,7 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	 * comes straight back.
 	 * <p>
 	 * A throwable escaping this method is logged and treated as
-	 * {@link AutomationFailureAction#STOP_BATCH}.
+	 * {@link AutomationFailureAction#RETRY_ITEM}.
 	 *
 	 * @param todoItem the item whose handling failed
 	 * @param cause the throwable that escaped {@link #handle}
@@ -113,7 +113,7 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	 * @return what to do with the item and with the rest of the batch, never null
 	 */
 	default AutomationFailureAction onFailure ( TODO_ITEM_TYPE todoItem, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context ) {
-		return AutomationFailureAction.defaultFor(cause);
+		return AutomationFailureAction.RETRY_ITEM;
 	}
 
 }

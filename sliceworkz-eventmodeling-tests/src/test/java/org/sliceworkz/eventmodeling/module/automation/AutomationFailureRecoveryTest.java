@@ -95,7 +95,7 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 	}
 
 	@Test
-	void retryLaterLetsTheItemsBehindAFailingOneProceed ( ) {
+	void continuingLetsTheItemsBehindAFailingOneProceed ( ) {
 		TodoList todoList = new TodoList("todo-failing-item");
 		Handled handled = new Handled();
 
@@ -106,7 +106,7 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 			handled.add(item);
 			return context.event(new MockDomainEvent.SecondDomainEvent(item));
 		});
-		automation.failureAction = AutomationFailureAction.RETRY_LATER;
+		automation.failureAction = AutomationFailureAction.CONTINUE_AND_RETRY_ITEM_LATER;
 		start(todoList, automation);
 
 		boundedContext.event(new FirstDomainEvent("bad"));
@@ -128,8 +128,13 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 		assertTrue(todoList.items().contains("bad"), "the failing item stays outstanding on the todo list");
 	}
 
+	/**
+	 * There is no inline retry: an item is never handed to {@code handle} twice within one batch. A
+	 * transient failure is answered by backing the whole batch off, which is what happens between batches
+	 * anyway, and the item is the first thing the next one picks up.
+	 */
 	@Test
-	void transientFailureIsRetriedWithinTheBatch ( ) {
+	void aTransientFailureIsRetriedOnTheNextBatch ( ) {
 		TodoList todoList = new TodoList("todo-transient");
 		Handled handled = new Handled();
 		AtomicInteger attempts = new AtomicInteger();
@@ -144,11 +149,11 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 
 		boundedContext.event(new FirstDomainEvent("item-0"));
 
-		// a storage failure is classified as retriable, so the item is retried within the same batch
-		// rather than left for the next round ten seconds later
-		await().atMost(Duration.ofSeconds(5)).untilAsserted(
+		await().atMost(Duration.ofSeconds(20)).untilAsserted(
 			() -> assertEquals(List.of("item-0"), handled.items(),
-				"a retriable failure should be retried within the batch"));
+				"the item should be handled once the failure has cleared"));
+
+		assertEquals(2, attempts.get(), "the item is attempted once per batch, never twice within one");
 	}
 
 	@Test

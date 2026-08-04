@@ -15,17 +15,22 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.boundedcontext;
+package org.sliceworkz.eventmodeling.examples.payments.features.abandonedpayments;
 
-import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
-import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.examples.payments.Payments;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
-public interface AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends
-	CQRSCapabilities<DOMAIN_EVENT_TYPE>,
-	DCBCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
-	AggregateCapability<DOMAIN_EVENT_TYPE>,
-	FeatureSliceCapabilities,
-	AutomationAdminCapability,
-	PortsCapability {
+/** The dead-letter view over the payments the automation gave up on. */
+@FeatureSlice(type = Type.STATE_READ, context = "payments", chapter = "Executing Payments",
+	tags = {"dead-letter", "operations"})
+public class AbandonedPaymentsFeatureSlice implements Slice<Payments> {
+
+	@Override
+	public void configureQuery ( BoundedContextBuilder<Payments> builder ) {
+		builder.readmodel(AbandonedPaymentsReadModel.class);
+	}
 
 }

@@ -69,4 +69,48 @@ public interface ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
 	 */
 	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing );
 
+	/**
+	 * Provides a domain event under an idempotency key, so that providing it again stores nothing.
+	 * <p>
+	 * The key is scoped to the event stream, and a second event carrying a key already used on that
+	 * stream is silently ignored by storage. This is what makes an at-least-once caller safe: an
+	 * automation is handed the same todo item again whenever the events it raised have not reached its
+	 * todo list — after a crash between the append and the bookmark, and after every failure — and the
+	 * key is what keeps that from appending the same fact twice. Derive it from the item rather than
+	 * from the attempt, or every retry gets a fresh key and dedups nothing.
+	 * <p>
+	 * <strong>An empty return means the event was already there</strong>, not that nothing happened: it
+	 * is the same {@code Optional.empty()} a caller gets for an event that was not appended, and the
+	 * two are not distinguished. For an automation that is the right outcome either way — the work is
+	 * done, and the todo list drops the item once the original event is projected.
+	 *
+	 * @param event the domain event to provide
+	 * @param idempotencyKey the key identifying this event on its stream, or null for no idempotency check
+	 * @return reference to the appended event, or empty if it was not appended, including when the key was already used
+	 */
+	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, String idempotencyKey );
+
+	/**
+	 * Provides a domain event with tags, under an idempotency key.
+	 *
+	 * @param event the domain event to provide
+	 * @param tags the tags to associate with the event
+	 * @param idempotencyKey the key identifying this event on its stream, or null for no idempotency check
+	 * @return reference to the appended event, or empty if it was not appended, including when the key was already used
+	 * @see #event(Object, String)
+	 */
+	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey );
+
+	/**
+	 * Provides a domain event with tags and tracing information, under an idempotency key.
+	 *
+	 * @param event the domain event to provide
+	 * @param tags the tags to associate with the event
+	 * @param idempotencyKey the key identifying this event on its stream, or null for no idempotency check
+	 * @param tracing the tracing information for distributed tracing
+	 * @return reference to the appended event, or empty if it was not appended, including when the key was already used
+	 * @see #event(Object, String)
+	 */
+	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing );
+
 }

@@ -119,4 +119,19 @@ public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND
 		return delegate.event(event, tags, tracing);
 	}
 
+	@Override
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey) {
+		return delegate.event(event, Tags.none(), idempotencyKey, tracing);
+	}
+
+	@Override
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey) {
+		return delegate.event(event, tags, idempotencyKey, tracing);
+	}
+
+	@Override
+	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing) {
+		return delegate.event(event, tags, idempotencyKey, tracing);
+	}
+
 }

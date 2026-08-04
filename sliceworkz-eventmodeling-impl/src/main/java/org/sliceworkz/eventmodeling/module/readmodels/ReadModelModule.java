@@ -141,6 +141,13 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentReadModel : eventuallyConsistentReadModels ) {
 			String name = eventuallyConsistentReadModel.readmodelName();
+			// the name keys this read model's bookmark, and readmodelName() defaults to the simple class
+			// name — which an anonymous class does not have, and a lambda regenerates on every run
+			if ( name == null || name.isBlank() ) {
+				throw new IllegalArgumentException(
+					"read model %s has no name: readmodelName() defaults to the simple class name, which an anonymous class does not have, and the name keys the bookmark recording how far it has been projected - give it a name or make it a named class"
+						.formatted(eventuallyConsistentReadModel.getClass().getName()));
+			}
 			if ( !seenNames.add(name) ) {
 				LOGGER.error("duplicate readmodel name '%s' registered".formatted(name));
 				throw new IllegalArgumentException("duplicate readmodel name '%s' - bookmarks would collide".formatted(name));

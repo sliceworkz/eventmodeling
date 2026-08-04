@@ -73,6 +73,22 @@ The example demonstrates:
 - Querying read models (AccountDetailsReadModel, AccountOverviewReadModel)
 - Event stream subscriptions
 
+**Payments Example — an automation whose work can fail (main method):**
+```bash
+cd sliceworkz-eventmodeling-examples
+mvn compile exec:java -Dexec.mainClass="org.sliceworkz.eventmodeling.examples.payments.PaymentsExample"
+```
+
+The reference to copy when writing an automation that talks to anything outside its own context.
+`ExecutePaymentAutomation` is the file to read: its `onFailure` maps each way a payment gateway can fail
+onto an `AutomationFailureAction` *and* onto an event, with the reasoning for each pairing written down
+next to it. The example runs all four paths — a payment that works, one rejected outright into the
+dead-letter read model, one declined twice and deferred while the payments behind it proceed, and the
+gateway going down entirely so the automation backs off and then catches up by itself. Note the two
+distinct delays it shows, which are easy to conflate: `PaymentAttemptFailed.nextAttemptDueAt` defers **one
+item** and is durable because it is an event, while `delayBeforeNextBatch` paces **the whole automation**
+and deliberately is not.
+
 ## Architecture Patterns
 
 ### BoundedContext Pattern
@@ -151,6 +167,167 @@ features/
 - Implement `Automation<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE>`
 - Paired with `TodoListReadModel` to identify work
 - Process outstanding todo items by executing commands
+- **Delivery is at least once, and the todo list is the queue.** Nothing else records outstanding work:
+  an item is whatever the todo list projects out of the event history, so an item that was not handled
+  is still there on the next round and after every restart, and an item is only "done" once the events
+  it raised make the projection drop it. Two consequences worth designing around — an item is handled
+  again whenever a crash lands between the append and the bookmark (give the raised events an
+  idempotency key where that would be wrong), and **no state kept outside events survives**, so an
+  automation that marks something done only in memory sees it come straight back
+- **A failing item no longer stops anything by default.** Every failure used to be caught at the batch
+  level and answered by setting the processor to `STOPPED`, which nothing but starting the bounded
+  context again ever undid. So one poison item — or one ordinary `OptimisticLockingException`, the
+  routine DCB outcome that `DCBModule` rethrows out of `context.execute()` — retired the automation for
+  the life of the process, with its items sitting outstanding, one WARN line and no bounded-context
+  event to say so. Failures are contained per item now, and what one costs is the automation's own
+  decision through `Automation.onFailure`, returning an `AutomationFailureAction`:
+  - **All three retry the item** — the framework has nothing to drop it from. They differ only in what
+    happens to *the rest of the work* while it waits its turn again:
+
+    | | this item | the items behind it |
+    |---|---|---|
+    | `RETRY_ITEM` | on the next batch | wait for it |
+    | `CONTINUE_AND_RETRY_ITEM_LATER` | on a later batch | handled now, ahead of it |
+    | `STOP_AUTOMATION` | after a restart | wait for a human |
+
+  - `RETRY_ITEM`: the default. Abandons the rest of this batch, keeps the automation running, and the
+    batch is attempted again from the front next round
+  - `CONTINUE_AND_RETRY_ITEM_LATER`: **the only action that lets work overtake**, and so the only one
+    that gives up the order `streamItems` defined. What to return when items are independent of each
+    other — it is what keeps one poison item from holding up everything behind it. Named at length on
+    purpose: it is chosen deliberately, never by accident. Note what it costs when a *shared* dependency
+    is down rather than one item being poison: every item in the window is attempted and fails, so a
+    round is `batchSize` failing calls against something already struggling, where the default makes one
+  - `STOP_AUTOMATION`: the old behaviour, now opt-in and only where a human is meant to intervene
+  - **The default never lets work overtake a failure**, and needs no classification of the cause to
+    decide that. `streamItems` defines the order and the framework honours it, so abandoning that order
+    the moment something goes wrong would be odd, and the framework cannot tell whether the items behind
+    a failing one depend on it. Of the two ways to be wrong, holding up independent items is a stall
+    that shows in `AutomationStatus` and clears when the cause is dealt with; overtaking dependent ones
+    produces wrong results and reports nothing
+  - **There is no inline retry, and an item is never handed to `handle` twice within one batch.** A
+    failure worth retrying in milliseconds is almost always about the call the handler made rather than
+    about the todo item, so it belongs inside `handle` where the code knows what it just attempted —
+    and retrying one item three times is the wrong granularity for the failure it was meant to serve
+    anyway, since a storage outage dooms every item in the window. What the framework does instead is
+    back the whole batch off, which is what happens between batches regardless: **immediately** when the
+    todo list has moved in the meantime — so an optimistic-locking conflict, where another writer did
+    append, comes straight back — and after the poll interval when nothing changed, which is exactly
+    when waiting is right
+  - **What the default costs is a poison item at the head of the list holding up the rest**, for as long
+    as it keeps failing — running, making no progress, `itemsFailed` climbing with nothing handled. The
+    two ways out are the ordinary ones: `CONTINUE_AND_RETRY_ITEM_LATER` where the items are independent,
+    or an `onFailure` that records the failure as an event the todo list projects, which moves the item
+    out of the way for good
+- **There is no dead-letter queue, and the durable substitute is an event.** Override `onFailure` and
+  record the failure as a domain event through the context; the todo list projects it and defers or drops
+  the item, and a read model over those same events is the dead-letter view. Retry-with-delay is the same
+  mechanism — project attempt events and have `streamItems` withhold anything not yet due. Anything the
+  framework held beside the todo list instead would be both lost at restart and unable to influence what
+  `streamItems` offers next, which is the part that matters: a permanently skipped item still occupies a
+  slot in every batch window, so only the todo list can actually unblock the queue
+- **`Automation.batchSize()` decides how stale the todo list may be while a batch runs** (default 50).
+  Within a batch the todo list does not move — it is projected by its own processor on its own thread, so
+  events raised while handling an item reach it afterwards. Between batches the processor bookmarks the
+  last event it produced and will not start the next batch until the todo list has been projected past
+  it. So `batchSize(1)` gives every item a todo list accounting for everything the previous item raised,
+  which is what to choose when handling one item can cancel or supersede the ones behind it; the cost is
+  a projection round trip per item
+- **A todo list may also anticipate its own projection**, which gets the same effect inside a batch:
+  items are pulled one at a time and the next is only taken once the current one has been handled (an
+  explicit iterator, not a `Stream` pipeline whose laziness nothing stated), so `streamItems` can withhold
+  items the just-raised events will cancel. Only ever as a shortcut to a conclusion the projection reaches
+  by itself — see the restart rule above. `streamItems` also owns ordering: items are handled in the order
+  it returns them, and the framework neither re-orders nor verifies
+- **A batch goes straight round again only when it filled its window *and* moved its bookmark.** Without a
+  bookmark move the catch-up guard has nothing to hold the processor against, so it used to re-read the
+  same window at full speed: an automation whose `handle` returns `Optional.empty()` — explicitly allowed,
+  and what an automation with a purely external effect does — spun at ~40M invocations a second against
+  50 items, hammering whatever it called. It now waits like an empty batch
+- **How long it waits is `Automation.delayBeforeNextBatch(consecutiveFailedBatches, lastFailure)`**, asked
+  only when the processor has already decided to wait. The default is the 10s poll interval while nothing
+  is failing, and doubles from there up to 5 minutes while batches keep failing without handling anything
+  — so a dependency that is down for an hour costs a handful of attempts instead of one per todo-list
+  update. Overriding it trades load on whatever is down against how late recovery is noticed, since a
+  backed-off automation sits out the current delay before finding out the dependency is back. A `null` or
+  negative duration falls back to the default with a WARN, and a throw is contained the same way
+- **A batch that failed and handled nothing is held for that delay whatever the todo list does**, which
+  is the one place the bookmark-moved fast path is deliberately not honoured: a changed todo list says
+  nothing about whether the dependency the handler needs has recovered, and releasing on it would tie the
+  retry rate to the traffic feeding the list — a busy system would hammer whatever is down rather than
+  back off from it. This needs its own wait (`backOff`, not `waitForWork`): bookmark moves arrive as a
+  bare `notify()` on the processor's monitor, so a parked thread is woken by any of them however it came
+  to be parked, and skipping the flag check alone left the automation released by the very notification it
+  was meant to ignore. `backOff` loops to its deadline and only shutdown or a stop cuts it short
+- **`AutomationStatus.consecutiveFailedBatches` is what makes a stall visible.** `itemsFailed` cannot: a
+  healthy automation accumulates failures too. A number that keeps climbing means running, retrying and
+  getting nowhere, and it resets the moment a batch handles anything
+- **`AutomationFailed` hands that stall to the surrounding infrastructure**, emitted once per batch that
+  failed and handled nothing — never per item, which is the automation's own business through `onFailure`
+  and would turn an outage into a flood. A batch that handled even one item is progress and emits nothing,
+  however many others failed in it. The rate is bounded by the backoff, and the event carries
+  `consecutiveFailedBatches` so the consumer picks its own alerting threshold rather than the framework
+  picking one. There is no matching "recovered" event: an automation that gets going again emits
+  `AutomationProcessed` with a non-zero `eventsHandled`
+- **An automation must be a named class, and so must a read model.** The simple name keys the bookmark
+  recording progress, the metric tags and the `AutomationAdminCapability` id. An anonymous class has no
+  simple name and a lambda's is regenerated per run — which is the dangerous one, since the bookmark would
+  be new on every start and every todo item handled again. Both are rejected at build time naming the
+  class and the reason; they used to fail deeper down with a bare `id is required`
+- **…but it does not wait out that interval when the todo list has moved underneath it.** The bookmark
+  notification was a bare `notify()`, so one arriving *while a batch was running* had nothing waiting to
+  hear it and was lost; the processor then parked the full 10s over a todo list that had already changed.
+  `monitoredBookmarkMoved` remembers it — set by `bookmarkUpdated`, cleared when a round reads the todo
+  list, so it only ever means "changed since we looked". This is what keeps a bookmark-less batch from
+  crawling: a backlog whose appends all de-duplicate on their idempotency key bookmarks nothing at all,
+  and one poll per batch would put a 10s tax on every 50 items of it. A bookmark that has *not* moved
+  still parks, so the anti-spin guarantee is untouched.
+  `AutomationFailureRecoveryTest.aTodoListChangingDuringABatchIsNotWaitedOut` pins it, and fails by
+  timeout without the flag
+- `AutomationFailureRecoveryTest` pins all of this down: the default holds the order and keeps the
+  automation running, `CONTINUE_AND_RETRY_ITEM_LATER` lets the items behind a failing one proceed, a
+  transient failure is retried on the next batch and never twice within one, `STOP_AUTOMATION` does what
+  it says, a no-event handler does not spin, and an item cancelling its successors under `batchSize(1)`
+  really does prevent them being handled
+- **The catch-up guard compares the total `(tx, position, index)` order**, through
+  `EventReference.happenedAfter` in `AutomationProcessor.hasCaughtUp`, not `position()` alone. The two are
+  genuinely different orders — a position is a `bigserial` and a transaction id an `xid8`, assigned
+  independently, so an event can hold a lower position and a higher transaction than one that committed
+  before it — and comparing positions reported the projector as caught up while it was not, re-reading a
+  todo list that still held items already handled. `AutomationCatchUpOrderingTest` pins it, including the
+  inclusive boundary (the event we produced counts as projected) and the `index` tiebreak upcasting produces
+- **`ProvidedEventCapability.event(...)` takes an idempotency key**, so an automation raising events
+  directly has the dedup lever a command already had through `CommandResult.idempotencyKey`. The key is
+  scoped to the stream, and a repeat is silently ignored by storage — which surfaces as `Optional.empty()`,
+  the same value as "not appended", the two being deliberately not distinguished (for an automation the
+  work is done either way, and the todo list drops the item once the original event is projected). Derive
+  the key from the todo item, never from the attempt, or every replay gets a fresh key and dedups nothing.
+  The overloads are on the shared capability, so translators get them too. `ProvidedEventIdempotencyTest`
+  covers it per backend plus end to end through an automation handed the same item twice
+- **A stopped automation is visible and restartable, through `AutomationAdminCapability` on the bounded
+  context.** `automations()` returns an `AutomationStatus` each — id, class, running, items failed,
+  `lastFailure`, and `stoppedBy` (kept apart from `lastFailure`, because a running automation has usually
+  survived failures and the one an operator wants is the one that stopped it). `restartAutomation(id)`
+  puts a stopped one back, returning `false` if it was already running and throwing `IllegalArgumentException`
+  naming the registered ids if there is no such automation. Two things to know: the item that stopped it is
+  still at the head of the todo list, so restarting without fixing the cause handles it again and stops
+  again; and this addresses **the instance it is called on**, since every instance runs its own processors
+  — a remote channel is the same "name one instance" problem leader election has, so it is left out rather
+  than half-done
+- **`AutomationStarted` / `AutomationStopped` are the pair to fold to answer "is it running"**, the later
+  of the two winning. `AutomationStarted` carries an `AutomationStartReason` (`BOUNDED_CONTEXT_START` or
+  `RESTART`) and is emitted on the ordinary path too, so the running automations are announced from startup
+  rather than from whenever each first has work — an automation with an empty todo list would otherwise say
+  nothing at all and be indistinguishable from one that is not deployed. The two are deliberately **not**
+  symmetric at shutdown: an automation going down with its context raises no `AutomationStopped`, because
+  `BoundedContextStopping` already says so for all of them at once, which leaves `AutomationStopped`
+  meaning the one state worth alerting on — down while its context is up
+- **`AutomationStatus.itemsFailed` is counted separately from the meter of the same name**, deliberately.
+  The default registry is an empty `Metrics.globalRegistry` composite whose counters are no-ops reading 0
+  forever, so serving an operator's view from the meter would have made it depend on whether anyone wired
+  up monitoring. `AutomationAdminTest` catches that (it asserts the count against an unconfigured registry)
+- Still missing, deliberately out of scope here: leader election (`instanceMode` is hardcoded to `LEADER`
+  while the bookmark is `[shared]`, so a second instance duplicates every item)
 
 **Translators:**
 - Implement `Translator<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>`

@@ -217,6 +217,93 @@ public sealed interface BoundedContextEvent {
 	 */
 	record AutomationProcessed ( String boundedContext, String automation, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
 
+	/**
+	 * Emitted when an automation completes a batch that failed and handled nothing — it is running,
+	 * retrying, and getting nowhere.
+	 * <p>
+	 * <strong>Once per such batch, not once per failed item.</strong> A failing item is the automation's
+	 * own business and it already decides what to do about it in {@code onFailure}, where it can record
+	 * whatever domain event the failure deserves; emitting one of these per item would duplicate that and
+	 * turn an outage into a flood. What the automation cannot report from there, and what infrastructure
+	 * actually needs, is the thing only the processor can see: no progress at all. A batch that handled
+	 * even one item is progress and emits nothing, however many other items failed in it.
+	 * <p>
+	 * The volume is bounded by the backoff, since a batch is the unit: while a dependency is down these
+	 * arrive on the schedule {@code Automation.delayBeforeNextBatch} sets, which by default slows from
+	 * every 10 seconds to every 5 minutes.
+	 * <p>
+	 * {@code consecutiveFailedBatches} is what a consumer should key its policy on rather than reacting
+	 * to the first one — the framework deliberately picks no alerting threshold, because how many failed
+	 * batches are worth waking somebody for is a property of what the automation talks to. There is no
+	 * matching "recovered" event: an automation that gets going again emits {@link AutomationProcessed}
+	 * with a non-zero {@code eventsHandled}, which is the same signal from the other side.
+	 *
+	 * @param boundedContext the context the automation belongs to
+	 * @param automation the automation's id, the same one the metric tags use
+	 * @param failure the last throwable to escape the handler in this batch
+	 * @param consecutiveFailedBatches how many batches in a row have now failed without handling anything,
+	 *        1 for the first
+	 * @param itemsFailed how many items failed in this batch
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record AutomationFailed ( String boundedContext, String automation, Failure failure, int consecutiveFailedBatches, long itemsFailed, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when an automation has stopped and will not process any further todo items until something
+	 * restarts it.
+	 * <p>
+	 * This is not the ordinary answer to a failing item — a failure is contained per item and the batch
+	 * carries on (see {@code AutomationFailureAction}). It is emitted only where the automation itself
+	 * asked for it by returning {@code STOP_AUTOMATION}, which is the choice to be made when a human is
+	 * meant to look before any more items are handled. Nothing restarts the processor on its own.
+	 * <p>
+	 * The outstanding work is not lost: a todo list is projected from events, so every item the automation
+	 * had left is still there, and the one it failed on is still at the head of it. Restarting without
+	 * addressing that item means handling it again, and probably stopping again.
+	 *
+	 * @param boundedContext the context the automation belongs to
+	 * @param automation the automation's id, the same one {@code AutomationStatus} and the metric tags use
+	 * @param failure what escaped the handler
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record AutomationStopped ( String boundedContext, String automation, Failure failure, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when an automation begins processing todo items: once per automation when the bounded
+	 * context starts, and again whenever a stopped one is restarted.
+	 * <p>
+	 * Emitted on the ordinary path and not only on the interesting one, so that the running automations
+	 * are visible from startup rather than from whenever each of them first has work — an automation with
+	 * an empty todo list would otherwise announce nothing at all, and be indistinguishable from one that
+	 * is not there.
+	 * <p>
+	 * With {@link AutomationStopped} this is the pair to fold to answer "is it running": the later of the
+	 * two wins. Note that they are deliberately not symmetric at shutdown — an automation stopping because
+	 * its context is going down raises no {@code AutomationStopped}, since {@link BoundedContextStopping}
+	 * already says so for all of them at once. {@code AutomationStopped} means one automation is down
+	 * while its context is up, which is the state worth alerting on.
+	 *
+	 * @param boundedContext the context the automation belongs to
+	 * @param automation the automation's id, the same one the metric tags use
+	 * @param reason whether the bounded context started it or an operator restarted it
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record AutomationStarted ( String boundedContext, String automation, AutomationStartReason reason, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/** Why an {@link AutomationStarted} was raised. */
+	enum AutomationStartReason {
+
+		/** The bounded context was started, which starts every automation registered on it. */
+		BOUNDED_CONTEXT_START,
+
+		/**
+		 * A stopped automation was restarted on its own, through
+		 * {@code AutomationAdminCapability.restartAutomation} — so somebody decided the reason it stopped
+		 * has been dealt with.
+		 */
+		RESTART
+	}
+
 	/*
 	 * Value objects used by the events above
 	 */

@@ -61,7 +61,18 @@ import org.sliceworkz.eventstore.stream.EventStream;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 
-public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, UnboundedReadModelCapability<DOMAIN_EVENT_TYPE> {
+/**
+ * The bounded context itself.
+ * <p>
+ * It implements {@link BoundedContext} rather than only the capability interfaces that make it up, and
+ * that is load bearing rather than tidiness. A context is handed to the caller as a {@link java.lang.reflect.Proxy}
+ * over their own context interface, and the proxy forwards by {@code Method.invoke(this, args)} — which
+ * requires this object to be an instance of the interface <em>declaring</em> the method. {@link BoundedContext#name()}
+ * is declared on {@code BoundedContext} and nowhere else, so with only the capabilities implemented here
+ * every call to {@code name()} through a proxied context failed with an {@code IllegalArgumentException}
+ * out of the reflection layer, saying only that the object was not an instance of the declaring class.
+ */
+public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, UnboundedReadModelCapability<DOMAIN_EVENT_TYPE> {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(BoundedContextImpl.class);
 
@@ -160,6 +171,11 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	
 	void setSelfReference(BoundedContext<?,?,?> selfReference) {
 		this.selfReference = selfReference;
+	}
+
+	@Override
+	public String name ( ) {
+		return name;
 	}
 
 	private Set<BoundedContextEvent.FeatureSlice> map ( List<? extends Slice<? extends BoundedContext<?,?,?>>> featureSlices ) {

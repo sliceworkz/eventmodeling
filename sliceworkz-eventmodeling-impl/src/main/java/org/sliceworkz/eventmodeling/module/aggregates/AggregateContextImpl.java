@@ -100,7 +100,10 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	@Override
 	public void raiseEvents(List<DOMAIN_EVENT_TYPE> events) {
 		var eventAppender = eventAppender();
-		events.stream().map(eventAppender::add);
+		// forEach, not stream().map(): a mapped stream that nobody consumes never runs, so this used to
+		// hand the appender nothing and append an empty batch - silently, since an empty append raises
+		// no error and the aggregate had already been told the events by the caller building the list
+		events.forEach(eventAppender::add);
 		EventReference lastEventReference = eventAppender.append();
 		saveSnapshotIfNeeded(lastEventReference, events.size());
 	}

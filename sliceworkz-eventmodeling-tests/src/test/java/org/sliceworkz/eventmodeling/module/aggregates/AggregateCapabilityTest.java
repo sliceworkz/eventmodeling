@@ -114,6 +114,34 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		assertThrows(OptimisticLockingException.class, ()-> bo123.doSomething()); // this should be behind
 	}
 	
+	/**
+	 * {@code raiseEvents} used to hand its events to the appender through a {@code stream().map(...)}
+	 * that nothing consumed, so nothing was added and an empty batch was appended - with no error, since
+	 * an empty append raises none. The aggregate was left un-updated too, because it is told about its
+	 * events by the appender, from what the store actually accepted.
+	 */
+	@ForEachBackend
+	void testAggregateRaisingSeveralEventsAtOnce ( ) {
+
+		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage()).getEventStream(EventStreamId.anyContext().withPurpose("domain"));
+
+		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 0);
+
+		MockAggregate bo = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
+		bo.doThreeThings();
+
+		List<? extends Event<MockDomainEvent>> all = allStream.query(EventQuery.matchAll()).toList();
+		assertEquals(3, all.size(), "all three raised events should have been appended");
+		all.forEach(event -> assertTrue(event.tags().containsAll(Tags.of("businessObject", "123"))));
+
+		assertEquals(3, bo.getCounter(), "the aggregate should have been told about each appended event");
+
+		// and the appender's lock reference moved with them, so the same instance can carry on
+		bo.doSomething();
+		assertEquals(4, bo.getCounter());
+		assertEquals(4, allStream.query(EventQuery.matchAll()).toList().size());
+	}
+
 	@ForEachBackend
 	void testAggregateSnapshots ( ) {
 		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 5);
@@ -221,6 +249,10 @@ class MockAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<MockA
 	
 	public void doSomething ( int number ) {
 		ctx.raiseEvent(new FirstDomainEvent("test " + number));
+	}
+
+	public void doThreeThings ( ) {
+		ctx.raiseEvents(List.of(new FirstDomainEvent("one"), new FirstDomainEvent("two"), new FirstDomainEvent("three")));
 	}
 	
 	public int getCounter ( ) {

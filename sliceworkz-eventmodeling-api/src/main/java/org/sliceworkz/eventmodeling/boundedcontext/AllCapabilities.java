@@ -18,12 +18,14 @@
 package org.sliceworkz.eventmodeling.boundedcontext;
 
 import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
+import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
 
 public interface AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends
 	CQRSCapabilities<DOMAIN_EVENT_TYPE>,
 	DCBCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
 	AggregateCapability<DOMAIN_EVENT_TYPE>,
 	FeatureSliceCapabilities,
+	AutomationAdminCapability,
 	PortsCapability {
 
 }

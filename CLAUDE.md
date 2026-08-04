@@ -230,9 +230,30 @@ features/
   the key from the todo item, never from the attempt, or every replay gets a fresh key and dedups nothing.
   The overloads are on the shared capability, so translators get them too. `ProvidedEventIdempotencyTest`
   covers it per backend plus end to end through an automation handed the same item twice
+- **A stopped automation is visible and restartable, through `AutomationAdminCapability` on the bounded
+  context.** `automations()` returns an `AutomationStatus` each — id, class, running, items failed,
+  `lastFailure`, and `stoppedBy` (kept apart from `lastFailure`, because a running automation has usually
+  survived failures and the one an operator wants is the one that stopped it). `restartAutomation(id)`
+  puts a stopped one back, returning `false` if it was already running and throwing `IllegalArgumentException`
+  naming the registered ids if there is no such automation. Two things to know: the item that stopped it is
+  still at the head of the todo list, so restarting without fixing the cause handles it again and stops
+  again; and this addresses **the instance it is called on**, since every instance runs its own processors
+  — a remote channel is the same "name one instance" problem leader election has, so it is left out rather
+  than half-done
+- **`AutomationStarted` / `AutomationStopped` are the pair to fold to answer "is it running"**, the later
+  of the two winning. `AutomationStarted` carries an `AutomationStartReason` (`BOUNDED_CONTEXT_START` or
+  `RESTART`) and is emitted on the ordinary path too, so the running automations are announced from startup
+  rather than from whenever each first has work — an automation with an empty todo list would otherwise say
+  nothing at all and be indistinguishable from one that is not deployed. The two are deliberately **not**
+  symmetric at shutdown: an automation going down with its context raises no `AutomationStopped`, because
+  `BoundedContextStopping` already says so for all of them at once, which leaves `AutomationStopped`
+  meaning the one state worth alerting on — down while its context is up
+- **`AutomationStatus.itemsFailed` is counted separately from the meter of the same name**, deliberately.
+  The default registry is an empty `Metrics.globalRegistry` composite whose counters are no-ops reading 0
+  forever, so serving an operator's view from the meter would have made it depend on whether anyone wired
+  up monitoring. `AutomationAdminTest` catches that (it asserts the count against an unconfigured registry)
 - Still missing, deliberately out of scope here: leader election (`instanceMode` is hardcoded to `LEADER`
-  while the bookmark is `[shared]`, so a second instance duplicates every item), and a bounded-context event
-  for a stopped automation (only the `sliceworkz.eventmodeling.automation.items.failed` counter exists)
+  while the bookmark is `[shared]`, so a second instance duplicates every item)
 
 **Translators:**
 - Implement `Translator<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>`

@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
+import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
@@ -268,6 +269,20 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public <T> T readUnbounded(Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params) {
 		return readmodelModule.liveModelUnbounded(readModelClass, tracing.instance(instance), params);
+	}
+
+	/*
+	 * AUTOMATION ADMINISTRATION
+	 */
+
+	@Override
+	public List<AutomationStatus> automations ( ) {
+		return automationModule.automations();
+	}
+
+	@Override
+	public boolean restartAutomation ( String automation ) {
+		return automationModule.restartAutomation(automation);
 	}
 
 	/*

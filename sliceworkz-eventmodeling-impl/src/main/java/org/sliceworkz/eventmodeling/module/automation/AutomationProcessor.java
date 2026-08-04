@@ -17,8 +17,11 @@
  */
 package org.sliceworkz.eventmodeling.module.automation;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Iterator;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -27,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.AutomationFailureAction;
+import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
@@ -77,6 +81,18 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * moved underneath it there is new work to see and no reason to sit out the poll interval.
 	 */
 	private volatile boolean monitoredBookmarkMoved = false;
+
+	/** The most recent throwable out of a handler, and the one that stopped us, for {@link #status()}. */
+	private volatile Throwable lastFailure;
+	private volatile Throwable stoppedBy;
+
+	/**
+	 * Failed items, counted here as well as into the meter. The meter cannot serve
+	 * {@link #status()}: the default registry is an empty {@code Metrics.globalRegistry} composite, whose
+	 * counters are no-ops that read 0 forever, so an operator's view of what went wrong would depend on
+	 * whether anyone happened to wire up monitoring.
+	 */
+	private final AtomicLong itemsFailed = new AtomicLong();
 
 	private final String boundedContext;
 	private final MeterRegistry meterRegistry;
@@ -135,10 +151,15 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 	@Override
 	public void start ( ) {
+		start(BoundedContextEvent.AutomationStartReason.BOUNDED_CONTEXT_START);
+	}
+
+	private void start ( BoundedContextEvent.AutomationStartReason reason ) {
 		this.processorMode = originalProcessorMode;
 		synchronized ( this ) { // escape the wait state if needed
 			this.notify();
 		}
+		eventEmitter.emit(new BoundedContextEvent.AutomationStarted(boundedContext, processorIdentification.id(), reason, eventEmitter.sliceFor(automation.getClass())));
 	}
 
 	@Override
@@ -218,6 +239,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 									batchCounter.increment();
 									itemsHandledCounter.increment(outcome.handled);
 									itemsFailedCounter.increment(outcome.failed);
+									itemsFailed.addAndGet(outcome.failed);
 
 									if ( outcome.streamed > 0 && eventEmitter.enabled() ) {
 										long duration = System.currentTimeMillis() - batchStartMs;
@@ -231,8 +253,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 									}
 
 									if ( outcome.stopAutomation ) {
-										LOGGER.warn("stopping automation '{}' as its failure handling asked for it - it will not run again until the bounded context is started", processorIdentification);
+										LOGGER.warn("stopping automation '{}' as its failure handling asked for it - it will not run again until it is restarted", processorIdentification);
+										stoppedBy = outcome.lastFailure;
 										processorMode = ProcessorMode.STOPPED;
+										eventEmitter.emit(new BoundedContextEvent.AutomationStopped(boundedContext, processorIdentification.id(), failureOf(outcome.lastFailure), eventEmitter.sliceFor(automation.getClass())), tracing);
 									} else if ( outcome.streamed >= batchSize.value() && outcome.lastProducedEvent != null ) {
 										// A full window and a bookmark that moved: there is plausibly more behind it, and the
 										// guard at the top of the loop now has something to hold us against. Without a moved
@@ -364,6 +388,8 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 				return true;
 			} catch ( Throwable t ) {
 				outcome.failed++;
+				outcome.lastFailure = t;
+				lastFailure = t;
 				AutomationFailureAction action = determineFailureAction(item, t, context);
 				Throwable r = determineRootCause(t);
 
@@ -458,6 +484,51 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		long failed;
 		EventReference lastProducedEvent;
 		boolean stopAutomation;
+		Throwable lastFailure;
+	}
+
+	/**
+	 * What this automation is doing, for an operator. Read off the processor without synchronisation, so
+	 * it is a snapshot rather than a consistent view — which is what {@code AutomationAdminCapability}
+	 * documents it to be, and why restarting reports what it actually did.
+	 */
+	AutomationStatus status ( ) {
+		return new AutomationStatus(
+				processorIdentification.id(),
+				automation.getClass().getSimpleName(),
+				processorMode != ProcessorMode.STOPPED,
+				itemsFailed.get(),
+				failureOf(lastFailure),
+				failureOf(stoppedBy));
+	}
+
+	/**
+	 * Restarts this processor if it is stopped, so it picks its todo list up again from its bookmark.
+	 *
+	 * @return {@code true} if it was stopped and has been restarted, {@code false} if it was running
+	 */
+	boolean restart ( ) {
+		if ( processorMode != ProcessorMode.STOPPED ) {
+			LOGGER.debug("automation '{}' is already running, nothing to restart", processorIdentification);
+			return false;
+		}
+		LOGGER.info("restarting automation '{}'", processorIdentification);
+		stoppedBy = null; // it is running again; what stopped it stays available as lastFailure
+		start(BoundedContextEvent.AutomationStartReason.RESTART);
+		return true;
+	}
+
+	String automationId ( ) {
+		return processorIdentification.id();
+	}
+
+	private static BoundedContextEvent.Failure failureOf ( Throwable failure ) {
+		if ( failure == null ) {
+			return null;
+		}
+		StringWriter stackTrace = new StringWriter();
+		failure.printStackTrace(new PrintWriter(stackTrace));
+		return new BoundedContextEvent.Failure(failure.getClass().getName(), failure.getMessage(), stackTrace.toString());
 	}
 
 

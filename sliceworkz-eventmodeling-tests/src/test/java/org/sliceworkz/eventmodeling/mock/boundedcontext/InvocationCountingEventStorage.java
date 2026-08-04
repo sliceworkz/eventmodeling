@@ -34,15 +34,26 @@ import org.sliceworkz.eventstore.stream.EventStreamId;
 public class InvocationCountingEventStorage implements EventStorage {
 
 	private EventStorage wrapped;
-	
+
 	private int queries = 0;
-	
+
+	private RuntimeException appendFailure;
+
 	public InvocationCountingEventStorage ( EventStorage wrapped ) {
 		this.wrapped = wrapped;
 	}
-	
+
 	public int queriesDone ( ) {
 		return queries;
+	}
+
+	/**
+	 * Makes every subsequent append fail, so a caller's handling of a storage that will not take an
+	 * event can be pinned down. No backend can be talked into failing on demand, which is why this is
+	 * here rather than in the fixture.
+	 */
+	public void failAppendsWith ( RuntimeException failure ) {
+		this.appendFailure = failure;
 	}
 	
 	@Override
@@ -68,6 +79,9 @@ public class InvocationCountingEventStorage implements EventStorage {
 
 	@Override
 	public List<StoredEvent> append(AppendCriteria appendCriteria, Optional<EventStreamId> stream, List<EventToStore> events) {
+		if ( appendFailure != null ) {
+			throw appendFailure;
+		}
 		return wrapped.append(appendCriteria, stream, events);
 	}
 

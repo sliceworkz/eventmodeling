@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -154,6 +155,69 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 				"the item should be handled once the failure has cleared"));
 
 		assertEquals(2, attempts.get(), "the item is attempted once per batch, never twice within one");
+	}
+
+	/**
+	 * A dependency that is down fails every batch, and the todo list keeps moving underneath the
+	 * automation because the rest of the system carries on appending the events that feed it. The
+	 * bookmark-moved fast path must not release the automation on that: a changed todo list says nothing
+	 * about whether the dependency is back, and releasing on it ties the retry rate to the traffic
+	 * feeding the list — so a busy system would hammer whatever is down instead of backing off.
+	 */
+	@Test
+	void aFailingBatchBacksOffEvenWhileTheTodoListKeepsMoving ( ) {
+		TodoList todoList = new TodoList("todo-backoff");
+		AtomicInteger attempts = new AtomicInteger();
+
+		TestAutomation automation = new TestAutomation(todoList, (item, context) -> {
+			attempts.incrementAndGet();
+			throw new IllegalStateException("the remote service is down");
+		});
+		start(todoList, automation);
+
+		boundedContext.event(new FirstDomainEvent("item-0"));
+		await().atMost(Duration.ofSeconds(10)).untilAsserted(
+			() -> assertTrue(attempts.get() >= 1, "the automation should have tried once"));
+
+		// keep the todo list moving: every one of these projects and moves the monitored bookmark
+		for ( int i = 1; i <= 20; i++ ) {
+			boundedContext.event(new FirstDomainEvent("item-" + i));
+			sleep(50);
+		}
+		sleep(1_000);
+
+		assertTrue(attempts.get() <= 2,
+			"a failing automation should back off rather than retry on every todo-list change, tried " + attempts.get() + " times");
+		assertTrue(boundedContext.automations().get(0).consecutiveFailedBatches() >= 1,
+			"the stall should be visible as consecutive failed batches");
+	}
+
+	@Test
+	void theBackoffGrowsWhileNothingGetsAnywhereAndResetsOnProgress ( ) {
+		TodoList todoList = new TodoList("todo-backoff-growth");
+		AtomicBoolean broken = new AtomicBoolean(true);
+
+		TestAutomation automation = new TestAutomation(todoList, (item, context) -> {
+			if ( broken.get() ) {
+				throw new IllegalStateException("still down");
+			}
+			return context.event(new MockDomainEvent.SecondDomainEvent(item));
+		});
+		automation.delay = Duration.ofMillis(50); // keep the test quick; the framework supplies the count
+		start(todoList, automation);
+
+		boundedContext.event(new FirstDomainEvent("item-0"));
+
+		await().atMost(Duration.ofSeconds(10)).untilAsserted(
+			() -> assertTrue(automation.delaysAskedFor().size() >= 3, "the automation should have been asked more than once"));
+
+		assertEquals(List.of(1, 2, 3), automation.delaysAskedFor().subList(0, 3),
+			"consecutive failed batches should be counted up and handed to the automation");
+
+		broken.set(false);
+		await().atMost(Duration.ofSeconds(10)).untilAsserted(
+			() -> assertEquals(0, boundedContext.automations().get(0).consecutiveFailedBatches(),
+				"progress should reset the count"));
 	}
 
 	@Test
@@ -308,6 +372,8 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 
 		AutomationFailureAction failureAction;
 		int batchSize = Automation.DEFAULT_BATCH_SIZE;
+		Duration delay;
+		final List<Integer> delaysAskedFor = Collections.synchronizedList(new ArrayList<>());
 
 		TestAutomation ( TodoListReadModel<MockDomainEvent,String> todoList, Handler handler ) {
 			this.todoList = todoList;
@@ -335,8 +401,18 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 			return failureAction != null ? failureAction : Automation.super.onFailure(todoItem, cause, context);
 		}
 
+		@Override
+		public Duration delayBeforeNextBatch ( int consecutiveFailedBatches, Throwable lastFailure ) {
+			delaysAskedFor.add(consecutiveFailedBatches);
+			return delay != null ? delay : Automation.super.delayBeforeNextBatch(consecutiveFailedBatches, lastFailure);
+		}
+
 		int attempts ( ) {
 			return attempts.get();
+		}
+
+		List<Integer> delaysAskedFor ( ) {
+			return List.copyOf(delaysAskedFor);
 		}
 	}
 

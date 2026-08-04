@@ -33,6 +33,10 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
  * @param running whether it is processing todo items, as opposed to stopped
  * @param itemsFailed how many todo items have failed on this instance since it started, whatever the
  *        automation decided to do about them
+ * @param consecutiveFailedBatches how many batches in a row have failed without handling anything. Zero
+ *        for an automation that is getting somewhere; a number that keeps climbing is the signature of a
+ *        stall — running, retrying, and making no progress — which {@code itemsFailed} alone cannot show,
+ *        since a healthy automation accumulates failures too
  * @param lastFailure what escaped the handler most recently, or {@code null} if nothing has
  * @param stoppedBy what escaped the handler on the failure that stopped it, or {@code null} if it is
  *        running. Kept apart from {@code lastFailure} because a running automation has usually survived
@@ -43,6 +47,7 @@ public record AutomationStatus (
 		String automationClass,
 		boolean running,
 		long itemsFailed,
+		int consecutiveFailedBatches,
 		BoundedContextEvent.Failure lastFailure,
 		BoundedContextEvent.Failure stoppedBy ) {
 }

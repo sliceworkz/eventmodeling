@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.automation;
 
+import java.time.Duration;
 import java.util.Optional;
 
 import org.sliceworkz.eventstore.events.EventReference;
@@ -36,6 +37,12 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 
 	/** The number of todo items handled in one batch when an automation does not choose one. */
 	int DEFAULT_BATCH_SIZE = 50;
+
+	/** How long an automation with nothing to do waits before looking at its todo list again. */
+	Duration DEFAULT_POLL_INTERVAL = Duration.ofSeconds(10);
+
+	/** How far the default backoff grows while an automation keeps failing to get anywhere. */
+	Duration DEFAULT_MAX_BACKOFF = Duration.ofMinutes(5);
 
 	/**
 	 * Returns the todo list read model that provides items for this automation to process.
@@ -114,6 +121,43 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	 */
 	default AutomationFailureAction onFailure ( TODO_ITEM_TYPE todoItem, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context ) {
 		return AutomationFailureAction.RETRY_ITEM;
+	}
+
+	/**
+	 * How long to wait before reading the todo list again, after a batch that got nowhere.
+	 * <p>
+	 * Consulted only when the processor has decided to wait at all — a batch that filled its window and
+	 * moved its bookmark goes straight round without asking, and a batch that made no progress but whose
+	 * todo list has changed underneath it comes back immediately, because there is new work to see.
+	 * Neither of those is a pacing decision.
+	 * <p>
+	 * The one that is, and the reason this is an automation's own business, is the third case: a batch
+	 * that <em>failed</em> and handled nothing. A todo list that moved says nothing about whether the
+	 * dependency the handler needs has come back, so a failing automation is held here rather than
+	 * released by the change, and how long it is held is a property of what it talks to. The default
+	 * doubles from {@link #DEFAULT_POLL_INTERVAL} up to {@link #DEFAULT_MAX_BACKOFF}, so a dependency that
+	 * is down for an hour costs a handful of attempts rather than one per todo-list update — which
+	 * matters most under {@link AutomationFailureAction#CONTINUE_AND_RETRY_ITEM_LATER}, where every
+	 * attempt is a whole batch of failing calls rather than one.
+	 * <p>
+	 * The cost of backing off is that recovery is noticed late: after a long outage the automation may sit
+	 * out most of the current delay before trying again. Override this to trade that against the load a
+	 * retry puts on whatever is down — returning {@link Duration#ZERO} makes the processor come straight
+	 * back, which is only sensible when a failure is cheap to repeat.
+	 *
+	 * @param consecutiveFailedBatches how many batches in a row have failed without handling anything,
+	 *        1 for the first, and 0 when the last batch did not fail (it simply found nothing to do)
+	 * @param lastFailure the throwable from the most recent failure, or {@code null} when nothing failed
+	 * @return how long to wait, never null and never negative — the processor still wakes early on
+	 *         shutdown, and on a todo-list change when the batch had not failed
+	 */
+	default Duration delayBeforeNextBatch ( int consecutiveFailedBatches, Throwable lastFailure ) {
+		if ( consecutiveFailedBatches <= 0 ) {
+			return DEFAULT_POLL_INTERVAL;
+		}
+		int doublings = Math.min(consecutiveFailedBatches - 1, 16); // 16 is far past the cap, and cannot overflow
+		long backoffMs = DEFAULT_POLL_INTERVAL.toMillis() << doublings;
+		return Duration.ofMillis(Math.min(backoffMs, DEFAULT_MAX_BACKOFF.toMillis()));
 	}
 
 }

@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.module.automation;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -90,6 +91,13 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * whether anyone happened to wire up monitoring.
 	 */
 	private final AtomicLong itemsFailed = new AtomicLong();
+
+	/**
+	 * Batches in a row that failed and handled nothing. Drives the backoff the automation is asked for,
+	 * and is what tells a stalled automation apart from a busy one on {@link #status()}: an automation
+	 * with failures behind it is ordinary, one that has not got anywhere in the last N batches is not.
+	 */
+	private volatile int consecutiveFailedBatches;
 
 	private final String boundedContext;
 	private final MeterRegistry meterRegistry;
@@ -249,6 +257,11 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 										eventSource.placeBookmark(processorIdentification.toString(), outcome.lastProducedEvent, processorIdentification.toTags(instance));
 									}
 
+									// a batch that handled something is progress, whatever else went wrong in it, and so
+									// is one where nothing failed - only a batch that failed and got nowhere backs off
+									boolean batchGotNowhere = outcome.handled == 0 && outcome.failed > 0;
+									consecutiveFailedBatches = batchGotNowhere ? consecutiveFailedBatches + 1 : 0;
+
 									if ( outcome.stopAutomation ) {
 										LOGGER.warn("stopping automation '{}' as its failure handling asked for it - it will not run again until it is restarted", processorIdentification);
 										stoppedBy = outcome.lastFailure;
@@ -261,9 +274,18 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 										// same window at full speed for as long as it stays unchanged.
 										LOGGER.debug("not at end of list - doing new batch of {}", batchSize);
 									} else {
-										LOGGER.debug("no new todo items to handle");
-										LOGGER.debug("not directly querying again, waiting for {} seconds", (WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS/1000));
-										waitForNewWork(WAIT_BEFORE_CHECKING_FOR_NEW_BOOKMARK_TIME_MS);
+										long delayMs = delayBeforeNextBatch(consecutiveFailedBatches, outcome.lastFailure);
+										if ( batchGotNowhere ) {
+											// Held here even if the todo list has moved: a change to the list says nothing
+											// about whether whatever this automation failed on has recovered, and releasing
+											// on it would tie the retry rate to the traffic feeding the list - so a busy
+											// system would hammer a dependency that is down rather than back off from it.
+											LOGGER.debug("batch failed without handling anything ({} in a row), waiting {} ms before trying again", consecutiveFailedBatches, delayMs);
+											backOff(delayMs);
+										} else {
+											LOGGER.debug("no new todo items to handle, waiting up to {} ms", delayMs);
+											waitForNewWork(delayMs);
+										}
 										LOGGER.debug("done waiting, or notified that readmodel was updated and new items could be present");
 									}
 
@@ -323,6 +345,24 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		LOGGER.info("{} gracefully terminated", processorIdentification.toString());
 	}
 	
+	/**
+	 * Asks the automation how long to wait, contained: a delay is a policy an implementation supplies, and
+	 * one that throws or returns nonsense must not take the processor with it or turn into a busy loop.
+	 */
+	private long delayBeforeNextBatch ( int consecutiveFailedBatches, Throwable lastFailure ) {
+		try {
+			Duration delay = automation.delayBeforeNextBatch(consecutiveFailedBatches, lastFailure);
+			if ( delay == null || delay.isNegative() ) {
+				LOGGER.warn("automation '{}' asked for a delay of {}, using {} instead", processorIdentification, delay, Automation.DEFAULT_POLL_INTERVAL);
+				return Automation.DEFAULT_POLL_INTERVAL.toMillis();
+			}
+			return delay.toMillis();
+		} catch ( Throwable t ) {
+			LOGGER.error("automation '{}' threw while being asked for its delay, using {}", processorIdentification, Automation.DEFAULT_POLL_INTERVAL, t);
+			return Automation.DEFAULT_POLL_INTERVAL.toMillis();
+		}
+	}
+
 	/**
 	 * Whether the read model we shadow has been projected up to and including the last event we produced,
 	 * which is what makes it safe to take a fresh look at the todo list.
@@ -445,12 +485,42 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	}
 
 	/**
+	 * Waits out {@code timeoutMs} whatever the todo list does, cut short only by this processor being
+	 * stopped or terminated.
+	 * <p>
+	 * This is what a failing batch waits on, and it cannot be {@link #waitForWork}: bookmark moves are
+	 * delivered as a plain {@code notify()} on this monitor, so a parked thread is woken by any of them
+	 * however it came to be parked. Skipping the {@code monitoredBookmarkMoved} check alone would not
+	 * hold a failing automation back — the very notification that sets that flag would release it — and
+	 * the retry rate would follow whatever traffic is feeding the todo list instead of the backoff.
+	 */
+	private void backOff ( long timeoutMs ) {
+		long deadline = System.currentTimeMillis() + timeoutMs;
+		try {
+			synchronized ( this ) {
+				while ( instanceMode != ProcessorInstanceMode.TERMINATING && processorMode != ProcessorMode.STOPPED ) {
+					long remaining = deadline - System.currentTimeMillis();
+					if ( remaining <= 0 ) {
+						return;
+					}
+					this.wait(remaining);
+				}
+			}
+		} catch (InterruptedException e) {
+			LOGGER.debug("interrupted while backing off"); // see waitForWork for why the flag is not restored
+		}
+	}
+
+	/**
 	 * Parks this thread for at most {@code timeoutMs}, waking early on a bookmark move or on a state
 	 * change. Re-checks for termination before parking: the {@code terminate()} that set TERMINATING may
 	 * have notified while nothing was waiting to hear it, and parking anyway makes shutdown sit out the
 	 * whole timeout.
 	 */
 	private void waitForWork ( long timeoutMs ) {
+		if ( timeoutMs <= 0 ) {
+			return; // Object.wait(0) waits forever, which is the opposite of what a zero delay asks for
+		}
 		try {
 			synchronized ( this ) {
 				if ( instanceMode != ProcessorInstanceMode.TERMINATING ) {
@@ -486,6 +556,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 				automation.getClass().getSimpleName(),
 				processorMode != ProcessorMode.STOPPED,
 				itemsFailed.get(),
+				consecutiveFailedBatches,
 				failureOf(lastFailure),
 				failureOf(stoppedBy));
 	}

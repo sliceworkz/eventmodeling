@@ -179,7 +179,9 @@ features/
   - `CONTINUE_AND_RETRY_ITEM_LATER`: **the only action that lets work overtake**, and so the only one
     that gives up the order `streamItems` defined. What to return when items are independent of each
     other — it is what keeps one poison item from holding up everything behind it. Named at length on
-    purpose: it is chosen deliberately, never by accident
+    purpose: it is chosen deliberately, never by accident. Note what it costs when a *shared* dependency
+    is down rather than one item being poison: every item in the window is attempted and fails, so a
+    round is `batchSize` failing calls against something already struggling, where the default makes one
   - `STOP_AUTOMATION`: the old behaviour, now opt-in and only where a human is meant to intervene
   - **The default never lets work overtake a failure**, and needs no classification of the cause to
     decide that. `streamItems` defines the order and the framework honours it, so abandoning that order
@@ -226,6 +228,24 @@ features/
   same window at full speed: an automation whose `handle` returns `Optional.empty()` — explicitly allowed,
   and what an automation with a purely external effect does — spun at ~40M invocations a second against
   50 items, hammering whatever it called. It now waits like an empty batch
+- **How long it waits is `Automation.delayBeforeNextBatch(consecutiveFailedBatches, lastFailure)`**, asked
+  only when the processor has already decided to wait. The default is the 10s poll interval while nothing
+  is failing, and doubles from there up to 5 minutes while batches keep failing without handling anything
+  — so a dependency that is down for an hour costs a handful of attempts instead of one per todo-list
+  update. Overriding it trades load on whatever is down against how late recovery is noticed, since a
+  backed-off automation sits out the current delay before finding out the dependency is back. A `null` or
+  negative duration falls back to the default with a WARN, and a throw is contained the same way
+- **A batch that failed and handled nothing is held for that delay whatever the todo list does**, which
+  is the one place the bookmark-moved fast path is deliberately not honoured: a changed todo list says
+  nothing about whether the dependency the handler needs has recovered, and releasing on it would tie the
+  retry rate to the traffic feeding the list — a busy system would hammer whatever is down rather than
+  back off from it. This needs its own wait (`backOff`, not `waitForWork`): bookmark moves arrive as a
+  bare `notify()` on the processor's monitor, so a parked thread is woken by any of them however it came
+  to be parked, and skipping the flag check alone left the automation released by the very notification it
+  was meant to ignore. `backOff` loops to its deadline and only shutdown or a stop cuts it short
+- **`AutomationStatus.consecutiveFailedBatches` is what makes a stall visible.** `itemsFailed` cannot: a
+  healthy automation accumulates failures too. A number that keeps climbing means running, retrying and
+  getting nowhere, and it resets the moment a batch handles anything
 - **…but it does not wait out that interval when the todo list has moved underneath it.** The bookmark
   notification was a bare `notify()`, so one arriving *while a batch was running* had nothing waiting to
   hear it and was lost; the processor then parked the full 10s over a todo list that had already changed.

@@ -165,17 +165,37 @@ features/
   the life of the process, with its items sitting outstanding, one WARN line and no bounded-context
   event to say so. Failures are contained per item now, and what one costs is the automation's own
   decision through `Automation.onFailure`, returning an `AutomationFailureAction`:
-  - `SKIP_ITEM` (the usual answer): leave the item, carry on with the rest of the batch. It comes round
-    again later. Right whenever items are independent of each other, poison ones included
-  - `RETRY_ITEM`: hand the same item back to `handle` immediately, 3 attempts total with a doubling
-    100ms backoff, then treated as `SKIP_ITEM`. For failures a second attempt can plausibly clear
-  - `STOP_BATCH`: abandon the rest of this batch, keep the automation running. For ordered work, where
-    the items behind the failing one are not independent of it and must wait rather than proceed
+  - **None of the four drops the item** — the framework has nothing to drop it from. They differ only in
+    *when* it comes back and *what else waits*, which is what their names say:
+
+    | | this item | the items behind it |
+    |---|---|---|
+    | `RETRY_NOW` | again, immediately | wait for it |
+    | `RETRY_LATER` | on a later batch | handled now, ahead of it |
+    | `STOP_BATCH` | on the next batch | wait for it |
+    | `STOP_AUTOMATION` | after a restart | wait for a human |
+
+  - `RETRY_NOW`: 3 attempts total with a doubling 100ms backoff, then treated as `STOP_BATCH`. For
+    failures a second attempt can plausibly clear, and it keeps the order while it tries
+  - `RETRY_LATER`: **the only action that lets work overtake**, and so the only one that gives up the
+    order `streamItems` defined. What to return when items are independent of each other — it is what
+    keeps one poison item from holding up everything behind it
+  - `STOP_BATCH`: the default. Abandons the rest of this batch, keeps the automation running, and the
+    batch is attempted again from the front next round
   - `STOP_AUTOMATION`: the old behaviour, now opt-in and only where a human is meant to intervene
-  - The default (`AutomationFailureAction.defaultFor`) scans the cause chain: `OptimisticLockingException`
-    → `SKIP_ITEM` (another writer moved the boundary, so re-reading the todo list is the repair, not a
-    retry), `EventStorageException` → `RETRY_ITEM`, serde failures → `SKIP_ITEM` (identical on every
-    attempt), anything else → `SKIP_ITEM`
+  - **The default never lets work overtake a failure.** `AutomationFailureAction.defaultFor` scans the
+    cause chain and answers `RETRY_NOW` for an `EventStorageException` (transient, and retried in place,
+    so the order holds) and `STOP_BATCH` for everything else — a poison payload, an optimistic-locking
+    conflict, a bug in the handler alike. `streamItems` defines the order and the framework honours it,
+    so abandoning that order the moment something goes wrong would be odd, and the framework cannot tell
+    whether the items behind a failing one depend on it. Of the two ways to be wrong, holding up
+    independent items is a stall that shows in `AutomationStatus` and clears when the cause is dealt
+    with; overtaking dependent ones produces wrong results and reports nothing
+  - **What the default costs is a poison item at the head of the list holding up the rest**, for as long
+    as it keeps failing — running, making no progress, `itemsFailed` climbing with nothing handled. The
+    two ways out are the ordinary ones: `RETRY_LATER` where the items are independent, or an `onFailure`
+    that records the failure as an event the todo list projects, which moves the item out of the way for
+    good
 - **There is no dead-letter queue, and the durable substitute is an event.** Override `onFailure` and
   record the failure as a domain event through the context; the todo list projects it and defers or drops
   the item, and a read model over those same events is the dead-letter view. Retry-with-delay is the same
@@ -211,10 +231,10 @@ features/
   still parks, so the anti-spin guarantee is untouched.
   `AutomationFailureRecoveryTest.aTodoListChangingDuringABatchIsNotWaitedOut` pins it, and fails by
   timeout without the flag
-- `AutomationFailureRecoveryTest` pins all of this down: a failing item at the head of the list does not
-  stop the items behind it, a retriable failure is retried inside the batch, `STOP_BATCH`/`STOP_AUTOMATION`
-  do what they say, a no-event handler does not spin, and an item cancelling its successors under
-  `batchSize(1)` really does prevent them being handled
+- `AutomationFailureRecoveryTest` pins all of this down: the default holds the order and keeps the
+  automation running, `RETRY_LATER` lets the items behind a failing one proceed, a storage failure is
+  retried inside the batch, `STOP_AUTOMATION` does what it says, a no-event handler does not spin, and an
+  item cancelling its successors under `batchSize(1)` really does prevent them being handled
 - **The catch-up guard compares the total `(tx, position, index)` order**, through
   `EventReference.happenedAfter` in `AutomationProcessor.hasCaughtUp`, not `position()` alone. The two are
   genuinely different orders — a position is a `bigserial` and a transaction id an `xid8`, assigned

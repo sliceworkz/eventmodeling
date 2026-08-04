@@ -62,18 +62,52 @@ import org.sliceworkz.eventstore.spi.EventStorageException;
  */
 public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 
+	/**
+	 * The default holds the order {@code streamItems} defined: the items behind a failing one wait for it
+	 * rather than overtaking it. It costs a poison item at the head of the list holding up the rest, which
+	 * is the trade — a stall that shows in {@link org.sliceworkz.eventmodeling.automation.AutomationStatus}
+	 * against reordering work that may not be reorderable, silently.
+	 */
 	@Test
-	void failingItemLeavesTheAutomationRunningAndTheItemOutstanding ( ) {
-		TodoList todoList = new TodoList("todo-failing-item");
+	void theDefaultHoldsTheOrderAndDoesNotStopTheAutomation ( ) {
+		TodoList todoList = new TodoList("todo-default-order");
 		Handled handled = new Handled();
 
-		start(todoList, new TestAutomation(todoList, (item, context) -> {
+		TestAutomation automation = new TestAutomation(todoList, (item, context) -> {
 			if ( item.equals("bad") ) {
 				throw new IllegalStateException("deliberate failure on " + item);
 			}
 			handled.add(item);
 			return context.event(new MockDomainEvent.SecondDomainEvent(item));
-		}));
+		});
+		start(todoList, automation);
+
+		boundedContext.event(new FirstDomainEvent("bad"));
+		boundedContext.event(new FirstDomainEvent("good-1"));
+
+		await().atMost(Duration.ofSeconds(15)).untilAsserted(
+			() -> assertTrue(automation.attempts() >= 2, "the batch should have been attempted more than once"));
+
+		assertEquals(List.of(), handled.items(),
+			"by default the items behind a failing one wait for it rather than overtaking it");
+		assertTrue(boundedContext.automations().get(0).running(),
+			"stopping a batch does not stop the automation");
+	}
+
+	@Test
+	void retryLaterLetsTheItemsBehindAFailingOneProceed ( ) {
+		TodoList todoList = new TodoList("todo-failing-item");
+		Handled handled = new Handled();
+
+		TestAutomation automation = new TestAutomation(todoList, (item, context) -> {
+			if ( item.equals("bad") ) {
+				throw new IllegalStateException("deliberate failure on " + item);
+			}
+			handled.add(item);
+			return context.event(new MockDomainEvent.SecondDomainEvent(item));
+		});
+		automation.failureAction = AutomationFailureAction.RETRY_LATER;
+		start(todoList, automation);
 
 		boundedContext.event(new FirstDomainEvent("bad"));
 		boundedContext.event(new FirstDomainEvent("good-1"));
@@ -139,31 +173,6 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 		assertEquals(afterFirstFailure, automation.attempts(),
 			"an automation asking to be stopped should not attempt any further item");
 		assertEquals(List.of(), handled.items());
-	}
-
-	@Test
-	void stopBatchLeavesTheItemsBehindTheFailingOneForALaterRound ( ) {
-		TodoList todoList = new TodoList("todo-stop-batch");
-		Handled handled = new Handled();
-
-		TestAutomation automation = new TestAutomation(todoList, (item, context) -> {
-			if ( item.equals("bad") ) {
-				throw new IllegalStateException("deliberate failure on " + item);
-			}
-			handled.add(item);
-			return context.event(new MockDomainEvent.SecondDomainEvent(item));
-		});
-		automation.failureAction = AutomationFailureAction.STOP_BATCH;
-		start(todoList, automation);
-
-		boundedContext.event(new FirstDomainEvent("bad"));
-		boundedContext.event(new FirstDomainEvent("good-1"));
-
-		await().atMost(Duration.ofSeconds(15)).untilAsserted(
-			() -> assertTrue(automation.attempts() >= 2, "the batch should have been attempted more than once"));
-
-		assertEquals(List.of(), handled.items(),
-			"work behind the failing item waits for it when the batch is ordered");
 	}
 
 	@Test

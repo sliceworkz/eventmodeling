@@ -393,13 +393,14 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 				AutomationFailureAction action = determineFailureAction(item, t, context);
 				Throwable r = determineRootCause(t);
 
-				if ( action == AutomationFailureAction.RETRY_ITEM && attempt >= MAX_ITEM_ATTEMPTS ) {
-					LOGGER.error("automation '{}' failed on a todo item {} times, leaving it for a later round: rootcause {} : {}", processorIdentification, attempt, r.getClass(), r.getMessage(), t);
-					return true;
+				if ( action == AutomationFailureAction.RETRY_NOW && attempt >= MAX_ITEM_ATTEMPTS ) {
+					// out of attempts: fall back to holding the order rather than letting the rest overtake
+					LOGGER.error("automation '{}' failed on a todo item {} times, abandoning the rest of this batch: rootcause {} : {}", processorIdentification, attempt, r.getClass(), r.getMessage(), t);
+					return false;
 				}
 
 				switch ( action ) {
-					case RETRY_ITEM -> {
+					case RETRY_NOW -> {
 						long backoff = FIRST_RETRY_BACKOFF_MS << (attempt - 1);
 						LOGGER.warn("automation '{}' failed on a todo item (attempt {} of {}), retrying in {} ms: rootcause {} : {}", processorIdentification, attempt, MAX_ITEM_ATTEMPTS, backoff, r.getClass(), r.getMessage(), t);
 						waitForWork(backoff);
@@ -407,8 +408,8 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 							return false;
 						}
 					}
-					case SKIP_ITEM -> {
-						LOGGER.error("automation '{}' failed on a todo item, leaving it for a later round: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
+					case RETRY_LATER -> {
+						LOGGER.error("automation '{}' failed on a todo item, leaving it for a later batch and carrying on: rootcause {} : {}", processorIdentification, r.getClass(), r.getMessage(), t);
 						return true;
 					}
 					case STOP_BATCH -> {
@@ -428,10 +429,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private AutomationFailureAction determineFailureAction ( TODO_ITEM_TYPE item, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context ) {
 		try {
 			AutomationFailureAction action = automation.onFailure(item, cause, context);
-			return action != null ? action : AutomationFailureAction.SKIP_ITEM;
+			return action != null ? action : AutomationFailureAction.STOP_BATCH;
 		} catch ( Throwable t ) {
-			LOGGER.error("failure handler of automation '{}' threw, leaving the todo item for a later round", processorIdentification, t);
-			return AutomationFailureAction.SKIP_ITEM;
+			LOGGER.error("failure handler of automation '{}' threw, abandoning the rest of this batch", processorIdentification, t);
+			return AutomationFailureAction.STOP_BATCH;
 		}
 	}
 

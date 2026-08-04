@@ -197,23 +197,21 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 			try {
 	
 				Optional<EventReference> lastReference = Optional.empty();
-				boolean mustFetchBookmark = true;
-				
+
 				// if instance is running ...
 				if ( processorMode != ProcessorMode.STOPPED ) {
-					
+
 					if ( processorMode == ProcessorMode.RUNNING_ON_ALL_INSTANCES || instanceMode == ProcessorInstanceMode.LEADER ) {
-	
-						if ( mustFetchBookmark ) {
-							lastReference = eventSource.getBookmark(processorIdentification.toString()); // get last produced event from bookmark of previous run
-							if ( lastReference != null && lastReference.isPresent() ) {
-								LOGGER.debug("last produced event was {}", lastReference.get());
-							} else {
-								LOGGER.debug("no run done yet starting from start of stream");
-							}
-							mustFetchBookmark = false; // as long as this thread is processing the next round, no need to go and fetch the bookmark again from storage
+
+						// read every round: another instance, or a restart, may have moved it, and this is one
+						// bookmark read against a batch of work
+						lastReference = eventSource.getBookmark(processorIdentification.toString()); // get last produced event from bookmark of previous run
+						if ( lastReference != null && lastReference.isPresent() ) {
+							LOGGER.debug("last produced event was {}", lastReference.get());
+						} else {
+							LOGGER.debug("no run done yet starting from start of stream");
 						}
-						
+
 						// cleared before the read, so that a move arriving from here on is one this round has
 						// not seen and is a reason to come straight back rather than park
 						monitoredBookmarkMoved = false;
@@ -261,6 +259,15 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 									// is one where nothing failed - only a batch that failed and got nowhere backs off
 									boolean batchGotNowhere = outcome.handled == 0 && outcome.failed > 0;
 									consecutiveFailedBatches = batchGotNowhere ? consecutiveFailedBatches + 1 : 0;
+
+									if ( batchGotNowhere ) {
+										// once per fruitless batch, so the rate follows the backoff rather than the
+										// number of items - and never for a batch that got somewhere, however many
+										// items failed in it
+										eventEmitter.emit(new BoundedContextEvent.AutomationFailed(boundedContext, processorIdentification.id(),
+												failureOf(outcome.lastFailure), consecutiveFailedBatches, outcome.failed,
+												eventEmitter.sliceFor(automation.getClass())), tracing);
+									}
 
 									if ( outcome.stopAutomation ) {
 										LOGGER.warn("stopping automation '{}' as its failure handling asked for it - it will not run again until it is restarted", processorIdentification);
@@ -331,7 +338,6 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 					}
 					
 				} else {
-					mustFetchBookmark = true;
 					LOGGER.debug("not running, waiting for further instructions, checking back in {} seconds", (WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS/1000));
 					// TODO maybe synchronize on other object than to allow notify() upon state change from STOPPED to RUNNING again, independently of notifies for new events in stream?
 					waitForWork(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);

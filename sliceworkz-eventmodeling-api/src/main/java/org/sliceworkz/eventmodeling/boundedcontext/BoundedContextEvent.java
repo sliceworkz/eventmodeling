@@ -218,6 +218,37 @@ public sealed interface BoundedContextEvent {
 	record AutomationProcessed ( String boundedContext, String automation, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
+	 * Emitted when an automation completes a batch that failed and handled nothing — it is running,
+	 * retrying, and getting nowhere.
+	 * <p>
+	 * <strong>Once per such batch, not once per failed item.</strong> A failing item is the automation's
+	 * own business and it already decides what to do about it in {@code onFailure}, where it can record
+	 * whatever domain event the failure deserves; emitting one of these per item would duplicate that and
+	 * turn an outage into a flood. What the automation cannot report from there, and what infrastructure
+	 * actually needs, is the thing only the processor can see: no progress at all. A batch that handled
+	 * even one item is progress and emits nothing, however many other items failed in it.
+	 * <p>
+	 * The volume is bounded by the backoff, since a batch is the unit: while a dependency is down these
+	 * arrive on the schedule {@code Automation.delayBeforeNextBatch} sets, which by default slows from
+	 * every 10 seconds to every 5 minutes.
+	 * <p>
+	 * {@code consecutiveFailedBatches} is what a consumer should key its policy on rather than reacting
+	 * to the first one — the framework deliberately picks no alerting threshold, because how many failed
+	 * batches are worth waking somebody for is a property of what the automation talks to. There is no
+	 * matching "recovered" event: an automation that gets going again emits {@link AutomationProcessed}
+	 * with a non-zero {@code eventsHandled}, which is the same signal from the other side.
+	 *
+	 * @param boundedContext the context the automation belongs to
+	 * @param automation the automation's id, the same one the metric tags use
+	 * @param failure the last throwable to escape the handler in this batch
+	 * @param consecutiveFailedBatches how many batches in a row have now failed without handling anything,
+	 *        1 for the first
+	 * @param itemsFailed how many items failed in this batch
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record AutomationFailed ( String boundedContext, String automation, Failure failure, int consecutiveFailedBatches, long itemsFailed, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
 	 * Emitted when an automation has stopped and will not process any further todo items until something
 	 * restarts it.
 	 * <p>

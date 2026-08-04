@@ -102,7 +102,21 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 
 		Set<String> seenNames = new HashSet<>();
 		for ( Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> a : automations ) {
-			String name = a.getClass().getSimpleName();
+			// An automation's simple name is its identity: it keys the bookmark that records how far it
+			// has got, the metric tags, and the id AutomationAdminCapability addresses it by. Two shapes
+			// cannot supply one, and both used to fail further down with a bare "id is required" that
+			// named neither the automation nor the reason:
+			//  - an anonymous class has no simple name at all
+			//  - a lambda's is generated (Foo$$Lambda/0x...) and differs between runs, so its bookmark
+			//    would be a new one on every start and every item would be handled again
+			Class<?> automationClass = a.getClass();
+			if ( automationClass.isAnonymousClass() || automationClass.isSynthetic() ) {
+				throw new IllegalArgumentException(
+					"automation %s must be a named class: its name identifies it and keys the bookmark recording its progress, which an anonymous class or lambda cannot provide stably"
+						.formatted(automationClass.getName()));
+			}
+
+			String name = automationClass.getSimpleName();
 			if ( !seenNames.add(name) ) {
 				LOGGER.error("duplicate automation name '%s' registered".formatted(name));
 				throw new IllegalArgumentException("duplicate automation name '%s' - bookmarks would collide".formatted(name));

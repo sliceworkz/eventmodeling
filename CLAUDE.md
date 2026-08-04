@@ -262,6 +262,18 @@ features/
 - **`AutomationStatus.consecutiveFailedBatches` is what makes a stall visible.** `itemsFailed` cannot: a
   healthy automation accumulates failures too. A number that keeps climbing means running, retrying and
   getting nowhere, and it resets the moment a batch handles anything
+- **`AutomationFailed` hands that stall to the surrounding infrastructure**, emitted once per batch that
+  failed and handled nothing — never per item, which is the automation's own business through `onFailure`
+  and would turn an outage into a flood. A batch that handled even one item is progress and emits nothing,
+  however many others failed in it. The rate is bounded by the backoff, and the event carries
+  `consecutiveFailedBatches` so the consumer picks its own alerting threshold rather than the framework
+  picking one. There is no matching "recovered" event: an automation that gets going again emits
+  `AutomationProcessed` with a non-zero `eventsHandled`
+- **An automation must be a named class, and so must a read model.** The simple name keys the bookmark
+  recording progress, the metric tags and the `AutomationAdminCapability` id. An anonymous class has no
+  simple name and a lambda's is regenerated per run — which is the dangerous one, since the bookmark would
+  be new on every start and every todo item handled again. Both are rejected at build time naming the
+  class and the reason; they used to fail deeper down with a bare `id is required`
 - **…but it does not wait out that interval when the todo list has moved underneath it.** The bookmark
   notification was a bare `notify()`, so one arriving *while a batch was running* had nothing waiting to
   hear it and was lost; the processor then parked the full 10s over a todo list that had already changed.

@@ -212,37 +212,66 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 
 	@Override
 	public void beforeBatch() {
+		Connection connection = null;
 		try {
-			batchConnection = dataSource().getConnection();
-			batchConnection.setAutoCommit(false);
+			connection = dataSource().getConnection();
+			connection.setAutoCommit(false);
+			batchConnection = connection;
 		} catch (SQLException e) {
+			// setAutoCommit is the one that realistically fails here, and it fails on a connection we
+			// have already taken from the pool - so it is closed rather than left to the garbage
+			// collector, and the field is not published for a batch that is not going to run
+			closeQuietly(connection);
 			throw new RuntimeException("Failed to start batch transaction", e);
 		}
 	}
 
 	@Override
 	public void afterBatch(Optional<EventReference> lastEventReference) {
-		try {
-			if (batchConnection != null) {
-				batchConnection.commit();
-				batchConnection.close();
-				batchConnection = null;
-			}
-		} catch (SQLException e) {
-			throw new RuntimeException("Failed to commit batch transaction", e);
-		}
+		endBatch(Connection::commit, "Failed to commit batch transaction");
 	}
 
 	@Override
 	public void cancelBatch() {
-		try {
-			if (batchConnection != null) {
-				batchConnection.rollback();
-				batchConnection.close();
-				batchConnection = null;
-			}
+		endBatch(Connection::rollback, "Failed to rollback batch transaction");
+	}
+
+	/**
+	 * Ends the batch transaction and hands the connection back, whether or not ending it worked.
+	 * <p>
+	 * The commit and the close used to be consecutive statements inside one try, so a commit that threw
+	 * skipped the close and left {@code batchConnection} pointing at an open connection that the next
+	 * {@code beforeBatch} then overwrote. That leaks one pooled connection per failed commit — and a
+	 * projection failing to commit is exactly the situation that repeats, so the pool drains and the
+	 * read model's real problem is buried under connection-acquisition timeouts.
+	 */
+	private void endBatch(BatchEnding ending, String failureMessage) {
+		Connection connection = batchConnection;
+		if (connection == null) {
+			return;
+		}
+		// cleared before we try: whatever happens below, this connection is not the next batch's
+		batchConnection = null;
+		try (Connection closing = connection) {
+			ending.end(closing);
 		} catch (SQLException e) {
-			throw new RuntimeException("Failed to rollback batch transaction", e);
+			throw new RuntimeException(failureMessage, e);
+		}
+	}
+
+	/** How a batch transaction is concluded — {@link Connection#commit} or {@link Connection#rollback}. */
+	@FunctionalInterface
+	private interface BatchEnding {
+		void end(Connection connection) throws SQLException;
+	}
+
+	private static void closeQuietly(Connection connection) {
+		if (connection != null) {
+			try {
+				connection.close();
+			} catch (SQLException ignored) {
+				// we are already reporting the failure that got us here
+			}
 		}
 	}
 

@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.module.automation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Optional;
@@ -53,6 +54,37 @@ public class DuplicateAutomationNameTest extends AbstractMockDomainTest {
 				.build();
 		});
 		assertEquals("duplicate automation name 'MockAutomation' - bookmarks would collide", e.getMessage());
+	}
+
+	/**
+	 * An automation's simple name keys its bookmark, so a shape that cannot supply one stably is rejected
+	 * where the mistake is made. Both used to fail deeper down with a bare "id is required" that named
+	 * neither the automation nor the reason — and the lambda case is the dangerous one, because its
+	 * generated name differs between runs, so the bookmark would be new on every start and every todo
+	 * item would be handled again.
+	 */
+	@Test
+	void anonymousAutomationRejected ( ) {
+		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
+			baseBuilder().automation(new MockAutomation("todo-anon") { }).build();
+		});
+		assertTrue(e.getMessage().contains("must be a named class"), e.getMessage());
+		assertTrue(e.getMessage().contains("bookmark"), "the message should say why a name is needed: " + e.getMessage());
+	}
+
+	@Test
+	void anonymousReadModelRejected ( ) {
+		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
+			var builder = baseBuilder();
+			builder.readmodel(new MockTodoList("named-so-far") {
+				@Override
+				public String readmodelName ( ) {
+					return getClass().getSimpleName(); // what the default does, and it is blank here
+				}
+			}).eventuallyConsistent();
+			builder.build();
+		});
+		assertTrue(e.getMessage().contains("has no name"), e.getMessage());
 	}
 
 	@Test

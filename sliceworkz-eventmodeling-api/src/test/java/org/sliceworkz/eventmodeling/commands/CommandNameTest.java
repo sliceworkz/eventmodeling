@@ -63,6 +63,17 @@ public class CommandNameTest {
 		assertEquals("explicit-name", new OverridingCommand().commandName());
 	}
 
+	@Test
+	void anonymousCommandFallsBackToWhereItWasDeclared() {
+		Command<Object> anonymous = new Command<>() {
+			@Override
+			public void execute(CommandContext<Object, Object> context) {
+			}
+		};
+		// an anonymous class has no simple name, so the name must come from the binary name instead
+		assertEquals("CommandNameTest$1", anonymous.commandName());
+	}
+
 	// ════════════════════════════════════════════════════════════════════
 	// COMMAND IMPLEMENTATIONS USED BY THE TESTS
 	// ════════════════════════════════════════════════════════════════════

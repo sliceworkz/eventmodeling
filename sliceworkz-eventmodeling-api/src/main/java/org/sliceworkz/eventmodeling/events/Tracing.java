@@ -115,9 +115,18 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 		return event.tags().tag(tagName).map(Tag::value);
 	}
 
+	/**
+	 * Adds a tracing tag, unless the value carries nothing to trace.
+	 * <p>
+	 * A tag value that is blank, or that has leading or trailing whitespace, is rejected by
+	 * {@link Tag} because it does not survive the round trip through the stored form. Tracing is
+	 * decoration the framework attaches on the caller's behalf, so rather than let a stray space in a
+	 * channel name abort the command that raised the event, a blank value is dropped and the rest is
+	 * stripped.
+	 */
 	private static final void addTag ( Set<Tag> tags, String name, String value) {
-		if ( value != null ) {
-			tags.add(Tag.of(name, value));
+		if ( value != null && !value.isBlank() ) {
+			tags.add(Tag.of(name, value.strip()));
 		}
 	}
 

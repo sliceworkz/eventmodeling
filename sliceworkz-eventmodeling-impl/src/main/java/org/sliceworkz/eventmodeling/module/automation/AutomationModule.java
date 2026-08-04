@@ -20,12 +20,14 @@ package org.sliceworkz.eventmodeling.module.automation;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
+import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -46,6 +48,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 	private String boundedContext;
 	private AllCapabilities<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> capabilitiesDelegate;
 	private ProcessorThreadManager<DOMAIN_EVENT_TYPE> processorThreadManager;
+	private final List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationProcessors;
 
 	private Instance instance;
 	private MeterRegistry meterRegistry;
@@ -58,9 +61,32 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 		this.meterRegistry = meterRegistry;
 		this.eventEmitter = eventEmitter;
 
-		Collection<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> aps = createAutomationProcessors(automations);
+		this.automationProcessors = createAutomationProcessors(automations);
 
-		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(ProcessorIdentification.TYPE_AUTOMATION, aps);
+		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(ProcessorIdentification.TYPE_AUTOMATION, automationProcessors);
+	}
+
+	/**
+	 * The state of every automation on this instance, in registration order.
+	 *
+	 * @see org.sliceworkz.eventmodeling.automation.AutomationAdminCapability#automations()
+	 */
+	public List<AutomationStatus> automations ( ) {
+		return automationProcessors.stream().map(AutomationProcessor::status).toList();
+	}
+
+	/**
+	 * Restarts a stopped automation on this instance.
+	 *
+	 * @see org.sliceworkz.eventmodeling.automation.AutomationAdminCapability#restartAutomation(String)
+	 */
+	public boolean restartAutomation ( String automation ) {
+		return automationProcessors.stream()
+				.filter(p -> p.automationId().equals(automation))
+				.findFirst()
+				.orElseThrow(() -> new IllegalArgumentException("no automation '%s' is registered on bounded context '%s', known are %s".formatted(
+						automation, boundedContext, automationProcessors.stream().map(AutomationProcessor::automationId).toList())))
+				.restart();
 	}
 
 	public void setCapabilitiesDelegate ( AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> delegate ) {
@@ -71,12 +97,26 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 		return new AutomationContextImpl<>(capabilitiesDelegate, tracing);
 	}
 	
-	Collection<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> createAutomationProcessors ( Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations ) {
-		Collection<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> result = new ArrayList<>();
+	List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> createAutomationProcessors ( Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations ) {
+		List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> result = new ArrayList<>();
 
 		Set<String> seenNames = new HashSet<>();
 		for ( Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> a : automations ) {
-			String name = a.getClass().getSimpleName();
+			// An automation's simple name is its identity: it keys the bookmark that records how far it
+			// has got, the metric tags, and the id AutomationAdminCapability addresses it by. Two shapes
+			// cannot supply one, and both used to fail further down with a bare "id is required" that
+			// named neither the automation nor the reason:
+			//  - an anonymous class has no simple name at all
+			//  - a lambda's is generated (Foo$$Lambda/0x...) and differs between runs, so its bookmark
+			//    would be a new one on every start and every item would be handled again
+			Class<?> automationClass = a.getClass();
+			if ( automationClass.isAnonymousClass() || automationClass.isSynthetic() ) {
+				throw new IllegalArgumentException(
+					"automation %s must be a named class: its name identifies it and keys the bookmark recording its progress, which an anonymous class or lambda cannot provide stably"
+						.formatted(automationClass.getName()));
+			}
+
+			String name = automationClass.getSimpleName();
 			if ( !seenNames.add(name) ) {
 				LOGGER.error("duplicate automation name '%s' registered".formatted(name));
 				throw new IllegalArgumentException("duplicate automation name '%s' - bookmarks would collide".formatted(name));

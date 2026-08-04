@@ -15,17 +15,12 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.boundedcontext;
+package org.sliceworkz.eventmodeling.examples.payments;
 
-import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
-import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsInboundEvent;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsOutboundEvent;
 
-public interface AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends
-	CQRSCapabilities<DOMAIN_EVENT_TYPE>,
-	DCBCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
-	AggregateCapability<DOMAIN_EVENT_TYPE>,
-	FeatureSliceCapabilities,
-	AutomationAdminCapability,
-	PortsCapability {
-
+public interface Payments extends BoundedContext<PaymentsDomainEvent, PaymentsInboundEvent, PaymentsOutboundEvent> {
 }

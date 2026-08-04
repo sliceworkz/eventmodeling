@@ -112,23 +112,15 @@ public class SnapshotCapableTest {
 	}
 
 	@Test
-	void testKeyWithNullTagKeyAndValue() {
-		Tags tags = Tags.of(new Tag(null, null));
-		String key = snapshotCapable.key("Account", tags);
-		assertEquals("Account/-", key);
-	}
-
-	@Test
 	void testKeyWithMixedNullTags() {
 		Tags tags = Tags.of(
 			new Tag("accountId", "123"),
 			new Tag(null, "456"),
-			new Tag("customerId", null),
-			new Tag(null, null)
+			new Tag("customerId", null)
 		);
 		String key = snapshotCapable.key("Account", tags);
 		// Null keys should sort first (empty string sorts before any character)
-		assertEquals("Account/-/-456/accountId-123/customerId-", key);
+		assertEquals("Account/-456/accountId-123/customerId-", key);
 	}
 
 	@Test
@@ -139,10 +131,10 @@ public class SnapshotCapableTest {
 	}
 
 	@Test
-	void testKeyWithEmptyTagValues() {
+	void testKeyWithValuelessTags() {
 		Tags tags = Tags.of(
-			new Tag("accountId", ""),
-			new Tag("customerId", "")
+			Tag.of("accountId"),
+			Tag.of("customerId")
 		);
 		String key = snapshotCapable.key("Account", tags);
 		assertEquals("Account/accountId-/customerId-", key);

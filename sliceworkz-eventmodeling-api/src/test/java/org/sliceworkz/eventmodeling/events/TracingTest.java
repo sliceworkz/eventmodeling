@@ -78,6 +78,27 @@ public class TracingTest {
 	}
 
 	@Test
+	void storeOnDropsBlankValuesInsteadOfFailingTheEvent ( ) {
+		Tracing tracing = Tracing.init(INSTANCE).command("   ").actor("");
+		EphemeralEvent<String> event = Event.of("hello", Tags.none());
+
+		EphemeralEvent<String> stored = tracing.storeOn(event);
+
+		assertFalse(stored.tags().tag("x-command").isPresent());
+		assertFalse(stored.tags().tag("x-actor").isPresent());
+	}
+
+	@Test
+	void storeOnStripsSurroundingWhitespaceFromValues ( ) {
+		Tracing tracing = Tracing.init(INSTANCE).channel(" web ");
+		EphemeralEvent<String> event = Event.of("hello", Tags.none());
+
+		EphemeralEvent<String> stored = tracing.storeOn(event);
+
+		assertEquals("web", stored.tags().tag("x-channel").get().value());
+	}
+
+	@Test
 	void storeOnPreservesExistingTags ( ) {
 		Tracing tracing = Tracing.init(INSTANCE).command("OpenAccountCommand");
 		EphemeralEvent<String> event = Event.of("hello", Tags.of(Tag.of("custom", "value")));

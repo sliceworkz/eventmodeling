@@ -12,14 +12,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"  # Required in Linux
 
-  loki:
-    image: grafana/loki:2.9.3
-    ports:
-      - "3100:3100"
-    command: -config.file=/etc/loki/local-config.yaml
-    volumes:
-      - loki-data:/loki
-      
   grafana:
     image: grafana/grafana
     ports:
@@ -32,6 +24,5 @@ services:
 #    volumes:
 #      - grafana-data:/var/lib/grafana
 
-volumes:
-  loki-data:
+#volumes:
 #  grafana-data:

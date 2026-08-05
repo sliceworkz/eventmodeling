@@ -60,15 +60,19 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 	private EventSource<DOMAIN_EVENT_TYPE> eventSource;
 	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation;
-	private ProcessorMode originalProcessorMode;
-	private ProcessorMode processorMode;
+	private final ProcessorMode originalProcessorMode;
+
+	// written by start/stop/terminate on other threads, read by this processor's loop, by handleBatch's
+	// mid-batch abort check and by status() -- none of which holds a monitor
+	private volatile ProcessorMode processorMode;
 	private ProcessorIdentification processorIdentification; // this is us
 	private ProcessorIdentification monitoredProcessorIdentification; // this is the readmodel-building processor we will shadow
 	private final String monitoredReader; // the reader name that projector bookmarks under, matched as-is
 
 	private Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory;
 
-	private ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER; // TOOD implement leader selection on processors
+	// volatile for the same reason as processorMode, written by terminate()
+	private volatile ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER; // TOOD implement leader selection on processors
 	private Instance instance;
 
 	private boolean monitoredBookmarkMissingWarned = false;

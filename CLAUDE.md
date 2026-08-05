@@ -269,11 +269,9 @@ features/
   `consecutiveFailedBatches` so the consumer picks its own alerting threshold rather than the framework
   picking one. There is no matching "recovered" event: an automation that gets going again emits
   `AutomationProcessed` with a non-zero `eventsHandled`
-- **An automation must be a named class, and so must a read model.** The simple name keys the bookmark
-  recording progress, the metric tags and the `AutomationAdminCapability` id. An anonymous class has no
-  simple name and a lambda's is regenerated per run — which is the dangerous one, since the bookmark would
-  be new on every start and every todo item handled again. Both are rejected at build time naming the
-  class and the reason; they used to fail deeper down with a bare `id is required`
+- **An automation must be a named class, and its name must be unique** — as must a read model's, a
+  translator's and a dispatcher's. See "Component names are bookmark keys" below for the shared rule; for
+  an automation the same name additionally keys the metric tags and the `AutomationAdminCapability` id
 - **…but it does not wait out that interval when the todo list has moved underneath it.** The bookmark
   notification was a bare `notify()`, so one arriving *while a batch was running* had nothing waiting to
   hear it and was lost; the processor then parked the full 10s over a todo list that had already changed.
@@ -340,6 +338,39 @@ features/
 **Dispatchers:**
 - Implement `Dispatcher<OUTBOUND_EVENT_TYPE>`
 - Implement outbox pattern for publishing events
+- Registered with the bounded context via `builder.dispatcher(...)`, and subject to the naming rule below.
+  This is the registry where getting a name wrong costs the most, since the bookmark records what has
+  already been published to an external system
+
+### Component names are bookmark keys
+
+**A read model, an automation, a translator and a dispatcher are each identified by a name**, which
+becomes the `id` in `ProcessorIdentification` and therefore the reader name of the bookmark recording how
+far that component has been projected. The name is the class' simple name, except for a read model, which
+may override `readmodelName()` — which is how one read model class serves several instances under
+different names. Two properties are load-bearing, nothing further down checks either, and both are now
+enforced at build time by `ProcessorNames`, the one validator all four registries run their components
+through:
+
+- **Unique within its kind.** Two components sharing a name share one bookmark, so each advances it past
+  events the other never saw. Nothing throws and nothing is logged: the events are simply never handled,
+  and for a dispatcher that means never published. This is why it cannot be left to a naming convention
+- **Stable across restarts.** A name a class cannot supply the same way twice gives a fresh bookmark on
+  every start, so the whole stream is handled again from the beginning at every boot. An anonymous class
+  has no simple name at all; a generated one (a lambda, a proxy, a bytecode-generated subclass) has a name
+  like `Foo$$Lambda/0x00007f...` regenerated per JVM run. For a dispatcher that is duplicate publishing to
+  an external system on every restart — the worst outcome the framework has
+
+The shape of the class is only held against a component **when the name it supplied is its class' simple
+name**, i.e. when it did not name itself. An anonymous read model returning a stable `readmodelName()` is
+perfectly able to key a bookmark and is accepted; an anonymous one falling back to the default is not.
+
+Two of these used to be missing entirely. Dispatchers had no duplicate check at all, and neither
+dispatchers nor translators had the shape check — an anonymous one failed deeper down with a bare
+`id is required` naming neither the component nor the reason. `DuplicateDispatcherNameTest`,
+`DuplicateTranslatorNameTest`, `DuplicateAutomationNameTest` and `DuplicateReadModelNameTest` pin the
+four registries down; they are plain `@Test`s, since this is framework behaviour rather than storage
+behaviour.
 
 ## Event Modeling Core Templates
 

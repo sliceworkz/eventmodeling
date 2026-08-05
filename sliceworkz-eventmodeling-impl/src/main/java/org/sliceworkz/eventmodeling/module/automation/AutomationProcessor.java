@@ -64,6 +64,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private ProcessorMode processorMode;
 	private ProcessorIdentification processorIdentification; // this is us
 	private ProcessorIdentification monitoredProcessorIdentification; // this is the readmodel-building processor we will shadow
+	private final String monitoredReader; // the reader name that projector bookmarks under, matched as-is
 
 	private Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory;
 
@@ -114,6 +115,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		this.processorMode = ProcessorMode.STOPPED; // initialize as STOPPED, don't run before start() or things might nog have been initialized in the bounded context impl
 		this.processorIdentification = processorIdentification;
 		this.monitoredProcessorIdentification = monitoredProcessorIdentification;
+		this.monitoredReader = monitoredProcessorIdentification == null ? null : monitoredProcessorIdentification.toString();
 		this.eventSource = eventSource;
 		this.instance = instance;
 		this.boundedContext = boundedContext;
@@ -167,12 +169,31 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		eventEmitter.emit(new BoundedContextEvent.AutomationStarted(boundedContext, processorIdentification.id(), reason, eventEmitter.sliceFor(automation.getClass())));
 	}
 
+	/**
+	 * Whether a bookmark notification is about the projector filling our todo list.
+	 * <p>
+	 * The reader name is compared as the string it is, and deliberately not parsed back into a
+	 * {@link ProcessorIdentification}. Every reader on this stream is announced to every subscriber, and a
+	 * reader is only ever a framework processor by convention — an application's own {@code Projector}, a
+	 * migration tool or an operator's script bookmarking the same domain stream picks whatever name it
+	 * likes. Parsing it threw {@code IllegalArgumentException} on anything not shaped like
+	 * {@code context/type/id[storage:location]}, which the event store contained and logged at ERROR with a
+	 * stack trace — once per bookmark placement, per automation, for a notification that was never ours.
+	 * <p>
+	 * It is also the stricter match: the projector bookmarks under exactly
+	 * {@code processorIdentification.toString()} (see {@code ProjectorProcessor}), and a round trip through
+	 * {@code parse} is not the identity for a read model whose {@code readmodelName()} contains a
+	 * {@code '/'} or a {@code '['} — which would have compared unequal and left the automation waiting out
+	 * every poll interval instead of waking on its todo list.
+	 */
+	static boolean isMonitoredBookmark ( String reader, String monitoredReader ) {
+		return monitoredReader != null && monitoredReader.equals(reader);
+	}
+
 	@Override
 	public void bookmarkUpdated (String reader, EventReference processedUntil ) {
-		ProcessorIdentification processor = ProcessorIdentification.parse(reader);
-
-		if ( processor.equals(monitoredProcessorIdentification)) {
-			LOGGER.debug("monitored event processor {} moved bookmark to  {}", processor.toString(), processedUntil);
+		if ( isMonitoredBookmark(reader, monitoredReader) ) {
+			LOGGER.debug("monitored event processor {} moved bookmark to  {}", reader, processedUntil);
 
 			// always of interest to us, as we'll probably be running behind now. Remembered rather than
 			// only signalled: a move that lands while we are handling a batch has nothing waiting to hear
@@ -183,7 +204,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 				this.notify();
 			}
 		} else {
-			LOGGER.debug("event processor {} moved bookmark to  {}, not of our concern", processor.toString(), processedUntil);
+			LOGGER.debug("reader {} moved bookmark to  {}, not of our concern", reader, processedUntil);
 		}
 	}
 	

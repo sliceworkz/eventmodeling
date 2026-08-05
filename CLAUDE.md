@@ -328,6 +328,18 @@ features/
   `consecutiveFailedBatches` so the consumer picks its own alerting threshold rather than the framework
   picking one. There is no matching "recovered" event: an automation that gets going again emits
   `AutomationProcessed` with a non-zero `eventsHandled`
+- **A bookmark notification names a reader, and most of them are not ours.** Every bookmark placed on the
+  domain stream is announced to every subscriber, so an automation hears about an application's own
+  `Projector`, a migration tool or an operator's script bookmarking the same stream — readers named by
+  whoever wrote them, under no obligation to look like a `ProcessorIdentification`. `bookmarkUpdated` used
+  to `parse` the reader before comparing it, so every foreign one threw `IllegalArgumentException`. The
+  event store contains a listener failure, so nothing broke: it logged at ERROR with a stack trace instead,
+  once per bookmark placement per automation, for a notification that was never this automation's business.
+  The reader is now compared as the string the projector actually wrote
+  (`processorIdentification.toString()`), which is also the stricter match — a round trip through `parse`
+  is not the identity for a read model whose `readmodelName()` carries a `/` or a `[`, and such an
+  automation would have compared unequal to its own todo list and waited out every poll interval instead of
+  waking on it. `AutomationForeignBookmarkTest` pins both halves
 - **An automation must be a named class, and its name must be unique** — as must a read model's, a
   translator's and a dispatcher's. See "Component names are bookmark keys" below for the shared rule; for
   an automation the same name additionally keys the metric tags and the `AutomationAdminCapability` id

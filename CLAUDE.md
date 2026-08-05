@@ -163,6 +163,65 @@ features/
   database that is durable but private to one instance
 - `boundedContext.start()` does not return until every `EPHEMERAL` read model has been projected completely, so those are usable right after start. `LOCAL` and `SHARED` read models keep their bookmark and catch up in the background without blocking startup. The wait has a safety timeout (default 5 minutes, `-Dsliceworkz.eventmodeling.readmodel.ephemeral.projection.timeout.ms=...`) after which startup continues with a warning
 
+**A durable read model keeps its own position, next to the state it projects:**
+- **The problem it solves is a two-store commit with no transaction across it.** A read model writes its
+  rows in its own database; the framework bookmarks its progress in the event store, *after* the commit.
+  That ordering is right — a crash in the window costs a repeat, not a loss — but against a durable,
+  shared read model a repeat is duplicated inserts and double-counted totals, permanently, with nothing
+  raised. The window was never one batch either: the eventstore bookmark used to be written once per
+  `run()`, so a catch-up that committed 2000 batches and died replayed all of them
+- **`SelfBookmarkingProjection` is the answer, and `SqlReadModelProjector` implements it.** Every batch
+  upserts the reference of its last event into a `<prefix>_projection_bookmark` table **inside the
+  transaction that writes the rows**, so the state and the position become durable together and cannot
+  disagree. Startup resumes from that table through `Projector.startingAfter(...)`, and the eventstore
+  bookmark is written but never read (`readOnManualTriggerOnly`) — it stays as the record an operator and
+  the dashboard see, lagging the truth by at most one batch
+- **An absent row means replay from the beginning, and deliberately does not fall back** to the eventstore
+  bookmark. That is what makes "drop the tables to rebuild" work with nothing else to reset, and what
+  stops a fresh database being handed a position describing rows it does not have. It also fixes a case
+  nobody had reported: an `EPHEMERAL` H2 read model whose in-memory database outlived its bounded context
+  (`CREATE TABLE IF NOT EXISTS` plus the framework dropping the eventstore bookmark) used to duplicate its
+  whole history on a context restart within one JVM
+- The table is created by `ensureTables()` **and** on first use, because the order is not ours to pick:
+  the context asks a read model where to resume while building its processor, possibly before the feature
+  slice has ensured anything. `tracksItsOwnBookmark()` opts out and puts the read model back on the
+  framework's bookmark
+- **`project()` should still be idempotent wherever it cheaply can be**, because this covers the
+  framework's own replay and nothing else — a second instance projecting the same `SHARED` read model
+  still applies every event again, since leader election is still missing. Two helpers do it:
+  - `updateOnce(...)` — an UPDATE that applies at most once per event per row. **There is no
+    one-row-per-event assumption**: `EVENT_REF_COLUMNS` on a row mean "the newest event this row
+    reflects", so the ordinary aggregate — `(customer_id, total_order_count, last_order_date)` fed by a
+    stream of `OrderReceived` — is exactly its case, as is one event updating many rows
+  - `insertIfAbsent(...)` — creates the aggregate row so `updateOnce` has something to guard, and
+    **deliberately leaves the freshness columns at their zero defaults**. Writing the current event's
+    reference there is the natural-looking mistake: the `updateOnce` that follows would find the row
+    already marked with that event and skip it, so the first order of every new customer would create the
+    row and never be counted
+  - `insertOnce(...)` — for the append-style table (a log, a list, a dead-letter view), keyed on
+    `last_event_id` so it works where two events legitimately produce identical-looking rows. One event
+    inserting *several* rows is the case it cannot cover
+- **The comparison is the total `(tx, position, index)` order, never `last_event_position` alone**, for
+  the same reason `EventReference.happenedAfter` and the DCB check are: a position is a `bigserial` and a
+  transaction id an `xid8`, assigned independently, so an event can carry a lower position than one that
+  committed before it. A position-only guard silently *discards* events it should apply — worse than the
+  duplication it was meant to prevent, and rare enough to reach production. This is why the helpers exist
+  rather than the comparison being left to each read model
+- **`insertOnce`/`insertIfAbsent` are a SELECT then an INSERT, not `INSERT ... WHERE NOT EXISTS`**, and
+  that is not stylistic. H2 — what an ephemeral read model runs on — caches that subquery's result across
+  executions of the same statement within a transaction, so the second call inserts a row the first had
+  already inserted and dies on the unique index. It passes against PostgreSQL either way, which is exactly
+  how such a thing reaches production. `SqlReadModelBookmarkTest.severalEventsInOneBatchEachAppendTheirOwnRow`
+  pins it
+- `SqlReadModelBookmarkTest` covers the positions and the helpers against a real database;
+  `SqlReadModelSurvivesRestartTest` reproduces the crash window end to end through a bounded context
+  (project, remove the framework bookmark, restart — the row count must not double) and fails with 50
+  rows against 25 without the wiring. `SqlReadModelTest` exposes `projectedUpTo()` and
+  `restartedProjector()` so a framework user can assert the same thing
+- Needs the matching eventstore fixes to be complete: the bookmark is placed per batch, and a batch whose
+  commit fails takes the projector's cursor back with it instead of skipping those events. See the
+  eventstore's `BatchAwareProjection` notes
+
 **Automations:**
 - Implement `Automation<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE>`
 - Paired with `TodoListReadModel` to identify work

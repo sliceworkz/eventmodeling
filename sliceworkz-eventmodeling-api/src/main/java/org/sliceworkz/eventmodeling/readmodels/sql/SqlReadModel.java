@@ -40,7 +40,7 @@ import org.sliceworkz.eventstore.events.EventReference;
 public abstract class SqlReadModel {
 
 	/**
-	 * Standard column definitions for event reference tracking.
+	 * Standard column definitions for event reference tracking: which event a row last reflects.
 	 * Include this snippet in CREATE TABLE statements for tables that track row-level freshness.
 	 *
 	 * <pre>{@code
@@ -50,6 +50,17 @@ public abstract class SqlReadModel {
 	 * )
 	 * """.formatted(table("mydata"), EVENT_REF_COLUMNS)
 	 * }</pre>
+	 *
+	 * <p><b>What they are for.</b> These four columns are what makes a write idempotent: they let a
+	 * statement ask whether the row has already seen the event being projected, and skip it if so.
+	 * {@link SqlReadModelProjector#updateOnce} and {@link SqlReadModelProjector#insertOnce} use them
+	 * that way and write them for you — declare the columns and use those helpers rather than
+	 * comparing by hand, because the comparison has a trap in it: the freshness order is the total
+	 * {@code (tx, position, index)} order, and {@code last_event_position} on its own is a different
+	 * order that silently discards events.
+	 *
+	 * <p>The defaults are all zero, so a row inserted without them is older than any real event and
+	 * the first event to touch it applies.
 	 */
 	protected static final String EVENT_REF_COLUMNS = """
 			last_event_id VARCHAR(255) NOT NULL DEFAULT '',

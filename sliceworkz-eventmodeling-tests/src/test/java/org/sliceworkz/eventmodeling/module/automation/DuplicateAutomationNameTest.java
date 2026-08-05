@@ -84,7 +84,21 @@ public class DuplicateAutomationNameTest extends AbstractMockDomainTest {
 			}).eventuallyConsistent();
 			builder.build();
 		});
-		assertTrue(e.getMessage().contains("has no name"), e.getMessage());
+		assertTrue(e.getMessage().contains("must be a named class"), e.getMessage());
+	}
+
+	/**
+	 * The shape of the class is only held against a read model when it did not name itself: the name is
+	 * what keys the bookmark, and an anonymous class returning a stable one of its own supplies that
+	 * perfectly well. Rejecting it would break the ordinary "one read model class, several instances
+	 * under different names" case the readmodelName() override exists for.
+	 */
+	@Test
+	void anonymousReadModelNamingItselfAccepted ( ) {
+		Mock ctx = buildBoundedContext(
+			baseBuilder().readmodel(new MockTodoList("anonymous-but-named") { }).eventuallyConsistent()
+		);
+		assertNotNull(ctx);
 	}
 
 	@Test

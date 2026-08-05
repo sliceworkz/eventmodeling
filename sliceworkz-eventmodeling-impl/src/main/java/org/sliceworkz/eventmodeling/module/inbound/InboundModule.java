@@ -20,14 +20,10 @@ package org.sliceworkz.eventmodeling.module.inbound;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -38,6 +34,7 @@ import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -56,8 +53,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
 public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
-
-	private static Logger LOGGER = LoggerFactory.getLogger(InboundModule.class);
 
 	private EventStream<INBOUND_EVENT_TYPE> inboundEventStream;
 
@@ -93,14 +88,10 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> createProjectorProcessors ( Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> integrations ) {
 		Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> result = new ArrayList<>();
 
-		Set<String> seenNames = new HashSet<>();
-		for ( Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> t : integrations ) {
-			String name = t.getClass().getSimpleName();
-			if ( !seenNames.add(name) ) {
-				LOGGER.error("duplicate translator name '%s' registered".formatted(name));
-				throw new IllegalArgumentException("duplicate translator name '%s' - bookmarks would collide".formatted(name));
-			}
-		}
+		// a translator's name keys the bookmark recording how far it has read the inbound stream, so it
+		// has to be unique and the same on every start - see ProcessorNames
+		ProcessorNames names = ProcessorNames.of(ProcessorIdentification.TYPE_TRANSLATOR);
+		integrations.forEach(names::claim);
 
 		integrations.forEach(t->result.add(
 				new ProjectorProcessor<>(

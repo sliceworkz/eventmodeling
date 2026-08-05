@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.module.inbound;
+package org.sliceworkz.eventmodeling.module.outbound;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -26,47 +26,56 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
-import org.sliceworkz.eventmodeling.inbound.Translator;
-import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
+import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
-public class DuplicateTranslatorNameTest extends AbstractMockDomainTest {
+/**
+ * A dispatcher's name keys the bookmark recording what it has already published, so the two ways of
+ * getting that name wrong both cost duplicate or missing publishing to an external system — the worst
+ * outcome the framework has. Neither used to be checked here at all: only automations, translators and
+ * read models were, and this registry was the one that mattered most.
+ */
+public class DuplicateDispatcherNameTest extends AbstractMockDomainTest {
 
+	/**
+	 * Two dispatchers sharing a name share one bookmark, so each advances it past events the other never
+	 * saw and those events are simply never published. Nothing throws and nothing is logged, which is why
+	 * this has to be refused at build time rather than left to a naming convention.
+	 */
 	@Test
-	void duplicateTranslatorClassRejected ( ) {
+	void duplicateDispatcherClassRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
 			baseBuilder()
-				.translator(new MockTranslator())
-				.translator(new MockTranslator())
+				.dispatcher(new MockDispatcher())
+				.dispatcher(new MockDispatcher())
 				.build();
 		});
-		assertEquals("duplicate translator name 'MockTranslator' - bookmarks would collide", e.getMessage());
+		assertEquals("duplicate dispatcher name 'MockDispatcher' - bookmarks would collide", e.getMessage());
 	}
 
 	/**
-	 * A translator's name keys the bookmark recording how far it has read the inbound stream, so a class
-	 * that cannot supply a stable one would translate the whole inbound stream again on every start. It
-	 * used to fail deeper down with a bare "id is required" naming neither the translator nor the reason.
+	 * A class that cannot supply a stable simple name gets a fresh bookmark on every start, so the whole
+	 * outbound stream would be dispatched again at every boot. It used to fail deeper down with a bare
+	 * "id is required" naming neither the dispatcher nor the reason.
 	 */
 	@Test
-	void anonymousTranslatorRejected ( ) {
+	void anonymousDispatcherRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
-			baseBuilder().translator(new MockTranslator() { }).build();
+			baseBuilder().dispatcher(new MockDispatcher() { }).build();
 		});
 		assertTrue(e.getMessage().contains("must be a named class"), e.getMessage());
 		assertTrue(e.getMessage().contains("bookmark"), "the message should say why a name is needed: " + e.getMessage());
 	}
 
 	@Test
-	void singleTranslatorBuildsSuccessfully ( ) {
+	void singleDispatcherBuildsSuccessfully ( ) {
 		Mock ctx = buildBoundedContext(
-			baseBuilder().translator(new MockTranslator())
+			baseBuilder().dispatcher(new MockDispatcher())
 		);
 		assertNotNull(ctx);
 	}
@@ -78,7 +87,7 @@ public class DuplicateTranslatorNameTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"));
 	}
 
-	static class MockTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
+	static class MockDispatcher implements Dispatcher<MockOutboundEvent> {
 
 		@Override
 		public EventQuery eventQuery ( ) {
@@ -86,7 +95,7 @@ public class DuplicateTranslatorNameTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+		public void when ( MockOutboundEvent event ) {
 			// no-op for the test
 		}
 	}

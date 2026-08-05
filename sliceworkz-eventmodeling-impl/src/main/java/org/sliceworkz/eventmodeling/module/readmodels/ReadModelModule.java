@@ -22,10 +22,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -40,6 +38,7 @@ import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
@@ -134,24 +133,16 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 					counterSnapshotWrite));
 		}
 
-		Set<String> seenNames = new HashSet<>();
+		// the name keys this read model's bookmark, and readmodelName() defaults to the simple class name
+		// — see ProcessorNames for what a duplicate or an unstable one costs. Live models key no bookmark
+		// of their own, but they share the name space a read is addressed by, so they are reserved.
+		ProcessorNames names = ProcessorNames.of(ProcessorIdentification.TYPE_READMODEL);
 		for ( Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> liveClass : this.liveModels.keySet() ) {
-			seenNames.add(liveClass.getSimpleName());
+			names.reserve(liveClass.getSimpleName());
 		}
 
 		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentReadModel : eventuallyConsistentReadModels ) {
-			String name = eventuallyConsistentReadModel.readmodelName();
-			// the name keys this read model's bookmark, and readmodelName() defaults to the simple class
-			// name — which an anonymous class does not have, and a lambda regenerates on every run
-			if ( name == null || name.isBlank() ) {
-				throw new IllegalArgumentException(
-					"read model %s has no name: readmodelName() defaults to the simple class name, which an anonymous class does not have, and the name keys the bookmark recording how far it has been projected - give it a name or make it a named class"
-						.formatted(eventuallyConsistentReadModel.getClass().getName()));
-			}
-			if ( !seenNames.add(name) ) {
-				LOGGER.error("duplicate readmodel name '%s' registered".formatted(name));
-				throw new IllegalArgumentException("duplicate readmodel name '%s' - bookmarks would collide".formatted(name));
-			}
+			names.claim(eventuallyConsistentReadModel, eventuallyConsistentReadModel.readmodelName());
 			this.eventuallyConsistentReadModels.add(eventuallyConsistentReadModel);
 		}
 

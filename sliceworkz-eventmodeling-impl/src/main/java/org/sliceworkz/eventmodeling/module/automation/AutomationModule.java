@@ -19,12 +19,8 @@ package org.sliceworkz.eventmodeling.module.automation;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
@@ -34,14 +30,13 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 import io.micrometer.core.instrument.MeterRegistry;
 
 public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
-
-	private static Logger LOGGER = LoggerFactory.getLogger(AutomationModule.class);
 
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 
@@ -100,28 +95,11 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 	List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> createAutomationProcessors ( Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations ) {
 		List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> result = new ArrayList<>();
 
-		Set<String> seenNames = new HashSet<>();
-		for ( Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> a : automations ) {
-			// An automation's simple name is its identity: it keys the bookmark that records how far it
-			// has got, the metric tags, and the id AutomationAdminCapability addresses it by. Two shapes
-			// cannot supply one, and both used to fail further down with a bare "id is required" that
-			// named neither the automation nor the reason:
-			//  - an anonymous class has no simple name at all
-			//  - a lambda's is generated (Foo$$Lambda/0x...) and differs between runs, so its bookmark
-			//    would be a new one on every start and every item would be handled again
-			Class<?> automationClass = a.getClass();
-			if ( automationClass.isAnonymousClass() || automationClass.isSynthetic() ) {
-				throw new IllegalArgumentException(
-					"automation %s must be a named class: its name identifies it and keys the bookmark recording its progress, which an anonymous class or lambda cannot provide stably"
-						.formatted(automationClass.getName()));
-			}
-
-			String name = automationClass.getSimpleName();
-			if ( !seenNames.add(name) ) {
-				LOGGER.error("duplicate automation name '%s' registered".formatted(name));
-				throw new IllegalArgumentException("duplicate automation name '%s' - bookmarks would collide".formatted(name));
-			}
-		}
+		// An automation's simple name is its identity: it keys the bookmark that records how far it has
+		// got, the metric tags, and the id AutomationAdminCapability addresses it by - see ProcessorNames
+		// for what a duplicate or an unstable one costs.
+		ProcessorNames names = ProcessorNames.of(ProcessorIdentification.TYPE_AUTOMATION);
+		automations.forEach(names::claim);
 
 		automations.forEach(a->result.add(new AutomationProcessor<>(
 				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)

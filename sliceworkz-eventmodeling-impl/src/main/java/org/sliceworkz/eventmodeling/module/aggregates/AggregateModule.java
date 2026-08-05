@@ -69,9 +69,11 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 			}
 			try {
 				
-				var aggregateTags = tags.and(io.micrometer.core.instrument.Tags.of("aggregate", spec.aggregateClass().getSimpleName())); 
-				
-				Counter counterLoad = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.load.count", aggregateTags);
+				var aggregateTags = tags.and(io.micrometer.core.instrument.Tags.of("aggregate", spec.aggregateClass().getSimpleName()));
+
+				// no load counter here: it is registered per channel in aggregate(...), and a second
+				// registration of the same name under a different tag key set is not merely redundant --
+				// Prometheus requires one tag key set per meter name, so registering both throws there
 				Counter counterSnapshotRead = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.snapshot.read.count", aggregateTags);
 				Counter counterSnapshotWrite = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.snapshot.write.count", aggregateTags);
 				Timer timer = meterRegistry.timer("sliceworkz.eventmodeling.aggregate.load.duration", aggregateTags);
@@ -85,7 +87,6 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 								spec.readSnapshots(),
 								spec.writeSnapshots(),
 								spec.snapshotEventCountThreshold(),
-								counterLoad,
 								counterSnapshotRead,
 								counterSnapshotWrite,
 								timer);
@@ -183,7 +184,6 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 				boolean readSnapshots,
 				boolean writeSnapshots,
 				int snapshotEventCountThreshold,
-				Counter counter,
 				Counter counterSnapshotRead,
 				Counter counterSnapshotWrite,
 				Timer timer

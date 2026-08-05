@@ -106,7 +106,23 @@ public abstract class SqlReadModelTest<T> {
 	 * {@link AbstractSqlReadModelTests#tablesToDrop()}, not from a fresh database.
 	 */
 	protected static DataSource postgresDataSource() {
-		return PostgresContainer.dataSource(POSTGRES_IMAGE);
+		return postgresDataSource(POSTGRES_IMAGE);
+	}
+
+	/**
+	 * The same, against a PostgreSQL version you name — {@code PostgresContainer.IMAGE_PG16},
+	 * {@code IMAGE_PG18}, or any image tag Testcontainers can pull.
+	 * <p>
+	 * A read model's SQL is the part of an application most likely to depend on the server version,
+	 * so a {@code @Nested} class per version is a reasonable thing to want. Prefer an image the
+	 * rest of the build already runs against: {@link PostgresContainer} keeps one container per
+	 * image for the life of the JVM, so a version nothing else uses costs a container start.
+	 *
+	 * @param image the PostgreSQL image tag to run against
+	 * @return the pooled DataSource of that container
+	 */
+	protected static DataSource postgresDataSource(String image) {
+		return PostgresContainer.dataSource(image);
 	}
 
 	/**

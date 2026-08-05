@@ -33,10 +33,12 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventStreamId;
+import org.sliceworkz.eventstore.testing.AbstractEventStoreTest;
+import org.sliceworkz.eventstore.testing.EventStoreBackend;
+import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
@@ -45,7 +47,45 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectWriter;
 import tools.jackson.databind.json.JsonMapper;
 
-public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+/**
+ * Base for the published test bases ({@link CommandTest}, {@link AggregateTest},
+ * {@link LiveModelTest}): builds a bounded context over an event storage and releases both around
+ * every test method.
+ * <p>
+ * <b>Which storage that is depends on how the test methods are annotated</b>, and it is the same
+ * choice the framework's own suite makes:
+ * <ul>
+ *   <li>{@link org.junit.jupiter.api.Test @Test} — one run against an in-memory store. Nothing to
+ *       configure, and what every test written before this existed keeps doing.</li>
+ *   <li>{@link ForEachBackend @ForEachBackend} — one run per {@link EventStoreBackend} registered
+ *       in {@code META-INF/services/org.sliceworkz.eventstore.testing.EventStoreBackend} on the
+ *       test classpath, each reported under the backend that produced it
+ *       ({@code openingAnAccount [postgres:18]}). Use it where the scenario is worth proving
+ *       against the storage the application will actually run on.</li>
+ * </ul>
+ * <pre>{@code
+ * class OpenAccountCommandTest extends CommandTest<BankingEvent, Void, Void> {
+ *
+ *     @ForEachBackend                      // in-memory, in-memory-fs, PostgreSQL, ...
+ *     void openingAnAccount ( ) {
+ *         given().when(new OpenAccountCommand("123")).then().event(new AccountOpened("123"));
+ *     }
+ * }
+ * }</pre>
+ * Registering a backend is a line in that service file plus the storage on the test classpath —
+ * {@code InMemoryBackend} needs nothing further, the PostgreSQL ones need
+ * {@code sliceworkz-eventstore-infra-postgres} and a Docker daemon for Testcontainers. Narrow a
+ * local run with {@code -Deventstore.testing.backends=inmem}. See this module's README.
+ * <p>
+ * The storage lifecycle itself comes from {@link AbstractEventStoreTest}: a fresh, empty store
+ * before each test method, released after it. Subclasses reach it through {@link #eventStorage()}
+ * and must not build one themselves.
+ *
+ * @param <DOMAIN_EVENT_TYPE>   the bounded context's domain event type
+ * @param <INBOUND_EVENT_TYPE>  the bounded context's inbound event type
+ * @param <OUTBOUND_EVENT_TYPE> the bounded context's outbound event type
+ */
+public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends AbstractEventStoreTest {
 
 	private static final String DOMAIN_NAME = "unitTests";
 	private static final String DOMAIN = "domain";
@@ -57,22 +97,22 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 	private Instance INSTANCE = InstanceFactory.determine("unittests");
 
 	private BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContext;
-	private EventStorage eventStorage;
-	private EventStore eventStore;
 
 	@SuppressWarnings("unchecked")
+	@Override
 	@BeforeEach
-	void setUp ( ) {
-		this.eventStorage = InMemoryEventStorage.newBuilder().build();
+	public void setUp ( ) {
+		// creates the storage -- the backend's for a @ForEachBackend invocation, the in-memory one
+		// of createEventStorage() otherwise -- plus the store this test queries through eventStore()
+		super.setUp();
 
-		this.eventStore = EventStoreFactory.get().eventStore(eventStorage);
 		BoundedContextBuilder<?> builder = BoundedContext.newBuilder(Untyped.class)
 				.eventTypes(domainEventType(), inboundEventType(), outboundEventType());
 
 		builder
 				.name(DOMAIN_NAME)
 				.instance(INSTANCE)
-				.eventStorage(eventStorage);
+				.eventStorage(eventStorage());
 
 		// let subclasses do any needed configuration
 		configure(builder);
@@ -82,25 +122,66 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 
 	/**
 	 * Releases everything {@link #setUp()} created, in ownership order: the bounded context (which
-	 * closes the store it built for itself), then the store handed to the test through
-	 * {@link #eventStore()}, then the storage that backs both.
+	 * closes the store it built for itself), then — through {@link AbstractEventStoreTest} — the
+	 * store handed to the test by {@link #eventStore()} and the storage that backs both.
 	 * <p>
 	 * Without this every test method would leave a bounded context and two stores behind, each with
 	 * its own processor and notification threads, for the rest of the JVM's life.
 	 */
+	@Override
 	@AfterEach
-	void tearDown ( ) {
+	public void tearDown ( ) {
 		if ( boundedContext != null ) {
 			boundedContext.terminate();
 			boundedContext = null;
 		}
-		if ( eventStore != null ) {
-			eventStore.close();
-			eventStore = null;
+		super.tearDown();
+	}
+
+	/**
+	 * The in-memory storage a plain {@code @Test} runs against.
+	 * <p>
+	 * {@link AbstractEventStoreTest} would otherwise demand a bound backend and fail the test with
+	 * an explanation; overriding it here makes the in-memory store the default — so a test written
+	 * before the matrix existed keeps running exactly as it did — and leaves {@link ForEachBackend}
+	 * as the deliberate opt-in to every registered storage.
+	 *
+	 * @return a fresh, empty storage
+	 */
+	@Override
+	protected EventStorage createEventStorage ( ) {
+		return hasBoundBackend() ? super.createEventStorage() : InMemoryEventStorage.newBuilder().build();
+	}
+
+	/**
+	 * Releases the storage {@link #createEventStorage()} produced: through the backend that built
+	 * it, or by closing it ourselves when we built the in-memory one above. The base class releases
+	 * only what a bound backend gave it, so without this branch the storage of every plain
+	 * {@code @Test} would stay open.
+	 *
+	 * @param storage the storage to release
+	 */
+	@Override
+	protected void destroyEventStorage ( EventStorage storage ) {
+		if ( hasBoundBackend() ) {
+			super.destroyEventStorage(storage);
+		} else {
+			storage.close();
 		}
-		if ( eventStorage != null ) {
-			eventStorage.close();
-			eventStorage = null;
+	}
+
+	/**
+	 * Whether a {@link ForEachBackend} invocation bound a backend to this test.
+	 * <p>
+	 * {@link AbstractEventStoreTest#backend()} throws rather than returning {@code null} when none
+	 * is bound, which is the right contract for a test that requires one but leaves no way to ask.
+	 */
+	private boolean hasBoundBackend ( ) {
+		try {
+			backend();
+			return true;
+		} catch (IllegalStateException noBackendBound) {
+			return false;
 		}
 	}
 
@@ -120,8 +201,18 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 		return EventStreamId.forContext(DOMAIN_NAME).withPurpose(DOMAIN);
 	}
 
+	/**
+	 * The store over {@link #eventStorage()}, for a test asserting on what a command actually wrote.
+	 * <p>
+	 * Widened from {@link AbstractEventStoreTest}'s {@code protected}: it has been part of this
+	 * class' published surface since before the backend matrix, and subclasses outside this package
+	 * call it.
+	 *
+	 * @return the event store, valid for the duration of one test
+	 */
+	@Override
 	public EventStore eventStore ( ) {
-		return eventStore;
+		return super.eventStore();
 	}
 
 	public void assertCompareJsonString ( Object expected, Object actual, String objectDescription ) {

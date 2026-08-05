@@ -126,11 +126,9 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 	}
 
 	/**
-	 * De-duplication reaches {@code incoming} as an empty result, never as an exception, so the
-	 * {@code catch (OptimisticLockingException)} that used to sit here — annotated "idempotency check
-	 * kicked in" — caught nothing on the path it was written for. What it did do was stand ready to
-	 * swallow a genuine failure to append, losing the inbound event silently. There is no other record
-	 * that it arrived, so the caller is the only party that can decide to retry, and it has to be told.
+	 * De-duplication reaches {@code incoming} as an empty result, never as an exception, so an exception
+	 * from the append is a genuine failure to store the event. Nothing else records that it arrived, so
+	 * the caller is the only party that can decide to retry and has to be told.
 	 */
 	@ForEachBackend
 	void testAnInboundEventThatCannotBeAppendedIsReportedToTheCaller ( ) {
@@ -142,7 +140,7 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 		assertThrows(OptimisticLockingException.class,
 				() -> boundedContext().incoming(new SomeInboundEvent("test"), Tag.of("uniqueKey", "123").toString()));
 
-		// and it really was not stored, so treating this as "already known" would have lost it
+		// and it really was not stored, so treating this as "already known" would lose it
 		assertEquals(eventsBefore, inboundEvents.query(EventQuery.matchAll()).toList().size());
 	}
 

@@ -114,12 +114,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		assertThrows(OptimisticLockingException.class, ()-> bo123.doSomething()); // this should be behind
 	}
 	
-	/**
-	 * {@code raiseEvents} used to hand its events to the appender through a {@code stream().map(...)}
-	 * that nothing consumed, so nothing was added and an empty batch was appended - with no error, since
-	 * an empty append raises none. The aggregate was left un-updated too, because it is told about its
-	 * events by the appender, from what the store actually accepted.
-	 */
+	/** Every event handed to {@code raiseEvents} is appended, and the aggregate is told about each. */
 	@ForEachBackend
 	void testAggregateRaisingSeveralEventsAtOnce ( ) {
 
@@ -169,12 +164,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 
 	/**
 	 * An aggregate that is kept and used, rather than re-loaded before every change, still snapshots at
-	 * the rate it was configured for.
-	 * <p>
-	 * The count of events since the last snapshot was only ever set by a load, never advanced by the
-	 * events the aggregate itself raised, so on a held instance it stood still: a freshly loaded
-	 * aggregate stayed one below any threshold above 1 and never snapshotted at all, while one loaded
-	 * near its threshold cleared it on every single raise and wrote a snapshot per event, indefinitely.
+	 * the rate it was configured for: the events it raises itself count towards the threshold.
 	 */
 	@ForEachBackend
 	void testAggregateSnapshotsWhileItIsHeldRatherThanReloaded ( ) {

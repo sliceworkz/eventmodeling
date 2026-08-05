@@ -39,9 +39,7 @@ import org.sliceworkz.eventstore.query.EventQuery;
  * instance or on a single leader, and whether its bookmark is dropped at startup.
  * <p>
  * There is no accessor for a JDBC URL on {@link DataSource}, so it has to be asked for by a name the
- * implementation happens to use — which is exactly what went wrong: only {@code getURL} was probed, and
- * HikariCP, the pool anyone would actually deploy, calls it {@code getJdbcUrl}. Every pooled read model
- * therefore fell into the fallback and was reported {@code SHARED}, in-memory H2 included.
+ * implementation happens to use, and the pools disagree about that name.
  * <p>
  * The fakes here stand in for the pools rather than depending on them, so the test says what it is about
  * and needs no database.
@@ -50,7 +48,7 @@ class SqlReadModelStorageDetectionTest {
 
 	@Test
 	void anInMemoryH2BehindAPoolThatNamesItsUrlGetterGetJdbcUrlIsEphemeral ( ) {
-		// HikariCP, c3p0 — the case that was misreported as SHARED
+		// HikariCP, c3p0
 		assertEquals(ReadModelStorage.EPHEMERAL, storageOf(new GetJdbcUrlDataSource("jdbc:h2:mem:readmodels")));
 	}
 
@@ -84,7 +82,7 @@ class SqlReadModelStorageDetectionTest {
 	/**
 	 * And when even that fails there is nothing left to go on. SHARED is the deliberate answer: a shared
 	 * read model mistaken for an ephemeral one reprojects its whole history into a durable database on
-	 * every start.
+	 * every start, which the other way round does not.
 	 */
 	@Test
 	void aDataSourceThatCannotBeAskedAtAllIsAssumedShared ( ) {

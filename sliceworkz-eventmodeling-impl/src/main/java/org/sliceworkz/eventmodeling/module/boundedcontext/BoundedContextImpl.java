@@ -65,12 +65,11 @@ import io.micrometer.core.instrument.MeterRegistry;
  * The bounded context itself.
  * <p>
  * It implements {@link BoundedContext} rather than only the capability interfaces that make it up, and
- * that is load bearing rather than tidiness. A context is handed to the caller as a {@link java.lang.reflect.Proxy}
- * over their own context interface, and the proxy forwards by {@code Method.invoke(this, args)} — which
- * requires this object to be an instance of the interface <em>declaring</em> the method. {@link BoundedContext#name()}
- * is declared on {@code BoundedContext} and nowhere else, so with only the capabilities implemented here
- * every call to {@code name()} through a proxied context failed with an {@code IllegalArgumentException}
- * out of the reflection layer, saying only that the object was not an instance of the declaring class.
+ * that is load bearing rather than tidiness. A context is handed to the caller as a
+ * {@link java.lang.reflect.Proxy} over their own context interface, and the proxy forwards by
+ * {@code Method.invoke(this, args)} — which requires this object to be an instance of the interface
+ * <em>declaring</em> the method. {@link BoundedContext#name()} is declared on {@code BoundedContext} and
+ * nowhere else, so anything this class does not implement is a method no proxied context can call.
  */
 public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, UnboundedReadModelCapability<DOMAIN_EVENT_TYPE> {
 

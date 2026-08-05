@@ -62,8 +62,7 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 
 	/**
 	 * Events that have gone by since the last snapshot of this aggregate: what a load replayed on top of
-	 * the snapshot it started from, plus everything raised since. Reset to zero whenever a snapshot is
-	 * written, which is the only thing that makes it mean what it says.
+	 * the snapshot it started from, plus everything raised since. Reset to zero whenever one is written.
 	 */
 	private long eventsSinceLastSnapshot = 0;
 
@@ -105,23 +104,14 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	@Override
 	public void raiseEvents(List<DOMAIN_EVENT_TYPE> events) {
 		var eventAppender = eventAppender();
-		// forEach, not stream().map(): a mapped stream that nobody consumes never runs, so this used to
-		// hand the appender nothing and append an empty batch - silently, since an empty append raises
-		// no error and the aggregate had already been told the events by the caller building the list
 		events.forEach(eventAppender::add);
 		EventReference lastEventReference = eventAppender.append();
 		saveSnapshotIfNeeded(lastEventReference, events.size());
 	}
 
 	/**
-	 * Writes a snapshot once enough events have gone by since the last one.
-	 * <p>
-	 * The events just appended are counted in, and the count is reset when a snapshot is written. Both
-	 * halves were missing: the count was only ever set by a load, so on an aggregate that is kept and
-	 * used rather than re-loaded before every change it stood still. A freshly loaded aggregate then sat
-	 * one event below any threshold above 1 and never snapshotted however long it was used, while one
-	 * loaded just under its threshold cleared it on every raise and wrote a snapshot per event, for as
-	 * long as the instance was held.
+	 * Writes a snapshot once enough events have gone by since the last one, counting in the events just
+	 * appended and starting the count again whenever one is written.
 	 */
 	private void saveSnapshotIfNeeded (EventReference lastEventReference, int appendedEvents) {
 		if ( lastEventReference != null ) {

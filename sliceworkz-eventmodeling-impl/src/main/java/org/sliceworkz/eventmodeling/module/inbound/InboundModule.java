@@ -166,15 +166,11 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	/**
 	 * Appends an inbound event to the inbound stream and lets the projector processors translate it.
 	 * <p>
-	 * The append carries no {@link AppendCriteria}, so there is no consistency boundary to violate and
-	 * nothing here can raise an {@link OptimisticLockingException}. De-duplication is not an exception
-	 * either: storage silently ignores an event whose idempotency key it has already seen on this
-	 * stream, and returns an empty result. This used to be wrapped in a {@code catch
-	 * (OptimisticLockingException)} annotated "idempotency check kicked in", which was never how the
-	 * de-duplication reached us — it caught nothing on the path it was written for, while standing
-	 * ready to swallow a genuine locking failure and lose the inbound event without a word.
+	 * The append carries no {@link AppendCriteria}, so there is no consistency boundary to violate.
+	 * De-duplication is not an exception either: storage silently ignores an event whose idempotency key
+	 * it has already seen on this stream, and returns an empty result.
 	 * <p>
-	 * A storage failure therefore reaches the caller, which is the only party that can decide whether
+	 * A failure to append therefore reaches the caller, which is the only party that can decide whether
 	 * to retry: nothing else in this framework has a record that the event ever arrived.
 	 */
 	public void incoming (INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {

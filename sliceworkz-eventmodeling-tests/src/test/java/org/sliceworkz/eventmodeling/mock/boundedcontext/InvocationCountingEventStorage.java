@@ -49,8 +49,7 @@ public class InvocationCountingEventStorage implements EventStorage {
 
 	/**
 	 * Makes every subsequent append fail, so a caller's handling of a storage that will not take an
-	 * event can be pinned down. No backend can be talked into failing on demand, which is why this is
-	 * here rather than in the fixture.
+	 * event can be pinned down. No real backend can be talked into failing on demand.
 	 */
 	public void failAppendsWith ( RuntimeException failure ) {
 		this.appendFailure = failure;

@@ -35,9 +35,8 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
  * <p>
  * Choosing what a command decides on — {@code decisionModels(...)}, or {@code noDecisionModels()} when
  * it decides on nothing — is what produces the {@code CommandResult} its events are raised on, so a
- * command that does neither has no consistency boundary to append under and nothing to append. It used
- * to surface as a NullPointerException from inside the framework, one call after the mistake, naming
- * neither the command nor what was missing.
+ * command that does neither has no consistency boundary to append under and nothing to append. The
+ * failure has to name the command at fault and the line missing from it.
  * <p>
  * Plain {@code @Test}: nothing here reaches storage.
  */

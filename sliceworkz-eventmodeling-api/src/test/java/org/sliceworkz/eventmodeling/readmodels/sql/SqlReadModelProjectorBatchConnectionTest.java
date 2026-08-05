@@ -38,13 +38,8 @@ import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * A SQL read model hands its pooled connection back at the end of every batch, including the batches
- * that go wrong.
- * <p>
- * The commit and the close used to be consecutive statements in one {@code try}, so a commit that threw
- * skipped the close and left the field pointing at an open connection that the next batch overwrote.
- * That is one leaked connection per failed commit, and a projection that cannot commit is precisely the
- * one that keeps trying — so the pool drains and the read model's real problem arrives disguised as a
- * connection-acquisition timeout.
+ * that go wrong. A projection that cannot commit is precisely the one that keeps trying, so a
+ * connection kept back on that path drains the pool.
  */
 class SqlReadModelProjectorBatchConnectionTest {
 
@@ -82,10 +77,7 @@ class SqlReadModelProjectorBatchConnectionTest {
 		assertEquals(1, dataSource.closed(), "the connection goes back even though the rollback failed");
 	}
 
-	/**
-	 * And the failed batch does not hold on to it: the next batch takes a fresh connection and the
-	 * failed one is not lost, which is what turns a single failure into a drained pool.
-	 */
+	/** And repeated failures do not accumulate: every connection handed out still comes back. */
 	@Test
 	void batchesThatKeepFailingToCommitDoNotAccumulateConnections ( ) {
 		CountingDataSource dataSource = new CountingDataSource(true, false);

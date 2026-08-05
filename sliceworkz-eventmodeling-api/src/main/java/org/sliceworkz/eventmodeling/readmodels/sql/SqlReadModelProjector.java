@@ -94,12 +94,8 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 	 * The JDBC URL behind a DataSource, or {@code null} when it cannot be established.
 	 * <p>
 	 * There is no accessor for this on {@link DataSource} itself, so the URL has to be asked for by a
-	 * name the implementation happens to use. Probing only {@code getURL} — the name the JDK's own
-	 * {@code JdbcDataSource} and H2's use — missed the pooled case entirely: HikariCP calls it
-	 * {@code getJdbcUrl}, so every Hikari-pooled read model, in-memory H2 included, fell into the
-	 * fallback and was classified {@code SHARED}. That is silent and it matters: the read model becomes
-	 * leader-only, so no other instance ever fills its own copy, and its bookmark stops being dropped
-	 * at startup.
+	 * name the implementation happens to use — and pools disagree about that name, so probing one of
+	 * them is not enough.
 	 * <p>
 	 * The known getter names are tried first because they need no database. Only when none of them
 	 * exists is a connection taken and asked for {@link java.sql.DatabaseMetaData#getURL()}, which is
@@ -218,9 +214,9 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 			connection.setAutoCommit(false);
 			batchConnection = connection;
 		} catch (SQLException e) {
-			// setAutoCommit is the one that realistically fails here, and it fails on a connection we
-			// have already taken from the pool - so it is closed rather than left to the garbage
-			// collector, and the field is not published for a batch that is not going to run
+			// setAutoCommit fails on a connection already taken from the pool, so it is closed here
+			// rather than left to the garbage collector, and the field is not published for a batch
+			// that is not going to run
 			closeQuietly(connection);
 			throw new RuntimeException("Failed to start batch transaction", e);
 		}
@@ -237,13 +233,9 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 	}
 
 	/**
-	 * Ends the batch transaction and hands the connection back, whether or not ending it worked.
-	 * <p>
-	 * The commit and the close used to be consecutive statements inside one try, so a commit that threw
-	 * skipped the close and left {@code batchConnection} pointing at an open connection that the next
-	 * {@code beforeBatch} then overwrote. That leaks one pooled connection per failed commit — and a
-	 * projection failing to commit is exactly the situation that repeats, so the pool drains and the
-	 * read model's real problem is buried under connection-acquisition timeouts.
+	 * Ends the batch transaction and hands the connection back, whether or not ending it worked. A
+	 * projection that cannot commit is one that keeps trying, so a connection held on to here would
+	 * drain the pool and bury the read model's real problem under acquisition timeouts elsewhere.
 	 */
 	private void endBatch(BatchEnding ending, String failureMessage) {
 		Connection connection = batchConnection;

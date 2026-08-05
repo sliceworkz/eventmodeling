@@ -34,10 +34,9 @@ public class BoundedContextNameTest extends AbstractMockDomainTest {
 
 	/**
 	 * {@code name()} is declared on {@link BoundedContext} and on none of the capability interfaces, and
-	 * a built context is handed back as a proxy that forwards through {@code Method.invoke}. That call
-	 * requires the target to be an instance of the interface declaring the method, so while the
-	 * implementation implemented only the capabilities, every call here failed with an
-	 * {@code IllegalArgumentException} from the reflection layer rather than returning the name.
+	 * a built context is handed back as a proxy that forwards through {@code Method.invoke} — which
+	 * requires the target to be an instance of the interface declaring the method. So this asserts the
+	 * implementation implements {@code BoundedContext} itself, not merely a method called {@code name}.
 	 */
 	@Test
 	void aBoundedContextReportsTheNameItWasBuiltWith ( ) {

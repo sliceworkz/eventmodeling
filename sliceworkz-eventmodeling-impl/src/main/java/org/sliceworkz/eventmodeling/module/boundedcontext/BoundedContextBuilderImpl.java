@@ -47,6 +47,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextListener;
 import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
+import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
@@ -370,12 +371,53 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		logEventTypes("INBOUND", inboundEventRootType);
 		logEventTypes("OUTBOUND", outboundEventRootType);
 
+		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage, meterRegistry);
+
+		// Everything from here on belongs to a context that does not exist yet. A builder that throws
+		// hands the caller nothing -- no context, so no terminate() and no shutdown hook -- so whatever
+		// was constructed by then is unreachable and would never be released. This is not a hypothetical
+		// path: the four registries reject a duplicate or anonymous component name from the middle of
+		// the sequence below, and the modules built before the rejection have already subscribed their
+		// processors to their streams, which the store holds until it is closed.
+		List<LifecycleCapability> constructed = new ArrayList<>();
+		try {
+			return assemble(returnType, eventStore, constructed);
+		} catch ( RuntimeException | Error failed ) {
+			releasePartiallyBuilt(constructed, eventStore, failed);
+			throw failed;
+		}
+	}
+
+	/**
+	 * Releases what a failed {@link #build()} had already constructed, attaching anything that goes
+	 * wrong here to the failure being reported rather than replacing it: the caller needs to see why
+	 * the build failed, not why the cleanup after it did.
+	 */
+	private static void releasePartiallyBuilt ( List<LifecycleCapability> constructed, EventStore eventStore, Throwable failure ) {
+		for ( int i = constructed.size() - 1; i >= 0; i-- ) { // reverse order of construction
+			try {
+				constructed.get(i).terminate();
+			} catch ( RuntimeException | Error cleanupFailed ) {
+				failure.addSuppressed(cleanupFailed);
+			}
+		}
+		try {
+			// ours, built over the storage we were handed -- so it is ours to close, and closing it
+			// releases the streams the processors above subscribed to. The storage stays open: it came
+			// from outside and can back other contexts.
+			eventStore.close();
+		} catch ( RuntimeException | Error cleanupFailed ) {
+			failure.addSuppressed(cleanupFailed);
+		}
+	}
+
+	private C assemble ( Class<?> returnType, EventStore eventStore, List<LifecycleCapability> constructed ) {
+
 		EventStream<Object> readAllInStoreEventStream;
 		EventStream domainEventStream;
 		EventStream inboundEventStream;
 		EventStream outboundEventStream;
 
-		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage, meterRegistry);
 		domainEventStream = historicalDomainEventRootType != null
 			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_DOMAIN), domainEventRootType, historicalDomainEventRootType)
 			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_DOMAIN), domainEventRootType);
@@ -435,16 +477,23 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		// model's own storage class, see ReadModelModule.createProjectorProcessors
 		Collection<ReadModelWithMetaData> eventuallyConsistentReadModels = longLivedReadModelSpecs.stream().map(LongLivedReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 
+		// each module is recorded as soon as it exists, so a failure in the next one still finds it --
+		// see releasePartiallyBuilt
 		Collection<Translator> translators = translatorSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
 		InboundModule im = new InboundModule(name, inboundEventStream, translators, instance, meterRegistry);
+		constructed.add(im);
 
 		Collection<Dispatcher> dispatchers = dispatcherSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
 		OutboundModule om = new OutboundModule(name, outboundEventStream, dispatchers, instance, meterRegistry);
+		constructed.add(om);
 
 		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, meterRegistry, eventEmitter);
+		constructed.add(am);
 
 		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentReadModels, instance, meterRegistry, eventEmitter);
+		constructed.add(rmm);
 		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, outboundEventStream, meterRegistry, eventEmitter);
+		constructed.add(dcb);
 
 		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, meterRegistry, eventEmitter);
 
@@ -456,6 +505,13 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
 						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry, adapterRegistry);
+
+		// From here the context owns the modules, and it is the only thing that can release them
+		// completely: its constructor registered a JVM shutdown hook holding it, which only its own
+		// terminate() deregisters. So a failure in the little that is left must go through the context
+		// rather than through the modules directly.
+		constructed.clear();
+		constructed.add(bc);
 
 		// this is only possible after creation
 		am.setCapabilitiesDelegate(bc);

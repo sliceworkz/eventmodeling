@@ -110,6 +110,42 @@ Key concepts:
 - **Three event types**: Domain events (internal), Inbound events (received), Outbound events (published)
 - **Instance**: Deployment/tenant identifier created via `InstanceFactory.determine()`
 
+**`build()` assembles, `start()` runs — and the processor threads follow that split:**
+- **The threads are created by `start()`, not by `build()`.** `ProcessorThreadManager` used to submit
+  every processor from its constructor, and the module constructors run inside `build()`, so a context
+  that was built and never started still had a thread per registered read model, automation, translator
+  and dispatcher. Nothing was gained by it: a processor is constructed `STOPPED` and does no work until
+  `start()` says so — `AutomationProcessor`'s constructor says as much, "don't run before start() or
+  things might not have been initialized in the bounded context impl", which was a `volatile` flag
+  holding live threads off a half-built context. Now the threads do not exist to be held off
+- **An idle processor is not free, which is what made this worth moving.** Both processor loops park in
+  `Object.wait()` inside a `synchronized` block, and on Java 21 a monitor wait pins the carrier, so every
+  parked virtual thread holds a platform thread. Measured before the change: 16 ephemeral read models
+  took a JVM from 8 platform threads to 26 at `build()`, with the context never started
+- **The processors are started before their threads are submitted**, which is load bearing rather than
+  incidental. `Processor.start()` signals a thread that may not be parked yet, and the stopped branch of
+  each loop re-checks only its terminating flag before waiting — so a signal arriving first is lost and
+  the processor sits out a full poll interval (10s, or 30s while stopped) before noticing it was started.
+  Starting first means the loop's very first pass reads a processor that is already running. The threads
+  are submitted once, so the `stop()` → `start()` restart path still just signals the parked ones
+- **A build that fails releases what it had made.** `build()` hands the caller nothing when it throws —
+  no context, so no `terminate()` and no shutdown hook — so anything constructed by then is unreachable.
+  This is an ordinary path, not a corner: all four registries reject a duplicate or anonymous component
+  name from the middle of the sequence, and the modules built before the rejection have already
+  subscribed their processors to their streams, which the event store holds until it is closed. `build()`
+  now terminates the modules it got through and closes the store it opened, in reverse order, with any
+  cleanup failure attached to the build failure as a **suppressed** exception rather than replacing it.
+  The storage is untouched, as everywhere else — it came from outside
+- **`build()` still does event-store I/O**, and this change does not address that: a `ProjectorProcessor`
+  drops the stale bookmark of an `EPHEMERAL` read model and reads a durable one's own bookmark from its
+  constructor, so building a context costs a round trip or two per read model before anyone asked it to
+  run. Making `build()` genuinely side-effect-free means moving that (and the `subscribe`) into the
+  processor's own thread, which is a larger change
+- `ProcessorThreadManagerTest` pins the timing, the start-before-submit order, the single submission
+  across a restart, and that terminating a never-started manager neither throws nor leaves a later
+  `start()` able to put terminated processors back on threads. `FailedBuildReleasesWhatItBuiltTest` pins
+  the cleanup, by counting what the failed build subscribed to the storage against what it gave back
+
 ### Feature Slice Pattern
 
 Features are organized as vertical slices:

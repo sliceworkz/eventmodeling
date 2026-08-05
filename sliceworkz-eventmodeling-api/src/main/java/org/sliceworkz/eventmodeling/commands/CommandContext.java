@@ -21,6 +21,20 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 
 public interface CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
+	/**
+	 * Projects a live read model and hands it to the command, for auxiliary lookups only.
+	 * <p>
+	 * <strong>A read done this way is not part of the command's consistency boundary.</strong> The
+	 * boundary the command appends under is built from its decision models alone, so the events this
+	 * read model was projected from are not covered by the optimistic-locking check: one of them can be
+	 * superseded between this read and the append, and the append still succeeds. A command that reads
+	 * nothing but this and then calls {@link #noDecisionModels()} appends with no consistency check at
+	 * all.
+	 * <p>
+	 * So do not decide on what this returns. Anything a raised event depends on belongs in a
+	 * {@link DecisionModel} passed to {@link #decisionModels(DecisionModel...)}, which is what puts it
+	 * inside the boundary.
+	 */
 	<T> T read ( Class<? extends ReadModel<? extends CONSUMED_EVENT_TYPE>> readModelClass, Object... constructorParams);
 	
 	CommandResult<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> noDecisionModels ( );

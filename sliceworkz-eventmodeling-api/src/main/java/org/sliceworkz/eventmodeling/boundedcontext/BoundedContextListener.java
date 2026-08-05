@@ -33,6 +33,22 @@ import org.sliceworkz.eventstore.events.EphemeralEvent;
  * <p>
  * <strong>Threading:</strong> the listener is invoked synchronously on the thread performing the
  * operation. Implementations must be fast and thread-safe, or buffer/offload work asynchronously.
+ * <p>
+ * <strong>A failure here never fails the operation being observed.</strong> An exception escaping
+ * {@link #on(EphemeralEvent)} is contained by the kernel, logged at ERROR and counted on the
+ * {@code sliceworkz.eventmodeling.listener.failure} meter; the command, automation batch or
+ * projection that produced the event carries on exactly as if no listener were registered. This
+ * matters most where the event is emitted <em>after</em> the work is already durable — a
+ * {@link BoundedContextEvent.CommandExecuted} whose delivery threw would otherwise report a
+ * succeeded command as failed and invite the caller to run it twice.
+ * <p>
+ * The corollary is that <strong>nothing replays what a failing listener missed</strong>: the event
+ * is dropped, and the next one is delivered normally. A listener that must not lose events is
+ * responsible for its own durability - buffer and retry inside the implementation, or accept that
+ * the stream it writes is a best-effort observability record rather than a complete one.
+ * <p>
+ * {@link Error} is deliberately not contained, matching the event store's rule for its own append
+ * listeners: an exhausted heap is not a listener problem to absorb.
  *
  * @see StreamAppendingBoundedContextListener
  * @see LoggingBoundedContextListener

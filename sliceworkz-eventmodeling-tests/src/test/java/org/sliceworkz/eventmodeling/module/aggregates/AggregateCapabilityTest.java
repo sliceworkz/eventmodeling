@@ -114,6 +114,29 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		assertThrows(OptimisticLockingException.class, ()-> bo123.doSomething()); // this should be behind
 	}
 	
+	/** Every event handed to {@code raiseEvents} is appended, and the aggregate is told about each. */
+	@ForEachBackend
+	void testAggregateRaisingSeveralEventsAtOnce ( ) {
+
+		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage()).getEventStream(EventStreamId.anyContext().withPurpose("domain"));
+
+		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 0);
+
+		MockAggregate bo = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
+		bo.doThreeThings();
+
+		List<? extends Event<MockDomainEvent>> all = allStream.query(EventQuery.matchAll()).toList();
+		assertEquals(3, all.size(), "all three raised events should have been appended");
+		all.forEach(event -> assertTrue(event.tags().containsAll(Tags.of("businessObject", "123"))));
+
+		assertEquals(3, bo.getCounter(), "the aggregate should have been told about each appended event");
+
+		// and the appender's lock reference moved with them, so the same instance can carry on
+		bo.doSomething();
+		assertEquals(4, bo.getCounter());
+		assertEquals(4, allStream.query(EventQuery.matchAll()).toList().size());
+	}
+
 	@ForEachBackend
 	void testAggregateSnapshots ( ) {
 		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 5);
@@ -137,6 +160,24 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		assertEquals(500, a.getCounter());
 		assertEquals(100, snapshotStorage.getSaveInvokes());
 		assertEquals(0, a.getCounterOnTopOfSnapshot()); // last append should also trigger a saveSnapshot
+	}
+
+	/**
+	 * An aggregate that is kept and used, rather than re-loaded before every change, still snapshots at
+	 * the rate it was configured for: the events it raises itself count towards the threshold.
+	 */
+	@ForEachBackend
+	void testAggregateSnapshotsWhileItIsHeldRatherThanReloaded ( ) {
+		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 5);
+
+		MockAggregate a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
+
+		for ( int i = 0; i < 20; i++ ) {
+			a.doSomething(i); // same instance throughout: never re-loaded
+		}
+
+		assertEquals(20, a.getCounter());
+		assertEquals(4, snapshotStorage.getSaveInvokes(), "20 events at a threshold of 5 is 4 snapshots");
 	}
 
 	@ForEachBackend
@@ -221,6 +262,10 @@ class MockAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<MockA
 	
 	public void doSomething ( int number ) {
 		ctx.raiseEvent(new FirstDomainEvent("test " + number));
+	}
+
+	public void doThreeThings ( ) {
+		ctx.raiseEvents(List.of(new FirstDomainEvent("one"), new FirstDomainEvent("two"), new FirstDomainEvent("three")));
 	}
 	
 	public int getCounter ( ) {

@@ -60,7 +60,11 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	private Tracing tracing;
 	private BoundedContextEventEmitter eventEmitter;
 
-	private long eventsStreamedForLoading = 0;
+	/**
+	 * Events that have gone by since the last snapshot of this aggregate: what a load replayed on top of
+	 * the snapshot it started from, plus everything raised since. Reset to zero whenever one is written.
+	 */
+	private long eventsSinceLastSnapshot = 0;
 
 	public AggregateContextImpl ( String boundedContext, Instance instance, String aggregateName, Tags identity, Aggregate<DOMAIN_EVENT_TYPE> aggregate, EventStream<DOMAIN_EVENT_TYPE> eventStream, EventReference lastEventReference, SnapshotStorage<Object> snapshotStorage, int snapshotThresholdEventCount, Counter counterSnapshotWrite, MeterRegistry meterRegistry, ConcurrentHashMap<String, Counter> domainEventCounters, Tracing tracing, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
@@ -100,16 +104,22 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	@Override
 	public void raiseEvents(List<DOMAIN_EVENT_TYPE> events) {
 		var eventAppender = eventAppender();
-		events.stream().map(eventAppender::add);
+		events.forEach(eventAppender::add);
 		EventReference lastEventReference = eventAppender.append();
 		saveSnapshotIfNeeded(lastEventReference, events.size());
 	}
 
+	/**
+	 * Writes a snapshot once enough events have gone by since the last one, counting in the events just
+	 * appended and starting the count again whenever one is written.
+	 */
 	private void saveSnapshotIfNeeded (EventReference lastEventReference, int appendedEvents) {
 		if ( lastEventReference != null ) {
-			if ( snapshotStorage != null && (eventsStreamedForLoading + appendedEvents) >= snapshotThresholdEventCount && aggregate instanceof SnapshotCapable<?> snapshotCapable) {
+			eventsSinceLastSnapshot += appendedEvents;
+			if ( snapshotStorage != null && eventsSinceLastSnapshot >= snapshotThresholdEventCount && aggregate instanceof SnapshotCapable<?> snapshotCapable) {
 				snapshotStorage.save(snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), lastEventReference);
 				counterSnapshotWrite.increment();
+				eventsSinceLastSnapshot = 0;
 			}
 		}
 	}
@@ -135,7 +145,7 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 			snapshotStorage.save(snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), metrics.until());
 			counterSnapshotWrite.increment();
 		} else {
-			eventsStreamedForLoading = projectorMetrics.eventsStreamed();
+			eventsSinceLastSnapshot = projectorMetrics.eventsStreamed();
 		}
 
 		eventEmitter.emit(new BoundedContextEvent.AggregateLoaded(boundedContext, aggregate.getClass().getSimpleName(), metrics, eventEmitter.sliceFor(aggregate.getClass())), tracing);

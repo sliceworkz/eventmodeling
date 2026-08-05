@@ -19,6 +19,9 @@ package org.sliceworkz.eventmodeling.module.inbound;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
@@ -30,9 +33,11 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent.SomeInboundEvent;
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Tag;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
+import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 public class InboundModuleTest  extends AbstractMockDomainTest {
@@ -118,6 +123,25 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 		boundedContext().incoming(e4, Tag.of("hash", String.valueOf(e4.hashCode())).toString());
 		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).toList().size());
 
+	}
+
+	/**
+	 * De-duplication reaches {@code incoming} as an empty result, never as an exception, so an exception
+	 * from the append is a genuine failure to store the event. Nothing else records that it arrived, so
+	 * the caller is the only party that can decide to retry and has to be told.
+	 */
+	@ForEachBackend
+	void testAnInboundEventThatCannotBeAppendedIsReportedToTheCaller ( ) {
+		EventStream<MockInboundEvent> inboundEvents = EventStoreFactory.get().eventStore(eventStorage()).getEventStream(EventStreamId.anyContext().withPurpose("inbound"));
+		int eventsBefore = inboundEvents.query(EventQuery.matchAll()).toList().size();
+
+		countingStorage.failAppendsWith(new OptimisticLockingException(EventFilter.matchAll(), Optional.empty()));
+
+		assertThrows(OptimisticLockingException.class,
+				() -> boundedContext().incoming(new SomeInboundEvent("test"), Tag.of("uniqueKey", "123").toString()));
+
+		// and it really was not stored, so treating this as "already known" would lose it
+		assertEquals(eventsBefore, inboundEvents.query(EventQuery.matchAll()).toList().size());
 	}
 
 	Mock createBoundedContext( ) {

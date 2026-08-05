@@ -268,7 +268,20 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		}
 	}
 
+	/**
+	 * The result of the command that ran against this context.
+	 * <p>
+	 * A command builds it by choosing what it decides on — {@code context.decisionModels(...)}, or
+	 * {@code context.noDecisionModels()} when it decides on nothing — and a command that does neither
+	 * never produces one. That is a mistake in the command rather than a state to carry on from: there
+	 * is no consistency boundary to append under and nothing to append.
+	 */
 	public CommandResultImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> getCommandResult ( ) {
+		if ( commandResult == null ) {
+			throw new IllegalStateException(
+					"command '%s' did not select its decision models: call context.decisionModels(...) with what it decides on, or context.noDecisionModels() when it decides on nothing - a command has to do one of the two, since that is what produces the CommandResult its events are raised on"
+						.formatted(tracing.command()));
+		}
 		return commandResult;
 	}
 

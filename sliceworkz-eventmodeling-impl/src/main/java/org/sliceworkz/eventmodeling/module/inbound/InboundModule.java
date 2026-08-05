@@ -163,15 +163,18 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 				io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName, "channel", channel)));
 	}
 
+	/**
+	 * Appends an inbound event to the inbound stream and lets the projector processors translate it.
+	 * <p>
+	 * The append carries no {@link AppendCriteria}, so there is no consistency boundary to violate.
+	 * De-duplication is not an exception either: storage silently ignores an event whose idempotency key
+	 * it has already seen on this stream, and returns an empty result.
+	 * <p>
+	 * A failure to append therefore reaches the caller, which is the only party that can decide whether
+	 * to retry: nothing else in this framework has a record that the event ever arrived.
+	 */
 	public void incoming (INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
-		// just append to the inbound-stream and let the projector processors do their thing...
-
-		AppendCriteria appendCriteria = AppendCriteria.none();
-		try {
-			inboundEventStream.append(appendCriteria, Collections.singletonList(tracing.storeOn(Event.of(event, Tags.none()).withIdempotencyKey(idempotencyKey))));
-		} catch (OptimisticLockingException e) {
-			// idempotency check kicked in.  assume we already know this event
-		}
+		inboundEventStream.append(AppendCriteria.none(), Collections.singletonList(tracing.storeOn(Event.of(event, Tags.none()).withIdempotencyKey(idempotencyKey))));
 	}
 
 	/**

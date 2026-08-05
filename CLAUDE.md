@@ -564,6 +564,32 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 - Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `SqlReadModelTest`)
 - Use JUnit 5 (Jupiter)
 
+**The published base classes run the same matrix, and that is the point of them being the same mechanism:**
+- `sliceworkz-eventmodeling-testing`'s `AbstractBoundedContextTest` — the base of `CommandTest`,
+  `AggregateTest` and `LiveModelTest` — extends the eventstore's `AbstractEventStoreTest`, exactly as
+  this suite's own `mock.boundedcontext.AbstractBoundedContextTest` does. So a user annotates a scenario
+  `@ForEachBackend` and it runs against every `EventStoreBackend` they registered, and a plain `@Test`
+  runs once against the in-memory store. Same annotations, same service file, same
+  `-Deventstore.testing.backends=` narrowing as here
+- **It used to build an `InMemoryEventStorage` of its own**, which made the framework's matrix
+  unreachable from outside this repository: a user testing a command against the PostgreSQL they deploy
+  on had to abandon the base classes and wire a bounded context by hand. The two base classes had drifted
+  into different mechanisms, and only the unpublished one could reach the backends — the storage-specific
+  outcomes these tests exist to catch (DCB conflicts under a real advisory lock, tag round trips through
+  `text[]`, ordering where position and transaction disagree) were the ones a user could not reach
+- **A plain `@Test` behaves exactly as before**, deliberately: `createEventStorage()` falls back to the
+  in-memory store when no backend is bound, so every test written against these classes keeps running
+  with nothing to change, and `@ForEachBackend` is the opt-in
+- What a user still has to supply is what this module supplies too — the service file plus the storage
+  the named backends build on (`sliceworkz-eventstore-infra-postgres` and friends are `<optional>` in
+  `sliceworkz-eventstore-testing`, so they are not inherited). `InMemoryBackend` needs nothing further.
+  See `sliceworkz-eventmodeling-testing/README.md`
+- `CommandTestRunsOnEveryBackendTest` and `LiveModelTestRunsOnEveryBackendTest` are this repository's
+  copy of what a user gets: they extend the *published* bases, run `@ForEachBackend` over the whole
+  matrix, and keep one plain `@Test` to pin the in-memory default. Without the wiring they would run
+  in-memory only — which is precisely the failure that went unnoticed, since nothing about a green
+  in-memory run says the other backends were never asked
+
 ## EventStore Integration
 
 The framework depends on the separate `sliceworkz-eventstore` library:

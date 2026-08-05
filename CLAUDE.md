@@ -341,6 +341,46 @@ features/
 - Implement `Dispatcher<OUTBOUND_EVENT_TYPE>`
 - Implement outbox pattern for publishing events
 
+**BoundedContextListener — observability that cannot fail the work it observes:**
+- Register one on the builder (`.listener(...)`) to receive every `BoundedContextEvent` the kernel
+  produces. `StreamAppendingBoundedContextListener` appends them to a stream, which means the listener
+  does I/O on the caller's thread and can fail exactly like any other event-store call
+- **A listener failure is never the caller's failure, and never silent.** `BoundedContextEventEmitter`
+  contains every delivery: the exception is caught, counted on
+  `sliceworkz.eventmodeling.listener.failure` (tagged `context` and `event`) and logged at ERROR, and
+  the operation carries on as if no listener were registered. Unguarded, the throw was not merely noise
+  at three call sites:
+  - `CommandExecuted` is emitted **after** the command's domain events are durably appended, so a
+    throw reported a command that had succeeded as failed — and the caller's natural response to that
+    is to execute it again. Worse, it landed in `DCBModule`'s own `catch ( RuntimeException )`, which
+    then emitted `CommandFailed` for that same successful command: the observability record said the
+    opposite of what happened
+  - In `AutomationProcessor`, `AutomationProcessed` is emitted **before** the processor bookmarks the
+    events the batch produced, so a throw skipped the bookmark and the processor re-read a todo list it
+    had already worked
+  - A projector's run listener (`EventuallyConsistentReadModelUpdated`) throws *inside* the projection
+    loop rather than beside it
+- The two processor loops have a catch-all of their own, so they degraded into an error-and-retry cycle
+  rather than dying — which is exactly why containment belongs at the emitter: a loop's catch-all cannot
+  tell a broken listener apart from a broken projection, and answers both by abandoning the round
+- **`Error` is deliberately not caught**, matching the eventstore's rule for its own append listeners:
+  an exhausted heap is not a listener problem to absorb
+- **Nothing replays what a failing listener missed.** The event is dropped and the next one is delivered
+  normally, so the stream a listener writes is a best-effort record. A listener that must not lose
+  events buffers and retries inside its own implementation
+- **The log is throttled, the meter never is.** This sits on the hot path of every command, so a
+  listener broken by a storage outage fails once per command and a stack trace each would bury the cause
+  under its own symptoms. The first failure of a run logs in full; identical repeats are counted and
+  summarised at most once a minute carrying the suppressed count; a different exception type reports
+  immediately; recovery logs a WARN naming how many events were lost. Alert on the meter, which keeps
+  the exact rate
+- **A listener that always throws does not stop the context coming up.** Failing the boot would turn a
+  transient blip in whatever the listener writes to into an outage of the application it only observes
+- `BoundedContextListenerFailureTest` pins all of this down: a command whose `CommandExecuted` delivery
+  throws still appends and still returns its reference, is never reported as `CommandFailed`, the
+  delivery after a failing one still arrives, every failure is counted, and the projector and automation
+  both keep making progress
+
 ## Event Modeling Core Templates
 
 The framework supports the 4 Event Modeling patterns:

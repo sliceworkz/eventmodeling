@@ -429,7 +429,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			LOGGER.warn("no features rootPackage");
 		}
 
-		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices, sliceMembers));
+		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices, sliceMembers), name, meterRegistry);
 
 		// how each of these is projected (every instance or a single leader) follows from the read
 		// model's own storage class, see ReadModelModule.createProjectorProcessors

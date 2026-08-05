@@ -26,6 +26,7 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
+import org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.projection.Projector;
@@ -67,7 +68,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 			Projection<EVENT_TYPE> projection,
 			ProcessorMode processorMode,
 			Instance instance ) {
-		this(processorIdentification, eventSource, projection, processorMode, instance, null);
+		this(processorIdentification, eventSource, projection, processorMode, instance, null, null);
 	}
 
 	public ProjectorProcessor (
@@ -77,6 +78,24 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 			ProcessorMode processorMode,
 			Instance instance,
 			RunListener runListener ) {
+		this(processorIdentification, eventSource, projection, processorMode, instance, runListener, null);
+	}
+
+	/**
+	 * @param ownBookmark the projection's own record of how far it has come, when it keeps one
+	 *                    alongside the state it projects. Where present it decides where this
+	 *                    processor resumes, and the bookmark in the event store is not consulted —
+	 *                    see {@link SelfBookmarkingProjection}. {@code null} for a projection that
+	 *                    has no such record, which is every processor but a durable read model's
+	 */
+	public ProjectorProcessor (
+			ProcessorIdentification processorIdentification,
+			EventSource<EVENT_TYPE> eventSource,
+			Projection<EVENT_TYPE> projection,
+			ProcessorMode processorMode,
+			Instance instance,
+			RunListener runListener,
+			SelfBookmarkingProjection ownBookmark ) {
 
 		this.processorIdentification = processorIdentification;
 		this.originalProcessorMode = processorMode;
@@ -89,14 +108,33 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 			eventSource.removeBookmark(processorIdentification.toString());
 		}
 
-		this.projector = Projector.from(eventSource)
-				.towards(projection)
-				.bookmarkProgress()
+		Projector.Builder<EVENT_TYPE> builder = Projector.from(eventSource).towards(projection);
+
+		if ( ownBookmark != null ) {
+			// The projection wrote its position and its state in one transaction, so its position is
+			// the only one that cannot disagree with what it holds. Resume from that, and read the
+			// event store's bookmark not at all -- an absent position means "nothing is projected",
+			// and falling back would hand an empty read model a bookmark describing rows it lost.
+			EventReference resumeFrom = ownBookmark.resumeFrom().orElse(null);
+			LOGGER.info("'{}' keeps its own bookmark, resuming from {}", processorIdentification,
+					resumeFrom == null ? "the beginning of the stream" : resumeFrom);
+			builder = builder.startingAfter(resumeFrom)
+					.bookmarkProgress()
+						.withReader(processorIdentification.toString())
+						.withTags(processorIdentification.toTags(instance))
+						// written, never read: the event store bookmark stays as the record an
+						// operator and the dashboard read, and lags the truth by at most one batch
+						.readOnManualTriggerOnly()
+						.done();
+		} else {
+			builder = builder.bookmarkProgress()
 					.withReader(processorIdentification.toString())
 					.withTags(processorIdentification.toTags(instance))
 					.readBeforeFirstExecution()
-					.done()
-				.build();
+					.done();
+		}
+
+		this.projector = builder.build();
 
 		eventSource.subscribe(this);
 	}

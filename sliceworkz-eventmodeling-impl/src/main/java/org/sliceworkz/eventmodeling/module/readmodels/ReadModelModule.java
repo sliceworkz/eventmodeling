@@ -42,6 +42,7 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -169,10 +170,22 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				processorModeFor(readModelStorage),
 				instance,
-				ecRunListener(rm, storage)));
+				ecRunListener(rm, storage),
+				ownBookmarkOf(rm)));
 		});
 
 		return result;
+	}
+
+	/**
+	 * A read model that records its position alongside the state it projects, or {@code null}.
+	 * <p>
+	 * Resolved from the read model itself rather than from the {@link ReadModelAdapter} wrapping it:
+	 * the adapter is a metrics decorator around every read model alike and cannot answer for one of
+	 * them without answering for all.
+	 */
+	private static SelfBookmarkingProjection ownBookmarkOf ( ReadModelWithMetaData<?> readModel ) {
+		return readModel instanceof SelfBookmarkingProjection selfBookmarking ? selfBookmarking : null;
 	}
 
 	/**

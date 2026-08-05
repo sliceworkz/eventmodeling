@@ -180,10 +180,17 @@ public abstract class SqlReadModelTest<T> {
 		/**
 		 * Project one or more domain events through the projector's batch lifecycle.
 		 * Events receive auto-incrementing positions and transaction numbers.
+		 * <p>
+		 * The batch is closed with the reference of the last event, exactly as the framework closes a
+		 * real one — which is what makes the projector record its own position here too, so a test
+		 * exercises the same path production does.
+		 *
+		 * @return the reference of the last event projected, or empty if none were given
 		 */
 		@SafeVarargs
-		protected final void projectEvents(T... events) {
+		protected final Optional<EventReference> projectEvents(T... events) {
 			projector.beforeBatch();
+			EventReference last = null;
 			for (T eventData : events) {
 				long pos = positionCounter.incrementAndGet();
 				long tx = txCounter.incrementAndGet();
@@ -198,8 +205,33 @@ public abstract class SqlReadModelTest<T> {
 					LocalDateTime.now(ZoneOffset.UTC)
 				);
 				projector.when(event);
+				last = ref;
 			}
-			projector.afterBatch(Optional.empty());
+			Optional<EventReference> lastReference = Optional.ofNullable(last);
+			projector.afterBatch(lastReference);
+			return lastReference;
+		}
+
+		/**
+		 * Where the projector under test says it would resume — the position it recorded alongside
+		 * the rows it wrote. Empty means it would replay the stream from the beginning.
+		 * <p>
+		 * Assert on this to prove a read model survives a restart without re-applying what it has
+		 * already applied. It reads committed state, so it answers for the batches that landed and
+		 * not for one that was rolled back.
+		 */
+		protected Optional<EventReference> projectedUpTo() {
+			return projector.resumeFrom();
+		}
+
+		/**
+		 * A second projector over the same database, as a restarted instance would build. Use it to
+		 * assert that re-projecting events the read model has already seen changes nothing.
+		 */
+		protected SqlReadModelProjector<T> restartedProjector() {
+			SqlReadModelProjector<T> restarted = createProjector(dataSource);
+			restarted.ensureTables();
+			return restarted;
 		}
 	}
 }

@@ -45,6 +45,17 @@
 			<groupId>org.sliceworkz</groupId>
 			<artifactId>sliceworkz-eventstore-api</artifactId>
 		</dependency>
+		<!--
+			Test scope only. SqlReadModelProjector writes SQL that has to survive a real database:
+			its bookmark upsert and its idempotent-write helpers were previously asserted against a
+			mock Connection, which cannot tell whether the statements parse, let alone whether the
+			freshness comparison selects the right rows.
+		-->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 	
 	<build>

@@ -20,9 +20,23 @@ package org.sliceworkz.eventmodeling.module.threading;
 public interface Processor extends Runnable {
 
 	void stop ( );
-	
+
 	void start ( );
 
 	void terminate ( ); // instruct the processor to finish what it's doing and exit
-	
+
+	/**
+	 * Flips the election result for this processor — see {@link ProcessorInstanceMode}. Called by the
+	 * leader elector, from its own thread, whenever this instance wins or loses the processor's
+	 * lease; never on the processing path. Implementations wake their parked loop so a promotion
+	 * takes effect immediately rather than after the next poll interval, and a demotion takes effect
+	 * at the current batch boundary (a pass under way completes; the next pass reads the new mode).
+	 * <p>
+	 * Default no-op, which is correct for a processor that runs on every instance and so has no
+	 * election result to hold.
+	 */
+	default void instanceMode ( ProcessorInstanceMode mode ) {
+		// a processor untouched by leader election ignores this
+	}
+
 }

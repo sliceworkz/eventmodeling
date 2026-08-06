@@ -32,7 +32,7 @@ import org.sliceworkz.eventmodeling.inbound.NoTranslatorRegisteredException;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
-import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
@@ -61,6 +61,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	private final List<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> translators;
 
 	private String boundedContext;
+	private Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> projectorProcessors;
 	private ProcessorThreadManager<INBOUND_EVENT_TYPE> processorThreadManager;
 	private Instance instance;
 
@@ -75,10 +76,15 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		this.meterRegistry = meterRegistry;
 		this.translators = new ArrayList<>(eventuallyConsistentTranslators);
 
-		Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> processors = createProjectorProcessors(eventuallyConsistentTranslators);
+		this.projectorProcessors = createProjectorProcessors(eventuallyConsistentTranslators);
 
-		this.processorThreadManager = new ProcessorThreadManager<INBOUND_EVENT_TYPE>(ProcessorIdentification.TYPE_TRANSLATOR, processors);
+		this.processorThreadManager = new ProcessorThreadManager<INBOUND_EVENT_TYPE>(ProcessorIdentification.TYPE_TRANSLATOR, projectorProcessors);
 
+	}
+
+	/** The processors of this module that run on a single elected leader, for the leader elector. */
+	public Collection<ProjectorProcessor<INBOUND_EVENT_TYPE>> leaderOnlyProcessors ( ) {
+		return projectorProcessors.stream().filter(p -> p.configuredMode() == ProcessorMode.RUNNING_ON_SINGLE_LEADER).toList();
 	}
 
 	public void setCapabilitiesDelegate ( AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> capabilities ) {

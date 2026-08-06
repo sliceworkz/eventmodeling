@@ -29,7 +29,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
-import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
@@ -44,6 +44,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 	private EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream;
 
 	private String boundedContext;
+	private Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> projectorProcessors;
 	private ProcessorThreadManager<OUTBOUND_EVENT_TYPE> processorThreadManager;
 	private Instance instance;
 
@@ -57,9 +58,14 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 		this.instance = instance;
 		this.meterRegistry = meterRegistry;
 
-		Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> processors = createProjectorProcessors(dispatchers);
+		this.projectorProcessors = createProjectorProcessors(dispatchers);
 
-		this.processorThreadManager = new ProcessorThreadManager<OUTBOUND_EVENT_TYPE>(ProcessorIdentification.TYPE_DISPATCHER, processors);
+		this.processorThreadManager = new ProcessorThreadManager<OUTBOUND_EVENT_TYPE>(ProcessorIdentification.TYPE_DISPATCHER, projectorProcessors);
+	}
+
+	/** The processors of this module that run on a single elected leader, for the leader elector. */
+	public Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> leaderOnlyProcessors ( ) {
+		return projectorProcessors.stream().filter(p -> p.configuredMode() == ProcessorMode.RUNNING_ON_SINGLE_LEADER).toList();
 	}
 
 	Collection<ProjectorProcessor<OUTBOUND_EVENT_TYPE>> createProjectorProcessors ( Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers ) {

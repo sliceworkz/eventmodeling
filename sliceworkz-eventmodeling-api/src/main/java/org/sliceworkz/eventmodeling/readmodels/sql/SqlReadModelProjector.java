@@ -66,9 +66,11 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  *   <li><b>The table is created for you</b>, by {@link #ensureTables()} and, failing that, on first
  *       use. It is not part of {@link #createTables()} and must not be declared there.</li>
  *   <li><b>{@link #project(Event)} still ought to be idempotent</b> wherever it cheaply can be. This
- *       mechanism covers the framework's own replay; it does not cover a second instance projecting
- *       the same shared read model, which leader election has yet to prevent. See
- *       {@link #updateOnce} and {@link #insertOnce}.</li>
+ *       mechanism covers the framework's own replay, and leader election keeps a second instance from
+ *       projecting a shared read model in steady state — but a failover window is at-least-once (a
+ *       leader paused past its lease can finish a batch the new leader repeats), and anything that
+ *       re-runs a projection deliberately replays too. See {@link #updateOnce} and
+ *       {@link #insertOnce}.</li>
  * </ul>
  *
  * @param <T> the domain event type
@@ -332,10 +334,11 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 	 * for the current event's reference columns.
 	 *
 	 * <p><b>Write it so that projecting the same event twice leaves the same result.</b> This class
-	 * bookmarks itself, so the framework will not replay a committed batch at it — but that
-	 * guarantee ends where the framework does. A second instance projecting the same shared read
-	 * model still applies every event again, because leader election is not implemented yet; so does
-	 * anything that re-runs a projection deliberately. An UPDATE that sets a column and a DELETE are
+	 * bookmarks itself, so the framework will not replay a committed batch at it — and leader
+	 * election keeps a second instance from projecting the same shared read model in steady state.
+	 * What remains is the failover window, which is at-least-once by design: a leader paused past
+	 * its lease can commit a batch the newly elected leader repeats, and anything that re-runs a
+	 * projection deliberately replays too. An UPDATE that sets a column and a DELETE are
 	 * idempotent already; an increment, an append and a plain INSERT are not, and
 	 * {@link #updateOnce} and {@link #insertOnce} are the two helpers that make them so.
 	 */

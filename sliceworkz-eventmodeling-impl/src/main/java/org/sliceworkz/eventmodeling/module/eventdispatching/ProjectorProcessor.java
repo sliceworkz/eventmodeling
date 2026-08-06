@@ -26,6 +26,8 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorInstanceMode;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projection;
@@ -49,17 +51,34 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	private static final long WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS = 10000;
 	private static final long WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS = 30000;
 
-	private final Projector<EVENT_TYPE> projector;
 	private final ProcessorIdentification processorIdentification;
 	private final ProcessorMode originalProcessorMode;
 	private final RunListener runListener;
+
+	// retained so a promotion can rebuild the projector from the current shared position
+	private final EventSource<EVENT_TYPE> eventSource;
+	private final Projection<EVENT_TYPE> projection;
+	private final Instance instance;
+	private final SelfBookmarkingProjection ownBookmark;
 
 	// opens once this processor has caught up with the stream for the first time after start(), so
 	// callers can block until the projection it feeds is usable (see awaitInitialProjection)
 	private final CountDownLatch initialProjectionDone = new CountDownLatch(1);
 
+	// rebuilt on promotion (see reseedProjector); volatile so eventsAppended, on the storage's
+	// notification thread, always compares against the projector the loop is actually running
+	private volatile Projector<EVENT_TYPE> projector;
+
 	private volatile ProcessorMode processorMode;
-	private volatile ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER;
+	// A leader-only processor starts as a standby and is promoted by the leader elector; a processor
+	// running on every instance has no election result to wait for. Termination is deliberately not a
+	// value of this enum: it is the separate flag below, so a standby can be shut down as itself.
+	private volatile ProcessorInstanceMode instanceMode;
+	private volatile boolean terminating;
+	// set on promotion: the in-memory cursor of the projector is stale the moment another instance
+	// has projected past it, so the first leader run must resume from the shared position, not from
+	// wherever this instance's projector happened to stop reading
+	private volatile boolean reseedProjector;
 	private volatile boolean potentiallyNewEventsAppended;
 
 	public ProjectorProcessor (
@@ -101,6 +120,13 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 		this.originalProcessorMode = processorMode;
 		this.processorMode = ProcessorMode.STOPPED;
 		this.runListener = runListener;
+		this.eventSource = eventSource;
+		this.projection = projection;
+		this.instance = instance;
+		this.ownBookmark = ownBookmark;
+		this.instanceMode = processorMode == ProcessorMode.RUNNING_ON_ALL_INSTANCES
+				? ProcessorInstanceMode.LEADER
+				: ProcessorInstanceMode.STANDBY;
 
 		// Clean up stale bookmarks for ephemeral storage before building the projector
 		if ( processorIdentification.storage() == Storage.EPHEMERAL ) {
@@ -108,6 +134,22 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 			eventSource.removeBookmark(processorIdentification.toString());
 		}
 
+		this.projector = createProjector();
+
+		eventSource.subscribe(this);
+	}
+
+	/**
+	 * Builds the projector at its resume point, re-reading that point from where it durably lives.
+	 * <p>
+	 * Called at construction, and again on every promotion from standby to leader: the projector
+	 * holds its cursor in memory, so after a spell as standby that cursor describes where <em>this
+	 * instance</em> stopped reading, while the previous leader has long projected past it. Rebuilding
+	 * re-runs the resume logic — the projection's own transactional position for a
+	 * {@link SelfBookmarkingProjection}, the shared event-store bookmark otherwise — so a fresh
+	 * leader continues where the deployment got to, not where this JVM did.
+	 */
+	private Projector<EVENT_TYPE> createProjector ( ) {
 		Projector.Builder<EVENT_TYPE> builder = Projector.from(eventSource).towards(projection);
 
 		if ( ownBookmark != null ) {
@@ -134,13 +176,16 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 					.done();
 		}
 
-		this.projector = builder.build();
-
-		eventSource.subscribe(this);
+		return builder.build();
 	}
 
 	public ProcessorIdentification identification ( ) {
 		return processorIdentification;
+	}
+
+	/** The mode this processor was registered with — what decides whether it is leader-electable. */
+	public ProcessorMode configuredMode ( ) {
+		return originalProcessorMode;
 	}
 
 	/**
@@ -169,7 +214,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 
 	@Override
 	public void terminate ( ) {
-		this.instanceMode = ProcessorInstanceMode.TERMINATING;
+		this.terminating = true;
 		synchronized ( this ) {
 			this.notify();
 		}
@@ -186,6 +231,19 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	@Override
 	public void start ( ) {
 		this.processorMode = originalProcessorMode;
+		synchronized ( this ) {
+			this.notify();
+		}
+	}
+
+	@Override
+	public void instanceMode ( ProcessorInstanceMode mode ) {
+		ProcessorInstanceMode previous = this.instanceMode;
+		this.instanceMode = mode;
+		if ( mode == ProcessorInstanceMode.LEADER && previous == ProcessorInstanceMode.STANDBY ) {
+			// resume from the shared position, not from this instance's stale in-memory cursor
+			reseedProjector = true;
+		}
 		synchronized ( this ) {
 			this.notify();
 		}
@@ -213,7 +271,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 		Thread.currentThread().setName(processorIdentification.id());
 		LOGGER.info("projector processor '{}' running ...", processorIdentification);
 
-		while ( instanceMode != ProcessorInstanceMode.TERMINATING ) {
+		while ( !terminating ) {
 			try {
 
 				if ( processorMode != ProcessorMode.STOPPED ) {
@@ -221,6 +279,15 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 					if ( processorMode == ProcessorMode.RUNNING_ON_ALL_INSTANCES || instanceMode == ProcessorInstanceMode.LEADER ) {
 
 						try {
+							if ( reseedProjector ) {
+								// promoted since the last pass: rebuild the projector so it resumes from
+								// the position the previous leader durably left, not from this instance's
+								// in-memory cursor
+								reseedProjector = false;
+								LOGGER.info("'{}' promoted to leader, re-seeding projector from its durable position ...", processorIdentification);
+								this.projector = createProjector();
+							}
+
 							// the first run after start() rebuilds/catches up the projection from its bookmark
 							// (from scratch for ephemeral storage) and is what start() may be waiting for, so
 							// it is reported at info level, unlike the incremental runs that follow
@@ -253,11 +320,11 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 
 							// Caught up with the stream — wait for new events or timeout
 							synchronized ( this ) {
-								// The terminate() that set TERMINATING notified us while we were in the run
+								// The terminate() that set the flag notified us while we were in the run
 								// above, with nothing waiting to hear it. Re-check the flag before parking:
 								// otherwise that notification is lost, shutdown sits out this whole timeout,
 								// and the thread manager's grace period ends in an interrupt instead.
-								if ( ! potentiallyNewEventsAppended && instanceMode != ProcessorInstanceMode.TERMINATING ) {
+								if ( ! potentiallyNewEventsAppended && !terminating ) {
 									LOGGER.debug("no new events pending, waiting for {} seconds", (WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS / 1000));
 									this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS);
 									LOGGER.debug("done waiting, or notified that new events could be present");
@@ -277,14 +344,23 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 
 						}
 					} else {
-						LOGGER.debug("we're not leader, not running on this instance");
+						// Standing by: parked, not spinning. Woken instantly by instanceMode(LEADER),
+						// stop() or terminate(); the timeout is only a safety net. Re-checks its reasons
+						// for parking under the monitor, so a promotion arriving just before the wait is
+						// not lost.
+						LOGGER.debug("'{}' standing by, not the elected leader on this instance", processorIdentification);
+						synchronized ( this ) {
+							if ( !terminating && instanceMode == ProcessorInstanceMode.STANDBY && processorMode != ProcessorMode.STOPPED ) {
+								this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
+							}
+						}
 					}
 
 				} else {
 					LOGGER.debug("not running, waiting for further instructions, checking back in {} seconds", (WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS / 1000));
 					try {
 						synchronized ( this ) {
-							if ( instanceMode != ProcessorInstanceMode.TERMINATING ) { // same lost-notify race as above
+							if ( !terminating ) { // same lost-notify race as above
 								this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
 							}
 						}
@@ -299,7 +375,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 				// period runs out gets interrupted. On that path the loop condition below ends the run --
 				// reporting it as an unexpected throwable, stack trace and all, made a clean stop look
 				// like a failure.
-				if ( instanceMode == ProcessorInstanceMode.TERMINATING ) {
+				if ( terminating ) {
 					LOGGER.debug("interrupted while terminating");
 					Thread.currentThread().interrupt(); // pass it on, we are on our way out anyway
 				} else {
@@ -325,18 +401,6 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	@FunctionalInterface
 	public interface RunListener {
 		void onRun ( ProjectorMetrics metrics, long durationMs );
-	}
-
-	public enum ProcessorMode {
-		STOPPED, 					// processing will not run at all
-		RUNNING_ON_SINGLE_LEADER, 	// processing will run, on instance selected be via leader election
-		RUNNING_ON_ALL_INSTANCES,	 // processing will run, on each instance
-	}
-
-	public enum ProcessorInstanceMode {
-		LEADER,   // this instance is in charge
-		STANDBY,  // another instance is handling everything, but this one could be elected later on at any moment
-		TERMINATING, // gracefully end at end of current handling
 	}
 
 }

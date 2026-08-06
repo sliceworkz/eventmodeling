@@ -304,6 +304,71 @@ public sealed interface BoundedContextEvent {
 		RESTART
 	}
 
+	/**
+	 * Emitted when this instance wins the leadership lease of a leader-only processor — an automation,
+	 * a SHARED read model's projector, a translator or a dispatcher — and begins processing for the
+	 * whole deployment. Emitted per processor, since leases are per processor: an instance only
+	 * contends for the elements it has deployed, so leadership of different processors can legitimately
+	 * sit on different instances.
+	 * <p>
+	 * On a storage without lease support (no leader election), every leader-only processor is promoted
+	 * at startup with a fencing token of {@code 0}, and this event still says so.
+	 *
+	 * @param boundedContext the context the processor belongs to
+	 * @param processorType the kind of processor: {@code readmodel}, {@code automation},
+	 *        {@code translator} or {@code dispatcher}
+	 * @param processor the processor's id, the same string the metric tags and bookmark reader use
+	 * @param fencingToken the lease's fencing token for this tenure; strictly increases per ownership
+	 *        change, {@code 0} when the storage does not support leases
+	 */
+	record LeadershipAcquired ( String boundedContext, String processorType, String processor, long fencingToken ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when this instance gives up — or discovers it has lost — the leadership lease of a
+	 * leader-only processor while its bounded context is up. The processor parks as a standby; some
+	 * other instance takes over, immediately on a graceful hand-over and within the lease's
+	 * time-to-live otherwise.
+	 * <p>
+	 * Deliberately not emitted at shutdown, mirroring {@link AutomationStopped}: leadership released
+	 * because the context is going down is already said by {@link BoundedContextStopping} for
+	 * everything at once, which keeps this event meaning the one state worth watching — leadership
+	 * moved while the instance stayed up.
+	 *
+	 * @param boundedContext the context the processor belongs to
+	 * @param processorType the kind of processor, as on {@link LeadershipAcquired}
+	 * @param processor the processor's id
+	 * @param reason why leadership ended here — see {@link LeadershipReleaseReason}
+	 */
+	record LeadershipReleased ( String boundedContext, String processorType, String processor, LeadershipReleaseReason reason ) implements BoundedContextEvent { }
+
+	/** Why a {@link LeadershipReleased} was raised. */
+	enum LeadershipReleaseReason {
+
+		/**
+		 * A contender with a strictly higher priority turned up, and this instance honoured the
+		 * step-down request: it finished its current batch and handed the lease over. The ordinary
+		 * fail-back path when a preferred instance returns.
+		 */
+		STEPPED_DOWN,
+
+		/**
+		 * The storage reported another owner holding the lease. This instance had already lost it —
+		 * typically after a pause long past the lease's time-to-live — and demoted itself on finding
+		 * out.
+		 */
+		LOST,
+
+		/**
+		 * Renewals kept failing and the time-to-live elapsed without one confirmed, so this instance
+		 * demoted itself rather than assume a leadership it can no longer prove. The lease may still
+		 * name it as owner; it re-acquires on the first renewal that gets through, if nobody took over.
+		 */
+		RENEWAL_FAILED,
+
+		/** The bounded context was stopped on this instance, releasing its leases for others to take. */
+		STOPPED
+	}
+
 	/*
 	 * Value objects used by the events above
 	 */

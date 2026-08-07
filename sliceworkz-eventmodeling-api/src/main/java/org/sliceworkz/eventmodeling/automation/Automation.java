@@ -28,6 +28,22 @@ import org.sliceworkz.eventstore.events.EventReference;
  * Automations follow the Event Modeling automation pattern: events populate a todo list
  * read model, and the automation processes items from that list by executing commands or
  * providing events through the supplied context.
+ * <p>
+ * <strong>One automation is sequential by construction, and parallelism is realized across
+ * automations.</strong> An automation runs on a single processor thread, on the single elected leader
+ * of the deployment, and the next item is only handed to {@link #handle} once the current one has
+ * returned — that is what makes the order {@link TodoListReadModel#streamItems} defines mean anything,
+ * so there is deliberately no concurrency setting to turn up. Where one queue's throughput is not
+ * enough, partition the work over several automations: each is its own class (an automation's name is
+ * its class' simple name, and names key bookmarks and leases, so every automation needs its own), with
+ * its own todo list projecting a disjoint share of the items — one todo list class can serve all of
+ * them under different names via
+ * {@link org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData#readmodelName()}. Each then
+ * processes on its own thread, under its own lease, so the partitions proceed in parallel and a
+ * deployment may even spread them over different instances. The partition must be stable — an item,
+ * and everything that must stay ordered with it (derive the partition from something like a customer
+ * or account id, not from arrival order), always landing in the same automation's todo list — because
+ * ordering holds within one automation and nowhere else.
  *
  * @param <TODO_ITEM_TYPE> the type of items in the todo list
  * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context

@@ -115,8 +115,16 @@ public class BankingExample {
 		AccountDetailsReadModel rm = bc.read(AccountDetailsReadModel.class, ao.accountId());
 		System.out.println(rm.getAccountDetails());
 		
-		// Also print out the eventually consistent readmodel on all accounts
+		/*
+		 * Also print out the eventually consistent readmodel on all accounts.
+		 *
+		 * Note what it prints alongside: how far it has been projected. This read model is filled by a
+		 * background thread, so the account opened a moment ago may not be in it yet -- and because it
+		 * publishes its state together with the position that state reflects, it can say so rather than
+		 * leaving the caller to guess. An empty position means nothing has reached it yet at all.
+		 */
 		System.out.println(AccountOverviewReadModel.INSTANCE.getAccounts());
+		System.out.println("  (as projected up to " + AccountOverviewReadModel.INSTANCE.upTo() + ")");
 
 		/*
 		 * Open another account using CommandWithResult — the generated account ID

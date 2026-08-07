@@ -29,6 +29,8 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.examples.banking.features.closemonth.CloseMonthCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActiveMonthReadModel;
+import org.sliceworkz.eventmodeling.examples.banking.features.currentbalance.AccountBalancesReadModel;
+import org.sliceworkz.eventmodeling.examples.banking.features.currentbalance.CurrentBalanceReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.CurrentPeriodReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.deposit.DepositCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.monthstatement.MonthStatementReadModel;
@@ -92,9 +94,19 @@ public class BankingClosingTheBooksExample {
 			.eventStorage(eventStorage)
 			.instance(instance);
 
-		builder.readmodel(ActiveMonthReadModel.class);
-		builder.readmodel(CurrentPeriodReadModel.class);
-		builder.readmodel(MonthStatementReadModel.class);
+		builder.readmodel(ActiveMonthReadModel.class).live();
+		builder.readmodel(CurrentPeriodReadModel.class).live();
+		builder.readmodel(MonthStatementReadModel.class).live();
+
+		/*
+		 * The seeded read: an eventually consistent projection of every account's balance, plus a
+		 * read model that starts from it and projects only what has not reached it yet. The base is
+		 * registered like any other eventually consistent read model; the read that catches it up is
+		 * registered like any other live model. See step 3b.
+		 */
+		AccountBalancesReadModel balances = new AccountBalancesReadModel();
+		builder.readmodel(balances).eventuallyConsistent();
+		builder.readmodel(CurrentBalanceReadModel.class).live();
 
 		builder.features()
 			.rootPackage(BankingClosingTheBooksExample.class.getPackage())
@@ -167,6 +179,24 @@ public class BankingClosingTheBooksExample {
 			System.out.println("  Transactions: " + period.transactionCount());
 			System.out.println("  Closed:       " + period.closed());
 		});
+		System.out.println();
+
+
+		// ── Step 3b: The same balance, current, without replaying anything ──
+		//
+		// The four transactions above were appended a moment ago, so the background projection may or
+		// may not have reached them yet -- deliberately not waited for here, because the answer must
+		// not depend on it. Whatever it holds is the base, and the read projects the rest.
+
+		System.out.println("=== STEP 3b: Current balance (seeded read) ===");
+		System.out.println();
+
+		CurrentBalanceReadModel currentBalance = bc.read(CurrentBalanceReadModel.class, balances, accountId);
+
+		System.out.println("  Balance:              " + currentBalance.balance());
+		System.out.println("  Background projection: " + balances.balanceOf(accountId) + " (as far as its thread has got)");
+		System.out.println("  Events folded on read: " + currentBalance.foldedInRead() + " (the rest came from the base)");
+		System.out.println("  Current as of:        " + currentBalance.upTo());
 		System.out.println();
 
 

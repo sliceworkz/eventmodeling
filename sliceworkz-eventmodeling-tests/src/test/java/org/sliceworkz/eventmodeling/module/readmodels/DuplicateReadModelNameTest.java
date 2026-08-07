@@ -82,7 +82,7 @@ public class DuplicateReadModelNameTest extends AbstractMockDomainTest {
 
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
 			var builder = baseBuilder();
-			builder.readmodel(MockReadModel.class);
+			builder.readmodel(MockReadModel.class).live();
 			builder.readmodel(collidingEc).eventuallyConsistent();
 			builder.build();
 		});

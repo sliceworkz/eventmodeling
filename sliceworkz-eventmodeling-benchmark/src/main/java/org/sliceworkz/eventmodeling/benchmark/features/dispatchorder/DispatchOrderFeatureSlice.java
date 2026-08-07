@@ -35,7 +35,7 @@ public class DispatchOrderFeatureSlice implements Slice<OrderProcessing> {
 		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
 			ordersReadyToDispatch.initialize();
 		}
-		builder.readmodel(ordersReadyToDispatch);
+		builder.readmodel(ordersReadyToDispatch).eventuallyConsistent();
 		builder.automation(new DispatchOrderAutomation(ordersReadyToDispatch));
 	}
 

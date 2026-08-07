@@ -22,10 +22,51 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.snapshots.LiveModelSnapshotSpecification;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 
+/**
+ * Registration of a read model given by its class, which the bounded context instantiates per read.
+ *
+ * <p><b>One of the terminals below has to be called.</b> {@code readmodel(...)} on its own registers
+ * the read model but says nothing about how it is projected, and {@code build()} rejects that rather
+ * than picking silently — see {@link #live()}.
+ *
+ * @param <C> the bounded context type
+ */
 public interface LiveModelSpecification<C extends BoundedContext<?,?,?>> {
 
+	/**
+	 * Projects this read model <b>when it is read</b>, into a fresh instance built with the read's
+	 * parameters.
+	 *
+	 * <p><b>"Live" is about when it is projected, not about how much it replays.</b> How much depends
+	 * on where the projection starts: from the beginning of the stream by default, from a snapshot with
+	 * {@link #snapshots}, or from a base the read model loads itself if it implements
+	 * {@link SeededReadModel}. All three are live — the answer includes everything the store will show,
+	 * with no projector to lag behind.
+	 *
+	 * <p>The default answer for a read model, and the right one whenever the set of events its
+	 * {@code eventQuery()} matches is bounded by design. Where it is not — and where narrowing the
+	 * query or introducing a savepoint cannot make it so — the read belongs on a background projection
+	 * instead: register an instance with
+	 * {@link EventuallyConsistentReadModelSpecification#eventuallyConsistent()}.
+	 *
+	 * <p><b>Saying it is required</b>, and {@code build()} names the read model that did not. Calling
+	 * this is redundant with the overload — a class can only be live — so it exists for the reader and
+	 * for the writer: a mode that follows silently from which method was called is one nobody had to
+	 * decide, and the difference between the two is one every caller of the read model lives with.
+	 * {@link #snapshots} says it too, being a statement about how a live projection starts.
+	 */
 	BoundedContextBuilder<C> live();
 
+	/**
+	 * Not available for a read model registered by class.
+	 * <p>
+	 * An eventually consistent read model is one long-lived instance the framework projects in the
+	 * background, so it is registered as that instance —
+	 * {@code builder.readmodel(myReadModel).eventuallyConsistent()} — rather than as a class to build
+	 * per read.
+	 *
+	 * @throws IllegalArgumentException always
+	 */
 	BoundedContextBuilder<C> eventuallyConsistent();
 
 	/**

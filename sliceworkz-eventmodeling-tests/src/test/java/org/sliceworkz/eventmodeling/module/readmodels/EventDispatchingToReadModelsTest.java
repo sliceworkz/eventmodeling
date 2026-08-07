@@ -38,7 +38,8 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.ThirdDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
-import org.sliceworkz.eventmodeling.readmodels.LongLivedReadModelSpecification;
+import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
+import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
@@ -184,10 +185,10 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 				.eventStorage(eventStorage())
 				.instance(InstanceFactory.determine("unittests"));
 
-		liveModelClasses.forEach(builder::readmodel);
+		liveModelClasses.stream().map(builder::readmodel).forEach(LiveModelSpecification::live);
 		// shared vs local is declared by the read models themselves (ReadModelWithMetaData.storage())
-		eventuallyConsistentSharedReadModels.stream().map(builder::readmodel).forEach(LongLivedReadModelSpecification::eventuallyConsistent);
-		eventuallyConsistentLocalReadModels.stream().map(builder::readmodel).forEach(LongLivedReadModelSpecification::eventuallyConsistent);
+		eventuallyConsistentSharedReadModels.stream().map(builder::readmodel).forEach(EventuallyConsistentReadModelSpecification::eventuallyConsistent);
+		eventuallyConsistentLocalReadModels.stream().map(builder::readmodel).forEach(EventuallyConsistentReadModelSpecification::eventuallyConsistent);
 
 		return buildBoundedContext ( builder );
 	}

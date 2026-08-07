@@ -30,7 +30,7 @@ public class AbandonedPaymentsFeatureSlice implements Slice<Payments> {
 
 	@Override
 	public void configureQuery ( BoundedContextBuilder<Payments> builder ) {
-		builder.readmodel(AbandonedPaymentsReadModel.class);
+		builder.readmodel(AbandonedPaymentsReadModel.class).live();
 	}
 
 }

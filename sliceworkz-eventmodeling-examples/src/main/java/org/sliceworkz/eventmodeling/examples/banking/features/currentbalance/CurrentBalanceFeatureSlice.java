@@ -15,22 +15,21 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.readmodels;
+package org.sliceworkz.eventmodeling.examples.banking.features.currentbalance;
 
-import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
-import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.examples.banking.Banking;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
- * Registration of a long-lived read model instance, which can only be updated eventually
- * consistently.
+ * The current balance of an account, answered from a background projection that is caught up on the
+ * spot.
  * <p>
- * Whether the read model is projected on every instance or on a single elected leader is not
- * configured here: it follows from the read model's own {@link ReadModelWithMetaData#storage()}.
+ * The slice that shows what to do when a live model is impractical — too many events to replay per
+ * read — but an eventually consistent read is not current enough to decide on. See
+ * {@link CurrentBalanceReadModel}.
  */
-public interface LongLivedReadModelSpecification<C extends BoundedContext<?,?,?>> {
-
-	BoundedContextBuilder<C> live();
-
-	BoundedContextBuilder<C> eventuallyConsistent();
-
+@FeatureSlice(type = Type.STATE_READ, context = "banking", chapter = "Closing The Books")
+public class CurrentBalanceFeatureSlice implements Slice<Banking> {
 }

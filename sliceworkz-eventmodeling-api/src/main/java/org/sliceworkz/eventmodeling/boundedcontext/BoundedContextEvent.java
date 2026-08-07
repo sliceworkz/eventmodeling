@@ -188,10 +188,21 @@ public sealed interface BoundedContextEvent {
 	/**
 	 * Emitted after a live (on-demand) model has been projected.
 	 * <p>
-	 * {@code slice} identifies the originating feature slice (resolved by package convention) and may
-	 * be {@code null}.
+	 * {@code seededAt} is the position the projection started from — the base a
+	 * {@link org.sliceworkz.eventmodeling.readmodels.SeededReadModel} loaded, or a snapshot's last
+	 * event — and is {@code null} for the full replay an ordinary live model does. It is here because
+	 * a seed that returns empty by mistake produces a correct answer at the cost of the whole event
+	 * history, which is otherwise visible only as a read that is unaccountably slow: a
+	 * {@code LiveModelProjected} carrying no {@code seededAt} for a read model that is supposed to
+	 * have one says so directly, and {@code metrics.eventsStreamed()} says what it cost.
+	 *
+	 * @param boundedContext the context the read model belongs to
+	 * @param readModel the read model's name
+	 * @param metrics what the projection cost, {@code eventsStreamed} included
+	 * @param seededAt the position the projection started from, or {@code null} for a full replay
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
 	 */
-	record LiveModelProjected ( String boundedContext, String readModel, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+	record LiveModelProjected ( String boundedContext, String readModel, Metrics metrics, EventReference seededAt, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted after an aggregate has been loaded from its event stream.

@@ -35,7 +35,7 @@ public class AnnounceShipmentFeatureSlice implements Slice<OrderProcessing>{
 		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
 			shipmentsToBeAnounced.initialize();
 		}
-		builder.readmodel(shipmentsToBeAnounced);
+		builder.readmodel(shipmentsToBeAnounced).eventuallyConsistent();
 		builder.automation(new AnnounceShipmentAutomation(shipmentsToBeAnounced));
 	}
 

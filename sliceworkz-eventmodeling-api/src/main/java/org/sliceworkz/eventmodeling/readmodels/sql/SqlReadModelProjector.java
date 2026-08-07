@@ -79,11 +79,8 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(SqlReadModelProjector.class);
 
-	/**
-	 * The unqualified name of the bookmark table, which {@link #table(String)} prefixes like any
-	 * other. A read model may not use this name for a table of its own.
-	 */
-	private static final String BOOKMARK_TABLE = "projection_bookmark";
+	// BOOKMARK_TABLE is on SqlReadModel: the query side reads this same position to know how far the
+	// rows it selects have come. A read model may not use that name for a table of its own.
 
 	private final ReadModelStorage storage;
 	private final AtomicBoolean bookmarkTableEnsured = new AtomicBoolean();

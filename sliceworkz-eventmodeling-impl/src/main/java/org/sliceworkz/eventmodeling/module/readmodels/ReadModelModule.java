@@ -42,6 +42,7 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
 import org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
@@ -263,7 +264,16 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 			EventReference lastEventReference = null;
 
-			// Load snapshot if configured and read model implements SnapshotCapable
+			// A seeded read model loads its own base -- out of the tables an eventually consistent
+			// projector fills, or out of an in-memory read model -- and is projected only over what has
+			// not reached that base yet. It is registered like any other live model, because the seed is
+			// a property of the class: unlike a snapshot there is nothing external to configure.
+			if ( readModel instanceof SeededReadModel<?> seeded ) {
+				lastEventReference = seeded.seed().orElse(null);
+			}
+
+			// Load snapshot if configured and read model implements SnapshotCapable. Never both: a
+			// seeded read model may not be registered with snapshots(), which the builder rejects.
 			if ( info.readSnapshots() && readModel instanceof SnapshotCapable<?> snapshotCapable ) {
 				String key = snapshotCapable.key(readModel.readmodelName(), constructorParams);
 				String version = snapshotCapable.version();
@@ -275,7 +285,12 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				}
 			}
 
-			// Replay events — starting after snapshot's last event reference if available
+			// what the projection started from, reported on LiveModelProjected: a seed that quietly
+			// returned empty is otherwise indistinguishable from one that never existed, and shows up
+			// only as a read that streams the whole history
+			EventReference seededAt = lastEventReference;
+
+			// Replay events — starting after the base a seed or a snapshot supplied, if any
 			Projector projector = Projector.from(eventSource).towards(readModel).startingAfter(lastEventReference).build();
 			ProjectorMetrics projectorMetrics = projector.run();
 
@@ -286,7 +301,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				long finish = System.currentTimeMillis();
 				long duration = finish - start;
 				BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
-				eventEmitter.emit(new BoundedContextEvent.LiveModelProjected(boundedContext, readModel.readmodelName(), metrics, eventEmitter.sliceFor(readModel.getClass())), tracing);
+				eventEmitter.emit(new BoundedContextEvent.LiveModelProjected(boundedContext, readModel.readmodelName(), metrics, seededAt, eventEmitter.sliceFor(readModel.getClass())), tracing);
 			}
 
 			return readModel;

@@ -73,6 +73,21 @@ The example demonstrates:
 - Querying read models (AccountDetailsReadModel, AccountOverviewReadModel)
 - Event stream subscriptions
 
+**Closing The Books Example — bounded periods, and a read that is current without replaying (main method):**
+```bash
+cd sliceworkz-eventmodeling-examples
+mvn compile exec:java -Dexec.mainClass="org.sliceworkz.eventmodeling.examples.banking.BankingClosingTheBooksExample"
+```
+
+Two ways of keeping a read cheap on a long history, side by side. The domain one is "closing the books":
+`MonthClosed` summarises a period and `MonthOpened` carries the balance forward, so `MonthStatementReadModel`
+replays one month rather than one account's lifetime. The framework one is step 3b — `CurrentBalanceReadModel`,
+the file to read when a live model is impractical but an eventually consistent read is not current enough to
+decide on. It seeds from `AccountBalancesReadModel` (a `PublishingReadModel` projected in the background) and
+projects only what has not reached it, usually nothing. Note that both share one `BalanceFold`: the base and
+the delta are folded by different code paths, and the moment they disagree the answer starts depending on how
+far the projector got.
+
 **Payments Example — an automation whose work can fail (main method):**
 ```bash
 cd sliceworkz-eventmodeling-examples
@@ -185,6 +200,24 @@ features/
   which is purely declarative — it only adds them to the slice's `members` on `BoundedContextStarting`,
   so an observer (the dashboard) shows them from startup instead of after their first execution
 
+**Which read model to reach for is written down for users, and it is the same order to advise in.**
+[CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md) carries the ladder — decision model, live model,
+bound the replay, eventually consistent in memory, eventually consistent durable, seeded read,
+snapshots — with what each step buys and costs, plus the shapes to steer away from. The sections below
+are the *why* of each mechanism; that file is the *which*, and it is the one a user reads first. Keep
+the two in step rather than restating one in the other, and when advising on a read model, say which
+rung it is on and what would justify the next.
+
+**How a read model is projected has to be said out loud.** `builder.readmodel(X.class)` and
+`builder.readmodel(instance)` register, but `build()` rejects either unless `.live()` /
+`.eventuallyConsistent()` (or `.snapshots(...)`, which implies live) was called, naming every offender
+at once. The verb is redundant with the overload — a class can only be live, an instance only
+eventually consistent — and that is the point: a mode that follows silently from which method was
+called is one nobody had to decide, while the difference between the two is one every caller of that
+read model lives with. **Registration stays eager on purpose**: registering lazily from `live()` would
+turn a forgotten verb into a read model that silently is not there, trading a mistake caught at build
+time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins it.
+
 **ReadModels:**
 - Implement `ReadModel<DOMAIN_EVENT_TYPE>` which extends `EventHandler<DOMAIN_EVENT_TYPE>`
 - Define which events to handle via `when(EventType event)` methods
@@ -258,6 +291,105 @@ features/
 - Needs the matching eventstore fixes to be complete: the bookmark is placed per batch, and a batch whose
   commit fails takes the projector's cursor back with it instead of skipping those events. See the
   eventstore's `BatchAwareProjection` notes
+
+**A seeded read model — as current as a live model, at the cost of the delta:**
+- **The gap it fills.** A live model is always current and replays the whole history to be; an
+  eventually consistent read model is already materialised and lags whatever its projector has not
+  reached. Neither serves a read that is both too expensive to project live and too important to
+  answer from a stale projection. A `SeededReadModel` is the two combined: it loads a base — the rows
+  an SQL projector wrote, or the state an in-memory read model holds — and the framework projects it
+  over **only the events after that base**. Registration is unchanged
+  (`builder.readmodel(X.class).live()`); seeding is a property of the class, because unlike a snapshot
+  there is nothing external to configure
+- **One method, and it is the counterpart of `SelfBookmarkingProjection`.** `resumeFrom()` says where a
+  *projector* resumes writing; `seed()` says where a *read* resumes projecting. Both answer with a
+  position, and both are wrong in the same way if that position is not atomic with the state it
+  describes. `ReadModelModule.projectLiveModel` calls `seed()` once, after construction with the read's
+  parameters, and hands the result to `Projector.startingAfter(...)` — so the delta is paged, upcasted
+  and ordered on the total `(tx, position, index)` order exactly as a full projection is. **A
+  hand-rolled `query()` is what would risk the heap**: an unbounded query materialises its whole
+  result, where the projector reads in batches of 500
+- **Empty means "project everything", and that is the expensive mistake.** An account with no rows, a
+  key absent from the model, a customer who has done nothing are all *no state loaded* plus
+  `Optional.of(position)` — not `Optional.empty()`. Reporting empty for a base that exists is
+  **correct**, so nothing fails and no test goes red; it just costs the entire event history on every
+  read, and only once the stream is long enough to notice. This is why `LiveModelProjected` gained
+  `seededAt`: a seeded read that reports no base looks exactly like an ordinary live model from the
+  outside, and `metrics.eventsStreamed()` next to it says what that cost
+- **The state and the position must be one observation**, and there are two supported ways to get one:
+  - `SqlReadModelQuery.loadBaseAt(reader, loader)` for the SQL case. Rows and bookmark are two SELECTs,
+    and whatever the projector commits between them lands in one and not the other — **read the
+    bookmark first and the caller re-applies events its rows already contain; read it afterwards and
+    the events committed in between are in neither the base nor the delta**. Both are silent, and which
+    one you get depends only on the order the two reads happen to be written in. `loadBaseAt` reads the
+    bookmark on either side of the load and retries while the two differ, which is sound because
+    `SqlReadModelProjector` commits its rows and its bookmark in one transaction: an unchanged bookmark
+    proves no batch landed. **Deliberately not an isolation level** — `REPEATABLE READ` would mean
+    depending on something PostgreSQL and the H2 an ephemeral read model runs on do not implement
+    alike, where this is portable and lock-free. The loader may therefore be called more than once and
+    must *replace* what it loaded rather than add to it
+  - `PublishingReadModel.published()` for the in-memory case, below
+- **The fold has to be written once.** The base and the delta are projected by different code — an SQL
+  `project()` writing rows, and an in-memory `when()` folding a DTO — and if they disagree the answer
+  depends on how far the projector got, which is the one thing this exists to make impossible. Extract
+  the rule as a pure function of `(state, event)` and use it from both sides (`BalanceFold` in the
+  banking example is the shape). Where throughput forbids the read-modify-write that implies, keep them
+  separate and pin the equivalence with a test
+- **Two registrations are rejected at build time**, both silent failures otherwise: a `SeededReadModel`
+  registered `eventuallyConsistent()` (that processor resumes from its bookmark, so `seed()` would never
+  be called and the read model would look seeded and not be), and one registered with `snapshots(...)`
+  (two complete answers to "where does this projection start", with no sensible precedence)
+- **It buys the cost of a live model down, not the visibility rules away.** An event still in flight is
+  withheld from every reader alike — on PostgreSQL by the `pg_snapshot_xmin` barrier — so a seeded read
+  is exactly as fresh as a live model and no fresher. What it can offer that a live model cannot is
+  proof: have the read model expose the reference it reached, and a caller that just executed a command
+  checks its own write is included with `happenedBefore`
+- `SeededReadModelTest` pins the property that matters — **the answer does not depend on how far the
+  projector got** — from all three ends: a base that is behind, a base that is up to date, and no base
+  at all. It also counts the delta, because a seed being ignored produces entirely correct answers and
+  is otherwise invisible. `SqlReadModelSeedTest` pins the retry against a real database, including a
+  batch committing in the middle of a base read
+
+**`PublishingReadModel` — the in-memory base, and the template to copy:**
+- Folds events into an **immutable** state and publishes that state together with the position it
+  reflects, through a single volatile field, once per batch. Two problems, one answer: an ordinary read
+  model mutates its own fields from `when` on the projector's thread while readers call its getters
+  from theirs — so a reader can observe a half-applied batch — and a reader that wants to catch it up
+  needs the state and the position as one observation. `published()` is that observation
+- What a subclass writes is a state type, `initialState()`, `apply(state, event)` and `eventQuery()`.
+  `beforeBatch`/`when`/`afterBatch`/`cancelBatch` are final: a batch is folded aside into `pending` and
+  becomes visible only by replacing the published pair, so a cancelled batch republishes nothing and a
+  batch matching none of our events leaves the position where it was — the projector read past events
+  this read model does not hold, which says nothing about state it does not have
+- **The state must never be mutated after `apply` returns it**, which is the whole basis of the
+  guarantee: what a reader took is a value no later batch can alter under it. The cost is a copy per
+  batch rather than per event, which is what makes it affordable; a model too large for even that wants
+  a lock and a copy of the answer alone, not this class
+- `initialState()` is called lazily rather than from the constructor, so a subclass may build it out of
+  its own fields — a superclass constructor would run before those are assigned and hand the read model
+  a state built from nulls
+- Storage is `EPHEMERAL` and final. `PublishingReadModelTest` pins the batch lifecycle; the concurrency
+  is not tested, because a passing race proves nothing — it follows from the publication being one
+  volatile write of an immutable value
+
+**`ReadModelResult<R>` — one type for "an answer and what it reflects":**
+- `ReadModelResult(R data, EventReference upTo)` in `readmodels`, returned by
+  `PublishingReadModel.published()` and by `SqlReadModelQuery`'s `queryListWithRef` /
+  `querySingleWithRef`. It used to be two records for one concept — `PublishingReadModel.Published`
+  and a `ReadModelResult` nested in `SqlReadModelQuery`, the general idea living in the SQL package —
+  which is the kind of duplication that quietly becomes two diverging concepts
+- **`upTo` is what the answer reflects; how it was arrived at is the producer's business, and the two
+  producers differ in a way that matters.** `published()` reports the last event it actually folded, so
+  it is exactly the position of the state handed back. `queryListWithRef` reports the newest event any
+  *returned row* reflects, which is only a **lower bound** on how far the read model has been projected
+  — later events may have touched other rows, or created rows the query did not select. Good enough to
+  answer "is my write in this row", and **not** a base to seed from: a per-row reference cannot account
+  for a row that does not exist yet, which is why `SeededReadModel` seeds from `loadBaseAt` or
+  `published()` instead
+- Compare it with `happenedBefore`, never on `position()` — the same total-order rule as everywhere else
+- The rename is source-breaking for anyone who imported `SqlReadModelQuery.ReadModelResult` or called
+  `eventReference()`. A record cannot be aliased, so there is no deprecation path that keeps such code
+  compiling; the type moved and the accessor is now `upTo()`
 
 **Automations:**
 - Implement `Automation<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE>`

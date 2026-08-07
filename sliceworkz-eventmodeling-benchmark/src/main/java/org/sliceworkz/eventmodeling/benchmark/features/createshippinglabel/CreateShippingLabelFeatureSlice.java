@@ -35,7 +35,7 @@ public class CreateShippingLabelFeatureSlice implements Slice<OrderProcessing>{
 		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
 			requiredShippingLabels.initialize();
 		}
-		builder.readmodel(requiredShippingLabels);
+		builder.readmodel(requiredShippingLabels).eventuallyConsistent();
 		builder.automation(new CreateShippingLabelAutomation(requiredShippingLabels));
 	}
 

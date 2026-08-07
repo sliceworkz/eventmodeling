@@ -68,6 +68,16 @@ public abstract class SqlReadModel {
 			last_event_tx BIGINT NOT NULL DEFAULT 0,
 			last_event_index INT NOT NULL DEFAULT 0""";
 
+	/**
+	 * Unprefixed name of the table in which a read model records how far it has been projected, one
+	 * row per {@code reader}, written by {@link SqlReadModelProjector} inside the transaction that
+	 * writes the rows of the batch.
+	 * <p>
+	 * Shared by both sides because the query side reads that same position to know how far the rows
+	 * it is about to select have come — see {@link SqlReadModelQuery#loadBaseAt}.
+	 */
+	protected static final String BOOKMARK_TABLE = "projection_bookmark";
+
 	private final DataSource dataSource;
 	private final String tablePrefix;
 

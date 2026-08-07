@@ -30,8 +30,8 @@ import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
+import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
-import org.sliceworkz.eventmodeling.readmodels.LongLivedReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
@@ -148,7 +148,7 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
 	LiveModelSpecification<C> readmodel(Class<? extends ReadModelWithMetaData<?>> readModelClass);
 
-	LongLivedReadModelSpecification<C> readmodel(ReadModelWithMetaData<?> readModel);
+	EventuallyConsistentReadModelSpecification<C> readmodel(ReadModelWithMetaData<?> readModel);
 
 	BoundedContextBuilder<C> automation(Automation<?,?,?> automation);
 

@@ -35,7 +35,7 @@ public class PackageOrderFeatureSlice implements Slice<OrderProcessing>{
 		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
 			ordersReadyToPackage.initialize();
 		}
-		builder.readmodel(ordersReadyToPackage);
+		builder.readmodel(ordersReadyToPackage).eventuallyConsistent();
 		builder.automation(new PackageOrderAutomation(ordersReadyToPackage));
 	}
 

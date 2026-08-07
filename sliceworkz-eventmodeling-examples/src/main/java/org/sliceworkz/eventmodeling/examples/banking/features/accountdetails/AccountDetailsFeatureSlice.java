@@ -28,7 +28,7 @@ public class AccountDetailsFeatureSlice implements Slice<Banking> {
 
 	@Override
 	public void configureQuery(BoundedContextBuilder<Banking> builder) {
-		builder.readmodel(AccountDetailsReadModel.class);
+		builder.readmodel(AccountDetailsReadModel.class).live();
 	}
 
 

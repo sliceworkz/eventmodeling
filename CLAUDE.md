@@ -434,6 +434,12 @@ features/
   up monitoring. `AutomationAdminTest` catches that (it asserts the count against an unconfigured registry)
 - **A second instance no longer duplicates every item: automations run on the single elected leader.**
   See "Leader election" below for the mechanism, its configuration, and its honest limits
+- **One automation is sequential end to end, and parallelism is realized across automations**: partition
+  the work into several automation classes, each with its own todo list over a disjoint, stable share of
+  the items (one todo list class can serve all of them under different `readmodelName()`s). Each runs on
+  its own thread under its own lease, so partitions proceed in parallel — while ordering holds within one
+  automation and nowhere else, which is why the partition key must keep dependent items together. The
+  `Automation` interface javadoc carries the user-facing version of this
 
 ### Leader election — one instance per leader-only processor
 

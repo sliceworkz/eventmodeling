@@ -658,6 +658,21 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   and todo lists) rather than ever running twice. `start()` runs one synchronous election round before
   the processors' first pass; `stop()`/`terminate()` release the held leases so a standby takes over
   promptly instead of waiting out the ttl
+- **A processor that stops itself hands its lease back.** A projector retired by a `ProjectorException`
+  and an automation stopped through `STOP_AUTOMATION` set themselves `STOPPED` while their context — and
+  its elector — keep running, and the elector used to renew their leases unconditionally: the stopped
+  processor held its lease for the life of the process, so the read model was not projected, the
+  outbound stream not dispatched or the automation not run *anywhere in the deployment*, on one WARN
+  line. The elector now consults `Processor.stoppedItself()` each round: a self-stopped leader is
+  demoted, its lease released (`LeadershipReleased`, reason `PROCESSOR_STOPPED`) and no longer contended
+  for — not even as a contender, so a self-stopped high-priority instance does not step a healthy
+  leader down — until the processor is started again, which puts this instance back in the race on the
+  next heartbeat. That is why restarting a self-stopped automation resumes via re-election (within a
+  heartbeat when nobody took over) rather than instantly. The check is deliberately *stopped itself*,
+  not *is stopped*: every processor is lifecycle-`STOPPED` during the elector's synchronous first round
+  at `start()`, which must still elect a leader before any processor's first pass.
+  `LeaderElectionTest.testASelfStoppedAutomationHandsItsLeaseToAHealthyInstance` and its projector twin
+  pin both paths, and fail by timeout without the release
 - **Promotion re-seeds a projector.** The `Projector` holds its cursor in memory, so after a spell as
   standby that cursor describes where *this instance* stopped reading while the old leader projected
   on. `ProjectorProcessor` rebuilds its projector on every STANDBY→LEADER transition, re-running the
@@ -675,7 +690,8 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   `EventStorage` predating leases keeps working unchanged; the in-memory storages implement leases, so
   a single process wins everything trivially rather than falling back
 - **Observability**: `LeadershipAcquired`/`LeadershipReleased` (`BoundedContextEvent`s, per processor;
-  reasons `STEPPED_DOWN`, `LOST`, `RENEWAL_FAILED`, `STOPPED`). Deliberately not emitted at shutdown —
+  reasons `STEPPED_DOWN`, `LOST`, `RENEWAL_FAILED`, `STOPPED`, `PROCESSOR_STOPPED`). Deliberately not
+  emitted at shutdown —
   `BoundedContextStopping` already says it for everything at once, the same asymmetry
   `AutomationStopped` keeps. `AutomationStatus` gained `leader`: `running` says the automation would
   process if elected, `leader` says it actually is on this instance; `restartAutomation` on a standby

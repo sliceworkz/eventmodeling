@@ -377,7 +377,17 @@ public sealed interface BoundedContextEvent {
 		RENEWAL_FAILED,
 
 		/** The bounded context was stopped on this instance, releasing its leases for others to take. */
-		STOPPED
+		STOPPED,
+
+		/**
+		 * The processor stopped itself while its bounded context stayed up — a projector retired by a
+		 * projection failure, an automation whose failure handling returned {@code STOP_AUTOMATION} —
+		 * so this instance released the lease rather than keep renewing it for work it will not do,
+		 * and a healthy instance is free to take over. This instance contends for the lease again once
+		 * the processor is started (an automation's {@code restartAutomation}, or the context
+		 * restarting), so a restart here resumes on the next election round if nobody took over.
+		 */
+		PROCESSOR_STOPPED
 	}
 
 	/*

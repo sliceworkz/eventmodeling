@@ -95,6 +95,12 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private volatile Throwable lastFailure;
 	private volatile Throwable stoppedBy;
 
+	// set when this automation retires itself through STOP_AUTOMATION, as opposed to being stopped by
+	// its lifecycle; what the leader elector reads to release the lease of a processor that will not
+	// work it (see Processor.stoppedItself). Cleared by start() and stop(): either is an explicit
+	// instruction that supersedes the self-imposed stop
+	private volatile boolean stoppedItself;
+
 	/**
 	 * Failed items, counted here as well as into the meter. The meter cannot serve
 	 * {@link #status()}: the default registry is an empty {@code Metrics.globalRegistry} composite, whose
@@ -168,10 +174,16 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	
 	@Override
 	public void stop ( ) {
+		this.stoppedItself = false;
 		this.processorMode = ProcessorMode.STOPPED;
 		synchronized ( this ) { // escape the wait state if needed
 			this.notify();
 		}
+	}
+
+	@Override
+	public boolean stoppedItself ( ) {
+		return stoppedItself;
 	}
 
 	@Override
@@ -180,6 +192,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	}
 
 	private void start ( BoundedContextEvent.AutomationStartReason reason ) {
+		this.stoppedItself = false;
 		this.processorMode = originalProcessorMode;
 		synchronized ( this ) { // escape the wait state if needed
 			this.notify();
@@ -311,6 +324,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 									if ( outcome.stopAutomation ) {
 										LOGGER.warn("stopping automation '{}' as its failure handling asked for it - it will not run again until it is restarted", processorIdentification);
 										stoppedBy = outcome.lastFailure;
+										// self-imposed, not lifecycle: flagged before the mode flip so the
+										// leader elector never sees a self-stopped processor it would renew
+										// the lease for
+										stoppedItself = true;
 										processorMode = ProcessorMode.STOPPED;
 										eventEmitter.emit(new BoundedContextEvent.AutomationStopped(boundedContext, processorIdentification.id(), failureOf(outcome.lastFailure), eventEmitter.sliceFor(automation.getClass())), tracing);
 									} else if ( outcome.streamed >= batchSize.value() && outcome.lastProducedEvent != null ) {

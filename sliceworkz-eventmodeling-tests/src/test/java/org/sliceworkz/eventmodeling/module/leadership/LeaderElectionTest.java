@@ -35,10 +35,12 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
+import org.sliceworkz.eventmodeling.automation.AutomationFailureAction;
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -87,13 +89,24 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		contexts.clear();
 	}
 
-	private Mock instanceWith ( String node, long priority, RecordingAutomation automation, SharedApplyLog applyLog ) {
-		BoundedContextBuilder<Mock> builder = BoundedContext.newBuilder(Mock.class)
+	private BoundedContextBuilder<Mock> newInstanceBuilder ( String node, long priority ) {
+		return BoundedContext.newBuilder(Mock.class)
 				.name("LeaderElectionContext")
 				.eventStorage(eventStorage())
 				.instance(InstanceFactory.determine("election", node))
 				.leadershipPriority(priority)
 				.leadershipIntervals(HEARTBEAT, TTL);
+	}
+
+	private Mock startInstance ( BoundedContextBuilder<Mock> builder ) {
+		Mock context = builder.build();
+		contexts.add(context);
+		context.start();
+		return context;
+	}
+
+	private Mock instanceWith ( String node, long priority, RecordingAutomation automation, SharedApplyLog applyLog ) {
+		BoundedContextBuilder<Mock> builder = newInstanceBuilder(node, priority);
 		if ( automation != null ) {
 			builder.readmodel(automation.todoList()).eventuallyConsistent();
 			builder.automation(automation);
@@ -101,10 +114,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		if ( applyLog != null ) {
 			builder.readmodel(applyLog).eventuallyConsistent();
 		}
-		Mock context = builder.build();
-		contexts.add(context);
-		context.start();
-		return context;
+		return startInstance(builder);
 	}
 
 	private static void appendWork ( Mock context, String... items ) {
@@ -190,6 +200,69 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		List<AutomationStatus> automations = context.automations();
 		assertEquals(1, automations.size());
 		return automations.get(0).leader();
+	}
+
+	/**
+	 * A leader whose automation stops itself through {@code STOP_AUTOMATION} must hand its lease
+	 * back, so a healthy instance takes the work over. The elector used to renew every lease
+	 * unconditionally, consulting nothing about the processor's own state — so the stopped
+	 * automation held its lease for the life of the process and its items sat outstanding on every
+	 * instance of the deployment. Fails by timeout without the release.
+	 */
+	@Test
+	public void testASelfStoppedAutomationHandsItsLeaseToAHealthyInstance ( ) {
+		StoppableAutomation onA = new StoppableAutomation("node-a", true);
+		StoppableAutomation onB = new StoppableAutomation("node-b", false);
+		List<Object> kernelEventsOnA = new CopyOnWriteArrayList<>();
+
+		BoundedContextBuilder<Mock> builderA = newInstanceBuilder("node-a", 0)
+				.listener(event -> kernelEventsOnA.add(event.data()));
+		builderA.readmodel(onA.todoList()).eventuallyConsistent();
+		builderA.automation(onA);
+		Mock nodeA = startInstance(builderA);
+		// started alone, so its synchronous start round made it leader before B even exists
+		assertTrue(leaderFlagOf(nodeA), "the first-started instance must lead");
+
+		BoundedContextBuilder<Mock> builderB = newInstanceBuilder("node-b", 0);
+		builderB.readmodel(onB.todoList()).eventuallyConsistent();
+		builderB.automation(onB);
+		startInstance(builderB);
+
+		appendWork(nodeA, "poison", "behind-it");
+
+		await().atMost(Duration.ofSeconds(15)).untilAsserted(
+				() -> assertTrue(onB.handled().containsAll(List.of("poison", "behind-it")),
+						"the healthy instance must take the work over, but handled only: " + onB.handled()));
+		assertEquals(List.of(), onA.handled(), "the failing instance must have handled nothing");
+		assertTrue(kernelEventsOnA.stream().anyMatch(e -> e instanceof BoundedContextEvent.LeadershipReleased released
+						&& released.reason() == BoundedContextEvent.LeadershipReleaseReason.PROCESSOR_STOPPED),
+				"the failed instance must say why it gave the lease up, but emitted: " + kernelEventsOnA);
+	}
+
+	/**
+	 * The same hand-over for a projector — and so for the translators and dispatchers that run on
+	 * the same processor: a SHARED read model whose projection fails stops its projector (the
+	 * {@code ProjectorException} path), and the lease must follow, so the healthy instance projects
+	 * what the failed leader could not. Fails by timeout without the release.
+	 */
+	@Test
+	public void testASelfStoppedProjectorHandsItsLeaseToAHealthyInstance ( ) {
+		FlakyApplyLog onA = new FlakyApplyLog(true);
+		FlakyApplyLog onB = new FlakyApplyLog(false);
+
+		BoundedContextBuilder<Mock> builderA = newInstanceBuilder("node-a", 0);
+		builderA.readmodel(onA).eventuallyConsistent();
+		Mock nodeA = startInstance(builderA); // leads everything from its synchronous start round
+
+		BoundedContextBuilder<Mock> builderB = newInstanceBuilder("node-b", 0);
+		builderB.readmodel(onB).eventuallyConsistent();
+		startInstance(builderB);
+
+		appendWork(nodeA, "survives-the-failover");
+
+		await().atMost(Duration.ofSeconds(15)).untilAsserted(
+				() -> assertEquals(Map.of("survives-the-failover", 1), FlakyApplyLog.applications(),
+						"the healthy instance must project what the failed leader could not"));
 	}
 
 	/**
@@ -360,6 +433,95 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	}
 
 	/**
+	 * An automation that either handles items like {@link RecordingAutomation} or fails every one
+	 * and asks to be stopped — the same class on both instances, so both contend for one lease,
+	 * with only one of them broken.
+	 */
+	static class StoppableAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+
+		private final EventSourcedTodoList todoList;
+		private final boolean failing;
+		private final List<String> handled = new CopyOnWriteArrayList<>();
+
+		StoppableAutomation ( String node, boolean failing ) {
+			this.todoList = new EventSourcedTodoList("stoppable-todo-of-" + node);
+			this.failing = failing;
+		}
+
+		EventSourcedTodoList todoList ( ) {
+			return todoList;
+		}
+
+		@Override
+		public TodoListReadModel<MockDomainEvent,String> getTodoList ( ) {
+			return todoList;
+		}
+
+		@Override
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+			if ( failing ) {
+				throw new IllegalStateException("this instance cannot handle '%s'".formatted(todoItem));
+			}
+			handled.add(todoItem);
+			return context.event(new SecondDomainEvent(todoItem), "done-" + todoItem);
+		}
+
+		@Override
+		public AutomationFailureAction onFailure ( String todoItem, Throwable cause, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+			return AutomationFailureAction.STOP_AUTOMATION;
+		}
+
+		List<String> handled ( ) {
+			return List.copyOf(handled);
+		}
+	}
+
+	/**
+	 * A SHARED read model with one broken instance: {@code when} throws on the failing instance,
+	 * which stops that instance's projector, while the healthy instance carries the same class name
+	 * and so contends for the same lease. Applications are counted statically, across instances,
+	 * like {@link SharedApplyLog}.
+	 */
+	static class FlakyApplyLog implements ReadModelWithMetaData<MockDomainEvent> {
+
+		private static final Map<String,AtomicInteger> APPLICATIONS = new ConcurrentHashMap<>();
+
+		private final boolean failing;
+
+		FlakyApplyLog ( boolean failing ) {
+			this.failing = failing;
+		}
+
+		static Map<String,Integer> applications ( ) {
+			Map<String,Integer> snapshot = new ConcurrentHashMap<>();
+			APPLICATIONS.forEach((value, count) -> snapshot.put(value, count.get()));
+			return snapshot;
+		}
+
+		static void reset ( ) {
+			APPLICATIONS.clear();
+		}
+
+		@Override
+		public ReadModelStorage storage ( ) {
+			return ReadModelStorage.SHARED;
+		}
+
+		@Override
+		public EventQuery eventQuery ( ) {
+			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+		}
+
+		@Override
+		public void when ( Event<MockDomainEvent> event ) {
+			if ( failing ) {
+				throw new IllegalStateException("this instance cannot project '%s'".formatted(event.data()));
+			}
+			APPLICATIONS.computeIfAbsent(((FirstDomainEvent) event.data()).value(), v -> new AtomicInteger()).incrementAndGet();
+		}
+	}
+
+	/**
 	 * A todo list that is event-sourced all the way: items arrive as {@code FirstDomainEvent} and
 	 * leave as {@code SecondDomainEvent}, so a fresh instance projecting from scratch sees completed
 	 * items as completed — which is what makes a failover not re-handle them.
@@ -449,6 +611,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	public void setUp ( ) {
 		super.setUp();
 		SharedApplyLog.reset();
+		FlakyApplyLog.reset();
 	}
 
 }

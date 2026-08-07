@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.module.eventdispatching;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +54,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 
 	private final ProcessorIdentification processorIdentification;
 	private final ProcessorMode originalProcessorMode;
-	private final RunListener runListener;
+	private final ProjectorListener projectorListener;
 
 	// retained so a promotion can rebuild the projector from the current shared position
 	private final EventSource<EVENT_TYPE> eventSource;
@@ -101,8 +102,8 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 			Projection<EVENT_TYPE> projection,
 			ProcessorMode processorMode,
 			Instance instance,
-			RunListener runListener ) {
-		this(processorIdentification, eventSource, projection, processorMode, instance, runListener, null);
+			ProjectorListener projectorListener ) {
+		this(processorIdentification, eventSource, projection, processorMode, instance, projectorListener, null);
 	}
 
 	/**
@@ -118,13 +119,13 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 			Projection<EVENT_TYPE> projection,
 			ProcessorMode processorMode,
 			Instance instance,
-			RunListener runListener,
+			ProjectorListener projectorListener,
 			SelfBookmarkingProjection ownBookmark ) {
 
 		this.processorIdentification = processorIdentification;
 		this.originalProcessorMode = processorMode;
 		this.processorMode = ProcessorMode.STOPPED;
-		this.runListener = runListener;
+		this.projectorListener = projectorListener;
 		this.eventSource = eventSource;
 		this.projection = projection;
 		this.instance = instance;
@@ -241,6 +242,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 		synchronized ( this ) {
 			this.notify();
 		}
+		notifyListener("started", ProjectorListener::onStarted);
 	}
 
 	@Override
@@ -320,13 +322,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 							LOGGER.debug("projector run completed: {} events streamed, {} handled, last reference {}",
 									metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
 
-							if ( runListener != null ) {
-								try {
-									runListener.onRun(metrics, runDurationMs);
-								} catch ( Throwable t ) {
-									LOGGER.warn("projector run listener failed: {}", t.getMessage(), t);
-								}
-							}
+							notifyListener("run", listener -> listener.onRun(metrics, runDurationMs));
 
 							initialProjectionDone.countDown(); // caught up at least once, projection is usable
 
@@ -356,6 +352,9 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 							stoppedItself = true;
 							processorMode = ProcessorMode.STOPPED;
 							initialProjectionDone.countDown(); // no catch-up will happen anymore, release anyone waiting for it
+							// after the mode is set, so a listener that goes looking finds a processor that
+							// really has retired rather than one about to
+							notifyListener("stopped", listener -> listener.onStopped(e));
 
 						}
 					} else {
@@ -406,16 +405,62 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 
 
 	/**
-	 * Notified after each {@link Projector#run()} cycle with the metrics of that cycle (events
-	 * streamed, handled, queries done, last reference) and the wall-clock duration in milliseconds.
+	 * Delivers one notification to the listener, if there is one, absorbing whatever it throws.
 	 * <p>
-	 * A run corresponds to a full catch-up with the stream — possibly spanning several query batches,
-	 * such as the complete rebuild of an ephemeral read model on processor start — so the supplied
-	 * metrics aggregate all queries performed during that catch-up.
+	 * Observation must not cost projection: {@code onRun} is called from inside the projector loop, so
+	 * a throw there used to be answered by the loop's catch-all — which cannot tell a broken listener
+	 * from a broken projection and abandons the round either way. {@code onStopped} is worse still: it
+	 * runs on the path that is already handling a failure, and a throw would replace the failure being
+	 * reported with the reporting of it.
 	 */
-	@FunctionalInterface
-	public interface RunListener {
-		void onRun ( ProjectorMetrics metrics, long durationMs );
+	private void notifyListener ( String what, Consumer<ProjectorListener> notification ) {
+		if ( projectorListener == null ) {
+			return;
+		}
+		try {
+			notification.accept(projectorListener);
+		} catch ( Throwable t ) {
+			LOGGER.warn("projector listener failed on '{}' for '{}': {}", what, processorIdentification, t.getMessage(), t);
+		}
+	}
+
+	/**
+	 * What this processor tells its module about its own progress, so the module can report it in the
+	 * terms its components are named in — this class projects read models, translators and dispatchers
+	 * alike and has no business knowing which.
+	 * <p>
+	 * Every method is a no-op by default: a module supplies the ones it reports and ignores the rest.
+	 * A listener that throws is contained by this processor and never costs a projection, but that is
+	 * the last line rather than the intended one — an implementation doing I/O contains its own
+	 * failures.
+	 */
+	public interface ProjectorListener {
+
+		/**
+		 * Called from {@link ProjectorProcessor#start()}, on the caller's thread, before this
+		 * processor's loop has necessarily seen it. For a leader-only processor this says the processor
+		 * exists and is willing, not that it is the one projecting — that is
+		 * {@link ProcessorInstanceMode} and the leader elector reports it separately.
+		 */
+		default void onStarted ( ) { }
+
+		/**
+		 * Called after each {@link Projector#run()} cycle with the metrics of that cycle (events
+		 * streamed, handled, queries done, last reference) and the wall-clock duration in milliseconds.
+		 * <p>
+		 * A run corresponds to a full catch-up with the stream — possibly spanning several query
+		 * batches, such as the complete rebuild of an ephemeral read model on processor start — so the
+		 * supplied metrics aggregate all queries performed during that catch-up.
+		 */
+		default void onRun ( ProjectorMetrics metrics, long durationMs ) { }
+
+		/**
+		 * Called when a projection failure has retired this processor. It is not a "batch failed"
+		 * notification: nothing retries after it, so this is the last thing the processor says until
+		 * something starts it again.
+		 */
+		default void onStopped ( ProjectorException failure ) { }
+
 	}
 
 }

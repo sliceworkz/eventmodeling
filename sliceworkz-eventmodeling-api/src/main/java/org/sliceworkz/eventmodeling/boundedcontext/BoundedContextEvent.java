@@ -215,10 +215,68 @@ public sealed interface BoundedContextEvent {
 	/**
 	 * Emitted after a batch of events has been applied to an eventually consistent read model.
 	 * <p>
+	 * <strong>Only when the catch-up handled something.</strong> A projector that finds nothing of
+	 * interest emits nothing, so silence here means "caught up" at least as often as it means anything
+	 * else, and never means the projector is gone — {@link ReadModelProjectorStarted} and
+	 * {@link ReadModelProjectorStopped} are the pair that answers that.
+	 * <p>
 	 * {@code slice} identifies the originating feature slice (resolved by package convention) and may
 	 * be {@code null}.
 	 */
 	record EventuallyConsistentReadModelUpdated ( String boundedContext, String readModel, String readModelType, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when the projector of an eventually consistent read model starts: once per read model
+	 * when the bounded context starts, on every instance that runs that projector.
+	 * <p>
+	 * Emitted on the ordinary path and not only on the interesting one, for the same reason
+	 * {@link AutomationStarted} is: {@link EventuallyConsistentReadModelUpdated} is raised only by a
+	 * catch-up that handled something, so a read model whose stream holds nothing for it would announce
+	 * nothing at all and be indistinguishable from one that is not deployed.
+	 * <p>
+	 * It is also the only event that says where a read model keeps its state before it has projected
+	 * anything. The slice inventory on {@link BoundedContextStarting} declares a read model's name and
+	 * the aspect it was registered in, but not its storage class — which is what decides whether every
+	 * instance projects its own copy or a single elected leader projects for the deployment.
+	 * <p>
+	 * A {@code shared} read model's projector is started on every instance that deploys it and then
+	 * stands by until it wins the lease, so this event does not say the read model is being projected
+	 * <em>here</em>; {@link LeadershipAcquired} does.
+	 *
+	 * @param boundedContext the context the read model belongs to
+	 * @param readModel the read model's name, the same one its bookmark and metric tags use
+	 * @param readModelType where the read model keeps its state: {@code ephemeral}, {@code local} or
+	 *        {@code shared}, as on {@link EventuallyConsistentReadModelUpdated}
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record ReadModelProjectorStarted ( String boundedContext, String readModel, String readModelType, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a read model's projector has stopped on a failure and will project nothing further
+	 * until something restarts it — which today means restarting its bounded context.
+	 * <p>
+	 * <strong>There is no retrying state to report, and so no counterpart to {@link AutomationFailed}.</strong>
+	 * An automation contains a failure per item and carries on, which is why it needs an event for
+	 * "running, retrying and getting nowhere". A projector has no such containment: one throwable out
+	 * of a projection abandons the batch and retires the processor, so its first failure is also its
+	 * last, and this event is both.
+	 * <p>
+	 * With {@link ReadModelProjectorStarted} this is the pair to fold to answer "is it still
+	 * projecting", the later of the two winning. The two are deliberately not symmetric at shutdown,
+	 * the same asymmetry {@link AutomationStopped} keeps: a projector going down with its context
+	 * raises nothing, because {@link BoundedContextStopping} already says so for all of them at once.
+	 * This event therefore means the one state worth alerting on — a read model that has stopped
+	 * taking events while the context serving it is up, and is quietly getting staler.
+	 *
+	 * @param boundedContext the context the read model belongs to
+	 * @param readModel the read model's name, the same one its bookmark and metric tags use
+	 * @param readModelType where the read model keeps its state, as on {@link ReadModelProjectorStarted}
+	 * @param failure what escaped the projection
+	 * @param failedAt the event being projected when it did, or {@code null} when the failure did not
+	 *        happen on one (streaming or querying the events, rather than handling one)
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record ReadModelProjectorStopped ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted after an automation has processed a batch of todo items.

@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.readmodels;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -49,6 +51,7 @@ import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
+import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 
@@ -176,7 +179,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
 				processorModeFor(readModelStorage),
 				instance,
-				ecRunListener(rm, storage),
+				ecProjectorListener(rm, storage),
 				ownBookmarkOf(rm)));
 		});
 
@@ -205,20 +208,67 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	}
 
 	/**
-	 * Builds a run listener that emits an {@link BoundedContextEvent.EventuallyConsistentReadModelUpdated}
-	 * after each projector catch-up that handled at least one event. The metrics come from the projector
-	 * run, so {@code queriesDone}/{@code eventsStreamed} are accurate — including the full rebuild of an
-	 * ephemeral read model on processor start (which spans several query batches).
+	 * Turns what a projector reports about itself into the read model's own bounded-context events:
+	 * {@code ReadModelProjectorStarted} when it starts, {@code EventuallyConsistentReadModelUpdated}
+	 * after each catch-up that handled at least one event, and {@code ReadModelProjectorStopped} when
+	 * a projection failure has retired it.
+	 * <p>
+	 * The three are what make a read model's state answerable from the stream alone, which the update
+	 * event cannot do by itself: it is raised only by a catch-up that handled something, so a caught-up
+	 * read model and one whose projector died look identical for as long as nobody appends. The start
+	 * says the projector is there, the stop says it no longer is, and the updates in between say it is
+	 * getting somewhere.
+	 * <p>
+	 * The metrics come from the projector run, so {@code queriesDone}/{@code eventsStreamed} are
+	 * accurate — including the full rebuild of an ephemeral read model on processor start (which spans
+	 * several query batches).
 	 */
-	private ProjectorProcessor.RunListener ecRunListener ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> rm, Storage storage ) {
+	private ProjectorProcessor.ProjectorListener ecProjectorListener ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> rm, Storage storage ) {
 		// the projector runs on its own (system) thread, not on behalf of any user operation, so the
-		// event is emitted with kernel tracing (actor "system", no channel)
-		return (metrics, durationMs) -> {
-			if ( eventEmitter.enabled() && metrics.eventsHandled() > 0 ) {
-				BoundedContextEvent.Metrics m = new BoundedContextEvent.Metrics(durationMs, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
-				eventEmitter.emit(new BoundedContextEvent.EventuallyConsistentReadModelUpdated(boundedContext, rm.readmodelName(), storage.label(), m, eventEmitter.sliceFor(rm.getClass())));
+		// events are emitted with kernel tracing (actor "system", no channel)
+		return new ProjectorProcessor.ProjectorListener() {
+
+			@Override
+			public void onStarted ( ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorStarted(
+							boundedContext, rm.readmodelName(), storage.label(), eventEmitter.sliceFor(rm.getClass())));
+				}
+			}
+
+			@Override
+			public void onRun ( ProjectorMetrics metrics, long durationMs ) {
+				if ( eventEmitter.enabled() && metrics.eventsHandled() > 0 ) {
+					BoundedContextEvent.Metrics m = new BoundedContextEvent.Metrics(durationMs, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
+					eventEmitter.emit(new BoundedContextEvent.EventuallyConsistentReadModelUpdated(
+							boundedContext, rm.readmodelName(), storage.label(), m, eventEmitter.sliceFor(rm.getClass())));
+				}
+			}
+
+			@Override
+			public void onStopped ( ProjectorException failure ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorStopped(
+							boundedContext, rm.readmodelName(), storage.label(),
+							// the cause, not the ProjectorException wrapping it: the wrapper is the
+							// framework's own plumbing and reporting it would put the same type on every
+							// stopped read model there has ever been
+							failureOf(failure == null ? null : failure.getCause()),
+							failure == null ? null : failure.getEventReference(),
+							eventEmitter.sliceFor(rm.getClass())));
+				}
 			}
 		};
+	}
+
+	/** The throwable that stopped a projector, in the serialization-friendly shape the events carry. */
+	private static BoundedContextEvent.Failure failureOf ( Throwable failure ) {
+		if ( failure == null ) {
+			return null;
+		}
+		StringWriter stackTrace = new StringWriter();
+		failure.printStackTrace(new PrintWriter(stackTrace));
+		return new BoundedContextEvent.Failure(failure.getClass().getName(), failure.getMessage(), stackTrace.toString());
 	}
 
 	@SuppressWarnings("unchecked")

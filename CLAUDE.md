@@ -285,6 +285,45 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
   database that is durable but private to one instance
 - `boundedContext.start()` does not return until every `EPHEMERAL` read model has been projected completely, so those are usable right after start. `LOCAL` and `SHARED` read models keep their bookmark and catch up in the background without blocking startup. The wait has a safety timeout (default 5 minutes, `-Dsliceworkz.eventmodeling.readmodel.ephemeral.projection.timeout.ms=...`) after which startup continues with a warning
 
+**A projector's lifecycle is reported, because its silence means two opposite things:**
+- **`EventuallyConsistentReadModelUpdated` is raised only by a catch-up that handled something**, which
+  is right — an idle projector emitting per poll would be a heartbeat nobody asked for — but it leaves a
+  read model that is up to date and one whose projector died looking identical from outside, for as long
+  as nobody appends. That was the whole observable difference between "nothing to do" and "quietly going
+  stale", and it was a WARN line in a log file
+- **`ReadModelProjectorStarted` / `ReadModelProjectorStopped` are the pair to fold to answer "is it still
+  projecting"**, the later of the two winning — deliberately the same shape as
+  `AutomationStarted`/`AutomationStopped`, since it is the same question. `Started` is emitted on the
+  ordinary path for every eventually consistent read model when its context starts, so one whose stream
+  holds nothing for it is announced from startup instead of never
+- **There is no `ReadModelProjectorFailed`, and that asymmetry with automations is the behaviour, not an
+  omission.** An automation contains a failure per item and carries on, so it needs an event for
+  "running, retrying and getting nowhere". A projector has no such containment: one throwable out of a
+  projection abandons the batch and sets the processor `STOPPED`, which nothing but starting the bounded
+  context again undoes. Its first failure is its last, and `ReadModelProjectorStopped` is both
+- **`readModelType` on the start event is the only place the storage class is stated before anything has
+  been projected.** The slice inventory on `BoundedContextStarting` declares a read model's name and the
+  aspect it was registered in, but not where it keeps its state — which is what decides whether every
+  instance projects its own copy or one elected leader projects for the deployment. A consumer that had
+  to wait for the first update to learn that learned it last for exactly the read models it most wanted
+  to know about
+- **Not emitted at shutdown**, the same asymmetry `AutomationStopped` and the leadership events keep:
+  `BoundedContextStopping` already says it for everything at once, which leaves `ReadModelProjectorStopped`
+  meaning the one state worth alerting on — a read model that stopped taking events while the context
+  serving it is up. A `SHARED` read model's projector standing by is likewise not a stop:
+  `LeadershipAcquired`/`LeadershipReleased` report that axis, and `Started` says the processor exists and
+  is willing, not that it is the one projecting
+- The mechanism is `ProjectorProcessor.ProjectorListener` (`onStarted`/`onRun`/`onStopped`, all
+  defaulted), which replaced the `RunListener` that only carried `onRun`. `ProjectorProcessor` projects
+  read models, translators and dispatchers alike and has no business knowing which, so it reports to its
+  module and `ReadModelModule` names the events; the other two modules pass no listener and emit nothing.
+  Every delivery is contained by the processor — `onRun` runs *inside* the projector loop and `onStopped`
+  on a path already handling a failure, where a throw would replace the failure being reported with the
+  reporting of it
+- `ReadModelProjectorLifecycleTest` pins all four: an idle read model is announced and never updates, the
+  storage class travels with the event, a poison projection reports the cause (not the `ProjectorException`
+  wrapping it) together with the event it died on, and shutdown reports nothing per read model
+
 **A durable read model keeps its own position, next to the state it projects:**
 - **The problem it solves is a two-store commit with no transaction across it.** A read model writes its
   rows in its own database; the framework bookmarks its progress in the event store, *after* the commit.

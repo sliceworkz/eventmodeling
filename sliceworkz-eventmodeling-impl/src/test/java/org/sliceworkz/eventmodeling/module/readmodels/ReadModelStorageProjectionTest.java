@@ -20,7 +20,7 @@ package org.sliceworkz.eventmodeling.module.readmodels;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
-import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor.ProcessorMode;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 
 /**

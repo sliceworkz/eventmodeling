@@ -43,6 +43,7 @@ import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
 import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
 import org.sliceworkz.eventmodeling.module.inbound.InboundModule;
+import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
@@ -89,6 +90,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule;
 	private InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule;
 	private OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule;
+	private LeaderElector leaderElector;
 	
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> deployedFeatureSlices;
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> undeployedFeatureSlices;
@@ -132,6 +134,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule,
 			InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule,
 			OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule,
+			LeaderElector leaderElector,
 			Instance instance,
 			MeterRegistry meterRegistry,
 			AdapterRegistry adapterRegistry ) {
@@ -156,6 +159,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.aggregateModule = aggregateModule;
 
 		this.outboundModule = outboundModule;
+		this.leaderElector = leaderElector;
 
 		this.adapterRegistry = adapterRegistry;
 		this.instance = instance;
@@ -209,6 +213,11 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			if (startAutomations) raw.startAutomation(selfReference);
 			if (startProjections) raw.startProjection(selfReference);
 		}
+		// one synchronous election round before any processor takes its first loop pass, so a single
+		// instance -- or the preferred one on a quiet deployment -- leads from the start instead of a
+		// heartbeat interval later. Renewals continue on the elector's own thread, never on any
+		// processing path.
+		this.leaderElector.start();
 		this.inboundModule.start();
 		this.outboundModule.start();
 		this.dcbDomainModule.start();
@@ -227,6 +236,9 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.dcbDomainModule.stop();
 		this.automationModule.stop();
 		this.readmodelModule.stop();
+		// after the processors have stopped, so the leases are handed over once nothing here still
+		// works on them -- a stopped instance holding leases would stall the whole deployment
+		this.leaderElector.stop();
 		LOGGER.info("stopped bounded context '{}'.", name);
 	}
 	
@@ -251,6 +263,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.dcbDomainModule.terminate();
 		this.automationModule.terminate();
 		this.readmodelModule.terminate();
+		// releases the held leases once the processor threads are drained, so a standby instance takes
+		// over promptly instead of waiting out the lease ttl. Leases live on the storage, which stays
+		// open: only the store below is ours to close.
+		this.leaderElector.terminate();
 		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopped(name, instance.logical(), instance.physical(), instance.process()));
 		// The store is ours: the builder created it over the storage it was handed, and nothing outside
 		// this context holds it. Closing it releases the notification machinery it started -- left

@@ -38,6 +38,8 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorInstanceMode;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventSource;
@@ -71,8 +73,12 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 	private Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory;
 
-	// volatile for the same reason as processorMode, written by terminate()
-	private volatile ProcessorInstanceMode instanceMode = ProcessorInstanceMode.LEADER; // TOOD implement leader selection on processors
+	// The election result, flipped at runtime by the leader elector through instanceMode(): an
+	// automation is always leader-only, so it starts as a standby and is promoted, never assumed.
+	// Volatile for the same reason as processorMode. Termination is deliberately a separate flag,
+	// so a standby can be shut down as itself.
+	private volatile ProcessorInstanceMode instanceMode = ProcessorInstanceMode.STANDBY;
+	private volatile boolean terminating;
 	private Instance instance;
 
 	private boolean monitoredBookmarkMissingWarned = false;
@@ -146,8 +152,16 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 	@Override
 	public void terminate ( ) {
-		this.instanceMode = ProcessorInstanceMode.TERMINATING;
+		this.terminating = true;
 		synchronized ( this ) { // escape the wait state if needed
+			this.notify();
+		}
+	}
+
+	@Override
+	public void instanceMode ( ProcessorInstanceMode mode ) {
+		this.instanceMode = mode;
+		synchronized ( this ) { // wake a parked standby immediately on promotion, and a backOff on demotion
 			this.notify();
 		}
 	}
@@ -217,7 +231,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		Thread.currentThread().setName(processorIdentification.id()); // make the thread easily recognizable
 		LOGGER.info("automation event processor '{}' running ...", processorIdentification.toString());
 
-		while ( instanceMode != ProcessorInstanceMode.TERMINATING ) {
+		while ( !terminating ) {
 			
 			try {
 	
@@ -359,9 +373,18 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 						}
 	
 					} else {
-						LOGGER.debug("we're not leader, not running on this instance");
+						// Standing by: parked, not spinning. Woken instantly by instanceMode(LEADER),
+						// stop() or terminate(); the timeout is only a safety net. Bookmark
+						// notifications wake this park too (same monitor), which is harmless: the loop
+						// re-reads the mode and parks again.
+						LOGGER.debug("'{}' standing by, not the elected leader on this instance", processorIdentification);
+						synchronized ( this ) {
+							if ( !terminating && instanceMode == ProcessorInstanceMode.STANDBY && processorMode != ProcessorMode.STOPPED ) {
+								this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
+							}
+						}
 					}
-					
+
 				} else {
 					LOGGER.debug("not running, waiting for further instructions, checking back in {} seconds", (WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS/1000));
 					// TODO maybe synchronize on other object than to allow notify() upon state change from STOPPED to RUNNING again, independently of notifies for new events in stream?
@@ -426,8 +449,11 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		try ( Stream<TODO_ITEM_TYPE> items = automation.getTodoList().streamItems(batchSize) ) {
 			Iterator<TODO_ITEM_TYPE> iterator = items.iterator();
 			while ( iterator.hasNext() ) {
-				if ( instanceMode == ProcessorInstanceMode.TERMINATING || processorMode == ProcessorMode.STOPPED ) {
-					LOGGER.debug("abandoning the rest of the batch, this processor is stopping");
+				// a demotion abandons the batch at the item boundary too: the items behind this one are
+				// the new leader's to handle, and the fewer we touch after losing the lease, the smaller
+				// the at-least-once overlap window
+				if ( terminating || processorMode == ProcessorMode.STOPPED || instanceMode == ProcessorInstanceMode.STANDBY ) {
+					LOGGER.debug("abandoning the rest of the batch, this processor is stopping or no longer the leader");
 					return outcome;
 				}
 				TODO_ITEM_TYPE item = iterator.next();
@@ -529,7 +555,9 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		long deadline = System.currentTimeMillis() + timeoutMs;
 		try {
 			synchronized ( this ) {
-				while ( instanceMode != ProcessorInstanceMode.TERMINATING && processorMode != ProcessorMode.STOPPED ) {
+				// a demotion also cuts the backoff short: a standby has nothing to back off from,
+				// and should be parked in the standby branch instead
+				while ( !terminating && processorMode != ProcessorMode.STOPPED && instanceMode == ProcessorInstanceMode.LEADER ) {
 					long remaining = deadline - System.currentTimeMillis();
 					if ( remaining <= 0 ) {
 						return;
@@ -554,7 +582,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		}
 		try {
 			synchronized ( this ) {
-				if ( instanceMode != ProcessorInstanceMode.TERMINATING ) {
+				if ( !terminating ) {
 					this.wait(timeoutMs);
 				}
 			}
@@ -586,6 +614,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 				processorIdentification.id(),
 				automation.getClass().getSimpleName(),
 				processorMode != ProcessorMode.STOPPED,
+				instanceMode == ProcessorInstanceMode.LEADER,
 				itemsFailed.get(),
 				consecutiveFailedBatches,
 				failureOf(lastFailure),
@@ -612,6 +641,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		return processorIdentification.id();
 	}
 
+	public ProcessorIdentification identification ( ) {
+		return processorIdentification;
+	}
+
 	private static BoundedContextEvent.Failure failureOf ( Throwable failure ) {
 		if ( failure == null ) {
 			return null;
@@ -622,18 +655,6 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	}
 
 
-	public enum ProcessorMode {
-		STOPPED, 					// processing will not run at all
-		RUNNING_ON_SINGLE_LEADER, 	// processing will run, on instance selected be via leader election
-		RUNNING_ON_ALL_INSTANCES,	 // processing will run, on each instance
-	}
-	
-	public enum ProcessorInstanceMode {
-		LEADER,   // this instance is in charge
-		STANDBY,  // another instance is handling everything, but this one could be elected later on at any moment
-		TERMINATING, // gracefully end at end of current handling
-	}
-	
 	Throwable determineRootCause ( Throwable t ) {
 		if ( t.getCause() == null ) {
 			return t;

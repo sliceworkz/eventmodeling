@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+import java.time.Duration;
+
 import org.sliceworkz.eventmodeling.EventTypes; // retained for javadoc reference
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
@@ -64,6 +66,38 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * every context on it has been terminated. One storage can back several bounded contexts.
 	 */
 	BoundedContextBuilder<C> eventStorage(EventStorage eventStorage);
+
+	/**
+	 * This deployment's priority in leader election, default {@code 0}.
+	 * <p>
+	 * Leader-only processors — automations, SHARED read models' projectors, translators and
+	 * dispatchers — run on the single instance holding their lease. When a live contender with a
+	 * <b>strictly higher</b> priority appears, the current leader finishes its batch and hands the
+	 * lease over, so the preferred instance regains leadership when it comes back. Equal priorities
+	 * never preempt: whoever holds a lease keeps it, which is what keeps a symmetric deployment
+	 * stable.
+	 *
+	 * @param priority higher wins leadership back; equal never preempts
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> leadershipPriority ( long priority );
+
+	/**
+	 * The pacing of leader election, defaults 5 seconds heartbeat and 20 seconds time-to-live.
+	 * <p>
+	 * The elected leader renews its leases every {@code heartbeat}, off the processing path — no
+	 * batch or projection ever waits for a renewal. A lease not renewed within {@code ttl} (judged
+	 * on the event storage's clock) is expired and taken over, so {@code ttl} bounds how long
+	 * processing pauses when an instance dies without releasing; a graceful stop or step-down hands
+	 * over within a heartbeat or two. An instance that cannot <em>confirm</em> a renewal demotes
+	 * itself before the ttl elapses, which is what keeps two leaders from overlapping.
+	 *
+	 * @param heartbeat how often leases are renewed; must be positive
+	 * @param ttl how long an unrenewed lease survives; must be at least twice the heartbeat, so a
+	 *        single failed renewal does not cost leadership
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> leadershipIntervals ( Duration heartbeat, Duration ttl );
 
 	FeaturesSpecification<C> features ( );
 

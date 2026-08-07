@@ -21,6 +21,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -51,6 +52,9 @@ import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
+import org.sliceworkz.eventmodeling.module.automation.AutomationProcessor;
+import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
+import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateSpecificationImpl;
 import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
@@ -138,6 +142,10 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	private Instance instance;
 
+	private long leadershipPriority = 0;
+	private Duration leadershipHeartbeat = Duration.ofSeconds(5);
+	private Duration leadershipTtl = Duration.ofSeconds(20);
+
 	private final AdapterRegistry adapterRegistry = new AdapterRegistry();
 
 	@Override
@@ -209,6 +217,27 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	@Override
 	public BoundedContextBuilder<C> eventStorage ( EventStorage eventStorage ) {
 		this.eventStorage = eventStorage;
+		return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<C> leadershipPriority ( long priority ) {
+		this.leadershipPriority = priority;
+		return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<C> leadershipIntervals ( Duration heartbeat, Duration ttl ) {
+		if ( heartbeat == null || heartbeat.isNegative() || heartbeat.isZero() ) {
+			throw new IllegalArgumentException("leadership heartbeat must be positive, but was " + heartbeat);
+		}
+		if ( ttl == null || ttl.compareTo(heartbeat.multipliedBy(2)) < 0 ) {
+			// a ttl under two heartbeats makes a single failed renewal cost leadership, which turns
+			// every hiccup into a failover
+			throw new IllegalArgumentException("leadership ttl must be at least twice the heartbeat (%s), but was %s".formatted(heartbeat, ttl));
+		}
+		this.leadershipHeartbeat = heartbeat;
+		this.leadershipTtl = ttl;
 		return this;
 	}
 
@@ -497,6 +526,18 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, meterRegistry, eventEmitter);
 
+		// one lease per leader-only processor, named by its ProcessorIdentification: an instance only
+		// contends for the elements it has deployed, so heterogeneous deployments elect per element.
+		// The owner is Instance.process() -- fresh per JVM run, so a restarted process is a new
+		// contender and its predecessor's leases expire instead of being confusingly renewed.
+		List<LeaderElector.Electable> electables = new ArrayList<>();
+		im.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
+		om.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
+		am.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((AutomationProcessor<?,?,?>) p).identification(), (AutomationProcessor<?,?,?>) p)));
+		rmm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
+		LeaderElector leaderElector = new LeaderElector(name, eventStorage, instance.process(),
+				leadershipPriority, leadershipHeartbeat, leadershipTtl, electables, eventEmitter);
+
 		BoundedContextImpl bc =
 				new BoundedContextImpl(name, deployedFeatureSlices, undeployedFeatureSlices,
 						featuresSpecification.mustDeployCommands(),
@@ -504,7 +545,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
-						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, instance, meterRegistry, adapterRegistry);
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, instance, meterRegistry, adapterRegistry);
 
 		// From here the context owns the modules, and it is the only thing that can release them
 		// completely: its constructor registered a JVM shutdown hook holding it, which only its own

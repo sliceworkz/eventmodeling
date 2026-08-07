@@ -31,6 +31,10 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
  *        {@link BoundedContextEvent.AutomationStopped} event use
  * @param automationClass the simple name of the implementing class
  * @param running whether it is processing todo items, as opposed to stopped
+ * @param leader whether this instance holds the automation's leadership lease right now. An automation
+ *        runs on the single elected leader, so on every other instance a running automation is a parked
+ *        standby: {@code running} says it would process if elected, {@code leader} says it actually is.
+ *        Restarting a stopped automation on a standby instance puts it back to standing by, not to work
  * @param itemsFailed how many todo items have failed on this instance since it started, whatever the
  *        automation decided to do about them
  * @param consecutiveFailedBatches how many batches in a row have failed without handling anything. Zero
@@ -46,6 +50,7 @@ public record AutomationStatus (
 		String automation,
 		String automationClass,
 		boolean running,
+		boolean leader,
 		long itemsFailed,
 		int consecutiveFailedBatches,
 		BoundedContextEvent.Failure lastFailure,

@@ -29,6 +29,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
+import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
@@ -66,6 +67,11 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 	 *
 	 * @see org.sliceworkz.eventmodeling.automation.AutomationAdminCapability#automations()
 	 */
+	/** The processors of this module, all leader-only by construction, for the leader elector. */
+	public List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> leaderOnlyProcessors ( ) {
+		return automationProcessors;
+	}
+
 	public List<AutomationStatus> automations ( ) {
 		return automationProcessors.stream().map(AutomationProcessor::status).toList();
 	}
@@ -118,7 +124,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 					.name(a.getTodoList().readmodelName())
 					.storage(a.getTodoList().storage())
 				.build(),
-				domainEventStream, this::createAutomationContext, a, AutomationProcessor.ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance, boundedContext, meterRegistry, eventEmitter))
+				domainEventStream, this::createAutomationContext, a, ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance, boundedContext, meterRegistry, eventEmitter))
 		);
 		return result;
 	}

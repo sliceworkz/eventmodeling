@@ -223,8 +223,9 @@ features/
   slice has ensured anything. `tracksItsOwnBookmark()` opts out and puts the read model back on the
   framework's bookmark
 - **`project()` should still be idempotent wherever it cheaply can be**, because this covers the
-  framework's own replay and nothing else — a second instance projecting the same `SHARED` read model
-  still applies every event again, since leader election is still missing. Two helpers do it:
+  framework's own replay and the steady state only — leader election keeps a second instance from
+  projecting a `SHARED` read model, but a failover window is at-least-once (a leader paused past its
+  lease can commit a batch the new leader repeats). Two helpers do it:
   - `updateOnce(...)` — an UPDATE that applies at most once per event per row. **There is no
     one-row-per-event assumption**: `EVENT_REF_COLUMNS` on a row mean "the newest event this row
     reflects", so the ordinary aggregate — `(customer_id, total_order_count, last_order_date)` fed by a
@@ -431,8 +432,75 @@ features/
   The default registry is an empty `Metrics.globalRegistry` composite whose counters are no-ops reading 0
   forever, so serving an operator's view from the meter would have made it depend on whether anyone wired
   up monitoring. `AutomationAdminTest` catches that (it asserts the count against an unconfigured registry)
-- Still missing, deliberately out of scope here: leader election (`instanceMode` is hardcoded to `LEADER`
-  while the bookmark is `[shared]`, so a second instance duplicates every item)
+- **A second instance no longer duplicates every item: automations run on the single elected leader.**
+  See "Leader election" below for the mechanism, its configuration, and its honest limits
+
+### Leader election — one instance per leader-only processor
+
+**Every leader-only processor — an automation, a SHARED read model's projector, a translator, a
+dispatcher — runs on exactly one instance of the deployment**, elected by holding a lease in the event
+storage (the eventstore's `requestLease`/`releaseLease` SPI; see that repository's CLAUDE.md for the
+lease semantics themselves). `LeaderElector`, one per bounded context on its own virtual thread, renews
+every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`) on the processors.
+
+- **One lease per processor, named by its `ProcessorIdentification`** — the same string that keys its
+  bookmark, so each lease guards exactly that bookmark's writer. An instance contends only for the
+  elements it has deployed: a deployment that puts automation X on one instance and automation Y on
+  another has each instance win the leases nobody else wants, where a single per-context lease would
+  strand every processor the winning instance does not carry. `EPHEMERAL`/`LOCAL` read models are
+  `RUNNING_ON_ALL_INSTANCES` and untouched by any of this — `start()`'s wait on ephemeral projections
+  is unchanged
+- **Election is never on the processing path.** Leadership is a `volatile` field the processors read at
+  the top of every loop pass — the check that always existed, now actually flipped. No batch,
+  projection or event query ever waits for a lease call; a leader processes continuously across
+  renewals, so election adds zero read-model lag. On Postgres the lease tables sit outside the event
+  log: no lock an event query or append takes, no interaction with the `pg_snapshot_xmin` barrier
+- **Configuration on the builder**: `.leadershipPriority(long)` (default 0) and
+  `.leadershipIntervals(heartbeat, ttl)` (defaults 5s/20s, `ttl >= 2×heartbeat` enforced). A live
+  contender with a **strictly higher** priority makes the current leader finish its batch, park, and
+  hand the lease over one heartbeat later — the fail-back path when a preferred instance returns.
+  Equal priorities never preempt, which keeps a symmetric deployment stable
+- **The safety rule is demote-before-takeover.** Expiry is judged on the storage's clock only; the
+  elector measures durations on its own clock only. A leadership that cannot be *confirmed* is given up
+  at `ttl - heartbeat` since the last successful renewal, while a challenger acquires no earlier than
+  `ttl` — so on a crash, work pauses for up to the ttl (nothing is lost: it all sits in the event store
+  and todo lists) rather than ever running twice. `start()` runs one synchronous election round before
+  the processors' first pass; `stop()`/`terminate()` release the held leases so a standby takes over
+  promptly instead of waiting out the ttl
+- **Promotion re-seeds a projector.** The `Projector` holds its cursor in memory, so after a spell as
+  standby that cursor describes where *this instance* stopped reading while the old leader projected
+  on. `ProjectorProcessor` rebuilds its projector on every STANDBY→LEADER transition, re-running the
+  resume logic — the shared bookmark, or `SelfBookmarkingProjection.resumeFrom()` for a self-bookmarking
+  read model. `AutomationProcessor` needs nothing: it re-reads both bookmarks every round.
+  `LeaderElectionTest.testPromotedProjectorResumesFromTheSharedPositionNotItsStaleCursor` fails without
+  the re-seed
+- **The lease owner identifies the elector, not the JVM.** `Instance.process()` is computed once per
+  process, so two bounded-context instances in one JVM (a test, or deliberate co-location) would share
+  an owner id and each mistake the other's lease for its own — both leaders. The elector suffixes a
+  random token per construction; fail-back rides on priority, never on owner identity, so a fresh owner
+  per elector costs nothing
+- **A storage without lease support falls back to the old behaviour**: every leader-only processor is
+  promoted on this instance, with one WARN that a second instance would duplicate work. A third-party
+  `EventStorage` predating leases keeps working unchanged; the in-memory storages implement leases, so
+  a single process wins everything trivially rather than falling back
+- **Observability**: `LeadershipAcquired`/`LeadershipReleased` (`BoundedContextEvent`s, per processor;
+  reasons `STEPPED_DOWN`, `LOST`, `RENEWAL_FAILED`, `STOPPED`). Deliberately not emitted at shutdown —
+  `BoundedContextStopping` already says it for everything at once, the same asymmetry
+  `AutomationStopped` keeps. `AutomationStatus` gained `leader`: `running` says the automation would
+  process if elected, `leader` says it actually is on this instance; `restartAutomation` on a standby
+  restarts it to standing by, not to work
+- **What leader election deliberately does not promise: exactly-once through a failover.** A leader
+  paused beyond its ttl (GC, VM freeze) can finish a batch it had already started while the new leader
+  begins — a bounded overlap no lease can prevent. What contains it is what already existed: idempotency
+  keys on automation-raised events (derive them from the todo item), `updateOnce`/`insertOnce` in SQL
+  read models, and DCB conflicts. The lease's fencing token is stored and surfaced (on
+  `LeadershipAcquired` and `getLeases()`) but not yet enforced inside `SqlReadModelProjector`'s batch
+  transaction — that is the designed next step if zombie writes to SHARED SQL read models must fail hard
+- `LeaderElectionTest` pins it end to end with two instances in one JVM: only the elected leader
+  handles todo items (per backend), failover hands work over without loss or duplication, a
+  higher-priority instance regains leadership through the step-down protocol, a re-promoted projector
+  resumes from the durable position instead of its stale cursor, and a lease-less storage falls back
+  loudly. The lease semantics themselves are pinned per backend by the eventstore's `LeaseTest`
 
 **Translators:**
 - Implement `Translator<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>`

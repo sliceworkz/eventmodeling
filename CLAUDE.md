@@ -200,6 +200,44 @@ features/
   which is purely declarative — it only adds them to the slice's `members` on `BoundedContextStarting`,
   so an observer (the dashboard) shows them from startup instead of after their first execution
 
+**A command appends to exactly one stream — no command raises a domain event and an outbound event
+together:**
+- `AbstractCommand` is sealed with exactly two permits. `Command<D>` decides on domain events and
+  raises domain events; `OutboundCommand<D,O>` decides on domain events and raises **outbound** events
+  — the shape that feeds the outbound stream, and the only writer that stream has (there is no
+  `ProvidedEventCapability` for outbound events; dispatchers only consume). The produced type fixes the
+  target stream in `DCBModule`, and everything a command raises goes out in **one** `append` on that one
+  stream. There is no third command shape, and no cross-stream atomic append in the eventstore SPI to
+  build one on: domain and outbound are separate streams (purposes `domain` and `outbound`) whose
+  appends commit independently
+- **"Record the fact and publish it" is therefore an automation pattern, not a command shape.**
+  `AutomationContext` offers both halves side by side — `execute(OutboundCommand)` and
+  `ProvidedEventCapability.event(...)` — and `handle` composes them, non-atomically, made safe by
+  ordering plus idempotency keys:
+  - **Outbound first, domain second.** Only the domain event makes the todo list drop the item, so a
+    crash between the two leaves the item outstanding and the retry re-runs both halves — the outbound
+    half dedups on its key, and the domain event then lands. The other order loses the publication for
+    good: the domain event completes the item, and nothing ever retries the outbound append
+  - **Both events keyed, both keys derived from the todo item**, never from the attempt. The outbound
+    key is what turns the crash-window retry into a no-op; the domain key is what keeps a re-handled
+    item (a crash between append and bookmark, or a failover overlap) from recording the fact twice.
+    Two keys, because they are scoped per stream and guard two different appends
+- **An `OutboundCommand`'s decision models do not guard its append.** The models are projected from the
+  domain stream, but the `AppendCriteria` they produce travels with the append — which runs against the
+  *outbound* stream, where domain event types never occur, so the optimistic-locking check matches
+  nothing and admits everything. Until that is either fixed (checking the boundary against the domain
+  stream needs a cross-stream conditional append the storage SPI does not have) or rejected at runtime,
+  an `OutboundCommand` should call `noDecisionModels()` and take its correctness from its idempotency
+  key; declaring decision models on one buys a boundary that guards nothing, silently. Nothing enforces
+  this yet — the constraint lives here and in the `OutboundCommand` javadoc
+- **Where latency permits, prefer not needing the pair at all**: keep the command domain-only and derive
+  the publication — a todo list projects the domain event and an automation executes the
+  `OutboundCommand`. Command → domain event → todo list → automation → outbound event → dispatcher:
+  every hop bookmarked, at-least-once and dedup-able, at the price of the dispatch lagging the fact
+- `DispatchOrderAutomation` in the benchmark module is the in-tree example of the pair — outbound
+  first with an item-derived key, domain event second. (Its domain event predates the both-keys rule
+  and is unkeyed; harmless in a benchmark, not the part to copy)
+
 **Which read model to reach for is written down for users, and it is the same order to advise in.**
 [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md) carries the ladder — decision model, live model,
 bound the replay, eventually consistent in memory, eventually consistent durable, seeded read,

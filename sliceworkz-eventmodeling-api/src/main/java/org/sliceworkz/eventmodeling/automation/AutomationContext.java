@@ -26,6 +26,15 @@ import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
  * This interface exposes the capabilities available to an {@link Automation} when processing
  * todo items. Automations can execute commands and provide events to the system through
  * this context.
+ * <p>
+ * It deliberately offers both event destinations side by side — outbound through
+ * {@code execute(OutboundCommand)}, domain through {@code event(...)} — because "record the fact and
+ * publish it" is composed here, not inside any single command (a command appends to exactly one
+ * stream). The composition is non-atomic and made safe by ordering plus idempotency keys: execute the
+ * {@code OutboundCommand} first, provide the domain event second, each keyed from the todo item. Only
+ * the domain event completes the item, so in that order a crash between the two is retried and the
+ * outbound half de-duplicates — reversed, the publication is lost for good. See
+ * {@link org.sliceworkz.eventmodeling.commands.OutboundCommand} and the project documentation.
  *
  * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context
  * @param <OUTBOUND_EVENT_TYPE> the base type of outbound events that can be published

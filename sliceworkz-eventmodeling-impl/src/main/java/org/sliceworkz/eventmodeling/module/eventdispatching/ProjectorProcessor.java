@@ -80,6 +80,11 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	// wherever this instance's projector happened to stop reading
 	private volatile boolean reseedProjector;
 	private volatile boolean potentiallyNewEventsAppended;
+	// set when this processor retires itself on a projection failure, as opposed to being stopped by
+	// its lifecycle; what the leader elector reads to release the lease of a processor that will not
+	// work it (see Processor.stoppedItself). Cleared by start() and stop(): either is an explicit
+	// instruction that supersedes the self-imposed stop
+	private volatile boolean stoppedItself;
 
 	public ProjectorProcessor (
 			ProcessorIdentification processorIdentification,
@@ -222,6 +227,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 
 	@Override
 	public void stop ( ) {
+		this.stoppedItself = false;
 		this.processorMode = ProcessorMode.STOPPED;
 		synchronized ( this ) {
 			this.notify();
@@ -230,10 +236,16 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 
 	@Override
 	public void start ( ) {
+		this.stoppedItself = false;
 		this.processorMode = originalProcessorMode;
 		synchronized ( this ) {
 			this.notify();
 		}
+	}
+
+	@Override
+	public boolean stoppedItself ( ) {
+		return stoppedItself;
 	}
 
 	@Override
@@ -339,6 +351,9 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 									e.getCause().getMessage(),
 									e.getCause());
 							LOGGER.warn("Stopping projector due to error: {}", e.getCause().getMessage(), e.getCause());
+							// self-imposed, not lifecycle: flagged before the mode flip so the leader
+							// elector never sees a self-stopped processor it would renew the lease for
+							stoppedItself = true;
 							processorMode = ProcessorMode.STOPPED;
 							initialProjectionDone.countDown(); // no catch-up will happen anymore, release anyone waiting for it
 

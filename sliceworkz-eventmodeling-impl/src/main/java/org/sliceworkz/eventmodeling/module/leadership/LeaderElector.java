@@ -210,6 +210,25 @@ public class LeaderElector implements Runnable {
 					continue;
 				}
 
+				if ( state.electable.processor().stoppedItself() ) {
+					// The processor retired itself -- a projector on a projection failure, an automation
+					// through STOP_AUTOMATION -- and does no work however the election goes. Renewing its
+					// lease from here would hold that work off every healthy instance for as long as this
+					// process lives: the same "parked processors holding leases would stall the whole
+					// deployment" principle stop() states, applied per processor. Release what we hold and
+					// stay out of the election -- also as a contender, so a self-stopped high-priority
+					// instance does not step down whoever took over -- until the processor is started
+					// again, which clears the flag and puts us back in the race next round.
+					if ( state.leader ) {
+						LOGGER.warn("'{}' stopped itself, releasing its lease so a healthy instance can take over", state.leaseName());
+						demote(state, LeadershipReleaseReason.PROCESSOR_STOPPED);
+						// a throw here lands in the catch below and is retried next heartbeat; state.leader
+						// is already false by then, so worst case the lease expires on the storage's ttl
+						eventStorage.releaseLease(state.leaseName(), owner);
+					}
+					continue;
+				}
+
 				LeaseResponse response = eventStorage.requestLease(new LeaseRequest(state.leaseName(), owner, priority, ttl));
 				switch ( response.status() ) {
 					case LEADER -> {

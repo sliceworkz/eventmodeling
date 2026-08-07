@@ -39,4 +39,20 @@ public interface Processor extends Runnable {
 		// a processor untouched by leader election ignores this
 	}
 
+	/**
+	 * Whether this processor has retired <em>itself</em> — a projector stopped by a projection
+	 * failure, an automation whose failure handling returned {@code STOP_AUTOMATION} — as opposed to
+	 * being stopped by its lifecycle. The leader elector reads this each round: a self-stopped
+	 * processor does no work however the election goes, so its lease is released and not contended
+	 * for until the processor is started again, letting a healthy instance take over.
+	 * <p>
+	 * Deliberately not "is stopped": every processor is lifecycle-{@code STOPPED} between
+	 * construction and {@code start()}, which is exactly when the elector runs its synchronous first
+	 * round so a leader exists before any processor's first pass. Only a stop the processor imposed
+	 * on itself may cost it its lease.
+	 */
+	default boolean stoppedItself ( ) {
+		return false;
+	}
+
 }

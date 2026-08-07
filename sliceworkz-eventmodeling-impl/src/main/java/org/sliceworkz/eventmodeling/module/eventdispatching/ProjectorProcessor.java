@@ -249,6 +249,17 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	}
 
 	@Override
+	public void instanceMode ( ProcessorInstanceMode mode, long fencingToken ) {
+		if ( mode == ProcessorInstanceMode.LEADER && ownBookmark != null ) {
+			// recorded before the mode flips, so the first batch of this leadership already writes
+			// under the token -- and the reseed the promotion triggers is what raises the stored
+			// token before the resume position is read, fencing the previous leader out
+			ownBookmark.fencedBy(fencingToken);
+		}
+		instanceMode(mode);
+	}
+
+	@Override
 	public void instanceMode ( ProcessorInstanceMode mode ) {
 		ProcessorInstanceMode previous = this.instanceMode;
 		this.instanceMode = mode;

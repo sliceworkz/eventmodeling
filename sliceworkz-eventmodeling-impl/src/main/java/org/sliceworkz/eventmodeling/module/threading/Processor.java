@@ -40,6 +40,19 @@ public interface Processor extends Runnable {
 	}
 
 	/**
+	 * The promotion half of {@link #instanceMode(ProcessorInstanceMode)}, carrying the fencing token
+	 * of the lease that was won. The default drops the token and forwards to the token-less form,
+	 * which is right for every processor whose writes need no fencing — an at-least-once repeat of
+	 * theirs is contained by idempotency keys and DCB conflicts. A processor projecting a
+	 * {@link org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection} overrides this and
+	 * hands the token on, so the batch of a leader paused beyond its lease is rejected in storage
+	 * rather than committed silently.
+	 */
+	default void instanceMode ( ProcessorInstanceMode mode, long fencingToken ) {
+		instanceMode(mode);
+	}
+
+	/**
 	 * Whether this processor has retired <em>itself</em> — a projector stopped by a projection
 	 * failure, an automation whose failure handling returned {@code STOP_AUTOMATION} — as opposed to
 	 * being stopped by its lifecycle. The leader elector reads this each round: a self-stopped

@@ -68,4 +68,27 @@ public interface SelfBookmarkingProjection {
 	 */
 	Optional<EventReference> resumeFrom ( );
 
+	/**
+	 * Hands this projection the fencing token of the leadership it is about to be projected under.
+	 * Called by the framework on every promotion of this read model's processor, before the first
+	 * batch of the new leadership runs — and possibly from the leader elector's own thread, so an
+	 * implementation must only <em>record</em> the token here (a volatile write) and never do I/O
+	 * with it.
+	 * <p>
+	 * What the token is for: leader election cannot prevent a leader paused beyond its lease ttl (a
+	 * long GC, a suspended container) from waking up and committing a batch it had already started,
+	 * while a newer leader projects on. The token is what turns that write from a silent duplicate
+	 * into a hard failure — store it next to the bookmark, in the same transaction as the rows, and
+	 * reject a batch whose token is older than the stored one (throw
+	 * {@link StaleLeadershipException}). {@link org.sliceworkz.eventmodeling.readmodels.sql.SqlReadModelProjector}
+	 * does exactly that; the default ignores the token, which is the unfenced behaviour this
+	 * interface had before the token existed.
+	 * <p>
+	 * A token of zero means no election result was ever handed over — a lease-less storage, a
+	 * processor running on every instance — and writes should then stay unfenced.
+	 */
+	default void fencedBy ( long fencingToken ) {
+		// unfenced by default: a projection that does not store the token keeps its old behaviour
+	}
+
 }

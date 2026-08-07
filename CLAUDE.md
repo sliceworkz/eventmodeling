@@ -310,8 +310,11 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
   framework's bookmark
 - **`project()` should still be idempotent wherever it cheaply can be**, because this covers the
   framework's own replay and the steady state only — leader election keeps a second instance from
-  projecting a `SHARED` read model, but a failover window is at-least-once (a leader paused past its
-  lease can commit a batch the new leader repeats). Two helpers do it:
+  projecting a `SHARED` read model, but a failover window is at-least-once: a leader paused past its
+  lease can commit a batch the new leader repeats. The fencing token narrows that window to a zombie
+  commit landing *before* the new leader is promoted — once it has resumed, a superseded leader's
+  batch is rejected whole (see the fencing bullets under "Leader election") — but does not close it.
+  Two helpers do it:
   - `updateOnce(...)` — an UPDATE that applies at most once per event per row. **There is no
     one-row-per-event assumption**: `EVENT_REF_COLUMNS` on a row mean "the newest event this row
     reflects", so the ordinary aggregate — `(customer_id, total_order_count, last_order_date)` fed by a
@@ -700,9 +703,30 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   paused beyond its ttl (GC, VM freeze) can finish a batch it had already started while the new leader
   begins — a bounded overlap no lease can prevent. What contains it is what already existed: idempotency
   keys on automation-raised events (derive them from the todo item), `updateOnce`/`insertOnce` in SQL
-  read models, and DCB conflicts. The lease's fencing token is stored and surfaced (on
-  `LeadershipAcquired` and `getLeases()`) but not yet enforced inside `SqlReadModelProjector`'s batch
-  transaction — that is the designed next step if zombie writes to SHARED SQL read models must fail hard
+  read models, and DCB conflicts
+- **For a SHARED SQL read model, the fencing token now makes half of that overlap fail hard instead of
+  relying on idempotency.** Promotion hands the lease's token down the chain —
+  `Processor.instanceMode(mode, fencingToken)`, `SelfBookmarkingProjection.fencedBy(long)` (a volatile
+  store only; it may be called from the elector's thread) — and `SqlReadModelProjector` stores it in its
+  bookmark row, in the same transaction as the rows. Two moments enforce it:
+  - **`resumeFrom()` raises the stored token *before* reading the resume position.** Fence first, read
+    second: from the moment the new leader knows where to resume, the old one can no longer move that
+    position underneath it — without the bump, the whole first catch-up would still be open to a zombie
+    commit
+  - **Every batch's bookmark write compares tokens inside the batch transaction.** A superseded leader
+    finds a newer token stored and its commit fails whole with `StaleLeadershipException` — the rows
+    roll back with the refused bookmark, its projector retires itself, and the elector releases the
+    lease it wrongly believed it held. Not worth retrying on that instance: the stored token only grows
+  - **What remains at-least-once is the other half**: a zombie batch that commits *before* the new
+    leader is promoted, which no bookmark-side check can reject — so the idempotency advice above
+    stands. A token of 0 (the lease-less fallback, an `EPHEMERAL` read model) leaves writes unfenced,
+    exactly as before the token existed
+  - The bookmark table gains `fencing_token BIGINT NOT NULL DEFAULT 0`; a table from before the column
+    existed is upgraded in place on first use (probe, then `ALTER TABLE ADD COLUMN` — no migration to
+    run by hand). `SqlReadModelFencingTest` pins the guard against the database alone — rejection,
+    rollback, the promotion-time bump, the same-token replay, the in-place upgrade — and
+    `SqlReadModelFencingHandOffTest` pins the hand-off end to end through a bounded context, because a
+    token that never reaches the row guards nothing and fails no test on its own
 - `LeaderElectionTest` pins it end to end with two instances in one JVM: only the elected leader
   handles todo items (per backend), failover hands work over without loss or duplication, a
   higher-priority instance regains leadership through the step-down protocol, a re-promoted projector

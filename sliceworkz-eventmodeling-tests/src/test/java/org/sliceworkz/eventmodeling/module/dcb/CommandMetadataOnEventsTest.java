@@ -31,6 +31,7 @@ import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
+import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -238,8 +239,9 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockOutboundEvent> context) {
-			context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none());
+		public void execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
+			// keyed per event: an outbound event without an idempotency key is rejected
+			context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none(), "meta/" + value);
 		}
 	}
 

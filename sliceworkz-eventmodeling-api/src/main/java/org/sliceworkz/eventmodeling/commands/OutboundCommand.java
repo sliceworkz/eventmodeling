@@ -31,15 +31,23 @@ package org.sliceworkz.eventmodeling.commands;
  * de-duplicates; the other order loses the publication for good). See the project documentation for the
  * full reasoning.
  * <p>
- * <strong>Decision models do not guard an outbound append.</strong> They are projected from the domain
- * stream, but the append criteria they produce are checked against the <em>outbound</em> stream, where
- * domain event types never occur — the optimistic-locking check matches nothing and admits everything.
- * An {@code OutboundCommand} should call {@code context.noDecisionModels()} and take its correctness
- * from an idempotency key instead. And since the callers that execute one (automations above all) are
- * at-least-once, an {@code OutboundCommand} without an idempotency key is a duplicate publication
- * waiting for its first retry — derive the key from the work item, never from the attempt.
+ * <strong>Decision models do not guard an outbound append, so this command is not offered any.</strong>
+ * They are projected from the domain stream, but the append criteria they produce would be checked
+ * against the <em>outbound</em> stream, where domain event types never occur — the optimistic-locking
+ * check would match nothing and admit everything. This is why {@link #execute} receives an
+ * {@link OutboundCommandContext}, which has no {@code decisionModels(...)} to mistakenly rely on:
+ * an outbound command calls {@code context.noDecisionModels()} and takes its correctness from its
+ * idempotency key instead.
+ * <p>
+ * <strong>And the idempotency key is required.</strong> The callers that execute an
+ * {@code OutboundCommand} (automations above all) are at-least-once, so an unkeyed outbound event is a
+ * duplicate publication waiting for its first retry — the framework therefore rejects the append,
+ * before anything is stored, unless every raised event carries a key or the command opted out with
+ * {@link CommandResult#forbidIdempotencyKey()}. Derive the key from the work item, never from the
+ * attempt — or let {@code AutomationContext.publishAndRecord(...)} derive it for you.
  */
 public non-sealed interface OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends AbstractCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 
+	void execute ( OutboundCommandContext<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> context );
 
 }

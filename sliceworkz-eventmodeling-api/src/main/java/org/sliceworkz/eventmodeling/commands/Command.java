@@ -18,5 +18,7 @@
 package org.sliceworkz.eventmodeling.commands;
 
 public non-sealed interface Command<DOMAIN_EVENT_TYPE> extends AbstractCommand<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> {
-	
+
+	void execute ( CommandContext<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> context );
+
 }

@@ -50,6 +50,8 @@ public sealed interface AbstractCommand<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE
 		return binaryName.substring(binaryName.lastIndexOf('.') + 1);
 	}
 
-	void execute ( CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> context );
+	// execute(...) lives on the permits rather than here, because the two shapes are handed different
+	// contexts: a Command gets the full CommandContext, an OutboundCommand the narrower
+	// OutboundCommandContext without decisionModels(...) — see there for why.
 
 }

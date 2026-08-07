@@ -151,6 +151,31 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 		}
 	}
 
+	/**
+	 * Rejects outbound events raised without an idempotency key. Called by the DCB module when the
+	 * target is the outbound stream, after the command-level key (if any) has been applied to the
+	 * events — so a key from any source (per event, {@code idempotencyKey(...)} on this result, or
+	 * externally provided) satisfies it. The callers that execute an {@code OutboundCommand} are
+	 * at-least-once, which makes an unkeyed outbound event a duplicate publication on the first
+	 * retry; {@link #forbidIdempotencyKey()} is the deliberate opt-out for a command that publishes
+	 * without de-duplication on purpose. Throws before anything is appended, so nothing is stored.
+	 */
+	public void requireIdempotencyKeysOnOutboundEvents ( String commandName ) {
+		if ( idempotencyKeyStrategy == IdempotencyKeyStrategy.FORBID_EXTERNAL ) {
+			return;
+		}
+		for ( EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : events ) {
+			if ( event.idempotencyKey() == null ) {
+				throw new IllegalStateException(
+						("outbound command '%s' raised %s without an idempotency key: every caller executing an OutboundCommand"
+						+ " is effectively at-least-once, so an unkeyed outbound event is a duplicate publication on the first retry."
+						+ " Key the event from the work item it publishes for (raiseEvent(event, tags, key), CommandResult.idempotencyKey(...),"
+						+ " or an externally provided key), or call forbidIdempotencyKey() to publish without de-duplication deliberately")
+							.formatted(commandName, event.data().getClass().getSimpleName()));
+			}
+		}
+	}
+
 	public List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> raisedEvents ( ) {
 		return events;
 	}

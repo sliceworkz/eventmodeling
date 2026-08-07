@@ -98,13 +98,13 @@ public class CommandNameTest {
 
 	static class PublishOutboundCommand implements OutboundCommand<Object, Object> {
 		@Override
-		public void execute(CommandContext<Object, Object> context) {
+		public void execute(OutboundCommandContext<Object, Object> context) {
 		}
 	}
 
 	static class PublishOutbound implements OutboundCommand<Object, Object> {
 		@Override
-		public void execute(CommandContext<Object, Object> context) {
+		public void execute(OutboundCommandContext<Object, Object> context) {
 		}
 	}
 

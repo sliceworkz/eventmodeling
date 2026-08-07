@@ -20,24 +20,25 @@ package org.sliceworkz.eventmodeling.benchmark.features.dispatchorder;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent.OrderProcessed;
-import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
+import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
 import org.sliceworkz.eventstore.events.Tags;
 
 public class RegisterOrderDispatched implements OutboundCommand<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> {
 
 	private long orderId;
-	
+
 	public RegisterOrderDispatched ( long orderId ) {
 		this.orderId = orderId;
 	}
-	
+
 	@Override
 	public void execute(
-			CommandContext<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> context) {
-		var result = context.noDecisionModels();
-
-		result.raiseEvent(new OrderProcessed(orderId), Tags.none(), "order/outbound/" + orderId);
+			OutboundCommandContext<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> context) {
+		// the idempotency key comes from the caller — publishAndRecord derives it from the todo item
+		context.noDecisionModels()
+				.requireIdempotencyKey()
+				.raiseEvent(new OrderProcessed(orderId), Tags.none());
 	}
-	
+
 }

@@ -51,6 +51,11 @@ public interface CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 	/**
 	 * Forbids an externally provided idempotency key. Throws {@link IllegalStateException}
 	 * if the caller provided an external key.
+	 * <p>
+	 * For an {@link OutboundCommand} this is also the deliberate opt-out from the rule that every
+	 * outbound event must carry an idempotency key: a command that calls this declares that it
+	 * publishes without de-duplication on purpose, and accepts that an at-least-once caller may
+	 * publish twice. Anywhere that would matter, key the events instead.
 	 */
 	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> forbidIdempotencyKey ( );
 

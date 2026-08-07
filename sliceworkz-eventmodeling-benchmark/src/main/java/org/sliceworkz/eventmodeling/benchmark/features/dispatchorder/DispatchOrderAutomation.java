@@ -44,11 +44,12 @@ public class DispatchOrderAutomation implements Automation<OrderReadyToDispatch,
 	@Override
 	public Optional<EventReference> handle(OrderReadyToDispatch todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context ) {
 
-		// first, execute the command (with idempotency)
-		context.execute(new RegisterOrderDispatched(todoItem.orderId()));
-		
-		// then note down that this has happened as a domain event
-		return context.event(new OrderDispatched(todoItem.orderId()));
+		// publish the outbound event, then record it as a domain event — publishAndRecord composes
+		// the two in the one safe order, both de-duplicated under keys derived from the item
+		return context.publishAndRecord(
+				new RegisterOrderDispatched(todoItem.orderId()),
+				new OrderDispatched(todoItem.orderId()),
+				"order/" + todoItem.orderId());
 	}
 
 }

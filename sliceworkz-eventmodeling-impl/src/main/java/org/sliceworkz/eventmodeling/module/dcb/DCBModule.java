@@ -20,11 +20,11 @@ package org.sliceworkz.eventmodeling.module.dcb;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
-import org.sliceworkz.eventmodeling.commands.AbstractCommand;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
@@ -74,19 +74,19 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	}
 	
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return executeAbstractCommand(command, command.commandName(), tracing, domainEventStream, null);
+		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, tracing, domainEventStream, false, null);
 	}
 
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return executeAbstractCommand(command, command.commandName(), tracing, domainEventStream, idempotencyKey);
+		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, tracing, domainEventStream, false, idempotencyKey);
 	}
 
 	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, Tracing tracing ) {
-		return executeAbstractCommand(command, command.commandName(), tracing, outboundEventStream, null);
+		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, tracing, outboundEventStream, true, null);
 	}
 
 	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return executeAbstractCommand(command, command.commandName(), tracing, outboundEventStream, idempotencyKey);
+		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, tracing, outboundEventStream, true, idempotencyKey);
 	}
 
 	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing ) {
@@ -97,26 +97,34 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		return executeCommandWithResult(command, tracing, idempotencyKey);
 	}
 
-	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeAbstractCommand ( AbstractCommand<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> command, String commandName, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String idempotencyKey ) {
+	/**
+	 * Shared execution path for both command shapes. The command body arrives as a consumer of the
+	 * context implementation rather than as the command itself, because since the two permits were
+	 * given different context types ({@code CommandContext} vs the narrower
+	 * {@code OutboundCommandContext}), there is no common {@code execute} left on
+	 * {@code AbstractCommand} to call — {@code DCBCommandContextImpl} implements both, so a method
+	 * reference to either shape's {@code execute} fits here.
+	 */
+	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeAbstractCommand ( String commandName, Class<?> commandClass, Consumer<DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>> commandBody, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, boolean outboundTarget, String idempotencyKey ) {
 		return timed(commandName, () -> {
 			long start = System.currentTimeMillis();
 
 			Tracing tracingWithCommand = tracing.command(commandName);
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracingWithCommand);
 			try {
-				command.execute(commandContext);
+				commandBody.accept(commandContext);
 				CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-				List<EventReference> eventReferences = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, tracingWithCommand);
+				List<EventReference> eventReferences = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, outboundTarget, tracingWithCommand);
 
-				emitCommandExecuted(commandContext, commandName, command.getClass(), start, eventReferences);
+				emitCommandExecuted(commandContext, commandName, commandClass, start, eventReferences);
 
 				return eventReferences.isEmpty() ? Optional.empty() : Optional.of(eventReferences.get(eventReferences.size() - 1));
 			} catch ( OptimisticLockingException ole ) {
-				emitCommandFailedOnOptimisticLocking(commandContext, commandName, command.getClass(), start, ole);
+				emitCommandFailedOnOptimisticLocking(commandContext, commandName, commandClass, start, ole);
 				throw ole;
 			} catch ( RuntimeException e ) {
-				emitCommandFailed(commandContext, commandName, command.getClass(), start, e);
+				emitCommandFailed(commandContext, commandName, commandClass, start, e);
 				throw e;
 			}
 		});
@@ -133,7 +141,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 				RESPONSE_TYPE response = command.execute(commandContext);
 				CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-				List<EventReference> eventReferences = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, tracingWithCommand);
+				List<EventReference> eventReferences = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, false, tracingWithCommand);
 
 				emitCommandExecuted(commandContext, commandName, command.getClass(), start, eventReferences);
 
@@ -149,11 +157,19 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		});
 	}
 
-	private <PRODUCED_EVENT_TYPE> List<EventReference> persistAndRecord ( CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String commandName, String idempotencyKey, Tracing tracing ) {
+	private <PRODUCED_EVENT_TYPE> List<EventReference> persistAndRecord ( CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String commandName, String idempotencyKey, boolean outboundTarget, Tracing tracing ) {
 		// resolve and apply idempotency key (internal strategy vs external key)
 		String resolvedKey = commandResult.resolveIdempotencyKey(idempotencyKey);
 		if ( resolvedKey != null ) {
 			commandResult.applyIdempotencyKey(resolvedKey);
+		}
+
+		// an outbound event without an idempotency key is a duplicate publication waiting for its
+		// first at-least-once retry, so it is rejected here, before anything is stored — after the
+		// key application above, so a key from any source satisfies it. forbidIdempotencyKey() is
+		// the deliberate opt-out.
+		if ( outboundTarget ) {
+			commandResult.requireIdempotencyKeysOnOutboundEvents(commandName);
 		}
 
 		if ( !commandResult.raisedEvents().isEmpty() ) {

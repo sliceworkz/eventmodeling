@@ -21,7 +21,7 @@ package org.sliceworkz.eventmodeling.commands;
  * A command that synchronously returns a response value after successful execution
  * and event persistence.
  * <p>
- * Unlike {@link Command}, which returns {@code void} via {@link AbstractCommand#execute},
+ * Unlike {@link Command}, which returns {@code void} via {@link Command#execute},
  * this interface allows the command to compute a response value during execution (e.g., a
  * generated ID) that is delivered to the caller only after events have been successfully
  * persisted.

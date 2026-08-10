@@ -19,7 +19,9 @@ package org.sliceworkz.eventmodeling.readmodels.sql;
 
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.sql.DataSource;
@@ -29,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection;
+import org.sliceworkz.eventmodeling.readmodels.StaleLeadershipException;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
@@ -73,6 +76,22 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  *       {@link #insertOnce}.</li>
  * </ul>
  *
+ * <h2>The fencing token, and what it closes</h2>
+ *
+ * <p>The bookmark row also carries the fencing token of the leadership this read model was last
+ * projected under. Every batch's bookmark write compares this projector's token — handed over on
+ * promotion through {@link #fencedBy(long)} — against the stored one, inside the batch transaction:
+ * a superseded leader finds a newer token there and its whole batch is rolled back with a
+ * {@link StaleLeadershipException}, instead of committing over rows the new leader owns. The fence
+ * is raised before it is relied on: {@link #resumeFrom()} bumps the stored token <em>before</em>
+ * reading the position, so from the moment a new leader knows where to resume, the old one can no
+ * longer move that position underneath it.
+ *
+ * <p>What remains at-least-once is the other half of the overlap — a zombie batch that commits
+ * <em>before</em> the new leader is promoted. No bookmark-side check can reject a write that arrives
+ * first, which is why the idempotency advice above stands. A token of zero (no election: a
+ * lease-less storage, an {@code EPHEMERAL} read model) leaves writes unfenced, exactly as before.
+ *
  * @param <T> the domain event type
  */
 public abstract class SqlReadModelProjector<T> extends SqlReadModel implements ReadModelWithMetaData<T>, BatchAwareProjection<T>, SelfBookmarkingProjection {
@@ -86,6 +105,9 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 	private final AtomicBoolean bookmarkTableEnsured = new AtomicBoolean();
 	private Connection batchConnection;
 	private EventReference currentEventReference;
+	// written by the leader elector's thread on promotion, read on the projector's thread by every
+	// batch; 0 means "never fenced" and leaves the writes unguarded, as they were before the token
+	private volatile long fencingToken;
 
 	/**
 	 * @param dataSource  the shared read model DataSource
@@ -193,12 +215,29 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 			statement.execute("""
 					CREATE TABLE IF NOT EXISTS %s (
 						reader VARCHAR(255) NOT NULL PRIMARY KEY,
-						%s
+						%s,
+						fencing_token BIGINT NOT NULL DEFAULT 0
 					)""".formatted(table(BOOKMARK_TABLE), EVENT_REF_COLUMNS));
+			addFencingTokenToAnOlderBookmarkTable(statement);
 		} catch (SQLException e) {
 			throw new RuntimeException("Failed to ensure readmodel bookmark table " + table(BOOKMARK_TABLE), e);
 		}
 		bookmarkTableEnsured.set(true);
+	}
+
+	/**
+	 * Upgrades a bookmark table created before the fencing token existed. {@code CREATE TABLE IF NOT
+	 * EXISTS} leaves an existing table exactly as it is, so the column has to be added by its own
+	 * statement — probed first, because {@code ADD COLUMN IF NOT EXISTS} is not something every
+	 * database this may run against offers. The default 0 is "never fenced", which is also the true
+	 * history of every row written before the column existed.
+	 */
+	private void addFencingTokenToAnOlderBookmarkTable(Statement statement) throws SQLException {
+		try (var rs = statement.executeQuery("SELECT fencing_token FROM %s WHERE 1 = 0".formatted(table(BOOKMARK_TABLE)))) {
+			// the column is there; nothing to upgrade
+		} catch (SQLException noSuchColumn) {
+			statement.execute("ALTER TABLE %s ADD COLUMN fencing_token BIGINT NOT NULL DEFAULT 0".formatted(table(BOOKMARK_TABLE)));
+		}
 	}
 
 	// -- Own bookmark --
@@ -226,12 +265,25 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 		return readmodelName();
 	}
 
+	/**
+	 * Records the fencing token of the leadership this read model is about to be projected under.
+	 * Deliberately no more than a volatile write — the elector's thread calls this — and the token
+	 * takes effect where it can actually guard something: {@link #resumeFrom()} raises the stored
+	 * token before reading the position, and every batch's bookmark write compares against it inside
+	 * the batch transaction.
+	 */
+	@Override
+	public void fencedBy(long fencingToken) {
+		this.fencingToken = fencingToken;
+	}
+
 	@Override
 	public Optional<EventReference> resumeFrom() {
 		if (!tracksItsOwnBookmark()) {
 			return Optional.empty();
 		}
 		ensureBookmarkTable();
+		fenceOutPredecessor();
 		String sql = "SELECT last_event_id, last_event_position, last_event_tx, last_event_index FROM %s WHERE reader = ?"
 				.formatted(table(BOOKMARK_TABLE));
 		try (var conn = dataSource().getConnection();
@@ -254,23 +306,92 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 	}
 
 	/**
+	 * Raises the stored fencing token to this projector's, before the position is read.
+	 * <p>
+	 * Fence first, read second — the order is the guarantee. Once the stored token is raised, a
+	 * superseded leader's in-flight batch can no longer commit (its bookmark write compares against
+	 * the stored token inside the batch transaction), so the position read after the bump is final
+	 * with respect to the old leader: the new one cannot resume from a bookmark the old one then
+	 * advances. Bumping only at the first committed batch instead would leave the whole first
+	 * catch-up open to a zombie commit.
+	 * <p>
+	 * A row the reader does not have yet cannot be bumped, and that is fine: the first bookmark
+	 * write inserts the token, and until then there is no position for a zombie to move.
+	 */
+	private void fenceOutPredecessor() {
+		long token = fencingToken;
+		if (token == 0) {
+			return;
+		}
+		try (var conn = dataSource().getConnection();
+			 var stmt = conn.prepareStatement("UPDATE %s SET fencing_token = ? WHERE reader = ? AND fencing_token < ?"
+					 .formatted(table(BOOKMARK_TABLE)))) {
+			stmt.setLong(1, token);
+			stmt.setString(2, bookmarkReader());
+			stmt.setLong(3, token);
+			stmt.executeUpdate();
+		} catch (SQLException e) {
+			// not swallowed, for the same reason a failed position read is not: resuming unfenced
+			// would let the leader this instance is superseding keep committing
+			throw new RuntimeException("Failed to fence the bookmark of readmodel " + bookmarkReader(), e);
+		}
+	}
+
+	/**
 	 * Records how far this read model has come, on the batch's own connection so it commits with the
 	 * rows the batch produced and can never disagree with them.
+	 * <p>
+	 * When this projector holds a fencing token, the write also enforces it: the UPDATE only touches
+	 * a row whose stored token is not newer, so a leader that was paused past its lease and superseded
+	 * finds nothing to update, learns why from the stored token, and fails the whole batch with
+	 * {@link StaleLeadershipException} — inside the transaction, so none of its rows land either.
 	 */
 	private void writeBookmark(EventReference reference) {
 		String qualifiedTable = table(BOOKMARK_TABLE);
+		long token = fencingToken;
 		// UPDATE-then-INSERT rather than an upsert: MERGE, ON CONFLICT and ON DUPLICATE KEY are three
 		// different dialects, and a read model is projected by one writer at a time, so there is no
 		// race for the portable form to lose
+		if (token == 0) {
+			// never fenced: the unguarded write, which also leaves a stored token untouched
+			int updated = execute("""
+					UPDATE %s SET last_event_id = ?, last_event_position = ?, last_event_tx = ?, last_event_index = ?
+					WHERE reader = ?""".formatted(qualifiedTable),
+					reference.id().value(), reference.position(), reference.tx(), reference.index(), bookmarkReader());
+			if (updated == 0) {
+				execute("""
+						INSERT INTO %s (reader, last_event_id, last_event_position, last_event_tx, last_event_index)
+						VALUES (?, ?, ?, ?, ?)""".formatted(qualifiedTable),
+						bookmarkReader(), reference.id().value(), reference.position(), reference.tx(), reference.index());
+			}
+			return;
+		}
 		int updated = execute("""
-				UPDATE %s SET last_event_id = ?, last_event_position = ?, last_event_tx = ?, last_event_index = ?
-				WHERE reader = ?""".formatted(qualifiedTable),
-				reference.id().value(), reference.position(), reference.tx(), reference.index(), bookmarkReader());
+				UPDATE %s SET last_event_id = ?, last_event_position = ?, last_event_tx = ?, last_event_index = ?, fencing_token = ?
+				WHERE reader = ? AND fencing_token <= ?""".formatted(qualifiedTable),
+				reference.id().value(), reference.position(), reference.tx(), reference.index(), token, bookmarkReader(), token);
 		if (updated == 0) {
+			// either no row yet, or a row the guard refused: only the stored token can say which
+			OptionalLong stored = storedFencingToken();
+			if (stored.isPresent()) {
+				throw new StaleLeadershipException(bookmarkReader(), token, stored.getAsLong());
+			}
 			execute("""
-					INSERT INTO %s (reader, last_event_id, last_event_position, last_event_tx, last_event_index)
-					VALUES (?, ?, ?, ?, ?)""".formatted(qualifiedTable),
-					bookmarkReader(), reference.id().value(), reference.position(), reference.tx(), reference.index());
+					INSERT INTO %s (reader, last_event_id, last_event_position, last_event_tx, last_event_index, fencing_token)
+					VALUES (?, ?, ?, ?, ?, ?)""".formatted(qualifiedTable),
+					bookmarkReader(), reference.id().value(), reference.position(), reference.tx(), reference.index(), token);
+		}
+	}
+
+	/** The stored fencing token of this read model's bookmark row, read within the batch transaction. */
+	private OptionalLong storedFencingToken() {
+		try (var stmt = batchConnection.prepareStatement("SELECT fencing_token FROM %s WHERE reader = ?".formatted(table(BOOKMARK_TABLE)))) {
+			stmt.setString(1, bookmarkReader());
+			try (var rs = stmt.executeQuery()) {
+				return rs.next() ? OptionalLong.of(rs.getLong(1)) : OptionalLong.empty();
+			}
+		} catch (SQLException e) {
+			throw new RuntimeException("Failed to read the stored fencing token of readmodel " + bookmarkReader(), e);
 		}
 	}
 
@@ -373,7 +494,20 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 	@Override
 	public void afterBatch(Optional<EventReference> lastEventReference) {
 		if (tracksItsOwnBookmark() && batchConnection != null) {
-			lastEventReference.ifPresent(this::writeBookmark);
+			try {
+				lastEventReference.ifPresent(this::writeBookmark);
+			} catch (RuntimeException notBookmarked) {
+				// A batch whose bookmark did not land must not land itself -- least of all a fenced-out
+				// one. The rollback happens here rather than being left to cancelBatch, which is
+				// deliberately not called after an afterBatch that threw: by contract this projection
+				// has released what it held by then, so release it.
+				try {
+					endBatch(Connection::rollback, "Failed to rollback batch transaction");
+				} catch (RuntimeException rollbackFailure) {
+					notBookmarked.addSuppressed(rollbackFailure);
+				}
+				throw notBookmarked;
+			}
 		}
 		endBatch(Connection::commit, "Failed to commit batch transaction");
 	}

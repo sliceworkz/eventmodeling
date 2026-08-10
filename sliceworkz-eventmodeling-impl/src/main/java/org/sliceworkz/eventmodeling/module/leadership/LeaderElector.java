@@ -279,7 +279,9 @@ public class LeaderElector implements Runnable {
 
 	private void promote ( LeaseState state, long fencingToken ) {
 		state.leader = true;
-		state.electable.processor().instanceMode(ProcessorInstanceMode.LEADER);
+		// the token travels with the promotion, so a fencing-aware processor writes under it from its
+		// very first batch as leader (the fallback path promotes with 0, which means "unfenced")
+		state.electable.processor().instanceMode(ProcessorInstanceMode.LEADER, fencingToken);
 		LOGGER.info("'{}' elected leader on this instance (fencing token {})", state.leaseName(), fencingToken);
 		eventEmitter.emit(new BoundedContextEvent.LeadershipAcquired(boundedContext,
 				state.electable.identification().type(), state.electable.identification().id(), fencingToken));

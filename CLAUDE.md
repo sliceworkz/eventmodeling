@@ -263,6 +263,19 @@ rung it is on and what would justify the next. [READ-MODEL-MANUAL.md](READ-MODEL
 tutorial-form walk up the same ladder (one chapter per rung, banking examples worked through) — the
 same keep-in-step-via-links rule applies to it.
 
+**Where a validation goes is written down for users too, and it is the same order to advise in.**
+[WHERE-VALIDATIONS-GO.md](WHERE-VALIDATIONS-GO.md) carries the ladder — value objects, input checks,
+decision-model rules and the DCB re-check, the empty boundary for uniqueness, the edges (translators,
+automations, idempotency keys), evolving a rule — with the one sorting rule stated up front: a
+validation runs before events exist, or never; the write path validates, the read path accepts. The
+sections in this file and the eventstore's are the *why* (poison events, the lock filter, failure
+containment); that file is the *which*, and the same keep-in-step-via-links rule applies. Two of its
+stances to hold in code review: a record carried inside an event payload keeps a lenient canonical
+constructor and validates in its static factory (never a throwing compact constructor — Jackson
+reconstructs payloads through the canonical constructor on every read of history), and business-rule
+rejections in commands throw `BusinessException`, keeping them distinguishable from bugs (the older
+examples still throw `IllegalStateException`; prefer `BusinessException` in new code).
+
 **How a read model is projected has to be said out loud.** `builder.readmodel(X.class)` and
 `builder.readmodel(instance)` register, but `build()` rejects either unless `.live()` /
 `.eventuallyConsistent()` (or `.snapshots(...)`, which implies live) was called, naming every offender

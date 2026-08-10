@@ -28,6 +28,11 @@ Step-by-step introduction with the [quickstart guide](https://sliceworkz.github.
 - [Choosing a read model](CHOOSING-A-READ-MODEL.md) — which of the read model kinds to reach for, in
   the order to reach for them, and what each step costs. Start here before optimising a read: the
   cheapest fix is usually a step you have not taken yet rather than the one below it.
+  [READ-MODEL-MANUAL.md](READ-MODEL-MANUAL.md) walks the same ladder as a tutorial, one chapter per
+  step.
+- [Where a validation goes](WHERE-VALIDATIONS-GO.md) — the places a validation can run (value
+  objects, command input checks, decision models and DCB, uniqueness, the edges), what each can
+  guard, and the one rule that sorts them: a validation runs before events exist, or never.
 
 
 # Other

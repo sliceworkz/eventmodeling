@@ -7,6 +7,9 @@ choices.
 Each step below buys one thing and costs one thing. **Do not take a step until you have measured the
 problem it fixes.** Most read models should stop at step 1.
 
+This page is the decision guide; [READ-MODEL-MANUAL.md](READ-MODEL-MANUAL.md) walks the same ladder
+as a tutorial, one chapter per step, with the banking examples worked through.
+
 Every registration has to say which it is — `.live()` or `.eventuallyConsistent()` — and `build()`
 rejects one that does not, naming it. The framework could infer it (a class is always live, an instance
 always eventually consistent) and deliberately does not: how a read model is projected is the decision

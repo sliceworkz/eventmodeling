@@ -43,9 +43,7 @@ public abstract class LiveModelTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUN
 	}
 	
 	public interface TestResult<DOMAIN_EVENT_TYPE> {
-		
-		// TODO improve, this is not clear.  or "liveModelIs" or ".liveModel(()->..).is(...) => "map()" or something?
-		
+
 		void liveModelIs ( Object expectedModel );
 		TestResult<DOMAIN_EVENT_TYPE> liveModel ( DataMapper dataMapper );
 		TestResult<DOMAIN_EVENT_TYPE> is ( Object expectedModel );

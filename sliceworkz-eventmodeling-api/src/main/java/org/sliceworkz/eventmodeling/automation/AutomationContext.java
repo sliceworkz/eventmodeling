@@ -45,8 +45,6 @@ import org.sliceworkz.eventstore.events.Tags;
  */
 public interface AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> extends CommandExecutionCapability<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>, ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
 
-	// TODO should we allow ProvidedEventsCapability? or only CommandExecution?  also Aggregates?
-
 	/**
 	 * Publishes through an {@link OutboundCommand} and records the fact as a domain event, composed
 	 * the one safe way: <strong>outbound first, domain second, both under keys derived from the item.</strong>

@@ -33,8 +33,6 @@ import org.sliceworkz.eventstore.stream.EventStreamId;
 public class CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE>
 implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
-	// TODO add monitoring & debugging metadata? (models used, events seen, timings, correlation id, actor / acting user, channel, ...)
-
 	enum IdempotencyKeyStrategy {
 		NONE,
 		REQUIRE_EXTERNAL,

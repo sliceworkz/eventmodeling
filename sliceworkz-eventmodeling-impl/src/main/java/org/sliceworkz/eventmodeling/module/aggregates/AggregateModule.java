@@ -31,6 +31,7 @@ import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
+import org.sliceworkz.eventmodeling.module.snapshots.SnapshotMeters;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -73,11 +74,12 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 
 				// no load counter here: it is registered per channel in aggregate(...), and a second
 				// registration of the same name under a different tag key set is not merely redundant --
-				// Prometheus requires one tag key set per meter name, so registering both throws there
-				Counter counterSnapshotRead = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.snapshot.read.count", aggregateTags);
-				Counter counterSnapshotWrite = meterRegistry.counter("sliceworkz.eventmodeling.aggregate.snapshot.write.count", aggregateTags);
+				// Prometheus requires one tag key set per meter name, so registering both throws there.
+				// The snapshot counters live in SnapshotMeters and are registered lazily for the same
+				// reason: they carry a version tag, and the version is an instance method on the aggregate
+				SnapshotMeters snapshotMeters = new SnapshotMeters(meterRegistry, "sliceworkz.eventmodeling.aggregate.snapshot", aggregateTags);
 				Timer timer = meterRegistry.timer("sliceworkz.eventmodeling.aggregate.load.duration", aggregateTags);
-				
+
 				Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass = (Class<? extends Aggregate<DOMAIN_EVENT_TYPE>>) (Class<?>) spec.aggregateClass();
 				AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo =
 						new AggregateInfo<>(
@@ -87,8 +89,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 								spec.readSnapshots(),
 								spec.writeSnapshots(),
 								spec.snapshotEventCountThreshold(),
-								counterSnapshotRead,
-								counterSnapshotWrite,
+								snapshotMeters,
 								timer);
 
 				aggregateInfoByClass.put(aggregateClass, aggregateInfo);
@@ -138,9 +139,8 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 					if ( aggregateInfo.readSnapshots() && result instanceof SnapshotCapable snapshotCapable ) {
 						String key = snapshotCapable.key(aggregateInfo.name(), identity);
 						String version = snapshotCapable.version();
-						var loadedSnapshot = aggregateInfo.snapshotStorage().load(key, version);
+						var loadedSnapshot = aggregateInfo.snapshotMeters().load(aggregateInfo.snapshotStorage(), key, version);
 						if ( loadedSnapshot.isPresent() ) {
-							aggregateInfo.counterSnapshotRead.increment();
 							snapshotCapable.fromSnapshot(loadedSnapshot.get().snapshot());
 							lastEventReference = loadedSnapshot.get().lastEventReference();
 						}
@@ -156,7 +156,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 							lastEventReference,
 							aggregateInfo.snapshotStorageForWrite(),
 							aggregateInfo.snapshotEventCountThreshold(),
-							aggregateInfo.counterSnapshotWrite,
+							aggregateInfo.snapshotMeters(),
 							meterRegistry,
 							domainEventCounters,
 							finalTracing,
@@ -184,8 +184,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 				boolean readSnapshots,
 				boolean writeSnapshots,
 				int snapshotEventCountThreshold,
-				Counter counterSnapshotRead,
-				Counter counterSnapshotWrite,
+				SnapshotMeters snapshotMeters,
 				Timer timer
 			) {
 		

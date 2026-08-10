@@ -37,6 +37,7 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
+import org.sliceworkz.eventmodeling.module.snapshots.SnapshotMeters;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
@@ -55,7 +56,6 @@ import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 
-import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 
 public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
@@ -86,8 +86,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			boolean readSnapshots,
 			boolean writeSnapshots,
 			int snapshotEventCountThreshold,
-			Counter counterSnapshotRead,
-			Counter counterSnapshotWrite
+			SnapshotMeters snapshotMeters
 		) {
 
 		public SnapshotStorage<Object> snapshotStorageForWrite ( ) {
@@ -125,8 +124,9 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 					.of("context", boundedContext)
 					.and("readmodel", readModelClass.getSimpleName());
 
-			Counter counterSnapshotRead = meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.snapshot.read.count", tags);
-			Counter counterSnapshotWrite = meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.snapshot.write.count", tags);
+			// registered lazily inside SnapshotMeters: the counters carry a version tag, and the
+			// version is an instance method on the read model, unknown until a read constructs one
+			SnapshotMeters snapshotMeters = new SnapshotMeters(meterRegistry, "sliceworkz.eventmodeling.readmodel.live.snapshot", tags);
 
 			this.liveModels.put(readModelClass, new LiveModelInfo<>(
 					readModelClass,
@@ -134,8 +134,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 					spec.readSnapshots(),
 					spec.writeSnapshots(),
 					spec.snapshotEventCountThreshold(),
-					counterSnapshotRead,
-					counterSnapshotWrite));
+					snapshotMeters));
 		}
 
 		// the name keys this read model's bookmark, and readmodelName() defaults to the simple class name
@@ -327,9 +326,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			if ( info.readSnapshots() && readModel instanceof SnapshotCapable<?> snapshotCapable ) {
 				String key = snapshotCapable.key(readModel.readmodelName(), constructorParams);
 				String version = snapshotCapable.version();
-				var loadedSnapshot = info.snapshotStorage().load(key, version);
+				var loadedSnapshot = info.snapshotMeters().load(info.snapshotStorage(), key, version);
 				if ( loadedSnapshot.isPresent() ) {
-					info.counterSnapshotRead().increment();
 					((SnapshotCapable<Object>) snapshotCapable).fromSnapshot(loadedSnapshot.get().snapshot());
 					lastEventReference = loadedSnapshot.get().lastEventReference();
 				}
@@ -367,8 +365,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				&& projectorMetrics.eventsStreamed() >= info.snapshotEventCountThreshold()
 				&& readModel instanceof SnapshotCapable<?> snapshotCapable ) {
 			String key = snapshotCapable.key(readModel.readmodelName(), constructorParams);
-			snapshotStorageForWrite.save(key, snapshotCapable.version(), ((SnapshotCapable<Object>) snapshotCapable).takeSnapshot(), projectorMetrics.lastEventReference());
-			info.counterSnapshotWrite().increment();
+			info.snapshotMeters().save(snapshotStorageForWrite, key, snapshotCapable.version(), ((SnapshotCapable<Object>) snapshotCapable).takeSnapshot(), projectorMetrics.lastEventReference());
 		}
 	}
 

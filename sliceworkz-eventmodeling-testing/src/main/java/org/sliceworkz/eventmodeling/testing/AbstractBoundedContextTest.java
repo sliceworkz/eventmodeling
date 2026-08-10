@@ -18,12 +18,14 @@
 package org.sliceworkz.eventmodeling.testing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -91,6 +93,7 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 	private static final String DOMAIN = "domain";
 
 	private static final String IGNORE_TEXT = "<<<IGNORE>>>";
+	private static final String IGNORE_ID_TEXT = "<<<IGNORE_ID>>>";
 	private static final Calendar IGNORE_DATE_CALENDAR = new GregorianCalendar(); static {IGNORE_DATE_CALENDAR.set(666, 6, 6, 6, 6, 6);};
 	private static final Date IGNORE_DATE = IGNORE_DATE_CALENDAR.getTime();
 
@@ -261,7 +264,14 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 
 			int j = 0;
 			for ( String expectedLine: expectedParts ) {
-				if ( ! expectedLine.contains(IGNORE_TEXT) && ! expectedLine.contains(mapper.writeValueAsString(IGNORE_DATE))) {
+				if ( expectedLine.contains(IGNORE_ID_TEXT) ) {
+					// the field must be present and its value must be a UUID -- see IGNORE_ID(); only
+					// the concrete value is normalised out, so the field name is still compared below
+					expectedToCompare.add(expectedLine);
+					if ( actualParts.length > j ) {
+						actualToCompare.add(withUuidValueVerified(expectedLine, actualParts[j], objectDescription));
+					}
+				} else if ( ! expectedLine.contains(IGNORE_TEXT) && ! expectedLine.contains(mapper.writeValueAsString(IGNORE_DATE))) {
 					expectedToCompare.add(expectedLine);
 					if ( actualParts.length > j ) {
 						String actualLine = actualParts[j];
@@ -282,11 +292,69 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 		}
 	}
 
-	// TODO maybe check UUID format for this one instead of just ignoring alltogether?
-	public static String IGNORE_ID() {
-		return IGNORE_TEXT;
+	/**
+	 * Verifies the actual line carries a UUID where the expected line carries the
+	 * {@link #IGNORE_ID()} marker, and returns the actual line with that UUID replaced by the
+	 * marker — so everything else about the line (field name, nesting, punctuation) is still
+	 * compared against the expected one.
+	 */
+	private String withUuidValueVerified ( String expectedLine, String actualLine, String objectDescription ) {
+		String value = quotedValueOf(actualLine);
+		if ( value == null ) {
+			fail("expected a UUID for field %s of %s, but the actual value is not a string: %s"
+					.formatted(fieldNameOf(expectedLine), objectDescription, actualLine.strip()));
+		}
+		try {
+			UUID.fromString(value);
+		} catch ( IllegalArgumentException notAUuid ) {
+			fail("value \"%s\" of field %s of %s is not a UUID"
+					.formatted(value, fieldNameOf(expectedLine), objectDescription));
+		}
+		return actualLine.replace("\"" + value + "\"", "\"" + IGNORE_ID_TEXT + "\"");
 	}
 
+	/**
+	 * The string value of a pretty-printed {@code "field" : "value"} line, or {@code null} when the
+	 * line carries no quoted value (absent, {@code null}, a number, the start of a nested object).
+	 */
+	private static String quotedValueOf ( String jsonLine ) {
+		int colon = jsonLine.indexOf(':');
+		if ( colon < 0 ) {
+			return null;
+		}
+		String raw = jsonLine.substring(colon + 1).strip();
+		if ( raw.endsWith(",") ) {
+			raw = raw.substring(0, raw.length() - 1).strip();
+		}
+		if ( raw.length() < 2 || raw.charAt(0) != '"' || raw.charAt(raw.length() - 1) != '"' ) {
+			return null;
+		}
+		return raw.substring(1, raw.length() - 1);
+	}
+
+	private static String fieldNameOf ( String jsonLine ) {
+		int colon = jsonLine.indexOf(':');
+		String raw = ( colon < 0 ? jsonLine : jsonLine.substring(0, colon) ).strip();
+		if ( raw.length() >= 2 && raw.startsWith("\"") && raw.endsWith("\"") ) {
+			return raw.substring(1, raw.length() - 1);
+		}
+		return raw;
+	}
+
+	/**
+	 * Marker for an id field whose concrete value cannot be predicted: the field must be present on
+	 * the actual object and its value must parse as a {@link UUID} — only the value itself is not
+	 * compared. For an id that is legitimately not a UUID, use {@link #IGNORE_TEXT()}, which skips
+	 * the field entirely.
+	 */
+	public static String IGNORE_ID() {
+		return IGNORE_ID_TEXT;
+	}
+
+	/**
+	 * Marker for a field to leave out of the comparison entirely: neither its presence nor its
+	 * value is checked.
+	 */
 	public static String IGNORE_TEXT() {
 		return IGNORE_TEXT;
 	}

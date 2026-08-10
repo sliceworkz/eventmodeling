@@ -122,12 +122,7 @@ public class BenchmarkApplication {
 
 		Instant start = Instant.now();
 		
-		// TODO: can we use Projector in ReadModelModule or in EventuallyConstistentProcessor or in AutomationProcessor?
-		// TODO: do not fetch all to count but select latest (or other option?)
-		// TODO: create command CreateShippingLabel instead of generating event
 		// TODO: check micrometer on idempotency for inbound events?
-		// TODO: cli monitor (?)
-		// TODO: synchronized terug weghalen (?)
 		
 		AtomicInteger orderNumbering = new AtomicInteger();
 		

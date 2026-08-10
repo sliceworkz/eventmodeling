@@ -17,12 +17,41 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+/**
+ * The lifecycle of a bounded context: built → started ⇄ stopped → terminated.
+ * <p>
+ * {@code build()} assembles, {@link #start()} runs — a freshly built context has no processor threads
+ * and does no work until started. {@link #stop()} parks the processors without releasing anything, and
+ * {@code stop()} → {@code start()} is the supported restart path. {@link #terminate()} is terminal.
+ * <p>
+ * The guards a bounded context holds these methods to:
+ * <ul>
+ * <li>{@code start()} on a context that is already started is a no-op, logged at WARN — it does
+ *     <em>not</em> re-emit the starting/started events, re-run the slice wiring, or block on the
+ *     ephemeral read-model projection wait a real start does.</li>
+ * <li>{@code start()} on a terminated context throws {@link IllegalStateException}: its
+ *     {@code EventStore} is closed and its processor threads drained, so a context that "started"
+ *     anyway would look alive and do nothing.</li>
+ * <li>{@code stop()} on a context that is not started — never started, already stopped, or
+ *     terminated — is a no-op.</li>
+ * <li>{@code terminate()} is idempotent; later calls do nothing.</li>
+ * </ul>
+ */
 public interface LifecycleCapability {
 
-	// TODO guard against duplicate start() or stop().  remark: only start() is currenlty used to delay processor threads from starting until boundedcontext is initialized and available from code.
-	
+	/**
+	 * Starts the processors and announces the context: emits the starting/started events, runs every
+	 * deployed slice's wiring, holds one leader-election round, and blocks until the ephemeral read
+	 * models have been projected. No-op with a WARN when already started; throws
+	 * {@link IllegalStateException} after {@link #terminate()}.
+	 */
 	void start ( );
 
+	/**
+	 * Parks the processors and releases the held leases, so a standby instance takes over promptly.
+	 * Nothing is released beyond that: the context can be {@link #start() started} again. No-op when
+	 * not started.
+	 */
 	void stop ( );
 
 	/**

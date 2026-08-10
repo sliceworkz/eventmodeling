@@ -46,6 +46,35 @@ public interface SnapshotStorage<SNAPSHOT_TYPE> {
 	Optional<SnapshotRecord<SNAPSHOT_TYPE>> load ( String key, String version );
 
 	/**
+	 * Classifies why {@link #load(String, String)} returned empty for the given key and version,
+	 * so the framework can meter snapshot misses by reason
+	 * ({@code sliceworkz.eventmodeling.*.snapshot.miss.count}, tagged {@code reason}).
+	 * <p>
+	 * The framework calls this only after a load returned empty — never on a hit. A miss already
+	 * means the component is about to be rebuilt by replaying events, so one extra storage lookup
+	 * here is noise next to the replay it accompanies.
+	 * <p>
+	 * The default returns {@link MissReason#UNKNOWN}, which keeps storages written before this
+	 * method existed working unchanged — their misses are metered without a reason. Override it to
+	 * distinguish {@link MissReason#ABSENT} (nothing stored under the key) from
+	 * {@link MissReason#VERSION_MISMATCH} (a snapshot is stored under the key, but with a different
+	 * version). The mismatch is the case worth alerting on: a bumped version means every load
+	 * replays the full history until the next threshold-triggered save, and without this
+	 * classification that is indistinguishable from a key that was simply never snapshotted.
+	 * <p>
+	 * A throw out of this method is contained by the framework — the miss is metered as
+	 * {@link MissReason#UNKNOWN} and the read goes on. Classification never fails the work it
+	 * observes.
+	 *
+	 * @param key unique identifier for the snapshot, as passed to the load that missed
+	 * @param version the version the load that missed asked for
+	 * @return why the load missed, or {@link MissReason#UNKNOWN} when the storage cannot say
+	 */
+	default MissReason classifyMiss ( String key, String version ) {
+		return MissReason.UNKNOWN;
+	}
+
+	/**
 	 * Persists a snapshot with its version and the reference to the last event included.
 	 * <p>
 	 * The event reference allows the framework to resume event replay from the correct
@@ -70,6 +99,22 @@ public interface SnapshotStorage<SNAPSHOT_TYPE> {
 	 * @param lastEventReference reference to the last event included in the snapshot
 	 */
 	public record SnapshotRecord<SNAPSHOT_TYPE> ( SNAPSHOT_TYPE snapshot, EventReference lastEventReference ) {
+
+	}
+
+	/**
+	 * Why a {@link #load(String, String)} returned empty — see {@link #classifyMiss(String, String)}.
+	 */
+	public enum MissReason {
+
+		/** Nothing is stored under the key: the component has never been snapshotted. */
+		ABSENT,
+
+		/** A snapshot is stored under the key, but with a version other than the one asked for. */
+		VERSION_MISMATCH,
+
+		/** The storage cannot (or does not) say — the default for storages predating {@link #classifyMiss(String, String)}. */
+		UNKNOWN
 
 	}
 

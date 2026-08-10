@@ -105,7 +105,16 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private String name;
 	private Instance instance;
 	private BoundedContextEventEmitter eventEmitter;
-	private volatile boolean stopped = false;
+
+	/**
+	 * BUILT → STARTED ⇄ STOPPED → TERMINATED. The stop() → start() restart path is supported;
+	 * TERMINATED is terminal. Transitions are decided under this object's monitor, but the module
+	 * work of start() and stop() runs outside it: start() blocks until the ephemeral read models are
+	 * projected (minutes, worst case), and terminate() runs from a JVM shutdown hook — a lock held
+	 * across that wait would park the shutdown behind it.
+	 */
+	private enum LifecycleState { BUILT, STARTED, STOPPED, TERMINATED }
+	private volatile LifecycleState lifecycleState = LifecycleState.BUILT;
 	private final Thread shutdownHook;
 
 	private MeterRegistry meterRegistry;
@@ -202,6 +211,22 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	@Override
 	public void start ( ) {
+		synchronized (this) {
+			if (lifecycleState == LifecycleState.TERMINATED) {
+				// same rule as the eventstore's "start() on a closed storage throws": a terminated
+				// context has closed its EventStore and its processor threads are gone for good, so
+				// starting it would hand back a context that looks started and does nothing
+				throw new IllegalStateException("bounded context '" + name + "' has been terminated; terminate() is terminal - build a new context instead");
+			}
+			if (lifecycleState == LifecycleState.STARTED) {
+				// idempotent, matching terminate()'s tolerance: a second start would re-emit the
+				// starting/started events, re-run every slice's wiring and block on the ephemeral
+				// projection wait again, for a context that is already running
+				LOGGER.warn("bounded context '{}' is already started - ignoring this start()", name);
+				return;
+			}
+			lifecycleState = LifecycleState.STARTED;
+		}
 		LOGGER.info("starting bounded context '{}' ...", name);
 		long startedAt = System.currentTimeMillis();
 		eventEmitter.emit(new BoundedContextStarting(name, instance.logical(), instance.physical(), instance.process(),
@@ -230,6 +255,14 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	
 	@Override
 	public void stop ( ) {
+		synchronized (this) {
+			if (lifecycleState != LifecycleState.STARTED) {
+				// never started, already stopped, or terminated (which stopped everything): nothing to do
+				LOGGER.debug("bounded context '{}' is not started ({}) - ignoring this stop()", name, lifecycleState);
+				return;
+			}
+			lifecycleState = LifecycleState.STOPPED;
+		}
 		LOGGER.info("stopping bounded context '{}'...", name);
 		this.inboundModule.stop();
 		this.outboundModule.stop();
@@ -244,10 +277,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	
 	@Override
 	public synchronized void terminate ( ) {
-		if (stopped) {
+		if (lifecycleState == LifecycleState.TERMINATED) {
 			return;
 		}
-		stopped = true;
+		lifecycleState = LifecycleState.TERMINATED;
 		// Deregister the hook now that we are shutting down by hand: it holds a reference to this
 		// context, so a JVM that builds contexts and terminates them -- a test suite, above all --
 		// would keep every one of them, and everything it reaches, alive until it exits.

@@ -259,7 +259,9 @@ bound the replay, eventually consistent in memory, eventually consistent durable
 snapshots — with what each step buys and costs, plus the shapes to steer away from. The sections below
 are the *why* of each mechanism; that file is the *which*, and it is the one a user reads first. Keep
 the two in step rather than restating one in the other, and when advising on a read model, say which
-rung it is on and what would justify the next.
+rung it is on and what would justify the next. [READ-MODEL-MANUAL.md](READ-MODEL-MANUAL.md) is the
+tutorial-form walk up the same ladder (one chapter per rung, banking examples worked through) — the
+same keep-in-step-via-links rule applies to it.
 
 **How a read model is projected has to be said out loud.** `builder.readmodel(X.class)` and
 `builder.readmodel(instance)` register, but `build()` rejects either unless `.live()` /

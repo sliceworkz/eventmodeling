@@ -122,8 +122,9 @@ public class BenchmarkApplication {
 
 		Instant start = Instant.now();
 		
-		// TODO: check micrometer on idempotency for inbound events?
-		
+		// silently de-duplicated ingests are visible on the sliceworkz.eventstore.append.deduplicated
+		// counter (purpose=inbound for this loop); a clean run scrapes 0 there
+
 		AtomicInteger orderNumbering = new AtomicInteger();
 		
 		for ( int i = 0; i < PARALLEL_PRODUCERS; i++ ) {

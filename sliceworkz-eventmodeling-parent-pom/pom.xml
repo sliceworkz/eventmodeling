@@ -43,7 +43,7 @@
 		<testcontainers.postgresql.version>2.0.5</testcontainers.postgresql.version>
 		<h2.version>2.4.240</h2.version>
 		<hikaricp.version>7.1.0</hikaricp.version>
-		<archunit.version>1.4.2</archunit.version>
+		<archunit.version>1.5.0</archunit.version>
 		<awaitility.version>4.3.0</awaitility.version>
 		<uuid-creator.version>6.1.1</uuid-creator.version>
 

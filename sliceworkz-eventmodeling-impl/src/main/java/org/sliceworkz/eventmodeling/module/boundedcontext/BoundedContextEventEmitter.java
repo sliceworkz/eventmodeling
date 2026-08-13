@@ -158,6 +158,11 @@ public final class BoundedContextEventEmitter {
 					? Tracing.kernel(instance)
 					: Tracing.init(instance).actor(tracing.actor()).channel(tracing.channel()).command(tracing.command())
 							.agent(tracing.agentId(), tracing.agentName());
+			if ( tracing != null && tracing.correlationId() != null ) {
+				// keep the triggering operation's flow id, so the observability record of a command
+				// or automation run is correlated with the domain events it reports on
+				kernelTracing = kernelTracing.correlationId(tracing.correlationId());
+			}
 			EphemeralEvent<BoundedContextEvent> ephemeralEvent =
 					kernelTracing.storeOn(EphemeralEvent.of(event, Tags.none()));
 			try {

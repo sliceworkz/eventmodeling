@@ -21,6 +21,7 @@ import java.util.Iterator;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -28,6 +29,8 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.AutomationFailureAction;
+import org.sliceworkz.eventmodeling.automation.CorrelatedTodoItem;
+import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.Limit;
 
@@ -98,11 +101,41 @@ public final class AutomationBatch {
 	}
 
 	/**
+	 * The context to hand each item of a batch: the batch context, unless the item is a
+	 * {@link CorrelatedTodoItem} naming the flow it belongs to — then a context whose tracing carries
+	 * that flow's correlation id, so everything the handling raises is correlated with the events that
+	 * caused the item. Derived per item, because one batch spans many flows. This lives here so the
+	 * published {@code AutomationTest} harness exercises exactly the rule production runs.
+	 *
+	 * @param contextFactory builds a context for a tracing (in production, the bounded context's
+	 *        automation context factory)
+	 * @param batchTracing the batch-level tracing, whose correlation id names the automation run;
+	 *        items that are not correlated keep it
+	 */
+	public static <TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> Function<TODO_ITEM_TYPE,AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> correlatedContexts (
+			Function<Tracing,AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> contextFactory,
+			Tracing batchTracing ) {
+		AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> batchContext = contextFactory.apply(batchTracing);
+		return item -> {
+			if ( item instanceof CorrelatedTodoItem correlated ) {
+				String correlationId = correlated.correlationId();
+				if ( correlationId != null && !correlationId.isBlank() ) {
+					return contextFactory.apply(batchTracing.correlationId(correlationId.strip()));
+				}
+			}
+			return batchContext;
+		};
+	}
+
+	/**
 	 * Handles one batch of todo items, containing whatever a single item throws.
 	 *
 	 * @param automation the automation whose todo list is read and whose {@code handle}/{@code onFailure}
 	 *        are applied
-	 * @param context the automation context handed to every item of this batch
+	 * @param contextForItem the automation context to hand each item of this batch — normally
+	 *        {@link #correlatedContexts}, which derives a per-item context for a
+	 *        {@link CorrelatedTodoItem}; resolved once per item, and {@code handle} and
+	 *        {@code onFailure} see the same instance. May be {@code null} where no context applies
 	 * @param batchSize how many items to stream at most, normally {@link #batchSizeOf}
 	 * @param automationName how to name the automation in log lines
 	 * @param abandonRequested consulted before every item; {@code true} abandons the rest of the batch
@@ -111,7 +144,7 @@ public final class AutomationBatch {
 	 */
 	public static <TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> Outcome handleBatch (
 			Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation,
-			AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context,
+			Function<TODO_ITEM_TYPE,AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> contextForItem,
 			Limit batchSize,
 			String automationName,
 			BooleanSupplier abandonRequested,
@@ -135,6 +168,7 @@ public final class AutomationBatch {
 				}
 				TODO_ITEM_TYPE item = iterator.next();
 				streamed++;
+				AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context = contextForItem == null ? null : contextForItem.apply(item);
 				try {
 					Optional<EventReference> produced = automation.handle(item, context);
 					handled++;

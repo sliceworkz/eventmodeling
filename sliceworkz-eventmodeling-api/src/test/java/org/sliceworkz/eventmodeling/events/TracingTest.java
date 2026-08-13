@@ -22,11 +22,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDateTime;
+
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.stream.EventStreamId;
 
 public class TracingTest {
 
@@ -108,6 +113,75 @@ public class TracingTest {
 		assertTrue(stored.tags().tag("custom").isPresent());
 		assertEquals("value", stored.tags().tag("custom").get().value());
 		assertEquals("OpenAccountCommand", stored.tags().tag("x-command").get().value());
+	}
+
+	@Test
+	void everyFactoryMintsACorrelationId ( ) {
+		assertTrue(Tracing.init(INSTANCE).correlationId() != null);
+		assertTrue(Tracing.actorAndChannel("alice", "api").correlationId() != null);
+		assertTrue(Tracing.automation(INSTANCE).correlationId() != null);
+		assertTrue(Tracing.kernel(INSTANCE).correlationId() != null);
+	}
+
+	@Test
+	void factoriesMintDistinctCorrelationIds ( ) {
+		assertFalse(Tracing.init(INSTANCE).correlationId().equals(Tracing.init(INSTANCE).correlationId()));
+	}
+
+	@Test
+	void correlationIdSurvivesEveryWither ( ) {
+		Tracing tracing = Tracing.init(INSTANCE);
+		String minted = tracing.correlationId();
+		Tracing derived = tracing.command("OpenAccountCommand").actor("alice").channel("api")
+				.agent("agent-1", "Agent One").instance(new Instance("other", "p", "proc"));
+		assertEquals(minted, derived.correlationId());
+	}
+
+	@Test
+	void correlationIdWitherReplacesTheMintedOne ( ) {
+		Tracing tracing = Tracing.init(INSTANCE).correlationId("flow-42");
+		assertEquals("flow-42", tracing.correlationId());
+	}
+
+	@Test
+	void storeOnAddsCorrelationIdTag ( ) {
+		Tracing tracing = Tracing.init(INSTANCE).correlationId("flow-42");
+		EphemeralEvent<String> stored = tracing.storeOn(Event.of("hello", Tags.none()));
+
+		assertEquals("flow-42", stored.tags().tag(Tracing.TAG_CORRELATION_ID).get().value());
+	}
+
+	@Test
+	void storeOnLeavesNoCorrelationTagWhenTheIdIsNull ( ) {
+		Tracing tracing = Tracing.init(INSTANCE).correlationId(null);
+		EphemeralEvent<String> stored = tracing.storeOn(Event.of("hello", Tags.none()));
+
+		assertFalse(stored.tags().tag(Tracing.TAG_CORRELATION_ID).isPresent());
+	}
+
+	@Test
+	void readFromRoundTripsTheCorrelationId ( ) {
+		Tracing tracing = Tracing.init(INSTANCE).correlationId("flow-42");
+		EphemeralEvent<String> stored = tracing.storeOn(Event.of("hello", Tags.none()));
+		Event<String> persisted = Event.of(
+				EventStreamId.forContext("unittests"),
+				EventReference.create(1, 1),
+				stored.type(), stored.type(), stored.data(), stored.tags(),
+				LocalDateTime.now());
+
+		assertEquals("flow-42", Tracing.readFrom(persisted).correlationId());
+	}
+
+	@Test
+	void readFromReportsNullForAnEventWrittenBeforeCorrelationExisted ( ) {
+		Event<String> legacy = Event.of(
+				EventStreamId.forContext("unittests"),
+				EventReference.create(1, 1),
+				EventType.ofType("String"), EventType.ofType("String"), "hello",
+				Tags.of("x-actor", "alice"),
+				LocalDateTime.now());
+
+		assertNull(Tracing.readFrom(legacy).correlationId());
 	}
 
 	@Test

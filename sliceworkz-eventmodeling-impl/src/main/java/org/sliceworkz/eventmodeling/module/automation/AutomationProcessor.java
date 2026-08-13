@@ -17,8 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.module.automation;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.Optional;
@@ -662,12 +660,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	}
 
 	private static BoundedContextEvent.Failure failureOf ( Throwable failure ) {
-		if ( failure == null ) {
-			return null;
-		}
-		StringWriter stackTrace = new StringWriter();
-		failure.printStackTrace(new PrintWriter(stackTrace));
-		return new BoundedContextEvent.Failure(failure.getClass().getName(), failure.getMessage(), stackTrace.toString());
+		return BoundedContextEvent.Failure.of(failure);
 	}
 
 

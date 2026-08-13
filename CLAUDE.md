@@ -311,11 +311,14 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
   `AutomationStarted`/`AutomationStopped`, since it is the same question. `Started` is emitted on the
   ordinary path for every eventually consistent read model when its context starts, so one whose stream
   holds nothing for it is announced from startup instead of never
-- **There is no `ReadModelProjectorFailed`, and that asymmetry with automations is the behaviour, not an
-  omission.** An automation contains a failure per item and carries on, so it needs an event for
-  "running, retrying and getting nowhere". A projector has no such containment: one throwable out of a
-  projection abandons the batch and sets the processor `STOPPED`, which nothing but starting the bounded
-  context again undoes. Its first failure is its last, and `ReadModelProjectorStopped` is both
+- **`ReadModelProjectorFailed` reports the retrying state, once per fruitless round.** A projector now
+  contains a failure the way an automation contains a failing item — see "A projection failure is
+  retried" below — so "running, retrying and getting nowhere" is a state that exists and has to be
+  reported. The rate is bounded by the backoff, `consecutiveFailedRuns` travels with the event so the
+  consumer picks its own alerting threshold, and there is no matching "recovered" event: recovery shows
+  as the next `EventuallyConsistentReadModelUpdated`. `ReadModelProjectorStopped` now means retired on a
+  **permanent** failure — a poison event, a closed storage, a fenced-out leadership — the state where a
+  human has to act, restartable through `ProcessorAdminCapability` without restarting the context
 - **`readModelType` on the start event is the only place the storage class is stated before anything has
   been projected.** The slice inventory on `BoundedContextStarting` declares a read model's name and the
   aspect it was registered in, but not where it keeps its state — which is what decides whether every
@@ -328,16 +331,80 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
   serving it is up. A `SHARED` read model's projector standing by is likewise not a stop:
   `LeadershipAcquired`/`LeadershipReleased` report that axis, and `Started` says the processor exists and
   is willing, not that it is the one projecting
-- The mechanism is `ProjectorProcessor.ProjectorListener` (`onStarted`/`onRun`/`onStopped`, all
-  defaulted), which replaced the `RunListener` that only carried `onRun`. `ProjectorProcessor` projects
-  read models, translators and dispatchers alike and has no business knowing which, so it reports to its
-  module and `ReadModelModule` names the events; the other two modules pass no listener and emit nothing.
-  Every delivery is contained by the processor — `onRun` runs *inside* the projector loop and `onStopped`
-  on a path already handling a failure, where a throw would replace the failure being reported with the
-  reporting of it
-- `ReadModelProjectorLifecycleTest` pins all four: an idle read model is announced and never updates, the
-  storage class travels with the event, a poison projection reports the cause (not the `ProjectorException`
-  wrapping it) together with the event it died on, and shutdown reports nothing per read model
+- The mechanism is `ProjectorProcessor.ProjectorListener` (`onStarted`/`onRun`/`onFailed`/`onStopped`,
+  all defaulted), which replaced the `RunListener` that only carried `onRun`. `ProjectorProcessor`
+  projects read models, translators and dispatchers alike and has no business knowing which, so it
+  reports to its module and the module names the events — `ReadModelModule` the read model trio,
+  `InboundModule` `TranslatorStarted`/`TranslatorFailed`/`TranslatorStopped`, `OutboundModule` the
+  `Dispatcher…` trio. The latter two used to pass no listener at all, so a dead dispatcher —
+  deployment-wide silence toward an external system, since a dispatcher is the outbound stream's only
+  publisher — was two log lines and no bounded-context event. Every delivery is contained by the
+  processor — `onRun` runs *inside* the projector loop and `onStopped` on a path already handling a
+  failure, where a throw would replace the failure being reported with the reporting of it
+- `ReadModelProjectorLifecycleTest` pins the read model half: an idle read model is announced and never
+  updates, the storage class travels with the event, a poison projection reports the cause (not the
+  `ProjectorException` wrapping it) together with the event it died on and is never also reported as
+  retrying, and shutdown reports nothing per read model. `TranslatorLifecycleTest` and
+  `DispatcherLifecycleTest` pin the other two kinds, including their transient-failure recovery
+
+**A projection failure is retried with backoff; only a failure retrying cannot help retires the
+processor:**
+- **The problem this solves.** One throwable out of a projection used to set the processor `STOPPED`
+  for the life of the process — the same verdict for a poison event and for a two-second blip toward
+  the database a read model writes into, on one WARN line, with a bounded context restart as the only
+  way back. The failure the eventstore taxonomy calls *possibly transient* is the common one, and it is
+  precisely the one that self-heals if anyone retries
+- **Retrying never skips an event, which is what makes it safe to do by default.** The eventstore's
+  `Projector` rolls its cursor back to the start of a failed batch before throwing, and no bookmark is
+  placed for it — so the next `run()` re-offers exactly those events. A retry has the same at-least-once
+  semantics a context restart always had; `BatchAwareProjection`/`PublishingReadModel`/
+  `SqlReadModelProjector` remain the answer where a re-offered event must not double-apply
+- **The classification is a closed list of permanent causes, everything else retries.** Permanent —
+  `ProjectorException.getCause()` being `EventDeserializationException`, `EventSerializationException`,
+  `EventStorageClosedException` (checked before its parent `EventStorageException`, which is exactly the
+  retryable kind) or `StaleLeadershipException` (the stored fencing token only grows; retiring is what
+  hands the lease back) — stops the processor as before. Everything else, including whatever the
+  projection's own code throws — a dead target database and an outright bug are indistinguishable from
+  here — is retried: of the two ways to be wrong, retrying a bug is a *visible* stall (a climbing
+  `consecutiveFailedRuns`, one `…Failed` event per round) where stopping on an outage was a read model
+  that never came back. `ProjectorProcessor.isPermanentFailure` is the list
+- **The backoff mirrors the automation's**: initial delay doubling to a cap (defaults 10s → 5min),
+  overridable with `-Dsliceworkz.eventmodeling.projector.retry.initial.ms` /
+  `-Dsliceworkz.eventmodeling.projector.retry.max.ms` (read when the context is built — also the test
+  seam). The wait is a deadline loop deliberately immune to the bare `notify()` an append delivers, for
+  the same reason the automation's `backOff` is: released by traffic, a failing projection would retry
+  at the pace of the very stream feeding it. The counter resets on a completed run, on a demotion (a
+  standby retries nothing, and a re-won lease deserves fresh attempts), and on an explicit `start()`
+- **A leader that keeps failing yields its lease** after 3 consecutive failed runs
+  (`Processor.shouldYieldLeadership`): its trouble says nothing about the standby's connectivity, so the
+  elector demotes it (`LeadershipReleased`, reason `PROCESSOR_FAILING`), releases the lease, and stands
+  this instance out of that election for one ttl before contending again — so with nobody to yield to,
+  the sole instance re-acquires and keeps retrying, and two failing instances ping-pong at most about
+  once per ttl. Deliberately not implemented for automations: their backoff already paces a failing
+  leader and their failures are contained per item under the automation's own policy
+- **The promotion path is paced too.** A reseed (`createProjector` → `resumeFrom()`) hits the read
+  model's own database and throws *outside* the projector run; the loop's catch-all used to go straight
+  round again at thread speed. It now waits a poll interval — and the reseed flag is cleared only after
+  the rebuild succeeds, so a failed reseed is reseeded again rather than running the stale cursor it
+  exists to replace
+- **`start()` is never held hostage by an outage**: the first transient failure releases
+  `awaitInitialProjection`'s latch, exactly like a catch-up overrunning the ephemeral startup timeout —
+  the read model keeps catching up in the background once the cause clears
+- **A retired processor is visible and restartable without a context restart**, through
+  `ProcessorAdminCapability` on the bounded context — the projector counterpart of
+  `AutomationAdminCapability`, covering read model projectors, translators and dispatchers in one
+  surface since the operator question is identical. `processors()` returns a `ProcessorStatus` per
+  processor (kind, name, component class, storage, running, leader, `consecutiveFailedRuns`,
+  `lastFailure`, and `stoppedBy` — kept apart for the same reason `AutomationStatus` keeps them apart);
+  `restartProcessor(kind, name)` mirrors `restartAutomation`: `false` when already running,
+  `IllegalArgumentException` naming the known names otherwise, addresses the instance it is called on,
+  and a leader-only processor resumes via re-election. Restarting without fixing a permanent cause
+  replays the same batch and stops again
+- `ProjectorFailureRecoveryTest` pins the recovery: a transient failure recovers with nothing
+  restarted, the counter climbs per round and starts a fresh streak after a recovery, a failed
+  per-batch commit lands every event exactly once on the retry, and a failing reseed is paced.
+  `ProcessorAdminTest` pins the admin surface, and `LeaderElectionTest` the yield (including the sole
+  instance re-acquiring its own yielded lease) next to the permanent poison hand-over
 
 **A durable read model keeps its own position, next to the state it projects:**
 - **The problem it solves is a two-store commit with no transaction across it.** A read model writes its
@@ -715,8 +782,8 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   and todo lists) rather than ever running twice. `start()` runs one synchronous election round before
   the processors' first pass; `stop()`/`terminate()` release the held leases so a standby takes over
   promptly instead of waiting out the ttl
-- **A processor that stops itself hands its lease back.** A projector retired by a `ProjectorException`
-  and an automation stopped through `STOP_AUTOMATION` set themselves `STOPPED` while their context — and
+- **A processor that stops itself hands its lease back.** A projector retired by a permanent projection
+  failure and an automation stopped through `STOP_AUTOMATION` set themselves `STOPPED` while their context — and
   its elector — keep running, and the elector used to renew their leases unconditionally: the stopped
   processor held its lease for the life of the process, so the read model was not projected, the
   outbound stream not dispatched or the automation not run *anywhere in the deployment*, on one WARN
@@ -747,7 +814,9 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   `EventStorage` predating leases keeps working unchanged; the in-memory storages implement leases, so
   a single process wins everything trivially rather than falling back
 - **Observability**: `LeadershipAcquired`/`LeadershipReleased` (`BoundedContextEvent`s, per processor;
-  reasons `STEPPED_DOWN`, `LOST`, `RENEWAL_FAILED`, `STOPPED`, `PROCESSOR_STOPPED`). Deliberately not
+  reasons `STEPPED_DOWN`, `LOST`, `RENEWAL_FAILED`, `STOPPED`, `PROCESSOR_STOPPED`,
+  `PROCESSOR_FAILING` — the last being the yield of a leader that keeps failing transiently, see the
+  projection-failure section above). Deliberately not
   emitted at shutdown —
   `BoundedContextStopping` already says it for everything at once, the same asymmetry
   `AutomationStopped` keeps. `AutomationStatus` gained `leader`: `running` says the automation would

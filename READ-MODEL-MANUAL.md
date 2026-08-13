@@ -277,9 +277,11 @@ Operational facts to teach alongside:
 - **The read model's name is its bookmark key.** It defaults to the class' simple name; override
   `readmodelName()` to run one class as several differently-named instances. Names must be unique
   and stable — two components sharing a name share a bookmark and silently skip each other's events.
-- **A projector's first failure is its last.** One throwable out of a projection stops that
-  processor until the context is started again; `ReadModelProjectorStarted` / `Stopped` events are
-  how the outside world tells "idle" from "dead" (see chapter 9).
+- **A projection failure is retried with backoff, so a transient outage self-heals.** The retry
+  never skips an event (the projector's cursor rolls back to the failed batch), and each fruitless
+  round is reported as `ReadModelProjectorFailed`. Only a failure retrying cannot help — a poison
+  event, a closed storage — retires the processor, which `ReadModelProjectorStopped` announces and
+  `ProcessorAdminCapability.restartProcessor` puts back without a context restart (see chapter 9).
 
 ## 6. Durable, shared, and elected: the SQL read model
 
@@ -521,8 +523,12 @@ their failure modes in [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md#shape
 - `LiveModelProjected` — per live read: metrics plus `seededAt` (how a silently-empty seed shows up).
 - `ReadModelProjectorStarted` / `ReadModelProjectorStopped` — fold the pair, later one wins, to
   answer "is it still projecting". `Stopped` carries the cause and the event it died on; it is not
-  emitted at shutdown, so it always means the one state worth alerting on. There is no
-  `...Failed` event: a projector's first failure is its last.
+  emitted at shutdown, so it always means the one state worth alerting on — retired on a
+  *permanent* failure, restartable through `ProcessorAdminCapability`.
+- `ReadModelProjectorFailed` — the retrying state: once per fruitless retry round, rate bounded by
+  the backoff, carrying `consecutiveFailedRuns` so you pick your own alerting threshold. A transient
+  failure (the read model's target database being down) never stops the projector anymore; it backs
+  off, retries, and recovery shows as the next `EventuallyConsistentReadModelUpdated`.
 - `EventuallyConsistentReadModelUpdated` — only for catch-ups that handled something.
 - For `SHARED`: `LeadershipAcquired` / `LeadershipReleased` report the election axis separately.
 

@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
@@ -37,6 +38,8 @@ import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarted;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarting;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
@@ -347,6 +350,28 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public boolean restartAutomation ( String automation ) {
 		return automationModule.restartAutomation(automation);
+	}
+
+	/*
+	 * PROCESSOR ADMINISTRATION (read model projectors, translators, dispatchers)
+	 */
+
+	@Override
+	public List<ProcessorStatus> processors ( ) {
+		List<ProcessorStatus> result = new ArrayList<>();
+		result.addAll(readmodelModule.processorStatuses());
+		result.addAll(inboundModule.processorStatuses());
+		result.addAll(outboundModule.processorStatuses());
+		return result;
+	}
+
+	@Override
+	public boolean restartProcessor ( ProcessorKind kind, String name ) {
+		return switch ( kind ) {
+			case READ_MODEL -> readmodelModule.restartProcessor(name);
+			case TRANSLATOR -> inboundModule.restartProcessor(name);
+			case DISPATCHER -> outboundModule.restartProcessor(name);
+		};
 	}
 
 	/*

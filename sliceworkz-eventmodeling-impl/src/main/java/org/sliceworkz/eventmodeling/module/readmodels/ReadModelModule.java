@@ -17,8 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.module.readmodels;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -33,6 +31,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
+import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAdmin;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
@@ -79,6 +80,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 	private MeterRegistry meterRegistry;
 	private BoundedContextEventEmitter eventEmitter;
+	private ProjectorProcessorAdmin admin;
 
 	public record LiveModelInfo<DOMAIN_EVENT_TYPE> (
 			Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass,
@@ -151,6 +153,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		}
 
 		this.meterRegistry = meterRegistry;
+		this.admin = new ProjectorProcessorAdmin(ProcessorKind.READ_MODEL, boundedContext);
 
 		this.projectorProcessors = createProjectorProcessors(this.eventuallyConsistentReadModels);
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(ProcessorIdentification.TYPE_READMODEL, this.projectorProcessors);
@@ -169,7 +172,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		readModels.forEach(rm -> {
 			ReadModelStorage readModelStorage = rm.storage();
 			Storage storage = Storage.of(readModelStorage);
-			result.add(new ProjectorProcessor<>(
+			ProjectorProcessor<DOMAIN_EVENT_TYPE> processor = new ProjectorProcessor<>(
 				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)
 					.context(boundedContext).readmodel().name(rm.readmodelName())
 					.storage(readModelStorage)
@@ -179,10 +182,22 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				processorModeFor(readModelStorage),
 				instance,
 				ecProjectorListener(rm, storage),
-				ownBookmarkOf(rm)));
+				ownBookmarkOf(rm));
+			result.add(processor);
+			admin.register(processor, rm.getClass().getSimpleName());
 		});
 
 		return result;
+	}
+
+	/** The admin view over this module's processors, for {@code ProcessorAdminCapability}. */
+	public List<ProcessorStatus> processorStatuses ( ) {
+		return admin.statuses();
+	}
+
+	/** Restarts a stopped read model projector — see {@code ProcessorAdminCapability.restartProcessor}. */
+	public boolean restartProcessor ( String name ) {
+		return admin.restart(name);
 	}
 
 	/**
@@ -245,6 +260,19 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			}
 
 			@Override
+			public void onFailed ( ProjectorException failure, int consecutiveFailedRuns ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorFailed(
+							boundedContext, rm.readmodelName(), storage.label(),
+							// the cause, not the ProjectorException wrapping it, as on onStopped
+							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
+							failure == null ? null : failure.getEventReference(),
+							consecutiveFailedRuns,
+							eventEmitter.sliceFor(rm.getClass())));
+				}
+			}
+
+			@Override
 			public void onStopped ( ProjectorException failure ) {
 				if ( eventEmitter.enabled() ) {
 					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorStopped(
@@ -252,22 +280,12 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 							// the cause, not the ProjectorException wrapping it: the wrapper is the
 							// framework's own plumbing and reporting it would put the same type on every
 							// stopped read model there has ever been
-							failureOf(failure == null ? null : failure.getCause()),
+							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
 							failure == null ? null : failure.getEventReference(),
 							eventEmitter.sliceFor(rm.getClass())));
 				}
 			}
 		};
-	}
-
-	/** The throwable that stopped a projector, in the serialization-friendly shape the events carry. */
-	private static BoundedContextEvent.Failure failureOf ( Throwable failure ) {
-		if ( failure == null ) {
-			return null;
-		}
-		StringWriter stackTrace = new StringWriter();
-		failure.printStackTrace(new PrintWriter(stackTrace));
-		return new BoundedContextEvent.Failure(failure.getClass().getName(), failure.getMessage(), stackTrace.toString());
 	}
 
 	@SuppressWarnings("unchecked")

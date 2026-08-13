@@ -25,13 +25,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.inbound.NoTranslatorRegisteredException;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
+import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAdmin;
+import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
@@ -66,14 +72,18 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	private Instance instance;
 
 	private MeterRegistry meterRegistry;
+	private BoundedContextEventEmitter eventEmitter;
+	private ProjectorProcessorAdmin admin;
 	private ConcurrentHashMap<String, Counter> translatorCounters = new ConcurrentHashMap<>();
 	private ConcurrentHashMap<String, Timer> translatorTimers = new ConcurrentHashMap<>();
 
-	public InboundModule ( String boundedContext, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> eventuallyConsistentTranslators, Instance instance, MeterRegistry meterRegistry ) {
+	public InboundModule ( String boundedContext, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> eventuallyConsistentTranslators, Instance instance, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.inboundEventStream = inboundEventStream;
 		this.instance = instance;
 		this.meterRegistry = meterRegistry;
+		this.eventEmitter = eventEmitter;
+		this.admin = new ProjectorProcessorAdmin(ProcessorKind.TRANSLATOR, boundedContext);
 		this.translators = new ArrayList<>(eventuallyConsistentTranslators);
 
 		this.projectorProcessors = createProjectorProcessors(eventuallyConsistentTranslators);
@@ -99,21 +109,78 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		ProcessorNames names = ProcessorNames.of(ProcessorIdentification.TYPE_TRANSLATOR);
 		integrations.forEach(names::claim);
 
-		integrations.forEach(t->result.add(
-				new ProjectorProcessor<>(
-						ProcessorIdentification.ProcessorIdentificationBuilder
-							.newBuilder(instance)
-								.context(boundedContext)
-								.translator()
-								.name(t)
-								.shared()
-								.build(),
-						inboundEventStream,
-						new TranslatorAdapter(t, ()->context, Tracing.actorAndChannel(t.getClass().getSimpleName(), "translation").instance(instance)),
-						ProcessorMode.RUNNING_ON_SINGLE_LEADER,
-						instance)
-			));
+		integrations.forEach(t -> {
+			ProjectorProcessor<INBOUND_EVENT_TYPE> processor = new ProjectorProcessor<>(
+					ProcessorIdentification.ProcessorIdentificationBuilder
+						.newBuilder(instance)
+							.context(boundedContext)
+							.translator()
+							.name(t)
+							.shared()
+							.build(),
+					inboundEventStream,
+					new TranslatorAdapter(t, ()->context, Tracing.actorAndChannel(t.getClass().getSimpleName(), "translation").instance(instance)),
+					ProcessorMode.RUNNING_ON_SINGLE_LEADER,
+					instance,
+					translatorListener(t));
+			result.add(processor);
+			admin.register(processor, t.getClass().getSimpleName());
+		});
 		return result;
+	}
+
+	/**
+	 * Turns what a translator's processor reports about itself into the bounded-context events of the
+	 * translator — the same trio a read model's projector emits ({@code Started}/{@code Failed}/
+	 * {@code Stopped}), which is what makes a translator that has stopped reading the inbound stream
+	 * observable at all: before this the whole report was two log lines.
+	 */
+	private ProjectorProcessor.ProjectorListener translatorListener ( Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator ) {
+		String name = translator.getClass().getSimpleName();
+		return new ProjectorProcessor.ProjectorListener() {
+
+			@Override
+			public void onStarted ( ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.TranslatorStarted(
+							boundedContext, name, eventEmitter.sliceFor(translator.getClass())));
+				}
+			}
+
+			@Override
+			public void onFailed ( ProjectorException failure, int consecutiveFailedRuns ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.TranslatorFailed(
+							boundedContext, name,
+							// the cause, not the ProjectorException wrapping it, as everywhere
+							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
+							failure == null ? null : failure.getEventReference(),
+							consecutiveFailedRuns,
+							eventEmitter.sliceFor(translator.getClass())));
+				}
+			}
+
+			@Override
+			public void onStopped ( ProjectorException failure ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.TranslatorStopped(
+							boundedContext, name,
+							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
+							failure == null ? null : failure.getEventReference(),
+							eventEmitter.sliceFor(translator.getClass())));
+				}
+			}
+		};
+	}
+
+	/** The admin view over this module's processors, for {@code ProcessorAdminCapability}. */
+	public List<ProcessorStatus> processorStatuses ( ) {
+		return admin.statuses();
+	}
+
+	/** Restarts a stopped translator processor — see {@code ProcessorAdminCapability.restartProcessor}. */
+	public boolean restartProcessor ( String name ) {
+		return admin.restart(name);
 	}
 
 	class TranslatorAdapter implements Projection<INBOUND_EVENT_TYPE> {

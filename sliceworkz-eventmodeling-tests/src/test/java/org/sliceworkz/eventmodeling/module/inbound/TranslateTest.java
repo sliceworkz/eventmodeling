@@ -128,6 +128,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
 			switch ( event ) {
 				case SomeInboundEvent e -> context.event(new FirstDomainEvent(e.someValue()));
+				default -> { }
 			}
 		}
 	}

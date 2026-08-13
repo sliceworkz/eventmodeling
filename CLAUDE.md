@@ -104,6 +104,11 @@ distinct delays it shows, which are easy to conflate: `PaymentAttemptFailed.next
 item** and is durable because it is an event, while `delayBeforeNextBatch` paces **the whole automation**
 and deliberately is not.
 
+The same four paths are covered deterministically — no polling, no sleeps — by
+`ExecutePaymentAutomationTest` and `PaymentsToExecuteTodoListTest` in this module's `src/test`, built on
+the published `AutomationTest` base. Those two files are the reference for how to *test* an automation,
+the way `ExecutePaymentAutomation` is the reference for how to write one.
+
 ## Architecture Patterns
 
 ### BoundedContext Pattern
@@ -685,6 +690,16 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
   transient failure is retried on the next batch and never twice within one, `STOP_AUTOMATION` does what
   it says, a no-event handler does not spin, and an item cancelling its successors under `batchSize(1)`
   really does prevent them being handled
+- **The batch semantics live once, in `AutomationBatch`, used by both the processor and the published
+  test harness.** The loop — explicit-iterator one-at-a-time pull, `onFailure` routing (a throwing or
+  null-returning `onFailure` downgrades to `RETRY_ITEM`), `RETRY_ITEM` abandoning the batch,
+  `lastProducedEvent` being the last *non-empty* reference, the streamed/handled/failed counters and
+  `gotNowhere()` — was extracted out of `AutomationProcessor`'s private methods so that
+  `sliceworkz-eventmodeling-testing`'s `AutomationTest` runs literally the same code a deployment runs,
+  instead of a re-implementation that would drift. What stays in the processor is everything around the
+  loop: meters, bookmark read/placement, the catch-up guard, backoff, leadership, the bounded-context
+  events. `AutomationBatchTest` pins the loop directly; the processor end to end stays pinned by
+  `AutomationFailureRecoveryTest`
 - **The catch-up guard compares the total `(tx, position, index)` order**, through
   `EventReference.happenedAfter` in `AutomationProcessor.hasCaughtUp`, not `position()` alone. The two are
   genuinely different orders — a position is a `bigserial` and a transaction id an `xid8`, assigned
@@ -849,6 +864,11 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
 - Registered with the bounded context via `builder.dispatcher(...)`, and subject to the naming rule below.
   This is the registry where getting a name wrong costs the most, since the bookmark records what has
   already been published to an external system
+- `DispatcherDeliveryTest` pins the delivery path end to end — a keyed `OutboundCommand`'s event reaching
+  a registered dispatcher's `when()` exactly once through a real `OutboundModule` processor. It is the
+  only test that does: the other dispatcher tests assert registration-time validation, and the published
+  `DispatcherTest` base deliberately drives a dispatcher without registering it, so without this test the
+  wiring from `builder.dispatcher(...)` to `when()` could break with every suite still green
 
 ### Component names are bookmark keys
 
@@ -962,8 +982,38 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 
 **Base Classes:**
 - `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves. The release *terminates* the context rather than stopping it, because terminating is what closes the `EventStore` the context built and drains its processor threads — see "Shutdown — who closes what" below
-- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `SqlReadModelTest`)
+- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `TranslatorTest`, `DispatcherTest`, `SqlReadModelTest`)
 - Use JUnit 5 (Jupiter)
+
+**The other half of the patterns is served too — automations, translators and dispatchers have published
+bases, all synchronous and deterministic:**
+- `AutomationTest` is given/expectTodoItems/whenBatchRuns/then over an `Automation` and its todo list. It
+  runs the production batch loop (`AutomationBatch`, see the Automations section) over a real
+  `AutomationContext` on a built-but-unstarted context, projects the todo list itself with an eventstore
+  `Projector`, and deliberately projects *before* a batch and never after — so a batch's events reach the
+  todo list at the start of the next round, exactly as deployed, and `whenItemsAreRedelivered()` (the
+  same round without the catch-up) makes the crash-between-append-and-bookmark case a one-line test:
+  `.whenItemsAreRedelivered().noEvents()` proves the item-derived idempotency keys. The automation and
+  its todo list are **never registered on the builder** — a registered automation runs on a real
+  processor thread that would race the synchronous rounds
+- `TranslatorTest` registers the translators and rides the synchronous `translate()` path; every test
+  additionally asserts the inbound event was not persisted, which is that path's contract. The async
+  `incoming()` path stays with `InboundModuleTest`
+- `DispatcherTest` drives a dispatcher as the projection it is, over the outbound stream — `given(...)`
+  seeds raw outbound events, `givenExecuted(command, key)` seeds through the real command path, and the
+  two dispatch verbs make redelivery first-class: `whenDispatched()` keeps its cursor (a second round
+  delivers only what is new), `whenRedeliveredFromTheStart()` is the lost-bookmark case. The dispatcher
+  is never registered either; the registered path is `DispatcherDeliveryTest`'s
+- Worked examples to point users at: `ExecutePaymentAutomationTest` and `PaymentsToExecuteTodoListTest`
+  in `sliceworkz-eventmodeling-examples` cover every `onFailure` branch of the payments reference
+  automation deterministically — no Awaitility, no sleeps; deferred retries are tested by seeding the
+  `PaymentAttemptFailed` history with an already-elapsed due time rather than waiting one out
+- Each base has its own `...RunsOnEveryBackendTest` in `sliceworkz-eventmodeling-tests`
+  (`AutomationTestRunsOnEveryBackendTest`, `TranslatorTestRunsOnEveryBackendTest`,
+  `DispatcherTestRunsOnEveryBackendTest`), same rationale as the command/live-model ones below — and they
+  also pin the `"inbound"`/`"outbound"` purpose literals behind the new
+  `inboundEventStreamId()`/`outboundEventStreamId()` helpers, which duplicate the builder
+  implementation's private constants
 
 **The published base classes run the same matrix, and that is the point of them being the same mechanism:**
 - `sliceworkz-eventmodeling-testing`'s `AbstractBoundedContextTest` — the base of `CommandTest`,

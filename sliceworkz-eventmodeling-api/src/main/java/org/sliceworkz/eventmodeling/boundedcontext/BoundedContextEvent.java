@@ -652,6 +652,15 @@ public sealed interface BoundedContextEvent {
 			failure.printStackTrace(new java.io.PrintWriter(stackTrace));
 			return new Failure(failure.getClass().getName(), failure.getMessage(), stackTrace.toString());
 		}
+
+		/**
+		 * The already-rendered form, for a producer that has the three parts rather than a live
+		 * throwable — a monitoring reader synthesizing a view, a test choosing its stack trace. The
+		 * factory convention over value objects is what asks for this next to the canonical constructor.
+		 */
+		public static Failure of ( String type, String message, String stackTrace ) {
+			return new Failure(type, message, stackTrace);
+		}
 	}
 
 	/**

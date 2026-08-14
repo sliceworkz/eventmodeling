@@ -191,6 +191,7 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 			}
 			switch ( event ) {
 				case SomeInboundEvent e -> context.event(new FirstDomainEvent(e.someValue()), "translated-" + e.someValue());
+				default -> { } // this test only ever sends SomeInboundEvent
 			}
 		}
 	}

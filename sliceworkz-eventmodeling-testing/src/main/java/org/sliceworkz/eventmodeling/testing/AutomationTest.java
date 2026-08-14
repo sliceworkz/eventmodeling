@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Function;
 
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
@@ -148,8 +149,15 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 		return automationUnderTest;
 	}
 
-	private AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationContext ( ) {
-		return new AutomationContextImpl<>(kernel(), Tracing.init(InstanceFactory.determine("unittests")));
+	/**
+	 * Per-item, through {@code AutomationBatch.correlatedContexts} — the same derivation production
+	 * runs, so an item implementing {@code CorrelatedTodoItem} has its handling stamped with its
+	 * flow's correlation id in a test exactly as it would be at runtime.
+	 */
+	private Function<TODO_ITEM_TYPE,AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContexts ( ) {
+		return AutomationBatch.correlatedContexts(
+				tracing -> new AutomationContextImpl<>(kernel(), tracing),
+				Tracing.init(InstanceFactory.determine("unittests")));
 	}
 
 	public class TestDefinition {
@@ -239,7 +247,7 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 			EventReference outboundBookmark = lastReferenceOf(outboundStream().query(EventQuery.matchAll()).map(Event::reference).toList());
 
 			AutomationBatch.Outcome outcome = AutomationBatch.handleBatch(
-					automation, automationContext(), AutomationBatch.batchSizeOf(automation),
+					automation, automationContexts(), AutomationBatch.batchSizeOf(automation),
 					automation.getClass().getSimpleName(), () -> false, null);
 
 			if ( outcome.stopAutomation() ) {

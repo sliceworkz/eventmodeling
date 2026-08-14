@@ -20,13 +20,14 @@ package org.sliceworkz.eventmodeling.events;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
-public record Tracing ( Instance instance, String actor, String channel, String command, String agentId, String agentName ) {
+public record Tracing ( Instance instance, String actor, String channel, String command, String agentId, String agentName, String correlationId ) {
 
 	public static final String UNKNOWN_ACTOR = null;
 	public static final String UNKNOWN_CHANNEL = null;
@@ -50,16 +51,24 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	private static final String TAG_AGENT_ID = "x-agent-id";
 	private static final String TAG_AGENT_NAME = "x-agent-name";
 
+	/**
+	 * The tag carrying the correlation id. Public, unlike the other tag names: a consumer that wants
+	 * every event of one flow queries for this tag by name (e.g.
+	 * {@code EventQuery.forEvents(EventTypesFilter.any(), Tags.of(Tracing.TAG_CORRELATION_ID, id))}),
+	 * where the other tracing tags only ever round-trip through {@link #storeOn} / {@link #readFrom}.
+	 */
+	public static final String TAG_CORRELATION_ID = "x-correlation-id";
+
 	public Tracing actor ( String actor ) {
-		return new Tracing ( instance, actor, channel, command, agentId, agentName );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
 	}
 
 	public Tracing channel ( String channel ) {
-		return new Tracing ( instance, actor, channel, command, agentId, agentName );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
 	}
 
 	public Tracing command ( String command ) {
-		return new Tracing ( instance, actor, channel, command, agentId, agentName );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
 	}
 
 	/**
@@ -67,27 +76,49 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	 * (MCP). Both values are optional; a {@code null} pair leaves no agent tags on the event.
 	 */
 	public Tracing agent ( String agentId, String agentName ) {
-		return new Tracing ( instance, actor, channel, command, agentId, agentName );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
+	}
+
+	/**
+	 * Returns a copy carrying the given correlation id, replacing the one this tracing was minted
+	 * with. The correlation id names the <em>flow</em> an event belongs to and is meant to be reused,
+	 * never re-minted, across every step of that flow: command → domain event → todo list → automation
+	 * → outbound event, and across bounded contexts. A step that reacts to an event continues the flow
+	 * by carrying that event's correlation id ({@link #readFrom}) onto everything it raises.
+	 */
+	public Tracing correlationId ( String correlationId ) {
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
 	}
 
 	public static final Tracing init ( Instance instance ) {
-		return new Tracing(instance, UNKNOWN_ACTOR, UNKNOWN_CHANNEL, NO_COMMAND, null, null);
+		return new Tracing(instance, UNKNOWN_ACTOR, UNKNOWN_CHANNEL, NO_COMMAND, null, null, mintCorrelationId());
 	}
 
 	public Tracing instance ( Instance instance ) {
-		return new Tracing(instance, actor, channel, command, agentId, agentName);
+		return new Tracing(instance, actor, channel, command, agentId, agentName, correlationId);
 	}
 
 	public static final Tracing actorAndChannel ( String actor, String channel ) {
-		return new Tracing ( null, actor, channel, NO_COMMAND, null, null);
+		return new Tracing ( null, actor, channel, NO_COMMAND, null, null, mintCorrelationId());
 	}
 
 	public static final Tracing automation ( Instance instance ) {
-		return new Tracing(instance, AUTOMATION_ACTOR, AUTOMATION_CHANNEL, NO_COMMAND, null, null);
+		return new Tracing(instance, AUTOMATION_ACTOR, AUTOMATION_CHANNEL, NO_COMMAND, null, null, mintCorrelationId());
 	}
 
 	public static final Tracing kernel ( Instance instance ) {
-		return new Tracing(instance, SYSTEM_ACTOR, SYSTEM_CHANNEL, NO_COMMAND, null, null);
+		return new Tracing(instance, SYSTEM_ACTOR, SYSTEM_CHANNEL, NO_COMMAND, null, null, mintCorrelationId());
+	}
+
+	/**
+	 * Every factory mints a correlation id, so a flow carries one from its very first event and no
+	 * append path has to check for its absence. Minting happens <em>only</em> in the factories — never
+	 * in the canonical constructor or in {@link #storeOn} — so copying a tracing field by field, or
+	 * reading one back from a stored event, reproduces it exactly rather than silently starting a new
+	 * flow, and all events of one append carry the same id.
+	 */
+	private static final String mintCorrelationId ( ) {
+		return UUID.randomUUID().toString();
 	}
 
 	public static final <T> Event<T> removeFrom ( Event<T> event ) {
@@ -107,8 +138,9 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 		String command = tagValue(event, TAG_COMMAND).orElse(null);
 		String agentId = tagValue(event, TAG_AGENT_ID).orElse(null);
 		String agentName = tagValue(event, TAG_AGENT_NAME).orElse(null);
+		String correlationId = tagValue(event, TAG_CORRELATION_ID).orElse(null);
 
-		return new Tracing(instance, actor, channel, command, agentId, agentName);
+		return new Tracing(instance, actor, channel, command, agentId, agentName, correlationId);
 	}
 
 	private static final Optional<String> tagValue ( Event<?> event, String tagName ) {
@@ -143,6 +175,7 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 		addTag(tags, TAG_COMMAND, command);
 		addTag(tags, TAG_AGENT_ID, agentId);
 		addTag(tags, TAG_AGENT_NAME, agentName);
+		addTag(tags, TAG_CORRELATION_ID, correlationId);
 
 		Tags extraTags = new Tags(tags);
 		Tags mergedTags = event.tags().merge(extraTags);

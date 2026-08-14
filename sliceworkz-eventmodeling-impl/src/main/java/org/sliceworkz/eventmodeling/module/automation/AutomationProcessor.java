@@ -274,17 +274,15 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 									LOGGER.debug("starting processing of max {} items at a time", batchSize);
 
-									// Create automation context with tracing for proper correlation
-									AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context = automationContextFactory.apply(tracing);
-
 									// Time the batch processing and count items
 									Timer.Sample sample = Timer.start(meterRegistry);
 									long batchStartMs = System.currentTimeMillis();
 									// the batch semantics live in AutomationBatch, shared with the published
 									// AutomationTest harness; what this processor adds around them is the meters,
-									// the bookmark and the lifecycle below
+									// the bookmark and the lifecycle below. The context is derived per item, so
+									// a CorrelatedTodoItem's handling is stamped with its flow's correlation id
 									AutomationBatch.Outcome outcome = AutomationBatch.handleBatch(
-											automation, context, batchSize, processorIdentification.toString(),
+											automation, AutomationBatch.correlatedContexts(automationContextFactory, tracing), batchSize, processorIdentification.toString(),
 											() -> terminating || processorMode == ProcessorMode.STOPPED || instanceMode == ProcessorInstanceMode.STANDBY,
 											t -> lastFailure = t);
 									sample.stop(batchTimer);

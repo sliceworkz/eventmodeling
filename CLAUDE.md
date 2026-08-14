@@ -900,6 +900,43 @@ dispatchers nor translators had the shape check — an anonymous one failed deep
 four registries down; they are plain `@Test`s, since this is framework behaviour rather than storage
 behaviour.
 
+### Correlation ids — one flow, one id, reused at every step
+
+**Every event the framework appends carries an `x-correlation-id` tag naming the flow it belongs to**,
+alongside the other `x-*` tracing tags `Tracing.storeOn` writes. A flow is command → domain event →
+todo list → automation → raised/outbound event, across bounded contexts; the id is reused, never
+re-minted, across those steps, which is what makes "show me everything of this flow" a tag query:
+`EventQuery.forEvents(EventTypesFilter.any(), Tags.of(Tracing.TAG_CORRELATION_ID, id))`. Tag matching
+is containment, so the extra tag changes no existing query and no DCB boundary.
+
+- **Minting happens in the `Tracing` factories only** (`init`, `actorAndChannel`, `automation`,
+  `kernel`) — never in the canonical constructor, `readFrom` or `storeOn`. That is load-bearing: a
+  tracing copied field by field or read back from a stored event reproduces the id exactly instead of
+  silently starting a new flow, and all events of one append share one id. An edge that wants its own
+  id sets it with `.correlationId(id)`; a no-tracing `execute`/`incoming` gets one minted by the
+  substituted `Tracing.init(instance)`, so every flow has an id from its first event
+- **Translators continue the flow of what they translate.** The async path derives a per-event tracing
+  in `InboundModule.TranslatorAdapter`: the inbound event's correlation id when it carries one, a fresh
+  id when it does not (one inbound event is one flow). The interactive `translate(...)` path carries
+  the caller's tracing through. Both wrap the translator's context in `TracingTranslatorContext`, which
+  fills the tracing into every no-tracing capability overload — before that existed, a translator's
+  raised events carried only instance tags, losing actor and channel too
+- **Automations are the one hop the framework cannot bridge alone**: a todo item is a user type
+  projected out of history, and nothing links it to the event that put it on the list.
+  `CorrelatedTodoItem` is the opt-in link — the todo list captures
+  `Tracing.readFrom(event).correlationId()` in its `when(...)` and carries it on the item;
+  `handle`/`onFailure` are then handed a context whose tracing carries that id (per item — one batch
+  spans many flows). The derivation lives in `AutomationBatch.correlatedContexts`, with the rest of
+  the batch semantics, so the published `AutomationTest` harness exercises exactly the rule production
+  runs. Items that do not implement it keep the batch-level tracing, whose id names the automation
+  run. `OrdersReadyToDispatch`/`DispatchOrderAutomation` in the benchmark module is the worked example
+- **Monitoring events are correlated with what they report on**: `BoundedContextEventEmitter` carries
+  the triggering operation's correlation id onto the `BoundedContextEvent`s it emits (both branches —
+  also when the tracing has no actor and the kernel actor is substituted), so a `CommandExecuted` on
+  the monitoring stream is findable under the same id as the domain events the command raised
+- `CorrelationPropagationTest` pins every hop; `TracingTest` pins minting, the tag round trip, and
+  that a legacy event without the tag reads back as a null id (never a minted one)
+
 **BoundedContextListener — observability that cannot fail the work it observes:**
 - Register one on the builder (`.listener(...)`) to receive every `BoundedContextEvent` the kernel
   produces. `StreamAppendingBoundedContextListener` appends them to a stream, which means the listener

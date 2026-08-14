@@ -17,16 +17,23 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
-import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
-import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
+/**
+ * The kind of projector-driven processor a {@link ProcessorStatus} describes. Together with the
+ * processor's name this addresses one processor on {@link ProcessorAdminCapability#restartProcessor}
+ * — names are unique per kind, not across kinds, so the kind is part of the address.
+ * <p>
+ * Automations are deliberately not a kind here: they run on a different processor with a richer
+ * status and their own {@code AutomationAdminCapability}.
+ */
+public enum ProcessorKind {
 
-public interface AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends
-	CQRSCapabilities<DOMAIN_EVENT_TYPE>,
-	DCBCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
-	AggregateCapability<DOMAIN_EVENT_TYPE>,
-	FeatureSliceCapabilities,
-	AutomationAdminCapability,
-	ProcessorAdminCapability,
-	PortsCapability {
+	/** An eventually consistent read model's projector. */
+	READ_MODEL,
+
+	/** A translator's processor, reading the inbound stream. */
+	TRANSLATOR,
+
+	/** A dispatcher's processor, publishing the outbound stream. */
+	DISPATCHER
 
 }

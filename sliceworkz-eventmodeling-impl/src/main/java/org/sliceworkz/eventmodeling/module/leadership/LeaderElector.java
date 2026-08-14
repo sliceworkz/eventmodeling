@@ -98,6 +98,10 @@ public class LeaderElector implements Runnable {
 		boolean leader;
 		long lastConfirmedMs;
 		boolean releaseNextRound;
+		// set when this instance yielded the lease of a processor that kept failing here: it stands
+		// out of that election until this deadline, so another instance gets the lease first, and
+		// re-contends afterwards if nobody did
+		long contendAgainAtMs;
 
 		LeaseState ( Electable electable ) {
 			this.electable = electable;
@@ -226,6 +230,30 @@ public class LeaderElector implements Runnable {
 						// is already false by then, so worst case the lease expires on the storage's ttl
 						eventStorage.releaseLease(state.leaseName(), owner);
 					}
+					continue;
+				}
+
+				if ( state.leader && state.electable.processor().shouldYieldLeadership() ) {
+					// The processor is running and retrying, but keeps failing on this instance -- and
+					// its trouble (a read model's target database being down, say) says nothing about
+					// the standby's connectivity, so holding the lease here stalls the deployment on
+					// this instance's problem. Yield: release the lease and stand out of this election
+					// for one ttl, so another instance gets it first. The demotion resets the
+					// processor's failure streak, so if nobody takes over, this instance re-acquires
+					// after the ttl and keeps retrying with fresh attempts -- which also bounds the
+					// ping-pong between two failing instances to roughly one hand-over per ttl.
+					LOGGER.warn("'{}' keeps failing on this instance, yielding its lease so an instance whose dependencies may be healthy can take over", state.leaseName());
+					demote(state, LeadershipReleaseReason.PROCESSOR_FAILING);
+					state.contendAgainAtMs = System.currentTimeMillis() + ttl.toMillis();
+					// a throw here lands in the catch below; state.leader is already false, so worst
+					// case the lease expires on the storage's ttl instead of being handed over promptly
+					eventStorage.releaseLease(state.leaseName(), owner);
+					continue;
+				}
+
+				if ( !state.leader && System.currentTimeMillis() < state.contendAgainAtMs ) {
+					// stood down after yielding: give the other instances one ttl to take the lease
+					// before contending for it again
 					continue;
 				}
 

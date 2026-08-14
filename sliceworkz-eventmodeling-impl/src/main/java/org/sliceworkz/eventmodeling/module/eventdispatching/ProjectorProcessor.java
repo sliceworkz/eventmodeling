@@ -30,11 +30,15 @@ import org.sliceworkz.eventmodeling.module.threading.Processor;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorInstanceMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection;
+import org.sliceworkz.eventmodeling.readmodels.StaleLeadershipException;
+import org.sliceworkz.eventstore.events.EventDeserializationException;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.EventSerializationException;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.projection.ProjectorException;
+import org.sliceworkz.eventstore.spi.EventStorageClosedException;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStreamEventuallyConsistentAppendListener;
 
@@ -51,6 +55,23 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 
 	private static final long WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS = 10000;
 	private static final long WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS = 30000;
+
+	// The retry pacing for a projection failure that is not known to be permanent. The values mirror
+	// Automation.DEFAULT_POLL_INTERVAL and DEFAULT_MAX_BACKOFF deliberately -- same failure class, same
+	// pacing -- but are not imported from there: this class serves read models, translators and
+	// dispatchers alike and has no business depending on the automation package.
+	static final String RETRY_INITIAL_PROPERTY = "sliceworkz.eventmodeling.projector.retry.initial.ms";
+	static final String RETRY_MAX_PROPERTY = "sliceworkz.eventmodeling.projector.retry.max.ms";
+	static final long DEFAULT_RETRY_INITIAL_MS = 10000;
+	static final long DEFAULT_RETRY_MAX_MS = 300000; // 5 minutes
+
+	/**
+	 * After this many consecutive failed runs a leader-only processor reports
+	 * {@link #shouldYieldLeadership()}, so the elector hands its lease to an instance whose
+	 * dependencies may be healthy — this instance's target database being down says nothing about the
+	 * standby's connectivity.
+	 */
+	static final int YIELD_LEADERSHIP_AFTER_FAILED_RUNS = 3;
 
 	private final ProcessorIdentification processorIdentification;
 	private final ProcessorMode originalProcessorMode;
@@ -81,11 +102,26 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	// wherever this instance's projector happened to stop reading
 	private volatile boolean reseedProjector;
 	private volatile boolean potentiallyNewEventsAppended;
-	// set when this processor retires itself on a projection failure, as opposed to being stopped by
-	// its lifecycle; what the leader elector reads to release the lease of a processor that will not
-	// work it (see Processor.stoppedItself). Cleared by start() and stop(): either is an explicit
-	// instruction that supersedes the self-imposed stop
+	// set when this processor retires itself on a permanent projection failure, as opposed to being
+	// stopped by its lifecycle; what the leader elector reads to release the lease of a processor that
+	// will not work it (see Processor.stoppedItself). Cleared by start() and stop(): either is an
+	// explicit instruction that supersedes the self-imposed stop
 	private volatile boolean stoppedItself;
+
+	// how many runs in a row have now failed without the failure being permanent; what the backoff and
+	// the leadership yield are keyed on. Reset by a run that completes, and by a demotion -- a standby
+	// retries nothing, and a re-won lease deserves fresh attempts
+	private volatile int consecutiveFailedRuns;
+	// the cause of the most recent projection failure, permanent or not; stays available after recovery
+	private volatile Throwable lastFailure;
+	// the cause of the permanent failure that retired this processor, null while it is running. Kept
+	// apart from lastFailure, as on AutomationStatus: a running processor has usually survived
+	// failures, and the one an operator wants is the one that stopped it
+	private volatile Throwable stoppedBy;
+
+	// read at construction rather than into a static, so a test can shorten the pacing per context
+	private final long retryInitialMs = Long.getLong(RETRY_INITIAL_PROPERTY, DEFAULT_RETRY_INITIAL_MS);
+	private final long retryMaxMs = Long.getLong(RETRY_MAX_PROPERTY, DEFAULT_RETRY_MAX_MS);
 
 	public ProjectorProcessor (
 			ProcessorIdentification processorIdentification,
@@ -238,6 +274,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	@Override
 	public void start ( ) {
 		this.stoppedItself = false;
+		this.consecutiveFailedRuns = 0; // an explicit start deserves fresh attempts, whatever came before
 		this.processorMode = originalProcessorMode;
 		synchronized ( this ) {
 			this.notify();
@@ -249,6 +286,51 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	public boolean stoppedItself ( ) {
 		return stoppedItself;
 	}
+
+	@Override
+	public boolean shouldYieldLeadership ( ) {
+		return consecutiveFailedRuns >= YIELD_LEADERSHIP_AFTER_FAILED_RUNS;
+	}
+
+	/**
+	 * Restarts this processor if it has stopped, so it resumes projecting from where its position
+	 * durably left off — the retired projector's cursor was rolled back to the start of the batch it
+	 * failed on, so nothing is skipped by the restart either.
+	 *
+	 * @return {@code true} if it was stopped and has been restarted, {@code false} if it was running
+	 */
+	public boolean restart ( ) {
+		if ( processorMode != ProcessorMode.STOPPED ) {
+			LOGGER.debug("'{}' is already running, nothing to restart", processorIdentification);
+			return false;
+		}
+		LOGGER.info("restarting '{}'", processorIdentification);
+		stoppedBy = null; // it is running again; what stopped it stays available as lastFailure
+		start();
+		return true;
+	}
+
+	/**
+	 * What this processor is doing, for an operator. A snapshot read without synchronisation, exactly
+	 * as an automation's status is — the module reporting it adds the name and kind, since this class
+	 * projects read models, translators and dispatchers alike and has no business knowing which.
+	 */
+	public ProcessorSnapshot snapshot ( ) {
+		return new ProcessorSnapshot(
+				processorMode != ProcessorMode.STOPPED,
+				instanceMode == ProcessorInstanceMode.LEADER,
+				consecutiveFailedRuns,
+				lastFailure,
+				stoppedBy);
+	}
+
+	/** The operator-facing state of this processor, in the terms {@code ProcessorStatus} reports. */
+	public record ProcessorSnapshot (
+			boolean running,
+			boolean leader,
+			int consecutiveFailedRuns,
+			Throwable lastFailure,
+			Throwable stoppedBy ) { }
 
 	@Override
 	public void instanceMode ( ProcessorInstanceMode mode, long fencingToken ) {
@@ -268,6 +350,12 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 		if ( mode == ProcessorInstanceMode.LEADER && previous == ProcessorInstanceMode.STANDBY ) {
 			// resume from the shared position, not from this instance's stale in-memory cursor
 			reseedProjector = true;
+		}
+		if ( mode == ProcessorInstanceMode.STANDBY ) {
+			// a demotion ends the failure streak: a standby retries nothing, and a re-won lease
+			// deserves fresh attempts -- which also bounds the yield ping-pong between two failing
+			// instances to roughly one hand-over per lease ttl
+			consecutiveFailedRuns = 0;
 		}
 		synchronized ( this ) {
 			this.notify();
@@ -308,9 +396,13 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 								// promoted since the last pass: rebuild the projector so it resumes from
 								// the position the previous leader durably left, not from this instance's
 								// in-memory cursor
-								reseedProjector = false;
 								LOGGER.info("'{}' promoted to leader, re-seeding projector from its durable position ...", processorIdentification);
 								this.projector = createProjector();
+								// cleared only once the rebuild succeeded: createProjector reads the durable
+								// resume position and can throw (the same dead database a failing projection
+								// writes into), and clearing first would leave the retry running the stale
+								// cursor the reseed exists to replace
+								reseedProjector = false;
 							}
 
 							// the first run after start() rebuilds/catches up the projection from its bookmark
@@ -324,6 +416,11 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 							long runStartMs = System.currentTimeMillis();
 							ProjectorMetrics metrics = projector.run();
 							long runDurationMs = System.currentTimeMillis() - runStartMs;
+
+							if ( consecutiveFailedRuns > 0 ) {
+								LOGGER.info("'{}' recovered after {} failed run(s)", processorIdentification, consecutiveFailedRuns);
+								consecutiveFailedRuns = 0;
+							}
 
 							if ( initialRun ) {
 								LOGGER.info("'{}' initial catch-up completed in {} ms: {} events handled, {} streamed in {} queries, last reference {}",
@@ -352,21 +449,53 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 							}
 
 						} catch ( ProjectorException e ) {
-							LOGGER.error("problem in projector for event {} : {} : {}",
-									e.getEventReference(),
-									e.getCause().getClass(),
-									e.getCause().getMessage(),
-									e.getCause());
-							LOGGER.warn("Stopping projector due to error: {}", e.getCause().getMessage(), e.getCause());
-							// self-imposed, not lifecycle: flagged before the mode flip so the leader
-							// elector never sees a self-stopped processor it would renew the lease for
-							stoppedItself = true;
-							processorMode = ProcessorMode.STOPPED;
-							initialProjectionDone.countDown(); // no catch-up will happen anymore, release anyone waiting for it
-							// after the mode is set, so a listener that goes looking finds a processor that
-							// really has retired rather than one about to
-							notifyListener("stopped", listener -> listener.onStopped(e));
+							Throwable cause = e.getCause();
+							lastFailure = cause;
 
+							if ( isPermanentFailure(cause) ) {
+								LOGGER.error("permanent problem in projector of '{}' for event {} : {} : {} -- stopping, retrying could not help",
+										processorIdentification,
+										e.getEventReference(),
+										cause.getClass(),
+										cause.getMessage(),
+										cause);
+								stoppedBy = cause;
+								// self-imposed, not lifecycle: flagged before the mode flip so the leader
+								// elector never sees a self-stopped processor it would renew the lease for
+								stoppedItself = true;
+								processorMode = ProcessorMode.STOPPED;
+								initialProjectionDone.countDown(); // no catch-up will happen anymore, release anyone waiting for it
+								// after the mode is set, so a listener that goes looking finds a processor that
+								// really has retired rather than one about to
+								notifyListener("stopped", listener -> listener.onStopped(e));
+
+							} else {
+								// Anything else is retried: the Projector rolled its cursor back to the start
+								// of the failed batch, so the next run re-offers exactly those events and no
+								// event is ever skipped. The realistic transient cause -- the database this
+								// projection writes into being down -- and an outright bug in the projection
+								// are indistinguishable from here, and of the two ways to be wrong, retrying
+								// a bug is a visible stall (a climbing consecutiveFailedRuns, one Failed
+								// report per round) where stopping on an outage is a read model that never
+								// comes back without a restart.
+								consecutiveFailedRuns++;
+								int failedRuns = consecutiveFailedRuns;
+								long delayMs = retryDelayMs(failedRuns);
+								LOGGER.error("problem in projector of '{}' for event {} : {} : {} -- retrying in {} ms ({} consecutive failed run(s))",
+										processorIdentification,
+										e.getEventReference(),
+										cause.getClass(),
+										cause.getMessage(),
+										delayMs,
+										failedRuns,
+										cause);
+								// a waiter on the initial projection is released rather than held for the
+								// length of an outage; the projection keeps catching up in the background
+								// once the cause clears, exactly like one that overran the startup timeout
+								initialProjectionDone.countDown();
+								notifyListener("failed", listener -> listener.onFailed(e, failedRuns));
+								backOff(delayMs);
+							}
 						}
 					} else {
 						// Standing by: parked, not spinning. Woken instantly by instanceMode(LEADER),
@@ -408,12 +537,95 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 				}
 			} catch ( Throwable t ) {
 				LOGGER.error("unexpected throwable during processor run: " + t.getMessage() , t);
+				// Reaching here is a failure of the loop machinery itself, outside the projector run --
+				// realistically a promotion's reseed hitting the same dead database the projection
+				// writes into (resumeFrom() throws raw, not as a ProjectorException). Looping straight
+				// round used to retry that at full thread speed; pace it like a poll instead.
+				try {
+					synchronized ( this ) {
+						if ( !terminating ) {
+							this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS);
+						}
+					}
+				} catch ( InterruptedException interrupted ) {
+					LOGGER.debug("interrupted while waiting after an unexpected throwable");
+				}
 			}
 
 		}
 		LOGGER.info("{} gracefully terminated", processorIdentification);
 	}
 
+
+	/**
+	 * Whether a projection failure is one that retrying cannot help, so the processor retires instead
+	 * of backing off.
+	 * <p>
+	 * The classification is over the cause the {@code ProjectorException} wraps — the only signal a
+	 * caller of {@code Projector.run()} has — and it is deliberately a closed list: everything not on
+	 * it is retried, because the realistic transient failure (the database a projection writes into
+	 * being down) arrives as whatever the projection threw and cannot be told apart from a bug.
+	 * <ul>
+	 * <li>{@code EventDeserializationException} — a poison event: the stored payload and the stream's
+	 *     type mappings do not change between attempts, on this instance or any other</li>
+	 * <li>{@code EventSerializationException} — the same, for a payload that cannot be written</li>
+	 * <li>{@code EventStorageClosedException} — closing is terminal, a lifecycle bug in the calling
+	 *     code. Checked as its own case because it <em>extends</em> {@code EventStorageException},
+	 *     the possibly-transient kind that is exactly worth retrying</li>
+	 * <li>{@code StaleLeadershipException} — this leadership was fenced out by a newer leader; the
+	 *     stored token only grows, so retrying here fights the fence forever. Retiring is what hands
+	 *     the lease back (the elector reads {@code stoppedItself})</li>
+	 * </ul>
+	 */
+	static boolean isPermanentFailure ( Throwable cause ) {
+		return cause instanceof EventDeserializationException
+				|| cause instanceof EventSerializationException
+				|| cause instanceof EventStorageClosedException
+				|| cause instanceof StaleLeadershipException;
+	}
+
+	/**
+	 * How long to back off before retry number {@code consecutiveFailedRuns}: the initial delay,
+	 * doubling per further failed run, capped — the same shape as the automation default
+	 * ({@code Automation.delayBeforeNextBatch}), so a dependency that is down for an hour costs a
+	 * handful of attempts instead of a steady hammering.
+	 */
+	private long retryDelayMs ( int consecutiveFailedRuns ) {
+		long delay = retryInitialMs << Math.min(consecutiveFailedRuns - 1, 16);
+		return Math.min(delay, retryMaxMs);
+	}
+
+	/**
+	 * Waits out {@code timeoutMs} whatever else happens on this monitor, cut short only by shutdown, a
+	 * stop, or a demotion — a standby has nothing to back off from, and should be parked in the standby
+	 * branch instead.
+	 * <p>
+	 * This cannot be the plain caught-up wait: append notifications arrive as a bare {@code notify()}
+	 * on this monitor, so a parked thread is woken by any of them however it came to be parked, and a
+	 * failing projection released by every append would retry at the pace of the traffic feeding its
+	 * stream instead of the backoff — a busy system hammering the very database that is down. The loop
+	 * to the deadline is what makes the backoff hold. (The same reasoning as the automation's
+	 * {@code backOff}.)
+	 */
+	private void backOff ( long timeoutMs ) {
+		long deadline = System.currentTimeMillis() + timeoutMs;
+		try {
+			synchronized ( this ) {
+				while ( !terminating && processorMode != ProcessorMode.STOPPED && instanceMode == ProcessorInstanceMode.LEADER ) {
+					long remaining = deadline - System.currentTimeMillis();
+					if ( remaining <= 0 ) {
+						return;
+					}
+					this.wait(remaining);
+				}
+			}
+		} catch ( InterruptedException e ) {
+			// deliberately not restoring the flag: this loop parks again on its next pass, and a set
+			// flag would make that throw immediately and spin. An interrupt here comes from the thread
+			// manager giving up on a terminate() that has already set the flag, so the loop ends anyway
+			LOGGER.debug("interrupted while backing off");
+		}
+	}
 
 	/**
 	 * Delivers one notification to the listener, if there is one, absorbing whatever it throws.
@@ -466,9 +678,20 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 		default void onRun ( ProjectorMetrics metrics, long durationMs ) { }
 
 		/**
-		 * Called when a projection failure has retired this processor. It is not a "batch failed"
-		 * notification: nothing retries after it, so this is the last thing the processor says until
-		 * something starts it again.
+		 * Called once per projection run that failed with something worth retrying, before the
+		 * processor backs off and tries again — so the rate is bounded by the backoff, not by the
+		 * failure. The counterpart of {@link #onStopped}, which now means retired for good.
+		 *
+		 * @param failure the {@code ProjectorException} of this run; its cause is the signal
+		 * @param consecutiveFailedRuns how many runs in a row have now failed, 1 for the first
+		 */
+		default void onFailed ( ProjectorException failure, int consecutiveFailedRuns ) { }
+
+		/**
+		 * Called when a <em>permanent</em> projection failure — one retrying could not help: a poison
+		 * event, a closed storage, a fenced-out leadership — has retired this processor. Nothing
+		 * retries after it, so this is the last thing the processor says until something starts it
+		 * again; a failure worth retrying is reported through {@link #onFailed} instead, per round.
 		 */
 		default void onStopped ( ProjectorException failure ) { }
 

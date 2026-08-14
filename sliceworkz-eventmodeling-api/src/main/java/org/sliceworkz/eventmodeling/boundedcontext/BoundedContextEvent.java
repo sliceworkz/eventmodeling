@@ -252,14 +252,16 @@ public sealed interface BoundedContextEvent {
 	record ReadModelProjectorStarted ( String boundedContext, String readModel, String readModelType, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
-	 * Emitted when a read model's projector has stopped on a failure and will project nothing further
-	 * until something restarts it — which today means restarting its bounded context.
+	 * Emitted when a read model's projector has retired on a <em>permanent</em> failure and will
+	 * project nothing further until something restarts it — {@code ProcessorAdminCapability.restartProcessor},
+	 * or restarting its bounded context.
 	 * <p>
-	 * <strong>There is no retrying state to report, and so no counterpart to {@link AutomationFailed}.</strong>
-	 * An automation contains a failure per item and carries on, which is why it needs an event for
-	 * "running, retrying and getting nowhere". A projector has no such containment: one throwable out
-	 * of a projection abandons the batch and retires the processor, so its first failure is also its
-	 * last, and this event is both.
+	 * <strong>Permanent means retrying could not help</strong>: a poison event the stream's type
+	 * mappings cannot read, a payload that cannot be serialized, a storage that has been closed, or a
+	 * leadership fenced out by a newer leader. Every other failure — including the read model's own
+	 * projection code throwing, which is what a dead target database looks like from here — is retried
+	 * with backoff and reported per fruitless round as {@link ReadModelProjectorFailed} instead, so
+	 * this event no longer means "something threw once": it means somebody has to act.
 	 * <p>
 	 * With {@link ReadModelProjectorStarted} this is the pair to fold to answer "is it still
 	 * projecting", the later of the two winning. The two are deliberately not symmetric at shutdown,
@@ -272,11 +274,129 @@ public sealed interface BoundedContextEvent {
 	 * @param readModel the read model's name, the same one its bookmark and metric tags use
 	 * @param readModelType where the read model keeps its state, as on {@link ReadModelProjectorStarted}
 	 * @param failure what escaped the projection
-	 * @param failedAt the event being projected when it did, or {@code null} when the failure did not
-	 *        happen on one (streaming or querying the events, rather than handling one)
+	 * @param failedAt the last event the projection <em>handled</em>, or {@code null} when the failure
+	 *        came before one. For a poison event that is not the offender — the offending event never
+	 *        reached the projection, and is named inside the failure's own detail
+	 *        ({@code EventDeserializationException.getReference()}, quoted in the stack trace)
 	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
 	 */
 	record ReadModelProjectorStopped ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a read model's projector completes a run that failed — it is running, retrying, and
+	 * getting nowhere. The counterpart of {@link AutomationFailed}, for the same reason: without it, a
+	 * read model that is up to date and one that is quietly going stale behind a backoff look identical
+	 * for as long as nobody appends.
+	 * <p>
+	 * <strong>Once per fruitless retry round, so the rate is bounded by the backoff</strong> — by
+	 * default these arrive every 10 seconds at first and slow to every 5 minutes while the failure
+	 * persists. No event is ever skipped by the retry: the projector's cursor was rolled back to the
+	 * start of the failed batch, and the next round re-offers exactly those events.
+	 * <p>
+	 * {@code consecutiveFailedRuns} is what a consumer keys its alerting on, as with
+	 * {@link AutomationFailed}: the framework deliberately picks no threshold. There is no matching
+	 * "recovered" event — a projector that gets going again emits
+	 * {@link EventuallyConsistentReadModelUpdated}, which is the same signal from the other side.
+	 * Failures that retrying cannot help (a poison event, a closed storage, a fenced-out leadership)
+	 * are not reported here: they retire the processor and raise
+	 * {@link ReadModelProjectorStopped} instead.
+	 *
+	 * @param boundedContext the context the read model belongs to
+	 * @param readModel the read model's name, the same one its bookmark and metric tags use
+	 * @param readModelType where the read model keeps its state, as on {@link ReadModelProjectorStarted}
+	 * @param failure what escaped the projection on this round
+	 * @param failedAt the last event the projection handled, as on {@link ReadModelProjectorStopped}
+	 * @param consecutiveFailedRuns how many runs in a row have now failed, 1 for the first
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record ReadModelProjectorFailed ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, int consecutiveFailedRuns, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a translator's processor starts reading the inbound stream: once per translator when
+	 * the bounded context starts, and again when a stopped one is restarted. Emitted on the ordinary
+	 * path for the same reason {@link ReadModelProjectorStarted} is — a translator whose stream holds
+	 * nothing for it would otherwise announce nothing at all. A translator runs on the single elected
+	 * leader, so this says the processor exists and is willing, not that it is the one translating;
+	 * {@link LeadershipAcquired} says that.
+	 *
+	 * @param boundedContext the context the translator belongs to
+	 * @param translator the translator's name, the same one its bookmark and metric tags use
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record TranslatorStarted ( String boundedContext, String translator, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a translator's processor completes a run that failed — running, retrying with
+	 * backoff, and getting nowhere. Once per fruitless retry round, exactly as
+	 * {@link ReadModelProjectorFailed}; no inbound event is ever skipped by the retry.
+	 *
+	 * @param boundedContext the context the translator belongs to
+	 * @param translator the translator's name
+	 * @param failure what escaped the translation on this round
+	 * @param failedAt the last inbound event the translator handled, as on {@link ReadModelProjectorStopped}
+	 * @param consecutiveFailedRuns how many runs in a row have now failed, 1 for the first
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record TranslatorFailed ( String boundedContext, String translator, Failure failure, EventReference failedAt, int consecutiveFailedRuns, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a translator's processor has retired on a permanent failure and will translate
+	 * nothing further until something restarts it — the translator counterpart of
+	 * {@link ReadModelProjectorStopped}, with the same meaning: retrying could not help, somebody has
+	 * to act. Not emitted at shutdown, the shared asymmetry: {@link BoundedContextStopping} already
+	 * says it for everything at once.
+	 *
+	 * @param boundedContext the context the translator belongs to
+	 * @param translator the translator's name
+	 * @param failure what escaped the translation
+	 * @param failedAt the last inbound event the translator handled, as on {@link ReadModelProjectorStopped}
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record TranslatorStopped ( String boundedContext, String translator, Failure failure, EventReference failedAt, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a dispatcher's processor starts reading the outbound stream: once per dispatcher
+	 * when the bounded context starts, and again when a stopped one is restarted. The dispatcher
+	 * counterpart of {@link TranslatorStarted}, and the more important of the two to watch — a
+	 * dispatcher is the only thing publishing the outbound stream, so its processor being down is
+	 * deployment-wide silence toward an external system.
+	 *
+	 * @param boundedContext the context the dispatcher belongs to
+	 * @param dispatcher the dispatcher's name, the same one its bookmark and metric tags use
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record DispatcherStarted ( String boundedContext, String dispatcher, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a dispatcher's processor completes a run that failed — running, retrying with
+	 * backoff, and getting nowhere, which for a dispatcher means outbound events are accumulating
+	 * unpublished. Once per fruitless retry round, exactly as {@link ReadModelProjectorFailed}; no
+	 * outbound event is ever skipped by the retry, which is the outbox guarantee holding through the
+	 * failure.
+	 *
+	 * @param boundedContext the context the dispatcher belongs to
+	 * @param dispatcher the dispatcher's name
+	 * @param failure what escaped the dispatch on this round
+	 * @param failedAt the last outbound event the dispatcher handled, as on {@link ReadModelProjectorStopped}
+	 * @param consecutiveFailedRuns how many runs in a row have now failed, 1 for the first
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record DispatcherFailed ( String boundedContext, String dispatcher, Failure failure, EventReference failedAt, int consecutiveFailedRuns, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a dispatcher's processor has retired on a permanent failure and will publish
+	 * nothing further until something restarts it — the dispatcher counterpart of
+	 * {@link ReadModelProjectorStopped}. The outbound events are not lost: they sit in the outbound
+	 * stream behind the dispatcher's bookmark, and are published from there once it is restarted.
+	 * Not emitted at shutdown, the shared asymmetry.
+	 *
+	 * @param boundedContext the context the dispatcher belongs to
+	 * @param dispatcher the dispatcher's name
+	 * @param failure what escaped the dispatch
+	 * @param failedAt the last outbound event the dispatcher handled, as on {@link ReadModelProjectorStopped}
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record DispatcherStopped ( String boundedContext, String dispatcher, Failure failure, EventReference failedAt, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted after an automation has processed a batch of todo items.
@@ -439,13 +559,24 @@ public sealed interface BoundedContextEvent {
 
 		/**
 		 * The processor stopped itself while its bounded context stayed up — a projector retired by a
-		 * projection failure, an automation whose failure handling returned {@code STOP_AUTOMATION} —
-		 * so this instance released the lease rather than keep renewing it for work it will not do,
-		 * and a healthy instance is free to take over. This instance contends for the lease again once
-		 * the processor is started (an automation's {@code restartAutomation}, or the context
-		 * restarting), so a restart here resumes on the next election round if nobody took over.
+		 * permanent projection failure, an automation whose failure handling returned
+		 * {@code STOP_AUTOMATION} — so this instance released the lease rather than keep renewing it
+		 * for work it will not do, and a healthy instance is free to take over. This instance contends
+		 * for the lease again once the processor is started (an automation's {@code restartAutomation},
+		 * a projector's {@code restartProcessor}, or the context restarting), so a restart here resumes
+		 * on the next election round if nobody took over.
 		 */
-		PROCESSOR_STOPPED
+		PROCESSOR_STOPPED,
+
+		/**
+		 * The processor kept failing on this instance — several consecutive runs without progress — so
+		 * this instance yielded the lease for an instance whose dependencies may be healthy: a read
+		 * model's target database being down here says nothing about the standby's connectivity. The
+		 * processor itself is still running and retrying; this instance stands out of the election for
+		 * one lease time-to-live and then contends again, so if nobody took over it re-acquires and
+		 * keeps retrying with fresh attempts.
+		 */
+		PROCESSOR_FAILING
 	}
 
 	/*
@@ -507,7 +638,30 @@ public sealed interface BoundedContextEvent {
 	 * @param message    the exception message (may be {@code null})
 	 * @param stackTrace the full rendered stack trace
 	 */
-	record Failure ( String type, String message, String stackTrace ) { }
+	record Failure ( String type, String message, String stackTrace ) {
+
+		/**
+		 * Renders a throwable into this shape, or {@code null} for {@code null} — the one conversion
+		 * every emitter needs, kept here so it is written once rather than once per module.
+		 */
+		public static Failure of ( Throwable failure ) {
+			if ( failure == null ) {
+				return null;
+			}
+			java.io.StringWriter stackTrace = new java.io.StringWriter();
+			failure.printStackTrace(new java.io.PrintWriter(stackTrace));
+			return new Failure(failure.getClass().getName(), failure.getMessage(), stackTrace.toString());
+		}
+
+		/**
+		 * The already-rendered form, for a producer that has the three parts rather than a live
+		 * throwable — a monitoring reader synthesizing a view, a test choosing its stack trace. The
+		 * factory convention over value objects is what asks for this next to the canonical constructor.
+		 */
+		public static Failure of ( String type, String message, String stackTrace ) {
+			return new Failure(type, message, stackTrace);
+		}
+	}
 
 	/**
 	 * Performance metrics describing the work performed by an operation.

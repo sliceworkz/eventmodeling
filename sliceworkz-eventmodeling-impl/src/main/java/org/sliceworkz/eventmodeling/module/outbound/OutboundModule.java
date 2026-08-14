@@ -19,16 +19,23 @@ package org.sliceworkz.eventmodeling.module.outbound;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
+import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAdmin;
+import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
@@ -49,14 +56,18 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 	private Instance instance;
 
 	private MeterRegistry meterRegistry;
+	private BoundedContextEventEmitter eventEmitter;
+	private ProjectorProcessorAdmin admin;
 	private ConcurrentHashMap<String, Counter> dispatcherCounters = new ConcurrentHashMap<>();
 	private ConcurrentHashMap<String, Timer> dispatcherTimers = new ConcurrentHashMap<>();
 
-	public OutboundModule ( String boundedContext, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers, Instance instance, MeterRegistry meterRegistry ) {
+	public OutboundModule ( String boundedContext, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers, Instance instance, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.outboundEventStream = outboundEventStream;
 		this.instance = instance;
 		this.meterRegistry = meterRegistry;
+		this.eventEmitter = eventEmitter;
+		this.admin = new ProjectorProcessorAdmin(ProcessorKind.DISPATCHER, boundedContext);
 
 		this.projectorProcessors = createProjectorProcessors(dispatchers);
 
@@ -78,20 +89,79 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 		ProcessorNames names = ProcessorNames.of(ProcessorIdentification.TYPE_DISPATCHER);
 		dispatchers.forEach(names::claim);
 
-		dispatchers.forEach(t->result.add(
-				new ProjectorProcessor<>(
-						ProcessorIdentification.ProcessorIdentificationBuilder
-							.newBuilder(instance)
-								.context(boundedContext)
-								.dispatcher()
-								.name(t)
-								.shared()
-								.build(),
-						(EventStream<OUTBOUND_EVENT_TYPE>)outboundEventStream,
-						new DispatcherAdapter(t, Tracing.actorAndChannel(t.getClass().getSimpleName(), "dispatch").instance(instance)),
-						ProcessorMode.RUNNING_ON_SINGLE_LEADER,
-						instance)));
+		dispatchers.forEach(t -> {
+			ProjectorProcessor<OUTBOUND_EVENT_TYPE> processor = new ProjectorProcessor<>(
+					ProcessorIdentification.ProcessorIdentificationBuilder
+						.newBuilder(instance)
+							.context(boundedContext)
+							.dispatcher()
+							.name(t)
+							.shared()
+							.build(),
+					(EventStream<OUTBOUND_EVENT_TYPE>)outboundEventStream,
+					new DispatcherAdapter(t, Tracing.actorAndChannel(t.getClass().getSimpleName(), "dispatch").instance(instance)),
+					ProcessorMode.RUNNING_ON_SINGLE_LEADER,
+					instance,
+					dispatcherListener(t));
+			result.add(processor);
+			admin.register(processor, t.getClass().getSimpleName());
+		});
 		return result;
+	}
+
+	/**
+	 * Turns what a dispatcher's processor reports about itself into the bounded-context events of the
+	 * dispatcher — the same trio a read model's projector emits ({@code Started}/{@code Failed}/
+	 * {@code Stopped}). This is the reporting that matters most of the three kinds: a dispatcher is
+	 * the only thing publishing the outbound stream, so its processor being down is deployment-wide
+	 * silence toward an external system, and before this the whole report was two log lines.
+	 */
+	private ProjectorProcessor.ProjectorListener dispatcherListener ( Dispatcher<OUTBOUND_EVENT_TYPE> dispatcher ) {
+		String name = dispatcher.getClass().getSimpleName();
+		return new ProjectorProcessor.ProjectorListener() {
+
+			@Override
+			public void onStarted ( ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.DispatcherStarted(
+							boundedContext, name, eventEmitter.sliceFor(dispatcher.getClass())));
+				}
+			}
+
+			@Override
+			public void onFailed ( ProjectorException failure, int consecutiveFailedRuns ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.DispatcherFailed(
+							boundedContext, name,
+							// the cause, not the ProjectorException wrapping it, as everywhere
+							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
+							failure == null ? null : failure.getEventReference(),
+							consecutiveFailedRuns,
+							eventEmitter.sliceFor(dispatcher.getClass())));
+				}
+			}
+
+			@Override
+			public void onStopped ( ProjectorException failure ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.DispatcherStopped(
+							boundedContext, name,
+							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
+							failure == null ? null : failure.getEventReference(),
+							eventEmitter.sliceFor(dispatcher.getClass())));
+				}
+			}
+		};
+	}
+
+	/** The admin view over this module's processors, for {@code ProcessorAdminCapability}. */
+	public List<ProcessorStatus> processorStatuses ( ) {
+		return admin.statuses();
+	}
+
+	/** Restarts a stopped dispatcher processor — see {@code ProcessorAdminCapability.restartProcessor}. */
+	public boolean restartProcessor ( String name ) {
+		return admin.restart(name);
 	}
 
 	class DispatcherAdapter implements Projection<OUTBOUND_EVENT_TYPE> {

@@ -240,17 +240,22 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	}
 
 	/**
-	 * The same hand-over for a projector — and so for the translators and dispatchers that run on
-	 * the same processor: a SHARED read model whose projection fails stops its projector (the
-	 * {@code ProjectorException} path), and the lease must follow, so the healthy instance projects
-	 * what the failed leader could not. Fails by timeout without the release.
+	 * The same hand-over for a projector — and so for the translators and dispatchers that run on the
+	 * same processor — whose projection keeps failing <em>transiently</em>: the processor is not
+	 * retired (it retries with backoff), but after enough consecutive failed runs it yields its lease,
+	 * because its trouble — the database this instance projects into being down — says nothing about
+	 * the standby's connectivity. The healthy instance projects what the failing leader could not.
+	 * Fails by timeout without the yield: the failing leader would retry behind its backoff forever,
+	 * holding the lease the whole time.
 	 */
 	@Test
-	public void testASelfStoppedProjectorHandsItsLeaseToAHealthyInstance ( ) {
+	public void testAFailingProjectorYieldsItsLeaseToAHealthyInstance ( ) {
 		FlakyApplyLog onA = new FlakyApplyLog(true);
 		FlakyApplyLog onB = new FlakyApplyLog(false);
+		List<Object> kernelEventsOnA = new CopyOnWriteArrayList<>();
 
-		BoundedContextBuilder<Mock> builderA = newInstanceBuilder("node-a", 0);
+		BoundedContextBuilder<Mock> builderA = newInstanceBuilder("node-a", 0)
+				.listener(event -> kernelEventsOnA.add(event.data()));
 		builderA.readmodel(onA).eventuallyConsistent();
 		Mock nodeA = startInstance(builderA); // leads everything from its synchronous start round
 
@@ -262,7 +267,69 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 
 		await().atMost(Duration.ofSeconds(15)).untilAsserted(
 				() -> assertEquals(Map.of("survives-the-failover", 1), FlakyApplyLog.applications(),
-						"the healthy instance must project what the failed leader could not"));
+						"the healthy instance must project what the failing leader could not"));
+		assertTrue(kernelEventsOnA.stream().anyMatch(e -> e instanceof BoundedContextEvent.LeadershipReleased released
+						&& released.reason() == BoundedContextEvent.LeadershipReleaseReason.PROCESSOR_FAILING),
+				"the failing instance must say why it gave the lease up, but emitted: " + kernelEventsOnA);
+	}
+
+	/**
+	 * The <em>permanent</em> sibling: a poison event retires the projector outright ({@code stoppedItself}),
+	 * and the lease follows through the {@code PROCESSOR_STOPPED} release — the path that has always
+	 * existed for a self-stopped processor. Fails by timeout without the release.
+	 */
+	@Test
+	public void testAPoisonStoppedProjectorHandsItsLeaseToAHealthyInstance ( ) {
+		PoisonApplyLog onA = new PoisonApplyLog(true);
+		PoisonApplyLog onB = new PoisonApplyLog(false);
+		List<Object> kernelEventsOnA = new CopyOnWriteArrayList<>();
+
+		BoundedContextBuilder<Mock> builderA = newInstanceBuilder("node-a", 0)
+				.listener(event -> kernelEventsOnA.add(event.data()));
+		builderA.readmodel(onA).eventuallyConsistent();
+		Mock nodeA = startInstance(builderA);
+
+		BoundedContextBuilder<Mock> builderB = newInstanceBuilder("node-b", 0);
+		builderB.readmodel(onB).eventuallyConsistent();
+		startInstance(builderB);
+
+		appendWork(nodeA, "survives-the-failover");
+
+		await().atMost(Duration.ofSeconds(15)).untilAsserted(
+				() -> assertEquals(Map.of("survives-the-failover", 1), PoisonApplyLog.applications(),
+						"the healthy instance must project what the poisoned leader could not"));
+		assertTrue(kernelEventsOnA.stream().anyMatch(e -> e instanceof BoundedContextEvent.LeadershipReleased released
+						&& released.reason() == BoundedContextEvent.LeadershipReleaseReason.PROCESSOR_STOPPED),
+				"a poison stop must release through the self-stopped path, but emitted: " + kernelEventsOnA);
+	}
+
+	/**
+	 * Yielding must not strand the work when there is nobody to yield to: the sole instance stands out
+	 * of the election for one ttl, then contends again, re-acquires its own released lease, and — once
+	 * the cause clears — catches up. Fails by timeout if a yielded lease is never contended for again.
+	 */
+	@Test
+	public void testASoleFailingInstanceReacquiresItsYieldedLeaseAndRecovers ( ) {
+		FlakyApplyLog only = new FlakyApplyLog(true);
+		List<Object> kernelEvents = new CopyOnWriteArrayList<>();
+
+		BoundedContextBuilder<Mock> builder = newInstanceBuilder("node-only", 0)
+				.listener(event -> kernelEvents.add(event.data()));
+		builder.readmodel(only).eventuallyConsistent();
+		Mock node = startInstance(builder);
+
+		appendWork(node, "eventually-projected");
+
+		await().atMost(Duration.ofSeconds(15)).untilAsserted(
+				() -> assertTrue(kernelEvents.stream().anyMatch(e -> e instanceof BoundedContextEvent.LeadershipReleased released
+								&& released.reason() == BoundedContextEvent.LeadershipReleaseReason.PROCESSOR_FAILING),
+						"the failing sole instance must yield first: " + kernelEvents));
+
+		only.heal(); // the outage ends; nothing is restarted
+
+		await().atMost(Duration.ofSeconds(15)).untilAsserted(
+				() -> assertEquals(Map.of("eventually-projected", 1), FlakyApplyLog.applications(),
+						"the sole instance must re-acquire its yielded lease and catch up on its own"));
 	}
 
 	/**
@@ -477,19 +544,23 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	}
 
 	/**
-	 * A SHARED read model with one broken instance: {@code when} throws on the failing instance,
-	 * which stops that instance's projector, while the healthy instance carries the same class name
-	 * and so contends for the same lease. Applications are counted statically, across instances,
-	 * like {@link SharedApplyLog}.
+	 * A SHARED read model with one broken instance: {@code when} throws — transiently, so the
+	 * projector retries with backoff and eventually yields its lease — while the healthy instance
+	 * carries the same class name and so contends for the same lease. Applications are counted
+	 * statically, across instances, like {@link SharedApplyLog}.
 	 */
 	static class FlakyApplyLog implements ReadModelWithMetaData<MockDomainEvent> {
 
 		private static final Map<String,AtomicInteger> APPLICATIONS = new ConcurrentHashMap<>();
 
-		private final boolean failing;
+		private volatile boolean failing;
 
 		FlakyApplyLog ( boolean failing ) {
 			this.failing = failing;
+		}
+
+		void heal ( ) {
+			this.failing = false;
 		}
 
 		static Map<String,Integer> applications ( ) {
@@ -516,6 +587,51 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		public void when ( Event<MockDomainEvent> event ) {
 			if ( failing ) {
 				throw new IllegalStateException("this instance cannot project '%s'".formatted(event.data()));
+			}
+			APPLICATIONS.computeIfAbsent(((FirstDomainEvent) event.data()).value(), v -> new AtomicInteger()).incrementAndGet();
+		}
+	}
+
+	/**
+	 * The permanent sibling of {@link FlakyApplyLog}: the broken instance fails with a poison event —
+	 * an {@code EventDeserializationException}, identical on every retry — which retires its projector
+	 * outright instead of backing off.
+	 */
+	static class PoisonApplyLog implements ReadModelWithMetaData<MockDomainEvent> {
+
+		private static final Map<String,AtomicInteger> APPLICATIONS = new ConcurrentHashMap<>();
+
+		private final boolean failing;
+
+		PoisonApplyLog ( boolean failing ) {
+			this.failing = failing;
+		}
+
+		static Map<String,Integer> applications ( ) {
+			Map<String,Integer> snapshot = new ConcurrentHashMap<>();
+			APPLICATIONS.forEach((value, count) -> snapshot.put(value, count.get()));
+			return snapshot;
+		}
+
+		static void reset ( ) {
+			APPLICATIONS.clear();
+		}
+
+		@Override
+		public ReadModelStorage storage ( ) {
+			return ReadModelStorage.SHARED;
+		}
+
+		@Override
+		public EventQuery eventQuery ( ) {
+			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+		}
+
+		@Override
+		public void when ( Event<MockDomainEvent> event ) {
+			if ( failing ) {
+				throw new org.sliceworkz.eventstore.events.EventDeserializationException(
+						org.sliceworkz.eventstore.events.EventType.of(event.data().getClass()), "this instance cannot read '%s'".formatted(event.data()));
 			}
 			APPLICATIONS.computeIfAbsent(((FirstDomainEvent) event.data()).value(), v -> new AtomicInteger()).incrementAndGet();
 		}
@@ -612,6 +728,28 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		super.setUp();
 		SharedApplyLog.reset();
 		FlakyApplyLog.reset();
+		PoisonApplyLog.reset();
+		// short retry pacing, so a transiently failing projector reaches the yield threshold within
+		// the election intervals this test runs on (read when the bounded context is built)
+		previousRetryInitial = System.setProperty("sliceworkz.eventmodeling.projector.retry.initial.ms", "50");
+		previousRetryMax = System.setProperty("sliceworkz.eventmodeling.projector.retry.max.ms", "200");
+	}
+
+	private String previousRetryInitial;
+	private String previousRetryMax;
+
+	@AfterEach
+	void restoreRetryPacing ( ) {
+		restore("sliceworkz.eventmodeling.projector.retry.initial.ms", previousRetryInitial);
+		restore("sliceworkz.eventmodeling.projector.retry.max.ms", previousRetryMax);
+	}
+
+	private static void restore ( String property, String previous ) {
+		if ( previous == null ) {
+			System.clearProperty(property);
+		} else {
+			System.setProperty(property, previous);
+		}
 	}
 
 }

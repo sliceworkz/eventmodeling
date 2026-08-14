@@ -53,11 +53,11 @@ public interface Processor extends Runnable {
 	}
 
 	/**
-	 * Whether this processor has retired <em>itself</em> — a projector stopped by a projection
-	 * failure, an automation whose failure handling returned {@code STOP_AUTOMATION} — as opposed to
-	 * being stopped by its lifecycle. The leader elector reads this each round: a self-stopped
-	 * processor does no work however the election goes, so its lease is released and not contended
-	 * for until the processor is started again, letting a healthy instance take over.
+	 * Whether this processor has retired <em>itself</em> — a projector stopped by a permanent
+	 * projection failure, an automation whose failure handling returned {@code STOP_AUTOMATION} — as
+	 * opposed to being stopped by its lifecycle. The leader elector reads this each round: a
+	 * self-stopped processor does no work however the election goes, so its lease is released and not
+	 * contended for until the processor is started again, letting a healthy instance take over.
 	 * <p>
 	 * Deliberately not "is stopped": every processor is lifecycle-{@code STOPPED} between
 	 * construction and {@code start()}, which is exactly when the elector runs its synchronous first
@@ -65,6 +65,22 @@ public interface Processor extends Runnable {
 	 * on itself may cost it its lease.
 	 */
 	default boolean stoppedItself ( ) {
+		return false;
+	}
+
+	/**
+	 * Whether this processor, still running and retrying, has failed enough consecutive times that
+	 * its lease should go to an instance whose dependencies may be healthy — this instance's target
+	 * database being down says nothing about the standby's connectivity. The leader elector reads
+	 * this each round: a leader answering {@code true} is demoted, its lease released, and this
+	 * instance stands out of that election for one lease time-to-live before contending again — so if
+	 * nobody takes over, it re-acquires and keeps retrying with fresh attempts.
+	 * <p>
+	 * Deliberately not implemented by an automation's processor: its backoff already paces a failing
+	 * leader, and its failures are contained per item under the automation's own policy, so yielding
+	 * there is future work rather than an omission.
+	 */
+	default boolean shouldYieldLeadership ( ) {
 		return false;
 	}
 

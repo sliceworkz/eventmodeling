@@ -553,11 +553,11 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		// each module is recorded as soon as it exists, so a failure in the next one still finds it --
 		// see releasePartiallyBuilt
 		Collection<Translator> translators = translatorSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
-		InboundModule im = new InboundModule(name, inboundEventStream, translators, instance, meterRegistry);
+		InboundModule im = new InboundModule(name, inboundEventStream, translators, instance, meterRegistry, eventEmitter);
 		constructed.add(im);
 
 		Collection<Dispatcher> dispatchers = dispatcherSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
-		OutboundModule om = new OutboundModule(name, outboundEventStream, dispatchers, instance, meterRegistry);
+		OutboundModule om = new OutboundModule(name, outboundEventStream, dispatchers, instance, meterRegistry, eventEmitter);
 		constructed.add(om);
 
 		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, meterRegistry, eventEmitter);

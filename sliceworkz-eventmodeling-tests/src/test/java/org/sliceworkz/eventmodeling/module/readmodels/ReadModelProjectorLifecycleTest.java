@@ -40,6 +40,8 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
+import org.sliceworkz.eventstore.events.EventDeserializationException;
+import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
@@ -97,13 +99,15 @@ public class ReadModelProjectorLifecycleTest extends AbstractMockDomainTest {
 	}
 
 	/**
-	 * The one this exists for. A projection that throws retires its processor for good — there is no
-	 * per-item containment as an automation has, so its first failure is also its last — and until now
-	 * it said so in a log line and nowhere else, leaving a read model that had stopped taking events
-	 * looking exactly like one with nothing to do.
+	 * The one this exists for. A <em>permanent</em> projection failure — here a poison event, which is
+	 * identical on every retry — retires its processor for good, and until now it said so in a log
+	 * line and nowhere else, leaving a read model that had stopped taking events looking exactly like
+	 * one with nothing to do. (A failure that is merely worth retrying no longer stops anything: the
+	 * processor backs off and retries, reporting {@code ReadModelProjectorFailed} per round — that
+	 * half lives in {@code ProjectorFailureRecoveryTest}.)
 	 */
 	@Test
-	void aProjectionThatThrowsStopsTheProjectorAndSaysSo ( ) {
+	void aPermanentProjectionFailureStopsTheProjectorAndSaysSo ( ) {
 		ThrowingReadModel poison = new ThrowingReadModel("poison-readmodel");
 
 		BoundedContextBuilder<Mock> builder = observedBuilder();
@@ -121,13 +125,17 @@ public class ReadModelProjectorLifecycleTest extends AbstractMockDomainTest {
 		assertNotNull(stopped.failure(), "the throwable that stopped it is the point of the event");
 		// the cause, not the ProjectorException wrapping it — that wrapper is framework plumbing, and
 		// reporting it would put the same type on every stopped read model there has ever been
-		assertEquals(IllegalStateException.class.getName(), stopped.failure().type());
-		assertEquals("this read model cannot project", stopped.failure().message());
+		assertEquals(EventDeserializationException.class.getName(), stopped.failure().type());
+		assertEquals("this read model cannot read this event", stopped.failure().message());
 		assertTrue(stopped.failure().stackTrace().contains("ThrowingReadModel"),
 				"the stack trace must lead back to the projection: " + stopped.failure().stackTrace());
 		assertNotNull(stopped.failedAt(), "the event being projected when it failed is what an operator needs next");
 
 		assertNotNull(started("poison-readmodel"), "it started before it stopped: " + received);
+
+		assertFalse(received.stream().anyMatch(e -> e instanceof BoundedContextEvent.ReadModelProjectorFailed f
+						&& f.readModel().equals("poison-readmodel")),
+				"a permanent failure is not a retrying state, so it must not also be reported as one: " + received);
 	}
 
 	/**
@@ -186,7 +194,11 @@ public class ReadModelProjectorLifecycleTest extends AbstractMockDomainTest {
 		}
 	}
 
-	/** A read model that cannot project anything — the poison one a processor retires on. */
+	/**
+	 * A read model that fails on a poison event — a permanent failure, identical on every retry, which
+	 * is what retires a processor. (An ordinary throwable out of {@code when} is retried with backoff
+	 * instead; see {@code ProjectorFailureRecoveryTest}.)
+	 */
 	static class ThrowingReadModel implements ReadModel<MockDomainEvent> {
 
 		private final String name;
@@ -212,7 +224,7 @@ public class ReadModelProjectorLifecycleTest extends AbstractMockDomainTest {
 
 		@Override
 		public void when ( MockDomainEvent event ) {
-			throw new IllegalStateException("this read model cannot project");
+			throw new EventDeserializationException(EventType.of(event.getClass()), "this read model cannot read this event");
 		}
 
 	}

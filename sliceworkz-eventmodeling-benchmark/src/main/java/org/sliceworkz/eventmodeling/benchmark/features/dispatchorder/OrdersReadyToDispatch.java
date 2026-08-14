@@ -27,8 +27,10 @@ import java.util.stream.Stream;
 
 import javax.sql.DataSource;
 
+import org.sliceworkz.eventmodeling.automation.CorrelatedTodoItem;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
+import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderDispatched;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderPackaged;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.ShipmentAnnounced;
@@ -59,7 +61,8 @@ public class OrdersReadyToDispatch implements TodoListReadModel<OrderProcessingD
 				CREATE TABLE todo_orders_ready_to_dispatch (
 					order_id BIGINT PRIMARY KEY,
 					packaged BOOLEAN DEFAULT FALSE,
-					announced BOOLEAN DEFAULT FALSE
+					announced BOOLEAN DEFAULT FALSE,
+					correlation_id VARCHAR(64)
 				)
 				""");
 		} catch (SQLException e) {
@@ -74,21 +77,26 @@ public class OrdersReadyToDispatch implements TodoListReadModel<OrderProcessingD
 
 	@Override
 	public synchronized void when(Event<OrderProcessingDomainEvent> eventWithMeta) {
+		// this is where the flow an item belongs to is visible: the triggering event's tags are at
+		// hand, so the correlation id is captured here and carried on the item (CorrelatedTodoItem)
+		String correlationId = Tracing.readFrom(eventWithMeta).correlationId();
 		try {
 			switch(eventWithMeta.data()) {
 				case OrderPackaged e -> {
 					try (var stmt = connection.prepareStatement(
-						"INSERT INTO todo_orders_ready_to_dispatch (order_id, packaged, announced) VALUES (?, TRUE, FALSE) " +
-						"ON CONFLICT (order_id) DO UPDATE SET packaged = TRUE")) {
+						"INSERT INTO todo_orders_ready_to_dispatch (order_id, packaged, announced, correlation_id) VALUES (?, TRUE, FALSE, ?) " +
+						"ON CONFLICT (order_id) DO UPDATE SET packaged = TRUE, correlation_id = COALESCE(EXCLUDED.correlation_id, todo_orders_ready_to_dispatch.correlation_id)")) {
 						stmt.setLong(1, e.orderId());
+						stmt.setString(2, correlationId);
 						stmt.executeUpdate();
 					}
 				}
 				case ShipmentAnnounced e -> {
 					try (var stmt = connection.prepareStatement(
-						"INSERT INTO todo_orders_ready_to_dispatch (order_id, packaged, announced) VALUES (?, FALSE, TRUE) " +
-						"ON CONFLICT (order_id) DO UPDATE SET announced = TRUE")) {
+						"INSERT INTO todo_orders_ready_to_dispatch (order_id, packaged, announced, correlation_id) VALUES (?, FALSE, TRUE, ?) " +
+						"ON CONFLICT (order_id) DO UPDATE SET announced = TRUE, correlation_id = COALESCE(EXCLUDED.correlation_id, todo_orders_ready_to_dispatch.correlation_id)")) {
 						stmt.setLong(1, e.orderId());
+						stmt.setString(2, correlationId);
 						stmt.executeUpdate();
 					}
 				}
@@ -116,8 +124,8 @@ public class OrdersReadyToDispatch implements TodoListReadModel<OrderProcessingD
 	public synchronized Stream<OrderReadyToDispatch> streamItems(Limit limit) {
 		try (var connection = dataSource.getConnection()) {
 			String sql = limit.isSet()
-				? "SELECT order_id, packaged, announced FROM todo_orders_ready_to_dispatch WHERE packaged = TRUE AND announced = TRUE LIMIT ?"
-				: "SELECT order_id, packaged, announced FROM todo_orders_ready_to_dispatch WHERE packaged = TRUE AND announced = TRUE";
+				? "SELECT order_id, packaged, announced, correlation_id FROM todo_orders_ready_to_dispatch WHERE packaged = TRUE AND announced = TRUE LIMIT ?"
+				: "SELECT order_id, packaged, announced, correlation_id FROM todo_orders_ready_to_dispatch WHERE packaged = TRUE AND announced = TRUE";
 
 			PreparedStatement stmt = connection.prepareStatement(sql);
 			if (limit.isSet()) {
@@ -130,7 +138,8 @@ public class OrdersReadyToDispatch implements TodoListReadModel<OrderProcessingD
 					results.add(new OrderReadyToDispatch(
 						rs.getLong("order_id"),
 						rs.getBoolean("packaged"),
-						rs.getBoolean("announced")
+						rs.getBoolean("announced"),
+						rs.getString("correlation_id")
 					));
 				}
 				return results.stream();
@@ -176,7 +185,10 @@ public class OrdersReadyToDispatch implements TodoListReadModel<OrderProcessingD
 		}
 	}
 
-	public record OrderReadyToDispatch ( long orderId, boolean packaged, boolean announced ) {
+	// CorrelatedTodoItem: the item carries the flow it belongs to, so the events its handling raises
+	// (the dispatch, here) are stamped with the correlation id of the events that caused it
+	public record OrderReadyToDispatch ( long orderId, boolean packaged, boolean announced, String correlationId )
+			implements CorrelatedTodoItem {
 		public boolean ready ( ) {
 			return packaged && announced;
 		}

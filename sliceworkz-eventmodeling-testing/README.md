@@ -1,7 +1,7 @@
 # sliceworkz-eventmodeling-testing
 
 Base classes for testing an application built on the framework: `CommandTest`, `AggregateTest`,
-`LiveModelTest` and `SqlReadModelTest`.
+`LiveModelTest`, `AutomationTest`, `TranslatorTest`, `DispatcherTest` and `SqlReadModelTest`.
 
 ```xml
 <dependency>
@@ -13,7 +13,8 @@ Base classes for testing an application built on the framework: `CommandTest`, `
 
 ## Running against every event storage
 
-`CommandTest`, `AggregateTest` and `LiveModelTest` all extend `AbstractBoundedContextTest`, which
+`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `TranslatorTest` and
+`DispatcherTest` all extend `AbstractBoundedContextTest`, which
 builds a bounded context over a storage and releases both around every test method. **Which storage
 that is depends on how the test method is annotated** — the same choice the framework's own suite
 makes:
@@ -120,6 +121,140 @@ public void setUp ( ) {          // was: void setUp ( )
 }
 ```
 
+## Testing an automation
+
+`AutomationTest` tests an `Automation` together with its `TodoListReadModel` — synchronously, on the
+test thread, with no polling and no waits. The batch loop it runs is literally the production one
+(`AutomationBatch`, shared with `AutomationProcessor`), over a real `AutomationContext` on a real
+bounded context, so `publishAndRecord`, idempotency keys and `onFailure` behave exactly as deployed.
+
+```java
+class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecute, PaymentsDomainEvent, PaymentsInboundEvent, PaymentsOutboundEvent> {
+
+    private final SimulatedPaymentGateway gateway = new SimulatedPaymentGateway();
+
+    @Override
+    public Automation<PaymentToExecute, PaymentsDomainEvent, PaymentsOutboundEvent> automation ( ) {
+        return new ExecutePaymentAutomation(new PaymentsToExecuteTodoList(), gateway);
+    }
+
+    @Test
+    void aPaymentIsExecutedAndLeavesTheTodoList ( ) {
+        given(new PaymentRequested(paymentId, iban, 100_00))
+            .expectTodoItems(new PaymentToExecute(paymentId, iban, 100_00, 0, null))
+            .whenBatchRuns()
+            .itemsHandled(1)
+            .events(new PaymentExecuted(paymentId, gatewayReference))
+            .and()
+            .expectNoTodoItems();
+    }
+}
+```
+
+How a round works, and why it matches production: `whenBatchRuns()` first projects everything
+appended so far into the todo list (what the todo list's own projector does on its thread in
+production), then runs exactly **one** batch — and deliberately does **not** project afterwards, so a
+batch's events reach the todo list at the start of the *next* round, exactly as deployed. That is
+what makes at-least-once delivery expressible:
+
+- `whenItemsAreRedelivered()` is the same round *without* the catch-up, so the todo list re-offers
+  the items the previous batch already handled — the crash-between-append-and-bookmark case.
+  `.whenItemsAreRedelivered().noEvents()` is the one-line proof that item-derived idempotency keys
+  make the repeat a no-op.
+- `CONTINUE_AND_RETRY_ITEM_LATER` needs no harness support: a failed item returns on the next
+  `whenBatchRuns()` because the todo list still projects it — unless `onFailure` recorded an event
+  that defers or drops it, which the next round's projection applies.
+- A batch that ends in `STOP_AUTOMATION` (assert with `.automationStopped()`) makes further batches
+  refuse to run until `restartAutomation()` — as in production, where a stopped automation waits for
+  an operator. Restarting without fixing the cause finds the same item at the head and stops again.
+- Don't wait out retry delays — seed them. A scenario like "declined three times, then abandoned"
+  seeds the `PaymentAttemptFailed` events a past run would have recorded, with a due time already
+  reached, and runs one batch on top.
+
+**Never register the automation or its todo list on the builder** (via `configure`). The harness owns
+both instances and drives them itself; a registered automation runs on a real processor whose thread
+races the synchronous rounds, and every assertion turns non-deterministic. What the harness leaves to
+the framework's own tests is the processor around the loop: leader election, the catch-up guard,
+backoff pacing, `AutomationStatus`.
+
+The worked example to copy is `ExecutePaymentAutomationTest` (and `PaymentsToExecuteTodoListTest` for
+the projection alone) in `sliceworkz-eventmodeling-examples`.
+
+## Testing a translator
+
+`TranslatorTest` registers the translators under test and runs them through the *interactive* path —
+`BoundedContext.translate(...)`, synchronous, in the calling thread:
+
+```java
+class OrderRegisteredTranslatorTest extends TranslatorTest<ShopEvent, PartnerEvent, Void> {
+
+    @Override
+    public List<Translator<PartnerEvent, ShopEvent>> translators ( ) {
+        return List.of(new OrderRegisteredTranslator());
+    }
+
+    @Test
+    void aPartnerOrderBecomesADomainOrder ( ) {
+        given().when(new PartnerOrderPlaced("o1", 3))
+               .then().event(new OrderReceived("o1", 3));
+    }
+
+    @Test
+    void anUnknownPartnerEventIsLoud ( ) {
+        given().when(new PartnerPing())
+               .then().noTranslatorRegistered();
+    }
+}
+```
+
+Two properties of that path are asserted for free on every test: the inbound event is **not**
+persisted (that is `translate()`'s contract), and an inbound event no translator claims throws
+`NoTranslatorRegisteredException` rather than vanishing. One caveat: the interactive path matches
+translators on the inbound event's *type* only, so a translator whose `eventQuery()` also requires
+tags never matches interactively. The asynchronous path — `incoming(...)`, projector-driven — is
+framework behaviour and stays with the framework's own integration tests; the translation logic is
+identical on both paths.
+
+## Testing a dispatcher
+
+`DispatcherTest` drives a `Dispatcher` as what it is — a projection over the outbound stream — and
+the test asserts on the fake external system it publishes to:
+
+```java
+class AnnouncePaymentDispatcherTest extends DispatcherTest<PaymentsDomainEvent, Void, PaymentsOutboundEvent> {
+
+    private final RecordingMessageBus bus = new RecordingMessageBus();
+
+    @Override
+    public Dispatcher<PaymentsOutboundEvent> dispatcher ( ) {
+        return new AnnouncePaymentDispatcher(bus);
+    }
+
+    @Test
+    void anAnnouncementReachesTheBusExactlyOnce ( ) {
+        given(new PaymentAnnounced("p1"))
+            .whenDispatched().delivered(1)
+            .and()
+            .whenDispatched().nothingDelivered();   // the cursor plays the bookmark
+        assertEquals(List.of("p1"), bus.messages());
+    }
+}
+```
+
+Seeding: `given(...)` appends raw outbound events as fixture data (the idempotency-key requirement
+lives in the command path, not in storage, so this is legitimate); `givenExecuted(command, key)` is
+the faithful alternative — a real `OutboundCommand` through the bounded context under an externally
+provided key, exactly as an automation's `publishAndRecord` does, so executing it twice under the
+same key appends once.
+
+Redelivery is first-class, because a dispatcher is where duplicate publishing costs most: an absent
+bookmark means "publish everything again". `whenDispatched()` keeps one projector across rounds (a
+second round delivers only what is new); `whenRedeliveredFromTheStart()` builds a fresh projector
+from zero — the lost-bookmark or renamed-dispatcher case — and the test then faces up to what its
+dispatcher does with duplicates. As with the automation base, **never register the dispatcher on the
+builder**; the end-to-end delivery path through a registered dispatcher is the framework's own
+`DispatcherDeliveryTest`.
+
 ## SQL read models
 
 `SqlReadModelTest` is about a different database — the one a `SqlReadModelProjector` writes its rows
@@ -133,6 +268,8 @@ Beyond the fluent `given/when/then` of each base class, `AbstractBoundedContextT
 - `kernel()` — the bounded context under test
 - `eventStore()` / `eventStorage()` — the store the context was built over, for asserting on what
   was actually written
-- `eventStreamId()` — the domain stream of that context
+- `eventStreamId()` / `inboundEventStreamId()` / `outboundEventStreamId()` — the three streams of
+  that context, and `domainStream()` / `inboundStream()` / `outboundStream()` as ready-made handles
+  over them
 - `backend()` — the backend supplying this invocation's storage, under `@ForEachBackend`
 - `waitBecauseOfEventualConsistency(...)` — for assertions on anything projected asynchronously

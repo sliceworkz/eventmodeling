@@ -37,6 +37,7 @@ import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
+import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.testing.AbstractEventStoreTest;
 import org.sliceworkz.eventstore.testing.EventStoreBackend;
@@ -91,6 +92,11 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 
 	private static final String DOMAIN_NAME = "unitTests";
 	private static final String DOMAIN = "domain";
+	// the purposes the bounded context opens its three streams under. Duplicated from the builder
+	// implementation's private constants; the *TestRunsOnEveryBackendTest classes pin the literals, so
+	// drift fails a build rather than silently reading empty streams
+	private static final String INBOUND = "inbound";
+	private static final String OUTBOUND = "outbound";
 
 	private static final String IGNORE_TEXT = "<<<IGNORE>>>";
 	private static final String IGNORE_ID_TEXT = "<<<IGNORE_ID>>>";
@@ -202,6 +208,31 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 
 	public EventStreamId eventStreamId ( ) {
 		return EventStreamId.forContext(DOMAIN_NAME).withPurpose(DOMAIN);
+	}
+
+	/** The stream the bounded context under test receives inbound events on. */
+	public EventStreamId inboundEventStreamId ( ) {
+		return EventStreamId.forContext(DOMAIN_NAME).withPurpose(INBOUND);
+	}
+
+	/** The stream the bounded context under test publishes outbound events on. */
+	public EventStreamId outboundEventStreamId ( ) {
+		return EventStreamId.forContext(DOMAIN_NAME).withPurpose(OUTBOUND);
+	}
+
+	/** The domain stream of the bounded context under test, over {@link #eventStore()}. */
+	protected EventStream<DOMAIN_EVENT_TYPE> domainStream ( ) {
+		return eventStore().getEventStream(eventStreamId(), domainEventType());
+	}
+
+	/** The inbound stream of the bounded context under test, over {@link #eventStore()}. */
+	protected EventStream<INBOUND_EVENT_TYPE> inboundStream ( ) {
+		return eventStore().getEventStream(inboundEventStreamId(), inboundEventType());
+	}
+
+	/** The outbound stream of the bounded context under test, over {@link #eventStore()}. */
+	protected EventStream<OUTBOUND_EVENT_TYPE> outboundStream ( ) {
+		return eventStore().getEventStream(outboundEventStreamId(), outboundEventType());
 	}
 
 	/**

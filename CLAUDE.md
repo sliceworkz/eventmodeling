@@ -104,6 +104,11 @@ distinct delays it shows, which are easy to conflate: `PaymentAttemptFailed.next
 item** and is durable because it is an event, while `delayBeforeNextBatch` paces **the whole automation**
 and deliberately is not.
 
+The same four paths are covered deterministically — no polling, no sleeps — by
+`ExecutePaymentAutomationTest` and `PaymentsToExecuteTodoListTest` in this module's `src/test`, built on
+the published `AutomationTest` base. Those two files are the reference for how to *test* an automation,
+the way `ExecutePaymentAutomation` is the reference for how to write one.
+
 ## Architecture Patterns
 
 ### BoundedContext Pattern
@@ -252,6 +257,54 @@ together:**
   pins the runtime guards down — the rejection stores nothing, each key source satisfies it, the
   opt-out really does forgo dedup, and `publishAndRecord` orders the appends, dedups a re-handled item
   and rejects a missing item key. The context narrowing is compile-time and needs no runtime pin
+
+**`executeWithRetry` — the DCB retry loop, written once so it cannot be hand-rolled wrong:**
+- An `OptimisticLockingException` is the routine DCB outcome under contention, and the documented
+  answer has always been "re-execute, which re-projects and re-decides" — but the framework shipped
+  nothing that did it, so every caller wrote the same bounded loop, and the natural mistake (retrying
+  with the stale decision instead of re-reading) is exactly the one DCB exists to prevent. Every
+  `execute` overload now has an `executeWithRetry` twin taking a trailing `RetryPolicy`, plus a
+  policy-less convenience per command shape using `RetryPolicy.DEFAULT` (3 attempts). What makes the
+  retry correct is not the helper but the execution model it rides on: each `execute()` builds a fresh
+  command context, so the decision models are re-projected and the command re-decides against the new
+  facts — the helper just calls it again
+- **They are `default` methods on `CommandExecutionCapability`**, so they reach the bounded context,
+  `AutomationContext` and `TranslatorContext` with zero impl change, and are dispatched fine
+  through the context proxy (the impl inherits them as ordinary methods). One private loop, fifteen
+  one-line delegates
+- **Only `OptimisticLockingException` is ever caught.** `BusinessException`,
+  `IllegalArgumentException`, `IllegalStateException` and `EventStorageException` propagate from the
+  attempt that raised them — the taxonomy in WHERE-VALIDATIONS-GO.md demands opposite responses per
+  type, and a retry that ends in a `BusinessException` is the helper *working*: under the
+  empty-boundary uniqueness pattern the conflict means someone else claimed the name, and the
+  re-decide is what turns that into the business rejection
+- **`RetryPolicy` is `maxAttempts` and nothing else** — no delay, deliberately. A conflict is cleared
+  by re-reading, not by waiting; the one conflict that persists (a Postgres visibility stall, see the
+  eventstore's CLAUDE.md) lasts minutes and no seconds-scale backoff clears it, which is also why
+  attempts are bounded rather than looped. No sleep also means no interrupt handling. Backoff has its
+  home at `Automation.delayBeforeNextBatch`, a different granularity for a different failure
+- **Exhaustion rethrows the last conflict unchanged**, earlier ones attached as suppressed — existing
+  `catch ( OptimisticLockingException )` code keeps working, and `getSuppressed().length` says how
+  many attempts it took. No wrapper type, matching the eventstore's refusal of a common root
+- **No new observability event.** Every attempt runs through `DCBModule` as an ordinary execution, so
+  each conflict emits its own `CommandFailedOnOptimisticLocking` and its own meter increments — a
+  consumer counts attempts. An exhaustion event would have forced the loop into the impl for a fact
+  that is derivable
+- **The same command instance is re-executed**, so a command holding mutable state across `execute()`
+  calls, or building its decision models in its constructor, is not safely re-executable — idiomatic
+  commands hold immutable inputs and construct their models inside `execute()`. Nothing enforces this.
+  An idempotency key is carried unchanged into every attempt: a conflicted append stored nothing, so
+  the key is unconsumed, and a concurrent duplicate surfaces as `Optional.empty()` — success for an
+  at-least-once caller
+- **Inside an automation's `handle()` this is the complement, not a contradiction, of the item-level
+  policy**: `AutomationProcessor` deliberately never hands an item to `handle` twice within a batch,
+  saying a failure worth retrying in milliseconds "belongs inside handle()" — this is that retry. A
+  conflict cleared in-handle never reaches `onFailure` and never abandons the batch
+- `ExecuteWithRetryTest` pins all of it (success after a conflict, exhaustion with suppressed
+  conflicts, the default policy, the `BusinessException` outcome, non-conflicts never retried, the key
+  surviving the retry, the `CommandWithResult` and `OutboundCommand` twins);
+  `AutomationExecuteWithRetryTest` pins the in-handle use end to end; `RetryPolicyTest` pins the
+  validation
 
 **Which read model to reach for is written down for users, and it is the same order to advise in.**
 [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md) carries the ladder — decision model, live model,
@@ -704,6 +757,16 @@ processor:**
   transient failure is retried on the next batch and never twice within one, `STOP_AUTOMATION` does what
   it says, a no-event handler does not spin, and an item cancelling its successors under `batchSize(1)`
   really does prevent them being handled
+- **The batch semantics live once, in `AutomationBatch`, used by both the processor and the published
+  test harness.** The loop — explicit-iterator one-at-a-time pull, `onFailure` routing (a throwing or
+  null-returning `onFailure` downgrades to `RETRY_ITEM`), `RETRY_ITEM` abandoning the batch,
+  `lastProducedEvent` being the last *non-empty* reference, the streamed/handled/failed counters and
+  `gotNowhere()` — was extracted out of `AutomationProcessor`'s private methods so that
+  `sliceworkz-eventmodeling-testing`'s `AutomationTest` runs literally the same code a deployment runs,
+  instead of a re-implementation that would drift. What stays in the processor is everything around the
+  loop: meters, bookmark read/placement, the catch-up guard, backoff, leadership, the bounded-context
+  events. `AutomationBatchTest` pins the loop directly; the processor end to end stays pinned by
+  `AutomationFailureRecoveryTest`
 - **The catch-up guard compares the total `(tx, position, index)` order**, through
   `EventReference.happenedAfter` in `AutomationProcessor.hasCaughtUp`, not `position()` alone. The two are
   genuinely different orders — a position is a `bigserial` and a transaction id an `xid8`, assigned
@@ -870,6 +933,11 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
 - Registered with the bounded context via `builder.dispatcher(...)`, and subject to the naming rule below.
   This is the registry where getting a name wrong costs the most, since the bookmark records what has
   already been published to an external system
+- `DispatcherDeliveryTest` pins the delivery path end to end — a keyed `OutboundCommand`'s event reaching
+  a registered dispatcher's `when()` exactly once through a real `OutboundModule` processor. It is the
+  only test that does: the other dispatcher tests assert registration-time validation, and the published
+  `DispatcherTest` base deliberately drives a dispatcher without registering it, so without this test the
+  wiring from `builder.dispatcher(...)` to `when()` could break with every suite still green
 
 ### Component names are bookmark keys
 
@@ -900,6 +968,43 @@ dispatchers nor translators had the shape check — an anonymous one failed deep
 `DuplicateTranslatorNameTest`, `DuplicateAutomationNameTest` and `DuplicateReadModelNameTest` pin the
 four registries down; they are plain `@Test`s, since this is framework behaviour rather than storage
 behaviour.
+
+### Correlation ids — one flow, one id, reused at every step
+
+**Every event the framework appends carries an `x-correlation-id` tag naming the flow it belongs to**,
+alongside the other `x-*` tracing tags `Tracing.storeOn` writes. A flow is command → domain event →
+todo list → automation → raised/outbound event, across bounded contexts; the id is reused, never
+re-minted, across those steps, which is what makes "show me everything of this flow" a tag query:
+`EventQuery.forEvents(EventTypesFilter.any(), Tags.of(Tracing.TAG_CORRELATION_ID, id))`. Tag matching
+is containment, so the extra tag changes no existing query and no DCB boundary.
+
+- **Minting happens in the `Tracing` factories only** (`init`, `actorAndChannel`, `automation`,
+  `kernel`) — never in the canonical constructor, `readFrom` or `storeOn`. That is load-bearing: a
+  tracing copied field by field or read back from a stored event reproduces the id exactly instead of
+  silently starting a new flow, and all events of one append share one id. An edge that wants its own
+  id sets it with `.correlationId(id)`; a no-tracing `execute`/`incoming` gets one minted by the
+  substituted `Tracing.init(instance)`, so every flow has an id from its first event
+- **Translators continue the flow of what they translate.** The async path derives a per-event tracing
+  in `InboundModule.TranslatorAdapter`: the inbound event's correlation id when it carries one, a fresh
+  id when it does not (one inbound event is one flow). The interactive `translate(...)` path carries
+  the caller's tracing through. Both wrap the translator's context in `TracingTranslatorContext`, which
+  fills the tracing into every no-tracing capability overload — before that existed, a translator's
+  raised events carried only instance tags, losing actor and channel too
+- **Automations are the one hop the framework cannot bridge alone**: a todo item is a user type
+  projected out of history, and nothing links it to the event that put it on the list.
+  `CorrelatedTodoItem` is the opt-in link — the todo list captures
+  `Tracing.readFrom(event).correlationId()` in its `when(...)` and carries it on the item;
+  `handle`/`onFailure` are then handed a context whose tracing carries that id (per item — one batch
+  spans many flows). The derivation lives in `AutomationBatch.correlatedContexts`, with the rest of
+  the batch semantics, so the published `AutomationTest` harness exercises exactly the rule production
+  runs. Items that do not implement it keep the batch-level tracing, whose id names the automation
+  run. `OrdersReadyToDispatch`/`DispatchOrderAutomation` in the benchmark module is the worked example
+- **Monitoring events are correlated with what they report on**: `BoundedContextEventEmitter` carries
+  the triggering operation's correlation id onto the `BoundedContextEvent`s it emits (both branches —
+  also when the tracing has no actor and the kernel actor is substituted), so a `CommandExecuted` on
+  the monitoring stream is findable under the same id as the domain events the command raised
+- `CorrelationPropagationTest` pins every hop; `TracingTest` pins minting, the tag round trip, and
+  that a legacy event without the tag reads back as a null id (never a minted one)
 
 **BoundedContextListener — observability that cannot fail the work it observes:**
 - Register one on the builder (`.listener(...)`) to receive every `BoundedContextEvent` the kernel
@@ -983,8 +1088,38 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 
 **Base Classes:**
 - `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves. The release *terminates* the context rather than stopping it, because terminating is what closes the `EventStore` the context built and drains its processor threads — see "Shutdown — who closes what" below
-- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `SqlReadModelTest`)
+- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `TranslatorTest`, `DispatcherTest`, `SqlReadModelTest`)
 - Use JUnit 5 (Jupiter)
+
+**The other half of the patterns is served too — automations, translators and dispatchers have published
+bases, all synchronous and deterministic:**
+- `AutomationTest` is given/expectTodoItems/whenBatchRuns/then over an `Automation` and its todo list. It
+  runs the production batch loop (`AutomationBatch`, see the Automations section) over a real
+  `AutomationContext` on a built-but-unstarted context, projects the todo list itself with an eventstore
+  `Projector`, and deliberately projects *before* a batch and never after — so a batch's events reach the
+  todo list at the start of the next round, exactly as deployed, and `whenItemsAreRedelivered()` (the
+  same round without the catch-up) makes the crash-between-append-and-bookmark case a one-line test:
+  `.whenItemsAreRedelivered().noEvents()` proves the item-derived idempotency keys. The automation and
+  its todo list are **never registered on the builder** — a registered automation runs on a real
+  processor thread that would race the synchronous rounds
+- `TranslatorTest` registers the translators and rides the synchronous `translate()` path; every test
+  additionally asserts the inbound event was not persisted, which is that path's contract. The async
+  `incoming()` path stays with `InboundModuleTest`
+- `DispatcherTest` drives a dispatcher as the projection it is, over the outbound stream — `given(...)`
+  seeds raw outbound events, `givenExecuted(command, key)` seeds through the real command path, and the
+  two dispatch verbs make redelivery first-class: `whenDispatched()` keeps its cursor (a second round
+  delivers only what is new), `whenRedeliveredFromTheStart()` is the lost-bookmark case. The dispatcher
+  is never registered either; the registered path is `DispatcherDeliveryTest`'s
+- Worked examples to point users at: `ExecutePaymentAutomationTest` and `PaymentsToExecuteTodoListTest`
+  in `sliceworkz-eventmodeling-examples` cover every `onFailure` branch of the payments reference
+  automation deterministically — no Awaitility, no sleeps; deferred retries are tested by seeding the
+  `PaymentAttemptFailed` history with an already-elapsed due time rather than waiting one out
+- Each base has its own `...RunsOnEveryBackendTest` in `sliceworkz-eventmodeling-tests`
+  (`AutomationTestRunsOnEveryBackendTest`, `TranslatorTestRunsOnEveryBackendTest`,
+  `DispatcherTestRunsOnEveryBackendTest`), same rationale as the command/live-model ones below — and they
+  also pin the `"inbound"`/`"outbound"` purpose literals behind the new
+  `inboundEventStreamId()`/`outboundEventStreamId()` helpers, which duplicate the builder
+  implementation's private constants
 
 **The published base classes run the same matrix, and that is the point of them being the same mechanism:**
 - `sliceworkz-eventmodeling-testing`'s `AbstractBoundedContextTest` — the base of `CommandTest`,

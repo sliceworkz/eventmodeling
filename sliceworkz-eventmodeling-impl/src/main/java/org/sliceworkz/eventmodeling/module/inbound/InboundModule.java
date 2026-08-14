@@ -202,8 +202,18 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 			String eventName = eventWithMeta.data().getClass().getSimpleName();
 			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 
+			// one translation is one step of one flow: the tracing is derived per inbound event, and the
+			// correlation id is the inbound event's when it carries one - the translation continues that
+			// flow - or freshly minted when it does not (a legacy event's translation starts its own)
+			Tracing eventTracing = Tracing.actorAndChannel(translatorName, "translation").instance(instance);
+			String inboundCorrelationId = Tracing.readFrom(eventWithMeta).correlationId();
+			if ( inboundCorrelationId != null ) {
+				eventTracing = eventTracing.correlationId(inboundCorrelationId);
+			}
+			TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> tracedContext = new TracingTranslatorContext<>(context.get(), eventTracing);
+
 			countTranslation(translatorName, eventName, channel);
-			translationTimer(translatorName, eventName, channel).record(() -> translator.translate(eventWithMeta.data(), context.get()));
+			translationTimer(translatorName, eventName, channel).record(() -> translator.translate(eventWithMeta.data(), tracedContext));
 		}
 
 		@Override
@@ -262,7 +272,10 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 				"no translator registered for inbound event '%s' in bounded context '%s'".formatted(eventName, boundedContext));
 		}
 
-		CapturingTranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> capturingContext = new CapturingTranslatorContext<>(context);
+		// the caller's tracing (actor, channel, correlation id) travels onto everything the translators
+		// raise, instead of being dropped at this boundary and replaced by bare instance tags
+		CapturingTranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> capturingContext =
+				new CapturingTranslatorContext<>(new TracingTranslatorContext<>(context, tracing));
 
 		for ( Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator : matching ) {
 			String translatorName = translator.getClass().getSimpleName();

@@ -42,6 +42,11 @@
 			<groupId>org.sliceworkz</groupId>
 			<artifactId>sliceworkz-eventstore-infra-inmem</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.sliceworkz</groupId>
+			<artifactId>sliceworkz-eventmodeling-testing</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 </project>

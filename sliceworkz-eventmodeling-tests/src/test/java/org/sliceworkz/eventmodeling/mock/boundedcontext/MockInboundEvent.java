@@ -18,7 +18,10 @@
 package org.sliceworkz.eventmodeling.mock.boundedcontext;
 
 public sealed interface MockInboundEvent {
-	
+
 	public record SomeInboundEvent ( String someValue ) implements MockInboundEvent { }
+
+	/** An inbound event no translator claims, for the no-translator-registered scenarios. */
+	public record UnclaimedInboundEvent ( String someValue ) implements MockInboundEvent { }
 
 }

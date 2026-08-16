@@ -142,6 +142,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private BoundedContextListener boundedContextListener = BoundedContextListener.NO_OP;
 
 	private MeterRegistry meterRegistry = Metrics.globalRegistry;
+	private MeterOptions meterOptions = MeterOptions.defaults();
 
 	private EventStorage eventStorage;
 	private ShreddingCodec shreddingCodec;
@@ -217,6 +218,12 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		} else {
 			this.meterRegistry = Metrics.globalRegistry;
 		}
+		return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<C> meterOptions ( MeterOptions meterOptions ) {
+		this.meterOptions = meterOptions == null ? MeterOptions.defaults() : meterOptions;
 		return this;
 	}
 
@@ -473,7 +480,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		// store: it is what seals Shreddable values on append, unseals them on read, and holds the keys
 		// that erase() destroys. A null codec is the unprotected store this call has always built.
 		EventStore eventStore = EventStoreFactory.get()
-				.eventStore(eventStorage, meterRegistry, MeterOptions.defaults(), shreddingCodec);
+				.eventStore(eventStorage, meterRegistry, meterOptions, shreddingCodec);
 
 		// Everything from here on belongs to a context that does not exist yet. A builder that throws
 		// hands the caller nothing -- no context, so no terminate() and no shutdown hook -- so whatever

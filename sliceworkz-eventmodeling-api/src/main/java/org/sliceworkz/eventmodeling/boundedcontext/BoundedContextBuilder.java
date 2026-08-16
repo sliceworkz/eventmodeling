@@ -33,6 +33,7 @@ import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventstore.MeterOptions;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingKeyStore;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -58,6 +59,30 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	BoundedContextBuilder<C> instance(Instance instance);
 
 	BoundedContextBuilder<C> meterRegistry(MeterRegistry meterRegistry);
+
+	/**
+	 * How the event store tags the meters it registers, in particular how far it breaks them down by
+	 * stream purpose.
+	 * <p>
+	 * The default caps the {@code purpose} tag at 1000 distinct values and pools everything past that
+	 * under {@code _other}, which is the right answer for almost every context. Set this where you know
+	 * your own cardinality better than that default can:
+	 * <pre>{@code
+	 * // purpose is an entity id here -- never break down by it
+	 * .meterOptions(MeterOptions.withoutPurposeBreakdown())
+	 *
+	 * // a wider, but genuinely bounded, set of purposes
+	 * .meterOptions(MeterOptions.withMaxPurposeTagValues(5000))
+	 * }</pre>
+	 * Nothing evicts a meter once it is registered, so an uncapped high-cardinality purpose grows the
+	 * process for as long as it runs, with nothing failing to say so. A Micrometer {@code MeterFilter}
+	 * is not a substitute: it runs at registration, while the store keys some of its own state on the
+	 * tags it asked for.
+	 *
+	 * @param meterOptions how to tag the store's meters; null restores the defaults
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> meterOptions(MeterOptions meterOptions);
 
 	/**
 	 * The storage the bounded context keeps its events in.

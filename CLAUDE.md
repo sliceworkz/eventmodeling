@@ -1248,6 +1248,15 @@ backend's own under `@ForEachBackend`) into both the context and the store behin
 domain event carrying personal data works with no setup and a test can assert on an erasure through
 `shreddingKeyStore()`. `BoundedContextShreddingTest` is the worked example.
 
+**`meterOptions(...)` reaches the event store's meter tagging**, which the builder previously fixed at
+the defaults. It matters mainly for one thing: the store tags every meter with the stream `purpose`, and
+caps that tag at 1000 distinct values by default, pooling the rest under `_other`. Nothing evicts a
+meter, so an uncapped high-cardinality purpose grows the process for as long as it runs with nothing
+failing to say so. A context whose purpose is an entity id should turn the breakdown off outright —
+`.meterOptions(MeterOptions.withoutPurposeBreakdown())` — and one with a wide but genuinely bounded set
+can raise the cap with `MeterOptions.withMaxPurposeTagValues(n)`. Null restores the defaults, as
+`meterRegistry(...)` does, so nothing that already builds a context changes.
+
 ## Important Design Principles
 
 1. **ServiceLoader discovery**: Implementation classes are discovered via ServiceLoader, not direct instantiation

@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
+import org.sliceworkz.eventmodeling.boundedcontext.PrivacyCapability;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
@@ -55,6 +56,9 @@ import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventstore.EventStore;
+import org.sliceworkz.eventstore.shredding.DataSubject;
+import org.sliceworkz.eventstore.shredding.ErasureReason;
+import org.sliceworkz.eventstore.shredding.ErasureReport;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -314,6 +318,25 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.eventStore.close();
 		LOGGER.info("terminated bounded context '{}'.", name);
 	}
+	/*
+	 * PRIVACY
+	 */
+
+	/**
+	 * Destroys the keys protecting a data subject's personal data, delegating to the store this context
+	 * built. Nothing in the event log is written; see {@link PrivacyCapability} for what that means for
+	 * read models, which keep their copies until they are rebuilt.
+	 */
+	@Override
+	public ErasureReport erase ( DataSubject subject, ErasureReason reason ) {
+		ErasureReport report = eventStore.erase(subject, reason);
+		// Logged by the context as well as by the store: an erasure is irreversible, the events record
+		// nothing about it, and "which bounded context was asked" is the part the store cannot say.
+		LOGGER.info("bounded context '{}' erased data subject {}: {} key(s) shredded ({})",
+				name, subject, report.keysShredded(), reason);
+		return report;
+	}
+
 	/*
 	 * LIVE MODEL CONSULTATION
 	 */

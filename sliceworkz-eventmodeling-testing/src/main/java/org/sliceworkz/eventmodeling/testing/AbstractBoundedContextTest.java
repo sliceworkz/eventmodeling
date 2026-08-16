@@ -36,6 +36,8 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
+import org.sliceworkz.eventstore.infra.inmem.shredding.InMemoryShreddingKeyStore;
+import org.sliceworkz.eventstore.shredding.ShreddingKeyStore;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
@@ -106,6 +108,8 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 	private Instance INSTANCE = InstanceFactory.determine("unittests");
 
 	private BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> boundedContext;
+	private ShreddingKeyStore shreddingKeyStore;
+	private EventStore shreddingEventStore;
 
 	@SuppressWarnings("unchecked")
 	@Override
@@ -118,10 +122,22 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 		BoundedContextBuilder<?> builder = BoundedContext.newBuilder(Untyped.class)
 				.eventTypes(domainEventType(), inboundEventType(), outboundEventType());
 
+		this.shreddingKeyStore = createShreddingKeyStore();
+		// The test's own store gets the same key store as the context's, so a value the context sealed
+		// is readable through domainStream() and the streams below. Without this the harness would hand
+		// out two stores that disagree about personal data: the context could write a Shreddable that
+		// the test could not even open a stream for.
+		this.shreddingEventStore = eventStoreWithShredding(shreddingKeyStore);
+
 		builder
 				.name(DOMAIN_NAME)
 				.instance(INSTANCE)
-				.eventStorage(eventStorage());
+				.eventStorage(eventStorage())
+				// Always on, because it costs nothing and its absence is a footgun: a codec changes
+				// nothing for events that hold no Shreddable, and without one a domain event that does
+				// declare one cannot be registered at all -- so a test would fail at startup with a
+				// configuration error rather than exercising the behaviour it was written for.
+				.shredding(shreddingKeyStore);
 
 		// let subclasses do any needed configuration
 		configure(builder);
@@ -144,7 +160,37 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 			boundedContext.terminate();
 			boundedContext = null;
 		}
+		if ( shreddingEventStore != null ) {
+			// built by this class over the shared storage, so this class closes it; the storage itself
+			// is released by super.tearDown() below
+			shreddingEventStore.close();
+			shreddingEventStore = null;
+		}
 		super.tearDown();
+	}
+
+	/**
+	 * The key store protecting this test's personal data, for a test asserting on an erasure.
+	 * <p>
+	 * Created fresh per test, so keys never leak between them.
+	 *
+	 * @return the key store the bounded context under test was built with
+	 */
+	protected ShreddingKeyStore shreddingKeyStore ( ) {
+		return shreddingKeyStore;
+	}
+
+	/**
+	 * Builds the key store for one test: the backend's own for a {@code @ForEachBackend} invocation —
+	 * the SQL table on PostgreSQL, the file-backed one on inmem-fs — and an in-memory one otherwise.
+	 * <p>
+	 * Override to supply a key store of your own, for instance one that fails, to check that an outage
+	 * is not mistaken for an erasure.
+	 *
+	 * @return a key store, valid for the duration of one test
+	 */
+	protected ShreddingKeyStore createShreddingKeyStore ( ) {
+		return hasBoundBackend() ? backend().shreddingKeyStore(eventStorage()) : new InMemoryShreddingKeyStore();
 	}
 
 	/**
@@ -246,7 +292,7 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 	 */
 	@Override
 	public EventStore eventStore ( ) {
-		return super.eventStore();
+		return shreddingEventStore != null ? shreddingEventStore : super.eventStore();
 	}
 
 	public void assertCompareJsonString ( Object expected, Object actual, String objectDescription ) {

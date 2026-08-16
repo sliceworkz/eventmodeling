@@ -33,6 +33,8 @@ import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventstore.shredding.ShreddingCodec;
+import org.sliceworkz.eventstore.shredding.ShreddingKeyStore;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
 import io.micrometer.core.instrument.MeterRegistry;
@@ -66,6 +68,50 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * every context on it has been terminated. One storage can back several bounded contexts.
 	 */
 	BoundedContextBuilder<C> eventStorage(EventStorage eventStorage);
+
+	/**
+	 * Protects the {@link org.sliceworkz.eventstore.shredding.Shreddable} values in this context's
+	 * events, keeping the keys in the given key store.
+	 * <p>
+	 * This is the whole setup. The shipped AES-256-GCM codec is applied for you, so nothing here needs
+	 * to know about ciphers, initialisation vectors or envelopes — pick where the keys live and the rest
+	 * follows:
+	 * <pre>{@code
+	 * // production: keys in the same PostgreSQL database as the events, so a minted key and the
+	 * // append that seals under it commit together
+	 * .shredding(PostgresShreddingKeyStore.on(dataSource, "acme_"))
+	 *
+	 * // a file-backed store, beside file-backed events
+	 * .shredding(new InMemoryFsShreddingKeyStore(directory))
+	 *
+	 * // development and tests only -- keys die with the JVM, so every event sealed by a previous run
+	 * // reads as erased
+	 * .shredding(new InMemoryShreddingKeyStore())
+	 * }</pre>
+	 * Without this, an event type declaring a {@code Shreddable} component cannot be registered at all:
+	 * the context fails at startup rather than storing personal data in the clear with no key to destroy.
+	 * <p>
+	 * The key store stays yours, exactly as {@link #eventStorage(EventStorage)} does — the context never
+	 * closes it. Where the key store shares the storage's {@code DataSource}, closing the storage is
+	 * enough.
+	 *
+	 * @param shreddingKeyStore where keys are minted, resolved and destroyed
+	 * @return this builder
+	 * @see PrivacyCapability#erase(org.sliceworkz.eventstore.shredding.DataSubject, org.sliceworkz.eventstore.shredding.ErasureReason)
+	 */
+	BoundedContextBuilder<C> shredding(ShreddingKeyStore shreddingKeyStore);
+
+	/**
+	 * Protects personal data with a codec of your own, taking over encryption as well as key storage.
+	 * <p>
+	 * The seam for a codec that keeps key material inside an HSM, so it never enters this JVM. Prefer
+	 * {@link #shredding(ShreddingKeyStore)} unless you need that: it applies the shipped, tested codec
+	 * and leaves you only the question of where keys live.
+	 *
+	 * @param shreddingCodec seals and unseals protected values
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> shredding(ShreddingCodec shreddingCodec);
 
 	/**
 	 * This deployment's priority in leader election, default {@code 0}.

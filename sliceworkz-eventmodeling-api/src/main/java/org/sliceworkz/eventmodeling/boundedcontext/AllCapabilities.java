@@ -27,6 +27,7 @@ public interface AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND
 	FeatureSliceCapabilities,
 	AutomationAdminCapability,
 	ProcessorAdminCapability,
-	PortsCapability {
+	PortsCapability,
+	PrivacyCapability {
 
 }

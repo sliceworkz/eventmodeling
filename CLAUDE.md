@@ -1200,6 +1200,54 @@ storage.close();  // ours to close, once no context is running on it
 pool.close();     // supplied by us, so closed after the storage
 ```
 
+### Personal data: `Shreddable` values and erasure
+
+A record component declared `Shreddable<T>` is bound to a `DataSubject`, encrypted on append under the
+key held for that subject, and stored as a sealed envelope inside the ordinary payload. Erasing the
+subject destroys those keys; nothing in the event log is written.
+
+```java
+record TransferMade(
+        String transferId, Money amount,
+        String fromCustomerId,              // pseudonymous — survives erasure, still queryable
+        Shreddable<PartyDetails> from,      // payer's data, payer's key
+        Shreddable<PartyDetails> to         // payee's data, payee's key
+) implements PaymentEvent { }
+
+Payments payments = BoundedContext.newBuilder(Payments.class)
+        .eventStorage(storage)
+        .shredding(PostgresShreddingKeyStore.on(dataSource, "acme_"))   // that is the whole setup
+        .build();
+
+payments.erase(DataSubject.of("customer", "alice-42"),
+               ErasureReason.of("GDPR art.17 request #4711"));
+```
+
+- **`shredding(...)` is the only configuration.** The shipped AES-256-GCM codec is applied for you, so
+  the choice is only *where the keys live*: `PostgresShreddingKeyStore.on(dataSource, prefix)` in
+  production, `new InMemoryFsShreddingKeyStore(dir)` beside file-backed events, or
+  `new InMemoryShreddingKeyStore()` for development. `shredding(ShreddingCodec)` is the seam for taking
+  over the cryptography as well, for a codec that keeps keys inside an HSM.
+- **Without it, a domain event declaring a `Shreddable` cannot be registered**, so the context fails at
+  startup rather than storing personal data in the clear with no key to destroy.
+- **The framework is otherwise untouched.** Commands, projectors, automations, translators and
+  dispatchers see a `Shreddable` as an ordinary payload value. There is nothing to configure per slice.
+- **The key store stays yours**, exactly like the storage: `terminate()` closes the store the context
+  built and nothing else.
+
+**Read models are not erased, and this is the part that needs a decision per application.** A read model
+holds its own copy of whatever a projection wrote into it, and projections hold bookmarks, so nothing
+re-reads the affected events. After an erasure the event log is compliant immediately and a read model
+that stored personal data still holds it, in full, until it is rebuilt — a rebuild replays the events
+and now reads those values as shredded. Either keep personal data out of read models and read it through
+the events, or rebuild the affected read models as part of handling the request. Nothing in the
+framework notices an erasure on its own.
+
+**In tests, shredding is always on.** `AbstractBoundedContextTest` wires an in-memory key store (or the
+backend's own under `@ForEachBackend`) into both the context and the store behind `domainStream()`, so a
+domain event carrying personal data works with no setup and a test can assert on an erasure through
+`shreddingKeyStore()`. `BoundedContextShreddingTest` is the worked example.
+
 ## Important Design Principles
 
 1. **ServiceLoader discovery**: Implementation classes are discovered via ServiceLoader, not direct instantiation

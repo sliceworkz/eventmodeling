@@ -112,38 +112,25 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		}
 		MergedEventQueries mergedPlainQueries = EventQuery.merge(plainQueries);
 
-		// Number of physical reads that will actually be executed against the store: one per merged plain
-		// query plus one per savepoint model.
-		int physicalReads = mergedPlainQueries.mergedCount() + savepointModels.size();
-
-		// The filter to pin the boundary with. The pin has to name an instant at or after the newest event
-		// ANY of the reads cares about, and with a savepoint model there is no way to know up front what
-		// that is: the Projector bounds the initQuery too, so pinning before the newest savepoint would
-		// initialise the model from a stale one, and a model is free to derive its eventQuery from what the
-		// initQuery hands it — a query nobody can name before that read has happened. So a command with a
-		// savepoint model pins at the newest event in the stream.
-		// For the plain-only case the narrow union is kept: the newest event matching any single model's
-		// filter is by definition no later than the newest event matching their union, so both pins read
-		// exactly the same events and only the reference lands elsewhere. Match-all is not used there
-		// because it would deserialize whichever event happens to be newest in the stream, relevant or not.
-		EventQuery boundaryQuery;
-		if ( savepointModels.isEmpty() ) {
-			boundaryQuery = union(plainQueries);
-		} else {
-			boundaryQuery = EventQuery.matchAll();
-		}
-
-		// A single physical read is taken atomically by the store, so its own most-recent reference is a
-		// sound optimistic-lock boundary and no extra boundary query is needed. Two or more reads happen
-		// sequentially and are NOT atomic as a group: an append matching one model's filter can slip in
-		// between two reads and, because a later read advances the cursor past it, escape the lock check.
-		// To keep the lock sound we pin a single consistency boundary up front and bound every read to it,
-		// so the lock reference covers all reads.
-		// With <= 1 physical read this window does not exist and the boundary query is skipped.
-		EventReference boundary = ( physicalReads > 1 ) ? pinBoundary(boundaryQuery) : null;
+		// The consistency boundary, pinned BEFORE any read: the domain stream's head. Every read below is
+		// bounded at it and the append presents it as the expected reference, so however many physical
+		// reads the command makes they share one boundary. Two reads happen sequentially and are not
+		// atomic as a group -- an append matching one model's filter can land between them and, with
+		// the lock reference taken from a later read, escape the check -- and pinning first is what
+		// closes that window. It is also what the check costs: on PostgreSQL the probe walks every stream
+		// event after the reference, and this stream is the whole bounded context, so a reference at a
+		// quiet entity's own newest event walks everything the context appended since, where the head
+		// leaves it the handful appended during this command.
+		// head() reads the reference and nothing else -- no deserialization, no upcasting, no decryption
+		// -- so whatever type sits at the head cannot fail the command or answer as an empty stream, and
+		// the reference names the stored event whole: a boundary at it includes every event the stored
+		// event upcasts into. An absent head is an empty stream and stays absent: an empty expected
+		// reference under the lock filter is "I decided on an empty boundary", which the check defends.
+		// Never substitute a read's own newest event for it -- that reference belongs to one read, not
+		// to the group, and re-opens the window.
+		EventReference boundary = decisionModels.isEmpty() ? null : queryEventStream.head().orElse(null);
 
 		ProjectorMetrics accumulatedMetrics = ProjectorMetrics.empty();
-		EventReference singleReadMostRecent = null;
 
 		// project the plain models: one composite read per merged query, dispatching each event to the
 		// plain models whose own eventQuery matches it
@@ -160,7 +147,6 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
 			long durationMs = System.currentTimeMillis() - start;
 			accumulatedMetrics = accumulatedMetrics.add(metrics);
-			singleReadMostRecent = metrics.mostRecentEventReference();
 			for ( int i = 0; i < modelsForRead.size(); i++ ) {
 				decisionModelProjections.add(new DecisionModelProjection(
 						modelsForRead.get(i).getClass(), durationMs, metrics.queriesDone(),
@@ -175,15 +161,14 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
 			long durationMs = System.currentTimeMillis() - start;
 			accumulatedMetrics = accumulatedMetrics.add(metrics);
-			singleReadMostRecent = metrics.mostRecentEventReference();
 			decisionModelProjections.add(new DecisionModelProjection(
 					p.getClass(), durationMs, metrics.queriesDone(),
 					metrics.eventsStreamed(), metrics.eventsHandled(), metrics.mostRecentEventReference()));
 		}
 
-		// the lock reference: the pinned boundary when several reads were performed, otherwise the single
-		// read's most-recent reference (null when no decision models / no matching events were read)
-		EventReference lastEventReference = ( boundary != null ) ? boundary : singleReadMostRecent;
+		// the lock reference is the pinned boundary, absent for an empty stream or a command without
+		// decision models (whose lock filter is matchNone, so the reference is moot)
+		EventReference lastEventReference = boundary;
 
 		projectorMetrics = accumulatedMetrics;
 
@@ -214,20 +199,6 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			combined = ( combined == null ) ? query : combined.combineWith(query);
 		}
 		return ( combined == null ) ? EventQuery.matchNone() : combined;
-	}
-
-	/**
-	 * Pins the optimistic-lock boundary for a multi-read command: the reference of the most recent event
-	 * currently matching everything the command is about to read — the decision models' eventQueries plus
-	 * the savepoint models' initQueries — or {@code null} when no such event exists (in which case an
-	 * empty expected reference combined with the lock filter still rejects any concurrently appended
-	 * matching event). Read once, up front, so all subsequent reads share it.
-	 */
-	private EventReference pinBoundary ( EventQuery boundaryQuery ) {
-		return queryEventStream.query(boundaryQuery.backwards().limit(1))
-				.map(Event::reference)
-				.findFirst()
-				.orElse(null);
 	}
 
 	/**

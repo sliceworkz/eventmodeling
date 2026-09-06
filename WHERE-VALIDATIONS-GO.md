@@ -157,8 +157,9 @@ result.raiseEvent(new CustomerRegistered(customerId, email), Tags.of("email", em
 "No two customers with this email" is a rule about a *set*, not an entity, and the reflex is to check
 a read model — which is a race (see Shapes to avoid). The event-sourced answer is a consistency
 boundary you expect to be empty: a decision model whose query matches the claim, reading **nothing**.
-An empty read is still a boundary — the expected reference is empty under a real filter, and the
-append is admitted only if *still* nothing matches. Two concurrent registrations of the same email:
+An empty read is still a boundary — the framework pins the stream's head before the read and presents
+it as the expected reference (an absent head, on an empty stream, stays absent), and the append is
+admitted only if *still* nothing matches. Two concurrent registrations of the same email:
 exactly one wins, the other gets `OptimisticLockingException`, guaranteed per storage backend by the
 eventstore TCK's `ConcurrentOptimisticLockingTest`. The `taken()` check in the command gives the
 ordinary sequential case its `BusinessException`; the boundary is what makes the concurrent case safe.

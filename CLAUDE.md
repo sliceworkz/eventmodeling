@@ -258,6 +258,52 @@ together:**
   opt-out really does forgo dedup, and `publishAndRecord` orders the appends, dedups a re-handled item
   and rejects a missing item key. The context narrowing is compile-time and needs no runtime pin
 
+**A command's consistency boundary is pinned at the domain stream's head before its decision models
+are read:**
+- `DCBCommandContextImpl` takes `queryEventStream.head()` first, bounds every decision-model read at
+  it (`Projector.runUntil`), and presents it as the expected reference of the append. The lock
+  filter stays the union of the models' `eventQuery()`s as they were actually read (a savepoint
+  model only learns its query after its `initQuery` ran, so the union is built after the reads).
+  A command with no decision models pins nothing: its filter is match-none, so the reference is moot
+- **Why pin, and why first.** The plain models' queries are merged into one physical read, but a
+  savepoint model keeps its own projector, so a command can read more than once and nothing makes
+  the group atomic. Pinned first and shared by every read, the boundary makes an event landing
+  between two reads fall *after* the reference for all of them, so the check raises it; a reference
+  taken from any one read belongs to that read alone and re-opens the window. The alternative — pin
+  only when there are several reads, from the models' own newest event — loses on the one shape that
+  has no such event to pin from, an empty boundary: the reference then falls back to whatever the
+  last read saw, and an event matching an earlier model slips under it. `CommandBoundaryPinningTest.
+  aConflictBetweenTwoReadsOnAnEmptyBoundaryIsCaught` is that case
+- **An absent head stays an absent reference.** It means an empty stream, and under a real filter the
+  check reads it as "I decided on an empty boundary" and rejects any matching event — which is the
+  uniqueness pattern in WHERE-VALIDATIONS-GO.md, unchanged. A stream that holds *other* events pins
+  at its head instead, and the boundary is "nothing matching up to the head and nothing after",
+  which is the same claim with a cheaper cursor
+- **What it costs, and what it buys.** One `head()` per command with decision models — three
+  reference columns off the stream position index on Postgres, no payload — and every model read
+  carries an `until`. What it buys is the shape of the DCB check: on Postgres the probe walks every
+  *stream* event after the reference, and the framework's stream is the whole bounded context, so a
+  reference at a quiet entity's own newest event walked everything the context appended since it
+  (~0.2 µs each: an entity idle for five million context events cost about a second per command, and
+  again per retry). The head leaves the probe the handful of events appended during the command,
+  whatever the entity. The eventstore's `decide-then-append-fresh` benchmark is this pattern
+  measured: ~4 ms/op against ~450 for the unbounded decider on the large tier
+- **The outcome of every append is unchanged.** A read bounded at the head has no matching event
+  between the model's newest event and the head, so "nothing matching after the head" is the same
+  verdict as "nothing matching after the newest event read". Only the reference value moves. The
+  head need not match the lock filter — it is a cursor for the check, and only matching events after
+  it count
+- **`head()` is what makes this safe to do on every command.** It never deserializes, upcasts or
+  decrypts, so a poison event at the stream head, a legacy event upcasting into nothing, or a sealed
+  value under an unreachable key store cannot fail the command or read as an empty stream — the
+  typed `backwards().limit(1)` idiom fails on all three. And the reference it returns names the
+  stored event whole: the eventstore's `until` bounds stored events, so a head that upcasts into
+  several current events is read in full (the eventstore's `HeadTest` pins all of this per backend)
+- `CommandBoundaryPinningTest` pins the framework half per backend: a matching event after the read
+  conflicts whatever sits at the head and an unrelated one does not, an empty stream is an empty
+  boundary, the criteria reference is the head rather than the model's newest event, every model
+  read is bounded at it, one head lookup per command and none without decision models
+
 **`executeWithRetry` — the DCB retry loop, written once so it cannot be hand-rolled wrong:**
 - An `OptimisticLockingException` is the routine DCB outcome under contention, and the documented
   answer has always been "re-execute, which re-projects and re-decides" — but the framework shipped

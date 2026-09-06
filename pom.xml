@@ -34,7 +34,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-		<sliceworkz.eventstore.version>0.10.2</sliceworkz.eventstore.version>
+		<sliceworkz.eventstore.version>0.11.0-SNAPSHOT</sliceworkz.eventstore.version>
 		
 		<maven.minimal-version>3.6.3</maven.minimal-version>
 		

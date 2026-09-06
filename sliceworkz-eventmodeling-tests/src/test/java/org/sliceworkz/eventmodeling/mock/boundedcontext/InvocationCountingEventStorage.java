@@ -17,8 +17,10 @@
  */
 package org.sliceworkz.eventmodeling.mock.boundedcontext;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.sliceworkz.eventstore.events.Bookmark;
@@ -37,6 +39,16 @@ public class InvocationCountingEventStorage implements EventStorage {
 
 	private int queries = 0;
 
+	private int heads = 0;
+
+	private final List<EventQuery> queriesSeen = new ArrayList<>();
+
+	private AppendCriteria lastAppendCriteria;
+
+	private Predicate<EventQuery> afterQueryMatching;
+
+	private Runnable afterQueryHook;
+
 	private RuntimeException appendFailure;
 
 	public InvocationCountingEventStorage ( EventStorage wrapped ) {
@@ -45,6 +57,32 @@ public class InvocationCountingEventStorage implements EventStorage {
 
 	public int queriesDone ( ) {
 		return queries;
+	}
+
+	/** How many times the head of a stream was asked for -- a pin, as opposed to a read. */
+	public int headsDone ( ) {
+		return heads;
+	}
+
+	/** Every query issued, in order, so a test can assert on the shape a read was made with. */
+	public List<EventQuery> queriesSeen ( ) {
+		return List.copyOf(queriesSeen);
+	}
+
+	/** The criteria the most recent append was made under, or null when nothing was appended. */
+	public AppendCriteria lastAppendCriteria ( ) {
+		return lastAppendCriteria;
+	}
+
+	/**
+	 * Runs {@code hook} once, right after the first query matching {@code which} has been answered by
+	 * the wrapped storage. The deterministic way to land an event <em>between</em> two reads of one
+	 * command: the storage's query is eager, so by the time the hook runs the read it follows is done
+	 * and the read after it has not started.
+	 */
+	public void afterQuery ( Predicate<EventQuery> which, Runnable hook ) {
+		this.afterQueryMatching = which;
+		this.afterQueryHook = hook;
 	}
 
 	/**
@@ -73,7 +111,26 @@ public class InvocationCountingEventStorage implements EventStorage {
 	@Override
 	public Stream<StoredEvent> query(EventQuery query, Optional<EventStreamId> stream, EventReference from, Limit limit, QueryDirection queryDirection) {
 		queries++;
-		return wrapped.query(query, stream, from, limit, queryDirection);
+		queriesSeen.add(query);
+		Stream<StoredEvent> result = wrapped.query(query, stream, from, limit, queryDirection);
+		if ( afterQueryHook != null && afterQueryMatching.test(query) ) {
+			Runnable hook = afterQueryHook;
+			afterQueryHook = null;
+			afterQueryMatching = null;
+			hook.run();
+		}
+		return result;
+	}
+
+	/**
+	 * Forwarded rather than left to the interface default, which would answer through {@link #query}
+	 * and so be counted as a read; a head lookup is a pin, and the two are counted apart here for
+	 * the same reason the store meters them apart.
+	 */
+	@Override
+	public Optional<EventReference> head ( Optional<EventStreamId> stream ) {
+		heads++;
+		return wrapped.head(stream);
 	}
 
 	@Override
@@ -81,6 +138,7 @@ public class InvocationCountingEventStorage implements EventStorage {
 		if ( appendFailure != null ) {
 			throw appendFailure;
 		}
+		lastAppendCriteria = appendCriteria;
 		return wrapped.append(appendCriteria, stream, events);
 	}
 

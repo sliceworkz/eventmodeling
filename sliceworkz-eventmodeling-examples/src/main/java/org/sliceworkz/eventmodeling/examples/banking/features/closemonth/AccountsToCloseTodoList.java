@@ -24,7 +24,8 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyDeposited;
@@ -121,7 +122,7 @@ public class AccountsToCloseTodoList implements TodoListReadModel<BankingEvent, 
 	// ── Internal state ───────────────────────────────────────────────────
 
 	private record AccountState(
-		DomainConceptId accountId,
+		AccountId accountId,
 		YearMonth activeMonth,
 		boolean closed
 	) {}
@@ -129,7 +130,7 @@ public class AccountsToCloseTodoList implements TodoListReadModel<BankingEvent, 
 	// ── Todo item ────────────────────────────────────────────────────────
 
 	public record AccountToClose(
-		DomainConceptId accountId,
+		AccountId accountId,
 		YearMonth monthToClose
 	) {}
 }

@@ -19,9 +19,8 @@ package org.sliceworkz.eventmodeling.examples.banking.features.currentperiod;
 
 import java.time.YearMonth;
 
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTags;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.*;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
@@ -45,12 +44,12 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
  */
 public class ActiveMonthReadModel implements ReadModel<BankingEvent> {
 
-	private final DomainConceptId accountId;
+	private final AccountId accountId;
 
 	private boolean accountExists;
 	private YearMonth activeMonth;
 
-	public ActiveMonthReadModel(DomainConceptId accountId) {
+	public ActiveMonthReadModel(AccountId accountId) {
 		this.accountId = accountId;
 	}
 
@@ -58,7 +57,7 @@ public class ActiveMonthReadModel implements ReadModel<BankingEvent> {
 	public EventQuery eventQuery() {
 		return EventQuery.forEvents(
 			EventTypesFilter.of(AccountOpened.class, MonthOpened.class),
-			DomainConceptTags.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId)
+			BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId)
 		).backwards().limit(1);
 	}
 

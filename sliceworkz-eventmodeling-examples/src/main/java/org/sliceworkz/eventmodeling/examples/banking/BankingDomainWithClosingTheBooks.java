@@ -20,9 +20,9 @@ package org.sliceworkz.eventmodeling.examples.banking;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import org.sliceworkz.eventmodeling.domain.Entity;
+import org.sliceworkz.eventmodeling.domain.EntityId;
 
-import org.sliceworkz.eventmodeling.domain.DomainConcept;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 
 /**
  * Extended banking domain showing the "Closing The Books" pattern applied to
@@ -57,10 +57,21 @@ import org.sliceworkz.eventmodeling.domain.DomainConceptId;
  */
 public interface BankingDomainWithClosingTheBooks {
 
-	// ── Domain Concepts ──────────────────────────────────────────────────
+	// ── Entities ─────────────────────────────────────────────────────────
 
-	DomainConcept CONCEPT_ACCOUNT = DomainConcept.of("account");
-	DomainConcept CONCEPT_MONTH = DomainConcept.of("month");
+	record AccountId ( String value ) implements EntityId { }
+	record CustomerId ( String value ) implements EntityId { }
+	/** A month is an entity here: the period being closed has an identity of its own, {@code 2025-01}, and events are tagged with it. */
+	record MonthId ( String value ) implements EntityId { }
+
+	Entity<AccountId> ACCOUNT = Entity.of("account", AccountId::new);
+	Entity<CustomerId> CUSTOMER = Entity.of("customer", CustomerId::new);
+	Entity<MonthId> MONTH = Entity.of("month", MonthId::new);
+
+	/** The id of a month, so that every tag on a month spells it the same way: {@link YearMonth#toString()}. */
+	static MonthId monthId ( YearMonth month ) {
+		return MONTH.id(month.toString());
+	}
 
 	// ── Domain Events ────────────────────────────────────────────────────
 
@@ -76,8 +87,8 @@ public interface BankingDomainWithClosingTheBooks {
 		 * An account was opened. This is also the implicit start of the first period.
 		 */
 		record AccountOpened(
-			DomainConceptId accountId,
-			DomainConceptId customerId,
+			AccountId accountId,
+			CustomerId customerId,
 			YearMonth initialMonth,
 			LocalDate date
 		) implements BankingEvent {}
@@ -86,7 +97,7 @@ public interface BankingDomainWithClosingTheBooks {
 		 * Money was deposited into the account during the current period.
 		 */
 		record MoneyDeposited(
-			DomainConceptId accountId,
+			AccountId accountId,
 			YearMonth month,
 			BigDecimal amount,
 			String description
@@ -96,7 +107,7 @@ public interface BankingDomainWithClosingTheBooks {
 		 * Money was withdrawn from the account during the current period.
 		 */
 		record MoneyWithdrawn(
-			DomainConceptId accountId,
+			AccountId accountId,
 			YearMonth month,
 			BigDecimal amount,
 			String description
@@ -113,7 +124,7 @@ public interface BankingDomainWithClosingTheBooks {
 		 * represents the business operation of closing the monthly books.</p>
 		 */
 		record MonthClosed(
-			DomainConceptId accountId,
+			AccountId accountId,
 			YearMonth month,
 			BigDecimal openingBalance,
 			BigDecimal closingBalance,
@@ -128,7 +139,7 @@ public interface BankingDomainWithClosingTheBooks {
 		 * This is the "seed" event for the new period's stream.
 		 */
 		record MonthOpened(
-			DomainConceptId accountId,
+			AccountId accountId,
 			YearMonth month,
 			BigDecimal carryForwardBalance,
 			YearMonth previousMonth
@@ -151,7 +162,7 @@ public interface BankingDomainWithClosingTheBooks {
 	sealed interface BankingOutboundEvent {
 
 		record MonthlyStatementReady(
-			DomainConceptId accountId,
+			AccountId accountId,
 			YearMonth month
 		) implements BankingOutboundEvent {}
 	}

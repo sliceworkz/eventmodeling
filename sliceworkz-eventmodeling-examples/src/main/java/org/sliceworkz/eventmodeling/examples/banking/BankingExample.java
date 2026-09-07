@@ -23,9 +23,9 @@ import java.util.Optional;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.LoggingBoundedContextListener;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountdetails.AccountDetailsReadModel;
@@ -101,7 +101,7 @@ public class BankingExample {
 
 		
 		// Open an Account
-		Optional<EventReference> ref = bc.execute(new OpenAccountCommand(DomainConceptId.create()));
+		Optional<EventReference> ref = bc.execute(new OpenAccountCommand(BankingDomain.CUSTOMER.newId()));
 		
 		// Go fetch the AccountOpened Event that should have been raised by the OpenAccountCommmand
 		AccountOpened ao = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none()))
@@ -130,10 +130,10 @@ public class BankingExample {
 		 * Open another account using CommandWithResult — the generated account ID
 		 * is returned directly, no need to query the event stream.
 		 */
-		CommandExecutionResult<DomainConceptId> openResult =
-				bc.execute(new OpenAccountWithResultCommand(DomainConceptId.create()));
+		CommandExecutionResult<AccountId> openResult =
+				bc.execute(new OpenAccountWithResultCommand(BankingDomain.CUSTOMER.newId()));
 
-		DomainConceptId accountId = openResult.response();
+		AccountId accountId = openResult.response();
 		System.out.println("Account opened with ID: " + accountId);
 
 		AccountDetailsReadModel rm2 = bc.read(AccountDetailsReadModel.class, accountId);

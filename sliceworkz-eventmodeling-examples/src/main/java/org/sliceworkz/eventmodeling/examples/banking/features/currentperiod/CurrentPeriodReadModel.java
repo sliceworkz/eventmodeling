@@ -21,9 +21,8 @@ import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.Optional;
 
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTags;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.*;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
@@ -43,7 +42,7 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
  */
 public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 
-	private final DomainConceptId accountId;
+	private final AccountId accountId;
 
 	private YearMonth activeMonth;
 	private BigDecimal balance = BigDecimal.ZERO;
@@ -52,7 +51,7 @@ public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 	private int periodTransactionCount;
 	private boolean periodClosed;
 
-	public CurrentPeriodReadModel(DomainConceptId accountId) {
+	public CurrentPeriodReadModel(AccountId accountId) {
 		this.accountId = accountId;
 	}
 
@@ -60,7 +59,7 @@ public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 	public EventQuery initQuery() {
 		return EventQuery.forEvents(
 			EventTypesFilter.of(AccountOpened.class, MonthOpened.class),
-			DomainConceptTags.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId)
+			BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId)
 		).backwards().limit(1);
 	}
 
@@ -68,7 +67,7 @@ public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 	public EventQuery eventQuery() {
 		return EventQuery.forEvents(
 			EventTypesFilter.of(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class),
-			DomainConceptTags.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId)
+			BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId)
 		);
 	}
 

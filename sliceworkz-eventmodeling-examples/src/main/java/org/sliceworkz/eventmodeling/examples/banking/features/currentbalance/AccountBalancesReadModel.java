@@ -21,7 +21,8 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.readmodels.PublishingReadModel;
 import org.sliceworkz.eventstore.events.Event;
@@ -41,18 +42,18 @@ import org.sliceworkz.eventstore.query.EventQuery;
  * not what a real one would do: at that size, reach for a persistent map so a batch costs one
  * structural copy rather than one per event.
  */
-public class AccountBalancesReadModel extends PublishingReadModel<BankingEvent,Map<DomainConceptId,BigDecimal>> {
+public class AccountBalancesReadModel extends PublishingReadModel<BankingEvent,Map<AccountId,BigDecimal>> {
 
 	@Override
-	protected Map<DomainConceptId,BigDecimal> initialState ( ) {
+	protected Map<AccountId,BigDecimal> initialState ( ) {
 		return Map.of();
 	}
 
 	@Override
-	protected Map<DomainConceptId,BigDecimal> apply ( Map<DomainConceptId,BigDecimal> state, Event<BankingEvent> event ) {
-		DomainConceptId account = BalanceFold.accountOf(event.data());
+	protected Map<AccountId,BigDecimal> apply ( Map<AccountId,BigDecimal> state, Event<BankingEvent> event ) {
+		AccountId account = BalanceFold.accountOf(event.data());
 
-		Map<DomainConceptId,BigDecimal> next = new HashMap<>(state);
+		Map<AccountId,BigDecimal> next = new HashMap<>(state);
 		next.put(account, BalanceFold.apply(state.getOrDefault(account, BigDecimal.ZERO), event.data()));
 		return Map.copyOf(next);
 	}
@@ -68,7 +69,7 @@ public class AccountBalancesReadModel extends PublishingReadModel<BankingEvent,M
 	 * @param accountId the account to report on
 	 * @return its balance, zero for an account this projection has not seen
 	 */
-	public BigDecimal balanceOf ( DomainConceptId accountId ) {
+	public BigDecimal balanceOf ( AccountId accountId ) {
 		return state().getOrDefault(accountId, BigDecimal.ZERO);
 	}
 

@@ -21,18 +21,18 @@ import java.time.LocalDate;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.CustomerId;
 import org.sliceworkz.eventstore.events.Tags;
 
 public class OpenAccountCommand implements Command<BankingDomainEvent> {
 	
-	private DomainConceptId customerId;
+	private CustomerId customerId;
 	
-	public OpenAccountCommand ( DomainConceptId customerId ) {
+	public OpenAccountCommand ( CustomerId customerId ) {
 		this.customerId = customerId;
 	}
 
@@ -41,12 +41,12 @@ public class OpenAccountCommand implements Command<BankingDomainEvent> {
 
 		var result = context.noDecisionModels();
 
-		DomainConceptId accountId = DomainConceptId.create();
+		AccountId accountId = BankingDomain.ACCOUNT.newId();
 
 		result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
 				Tags.of(
-						DomainConceptTag.of(BankingDomain.CONCEPT_ACCOUNT, accountId),
-						DomainConceptTag.of(BankingDomain.CONCEPT_CUSTOMER, customerId)
+						BankingDomain.ACCOUNT.tag(accountId),
+						BankingDomain.CUSTOMER.tag(customerId)
 				)
 			);
 	}

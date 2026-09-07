@@ -55,7 +55,7 @@ need nothing more. An `EventStream` answers an `EventQuery` — event types, tag
 // the newest fact of one kind about one entity: one query, one event
 Optional<Event<BankingEvent>> lastClose = eventStream
     .query(EventQuery.forEvents(EventTypesFilter.of(MonthClosed.class),
-                                DomainConceptTags.of(CONCEPT_ACCOUNT, accountId))
+                                ACCOUNT.tags(accountId))
                      .backwards().limit(1))
     .findFirst();
 ```
@@ -85,17 +85,17 @@ The whole of [`AccountDetailsReadModel`](sliceworkz-eventmodeling-examples/src/m
 ```java
 public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 
-    private final DomainConceptId accountId;
+    private final AccountId accountId;
     private AccountDetails account;
 
-    public AccountDetailsReadModel ( DomainConceptId accountId ) {   // matches the read's parameters
+    public AccountDetailsReadModel ( AccountId accountId ) {   // matches the read's parameters
         this.accountId = accountId;
     }
 
     @Override
     public EventQuery eventQuery ( ) {
         return EventQuery.forEvents(EventTypesFilter.any(),
-                DomainConceptTags.of(BankingDomain.CONCEPT_ACCOUNT, accountId));
+                BankingDomain.ACCOUNT.tags(accountId));
     }
 
     @Override
@@ -186,7 +186,7 @@ backwards `limit(1)` query and replays only what came after:
 public EventQuery initQuery ( ) {
     return EventQuery.forEvents(
         EventTypesFilter.of(AccountOpened.class, MonthOpened.class),   // the savepoints
-        DomainConceptTags.of(CONCEPT_ACCOUNT, accountId)
+        ACCOUNT.tags(accountId)
     ).backwards().limit(1);
 }
 
@@ -194,7 +194,7 @@ public EventQuery initQuery ( ) {
 public EventQuery eventQuery ( ) {
     return EventQuery.forEvents(
         EventTypesFilter.of(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class),
-        DomainConceptTags.of(CONCEPT_ACCOUNT, accountId)               // movements only
+        ACCOUNT.tags(accountId)               // movements only
     );
 }
 ```
@@ -235,18 +235,18 @@ subclass writes exactly three things — a state type with an initial value, a p
 
 ```java
 public class AccountBalancesReadModel
-        extends PublishingReadModel<BankingEvent, Map<DomainConceptId,BigDecimal>> {
+        extends PublishingReadModel<BankingEvent, Map<AccountId,BigDecimal>> {
 
     @Override
-    protected Map<DomainConceptId,BigDecimal> initialState ( ) {
+    protected Map<AccountId,BigDecimal> initialState ( ) {
         return Map.of();
     }
 
     @Override
-    protected Map<DomainConceptId,BigDecimal> apply ( Map<DomainConceptId,BigDecimal> state,
-                                                      Event<BankingEvent> event ) {
-        DomainConceptId account = BalanceFold.accountOf(event.data());
-        Map<DomainConceptId,BigDecimal> next = new HashMap<>(state);
+    protected Map<AccountId,BigDecimal> apply ( Map<AccountId,BigDecimal> state,
+                                                Event<BankingEvent> event ) {
+        AccountId account = BalanceFold.accountOf(event.data());
+        Map<AccountId,BigDecimal> next = new HashMap<>(state);
         next.put(account, BalanceFold.apply(state.getOrDefault(account, BigDecimal.ZERO), event.data()));
         return Map.copyOf(next);
     }
@@ -404,14 +404,14 @@ reading the eventually consistent model; the one screen that decides adds a seed
 public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
 
     private final AccountBalancesReadModel balances;    // the chapter-5 base
-    private final DomainConceptId accountId;
+    private final AccountId accountId;
     private BigDecimal balance = BigDecimal.ZERO;
     private EventReference upTo;
 
     @Override
     public Optional<EventReference> seed ( ) {
         // rule 1: state and position in ONE observation
-        ReadModelResult<Map<DomainConceptId,BigDecimal>> published = balances.published();
+        ReadModelResult<Map<AccountId,BigDecimal>> published = balances.published();
         // rule 2: an unknown account is a zero balance AT that position, never an absent base
         balance = published.data().getOrDefault(accountId, BigDecimal.ZERO);
         upTo = published.upTo();
@@ -421,7 +421,7 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
     @Override
     public EventQuery eventQuery ( ) {          // only this account -> the delta stays tiny
         return EventQuery.forEvents(EventTypesFilter.any(),
-                Tags.of(DomainConceptTag.of(CONCEPT_ACCOUNT, accountId)));
+                ACCOUNT.tags(accountId));
     }
 
     @Override

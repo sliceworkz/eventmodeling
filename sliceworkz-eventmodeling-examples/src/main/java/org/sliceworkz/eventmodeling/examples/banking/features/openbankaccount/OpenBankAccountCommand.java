@@ -22,11 +22,11 @@ import java.time.YearMonth;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CustomerId;
 import org.sliceworkz.eventstore.events.Tags;
 
 /**
@@ -43,10 +43,10 @@ import org.sliceworkz.eventstore.events.Tags;
  */
 public class OpenBankAccountCommand implements Command<BankingEvent> {
 
-	private final DomainConceptId customerId;
+	private final CustomerId customerId;
 	private final YearMonth initialMonth;
 
-	public OpenBankAccountCommand(DomainConceptId customerId, YearMonth initialMonth) {
+	public OpenBankAccountCommand(CustomerId customerId, YearMonth initialMonth) {
 		this.customerId = customerId;
 		this.initialMonth = initialMonth;
 	}
@@ -56,14 +56,13 @@ public class OpenBankAccountCommand implements Command<BankingEvent> {
 
 		var result = context.noDecisionModels();
 
-		DomainConceptId accountId = DomainConceptId.create();
+		AccountId accountId = BankingDomainWithClosingTheBooks.ACCOUNT.newId();
 
 		result.raiseEvent(
 			new AccountOpened(accountId, customerId, initialMonth, LocalDate.now()),
 			Tags.of(
-				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
-				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-					DomainConceptId.of(initialMonth.toString()))
+				BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
+				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(initialMonth))
 			)
 		);
 	}

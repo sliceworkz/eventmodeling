@@ -40,8 +40,9 @@ public record AccountDetails ( String accountId, String customerId, LocalDate op
 
 A record with a validating static factory gives you the guarantee you want from a value object — an
 instance implies the rules held — and it is where *normalisation* belongs too (trim, lowercase), so
-that equality and tag matching see one spelling. `DomainConceptId.of(...)` in the API is the in-tree
-shape.
+that equality and tag matching see one spelling. `Entity.id(...)` in the API is the in-tree shape: an
+`EntityId` record is a plain carrier, and the `Entity` it belongs to does the stripping and rejects a
+blank value, so the rule lives in one place per kind of entity and the record stays lenient.
 
 **The split matters: where the record is carried inside an event payload, the canonical constructor
 must stay lenient.** Jackson reconstructs payload records *through the canonical constructor* on every
@@ -64,7 +65,7 @@ extending that test class is how an application inherits the rule.
 ## 2. Reject the malformed request — before any history is read
 
 ```java
-public OpenAccountCommand ( DomainConceptId customerId, BigDecimal initialDeposit ) {
+public OpenAccountCommand ( CustomerId customerId, BigDecimal initialDeposit ) {
     if ( customerId == null )                              { throw new IllegalArgumentException("customerId is required"); }
     if ( initialDeposit.signum() < 0 )                     { throw new IllegalArgumentException("initial deposit cannot be negative"); }
     this.customerId = customerId;

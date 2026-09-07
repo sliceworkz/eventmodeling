@@ -22,9 +22,8 @@ import java.time.YearMonth;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthClosed;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthOpened;
@@ -54,10 +53,10 @@ import org.sliceworkz.eventstore.events.Tags;
  */
 public class CloseMonthCommand implements Command<BankingEvent> {
 
-	private final DomainConceptId accountId;
+	private final AccountId accountId;
 	private final YearMonth monthToClose;
 
-	public CloseMonthCommand(DomainConceptId accountId, YearMonth monthToClose) {
+	public CloseMonthCommand(AccountId accountId, YearMonth monthToClose) {
 		this.accountId = accountId;
 		this.monthToClose = monthToClose;
 	}
@@ -86,9 +85,8 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 		// ── Close the current month ──────────────────────────────────
 
 		Tags currentMonthTags = Tags.of(
-			DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
-			DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-				DomainConceptId.of(monthToClose.toString()))
+			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
+			BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(monthToClose))
 		);
 
 		result.raiseEvent(
@@ -110,9 +108,8 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 		YearMonth nextMonth = monthToClose.plusMonths(1);
 
 		Tags nextMonthTags = Tags.of(
-			DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
-			DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-				DomainConceptId.of(nextMonth.toString()))
+			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
+			BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(nextMonth))
 		);
 
 		result.raiseEvent(

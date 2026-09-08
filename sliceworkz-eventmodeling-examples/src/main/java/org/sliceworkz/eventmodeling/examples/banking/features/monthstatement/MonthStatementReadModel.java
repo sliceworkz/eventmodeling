@@ -23,9 +23,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyDeposited;
@@ -52,7 +51,7 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
  */
 public class MonthStatementReadModel implements ReadModel<BankingEvent> {
 
-	private final DomainConceptId accountId;
+	private final AccountId accountId;
 	private final YearMonth month;
 
 	private BigDecimal openingBalance;
@@ -60,7 +59,7 @@ public class MonthStatementReadModel implements ReadModel<BankingEvent> {
 	private final List<TransactionLine> transactions = new ArrayList<>();
 	private boolean closed;
 
-	public MonthStatementReadModel(DomainConceptId accountId, YearMonth month) {
+	public MonthStatementReadModel(AccountId accountId, YearMonth month) {
 		this.accountId = accountId;
 		this.month = month;
 	}
@@ -75,9 +74,8 @@ public class MonthStatementReadModel implements ReadModel<BankingEvent> {
 		return EventQuery.forEvents(
 			EventTypesFilter.any(),
 			Tags.of(
-				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
-				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-					DomainConceptId.of(month.toString()))
+				BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
+				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(month))
 			)
 		);
 	}

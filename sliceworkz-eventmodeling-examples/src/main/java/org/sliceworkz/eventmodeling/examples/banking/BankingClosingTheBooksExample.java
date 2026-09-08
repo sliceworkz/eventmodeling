@@ -22,11 +22,12 @@ import java.time.YearMonth;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CustomerId;
 import org.sliceworkz.eventmodeling.examples.banking.features.closemonth.CloseMonthCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActiveMonthReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentbalance.AccountBalancesReadModel;
@@ -127,7 +128,7 @@ public class BankingClosingTheBooksExample {
 		System.out.println();
 
 		YearMonth january = YearMonth.of(2025, 1);
-		DomainConceptId customerId = DomainConceptId.create();
+		CustomerId customerId = BankingDomainWithClosingTheBooks.CUSTOMER.newId();
 
 		Optional<EventReference> ref = bc.execute(new OpenBankAccountCommand(customerId, january));
 
@@ -138,7 +139,7 @@ public class BankingClosingTheBooksExample {
 			.map(e -> (AccountOpened) e)
 			.findFirst()
 			.get();
-		DomainConceptId accountId = accountOpened.accountId();
+		AccountId accountId = accountOpened.accountId();
 
 		System.out.println("Account opened: " + accountId.value());
 		System.out.println("Initial period: " + accountOpened.initialMonth());

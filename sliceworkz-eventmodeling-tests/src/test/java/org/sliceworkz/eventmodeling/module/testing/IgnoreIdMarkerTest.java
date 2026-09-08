@@ -23,7 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
+import org.sliceworkz.eventmodeling.domain.Entity;
+import org.sliceworkz.eventmodeling.domain.EntityId;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
@@ -105,27 +106,30 @@ public class IgnoreIdMarkerTest extends CommandTest<MockDomainEvent, MockInbound
 	}
 
 	// --- the downstream shape ------------------------------------------------------------------
-	// Downstream projects do not put the marker on a bare String field: they wrap it in a value
-	// object -- DomainConceptId.of(IGNORE_ID()) -- so the marker sits on the value object's nested
-	// "value" line, often several times in one event. The actual ids come from
-	// DomainConceptId.create(), which is UUID.randomUUID(). ConceptDefined below mirrors that
-	// shape (e.g. the modeler's ProjectDefined / SliceDefined events).
+	// Downstream projects do not put the marker on a bare String field: they wrap it in an
+	// EntityId record -- PROJECT.id(IGNORE_ID()) -- so the marker sits on the record's nested
+	// "value" line, often several times in one event. The actual ids come from Entity.newId(),
+	// which is UUID.randomUUID(). ProjectDefined below mirrors that shape (e.g. the modeler's
+	// ProjectDefined / SliceDefined events).
 
-	record ConceptDefined ( DomainConceptId id, DomainConceptId parentId, String name ) { }
+	record ProjectId ( String value ) implements EntityId { }
+	static final Entity<ProjectId> PROJECT = Entity.of("project", ProjectId::new);
+
+	record ProjectDefined ( ProjectId id, ProjectId parentId, String name ) { }
 
 	@Test
 	void theDownstreamShapeAMarkerWrappedInAValueObjectPassesWithGeneratedIds ( ) {
 		assertCompareObjects(
-				new ConceptDefined(DomainConceptId.of(IGNORE_ID()), DomainConceptId.of(IGNORE_ID()), "My Project"),
-				new ConceptDefined(DomainConceptId.create(), DomainConceptId.create(), "My Project"),
+				new ProjectDefined(PROJECT.id(IGNORE_ID()), PROJECT.id(IGNORE_ID()), "My Project"),
+				new ProjectDefined(PROJECT.newId(), PROJECT.newId(), "My Project"),
 				"event");
 	}
 
 	@Test
 	void theDownstreamShapeFailsWhenAWrappedIdIsNotAUuid ( ) {
 		AssertionError failure = assertThrows(AssertionError.class, ( ) -> assertCompareObjects(
-				new ConceptDefined(DomainConceptId.of(IGNORE_ID()), DomainConceptId.of(IGNORE_ID()), "My Project"),
-				new ConceptDefined(DomainConceptId.create(), DomainConceptId.of("banana"), "My Project"),
+				new ProjectDefined(PROJECT.id(IGNORE_ID()), PROJECT.id(IGNORE_ID()), "My Project"),
+				new ProjectDefined(PROJECT.newId(), PROJECT.id("banana"), "My Project"),
 				"event"));
 
 		assertTrue(failure.getMessage().contains("banana"), "failure should name the offending value: " + failure.getMessage());
@@ -134,8 +138,8 @@ public class IgnoreIdMarkerTest extends CommandTest<MockDomainEvent, MockInbound
 	@Test
 	void theDownstreamShapeStillComparesTheFieldsNextToTheWrappedIds ( ) {
 		assertThrows(AssertionError.class, ( ) -> assertCompareObjects(
-				new ConceptDefined(DomainConceptId.of(IGNORE_ID()), DomainConceptId.of(IGNORE_ID()), "My Project"),
-				new ConceptDefined(DomainConceptId.create(), DomainConceptId.create(), "Another Project"),
+				new ProjectDefined(PROJECT.id(IGNORE_ID()), PROJECT.id(IGNORE_ID()), "My Project"),
+				new ProjectDefined(PROJECT.newId(), PROJECT.newId(), "Another Project"),
 				"event"));
 	}
 

@@ -23,7 +23,8 @@ import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.automation.Automation;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentId;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentAbandoned;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentAttemptFailed;
@@ -42,8 +43,8 @@ import org.sliceworkz.eventmodeling.testing.AutomationTest;
  */
 public class PaymentsToExecuteTodoListTest extends AutomationTest<PaymentToExecute, PaymentsDomainEvent, PaymentsInboundEvent, PaymentsOutboundEvent> {
 
-	private static final DomainConceptId PAYMENT_1 = DomainConceptId.of("p1");
-	private static final DomainConceptId PAYMENT_2 = DomainConceptId.of("p2");
+	private static final PaymentId PAYMENT_1 = PaymentsDomain.PAYMENT.id("p1");
+	private static final PaymentId PAYMENT_2 = PaymentsDomain.PAYMENT.id("p2");
 	private static final String IBAN_1 = "BE68539007547034";
 	private static final String IBAN_2 = "BE71096123456769";
 

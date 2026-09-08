@@ -20,9 +20,8 @@ package org.sliceworkz.eventmodeling.examples.banking.features.currentbalance;
 import java.math.BigDecimal;
 import java.util.Optional;
 
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelResult;
 import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
@@ -54,13 +53,13 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
 public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
 
 	private final AccountBalancesReadModel balances;
-	private final DomainConceptId accountId;
+	private final AccountId accountId;
 
 	private BigDecimal balance = BigDecimal.ZERO;
 	private EventReference upTo;
 	private int foldedInRead;
 
-	public CurrentBalanceReadModel ( AccountBalancesReadModel balances, DomainConceptId accountId ) {
+	public CurrentBalanceReadModel ( AccountBalancesReadModel balances, AccountId accountId ) {
 		this.balances = balances;
 		this.accountId = accountId;
 	}
@@ -69,7 +68,7 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
 	public Optional<EventReference> seed ( ) {
 		// One volatile read. Asking for the balance and the position separately would straddle whatever
 		// the projector published in between, and the delta would then double-count or skip it.
-		ReadModelResult<java.util.Map<DomainConceptId,BigDecimal>> published = balances.published();
+		ReadModelResult<java.util.Map<AccountId,BigDecimal>> published = balances.published();
 
 		// An account this projection has never seen is a balance of zero AT that position -- not an
 		// absent base. Returning empty here would be just as correct and would replay the entire
@@ -86,7 +85,7 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
 	@Override
 	public EventQuery eventQuery ( ) {
 		return EventQuery.forEvents(EventTypesFilter.any(),
-				Tags.of(DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId)));
+				Tags.of(BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId)));
 	}
 
 	@Override

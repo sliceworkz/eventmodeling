@@ -26,7 +26,8 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentId;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentAbandoned;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentAttemptFailed;
@@ -69,7 +70,7 @@ public class PaymentsToExecuteTodoList implements TodoListReadModel<PaymentsDoma
 	 *        and the payment would be retried forever
 	 * @param dueAt when it may be attempted again, or {@code null} when it is due now
 	 */
-	public record PaymentToExecute ( DomainConceptId paymentId, String iban, long amountInCents, int attempts, Instant dueAt ) {
+	public record PaymentToExecute ( PaymentId paymentId, String iban, long amountInCents, int attempts, Instant dueAt ) {
 
 		public boolean isDue ( Instant now ) {
 			return dueAt == null || !dueAt.isAfter(now);

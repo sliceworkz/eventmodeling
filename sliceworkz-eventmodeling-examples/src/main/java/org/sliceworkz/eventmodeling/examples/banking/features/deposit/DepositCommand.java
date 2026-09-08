@@ -21,9 +21,8 @@ import java.math.BigDecimal;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyDeposited;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActivePeriodDecisionModel;
@@ -44,11 +43,11 @@ import org.sliceworkz.eventstore.events.Tags;
  */
 public class DepositCommand implements Command<BankingEvent> {
 
-	private final DomainConceptId accountId;
+	private final AccountId accountId;
 	private final BigDecimal amount;
 	private final String description;
 
-	public DepositCommand(DomainConceptId accountId, BigDecimal amount, String description) {
+	public DepositCommand(AccountId accountId, BigDecimal amount, String description) {
 		this.accountId = accountId;
 		this.amount = amount;
 		this.description = description;
@@ -72,9 +71,8 @@ public class DepositCommand implements Command<BankingEvent> {
 		result.raiseEvent(
 			new MoneyDeposited(accountId, period.activeMonth(), amount, description),
 			Tags.of(
-				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_ACCOUNT, accountId),
-				DomainConceptTag.of(BankingDomainWithClosingTheBooks.CONCEPT_MONTH,
-					DomainConceptId.of(period.activeMonth().toString()))
+				BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
+				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(period.activeMonth()))
 			)
 		);
 	}

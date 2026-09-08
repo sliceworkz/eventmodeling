@@ -21,11 +21,11 @@ import java.time.LocalDate;
 
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTag;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.CustomerId;
 import org.sliceworkz.eventstore.events.Tags;
 
 /**
@@ -36,25 +36,25 @@ import org.sliceworkz.eventstore.events.Tags;
  * Instead of requiring the caller to query the event stream to discover the generated account ID,
  * the ID is returned synchronously after events are persisted.
  */
-public class OpenAccountWithResultCommand implements CommandWithResult<BankingDomainEvent, DomainConceptId> {
+public class OpenAccountWithResultCommand implements CommandWithResult<BankingDomainEvent, AccountId> {
 
-	private final DomainConceptId customerId;
+	private final CustomerId customerId;
 
-	public OpenAccountWithResultCommand ( DomainConceptId customerId ) {
+	public OpenAccountWithResultCommand ( CustomerId customerId ) {
 		this.customerId = customerId;
 	}
 
 	@Override
-	public DomainConceptId execute ( CommandContext<BankingDomainEvent, BankingDomainEvent> context ) {
+	public AccountId execute ( CommandContext<BankingDomainEvent, BankingDomainEvent> context ) {
 
 		var result = context.noDecisionModels();
 
-		DomainConceptId accountId = DomainConceptId.create();
+		AccountId accountId = BankingDomain.ACCOUNT.newId();
 
 		result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
 				Tags.of(
-						DomainConceptTag.of(BankingDomain.CONCEPT_ACCOUNT, accountId),
-						DomainConceptTag.of(BankingDomain.CONCEPT_CUSTOMER, customerId)
+						BankingDomain.ACCOUNT.tag(accountId),
+						BankingDomain.CUSTOMER.tag(customerId)
 				)
 			);
 

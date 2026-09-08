@@ -38,7 +38,7 @@
 		<slf4j.version>2.0.18</slf4j.version>
 		<junit-jupiter.version>6.1.3</junit-jupiter.version>
 		<postgresql.jdbc.version>42.7.13</postgresql.jdbc.version>
-		<micrometer.version>1.17.0</micrometer.version>
+		<micrometer.version>1.17.1</micrometer.version>
 		
 		<testcontainers.postgresql.version>2.0.5</testcontainers.postgresql.version>
 		<h2.version>2.4.240</h2.version>
@@ -48,7 +48,7 @@
 		<uuid-creator.version>6.1.1</uuid-creator.version>
 
 		<maven.maven-surefire-plugin.version>3.6.0</maven.maven-surefire-plugin.version>
-		<maven.maven-compiler-plugin.version>3.15.0</maven.maven-compiler-plugin.version>
+		<maven.maven-compiler-plugin.version>3.16.0</maven.maven-compiler-plugin.version>
 		<maven.maven-source-plugin.version>3.4.0</maven.maven-source-plugin.version>
 		<maven.maven-javadoc-plugin.version>3.12.0</maven.maven-javadoc-plugin.version>
 		<maven.maven-jar-plugin.version>3.5.1</maven.maven-jar-plugin.version>

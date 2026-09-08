@@ -20,9 +20,8 @@ package org.sliceworkz.eventmodeling.examples.banking.features.accountdetails;
 import java.time.LocalDate;
 import java.util.Optional;
 
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
-import org.sliceworkz.eventmodeling.domain.DomainConceptTags;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
@@ -31,10 +30,10 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 
-	private DomainConceptId accountId;
+	private AccountId accountId;
 	private AccountDetails account;
 	
-	public AccountDetailsReadModel ( DomainConceptId accountId ) {
+	public AccountDetailsReadModel ( AccountId accountId ) {
 		this.accountId = accountId;
 	}
 	
@@ -44,7 +43,7 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 	
 	@Override
 	public EventQuery eventQuery() {
-		return EventQuery.forEvents(EventTypesFilter.any(), DomainConceptTags.of(BankingDomain.CONCEPT_ACCOUNT, accountId));
+		return EventQuery.forEvents(EventTypesFilter.any(), BankingDomain.ACCOUNT.tags(accountId));
 	}
 
 	@Override

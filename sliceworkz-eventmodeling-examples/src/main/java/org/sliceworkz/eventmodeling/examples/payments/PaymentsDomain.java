@@ -18,9 +18,9 @@
 package org.sliceworkz.eventmodeling.examples.payments;
 
 import java.time.Instant;
+import org.sliceworkz.eventmodeling.domain.Entity;
+import org.sliceworkz.eventmodeling.domain.EntityId;
 
-import org.sliceworkz.eventmodeling.domain.DomainConcept;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 
 /**
  * A small domain whose only job is to show an automation that talks to something outside itself, and
@@ -40,39 +40,42 @@ import org.sliceworkz.eventmodeling.domain.DomainConceptId;
  */
 public interface PaymentsDomain {
 
-	DomainConcept CONCEPT_PAYMENT = DomainConcept.of("payment");
+	/** The identity of one payment; its record is what keeps a payment id from being handed to something expecting another kind of id. */
+	record PaymentId ( String value ) implements EntityId { }
+
+	Entity<PaymentId> PAYMENT = Entity.of("payment", PaymentId::new);
 
 	sealed interface PaymentsDomainEvent {
 
 		/** A payment has been requested and is now outstanding work for the automation. */
-		record PaymentRequested ( DomainConceptId paymentId, String iban, long amountInCents ) implements PaymentsDomainEvent { }
+		record PaymentRequested ( PaymentId paymentId, String iban, long amountInCents ) implements PaymentsDomainEvent { }
 
 		/** The gateway accepted the payment. The todo list drops the item on this. */
-		record PaymentExecuted ( DomainConceptId paymentId, String gatewayReference ) implements PaymentsDomainEvent { }
+		record PaymentExecuted ( PaymentId paymentId, String gatewayReference ) implements PaymentsDomainEvent { }
 
 		/**
 		 * One attempt failed in a way that may still succeed later. Carries the attempt number and when
 		 * the next attempt is due, both of which the todo list projects — which is how a delay survives a
 		 * restart. Nothing kept outside events would.
 		 */
-		record PaymentAttemptFailed ( DomainConceptId paymentId, String reason, int attempt, Instant nextAttemptDueAt ) implements PaymentsDomainEvent { }
+		record PaymentAttemptFailed ( PaymentId paymentId, String reason, int attempt, Instant nextAttemptDueAt ) implements PaymentsDomainEvent { }
 
 		/** Given up on. The todo list drops the item, and the dead-letter read model picks it up. */
-		record PaymentAbandoned ( DomainConceptId paymentId, String reason, int attempts ) implements PaymentsDomainEvent { }
+		record PaymentAbandoned ( PaymentId paymentId, String reason, int attempts ) implements PaymentsDomainEvent { }
 
 	}
 
 	sealed interface PaymentsInboundEvent {
 
 		/** Not used by this example; a bounded context declares three event types even so. */
-		record PaymentInstructionReceived ( DomainConceptId paymentId ) implements PaymentsInboundEvent { }
+		record PaymentInstructionReceived ( PaymentId paymentId ) implements PaymentsInboundEvent { }
 
 	}
 
 	sealed interface PaymentsOutboundEvent {
 
 		/** Not used by this example; a bounded context declares three event types even so. */
-		record PaymentAnnounced ( DomainConceptId paymentId ) implements PaymentsOutboundEvent { }
+		record PaymentAnnounced ( PaymentId paymentId ) implements PaymentsOutboundEvent { }
 
 	}
 

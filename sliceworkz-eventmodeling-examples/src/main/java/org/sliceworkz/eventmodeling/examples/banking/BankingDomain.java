@@ -18,33 +18,36 @@
 package org.sliceworkz.eventmodeling.examples.banking;
 
 import java.time.LocalDate;
+import org.sliceworkz.eventmodeling.domain.Entity;
+import org.sliceworkz.eventmodeling.domain.EntityId;
 
-import org.sliceworkz.eventmodeling.domain.DomainConcept;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 
 public interface BankingDomain {
 
-	public static final DomainConcept CONCEPT_ACCOUNT = DomainConcept.of("account");
-	public static final DomainConcept CONCEPT_CUSTOMER = DomainConcept.of("customer");
+	public record AccountId ( String value ) implements EntityId { }
+	public record CustomerId ( String value ) implements EntityId { }
+
+	public static final Entity<AccountId> ACCOUNT = Entity.of("account", AccountId::new);
+	public static final Entity<CustomerId> CUSTOMER = Entity.of("customer", CustomerId::new);
 	
 	
 	public sealed interface BankingDomainEvent {
 		
-		public record AccountOpened ( DomainConceptId accountId, DomainConceptId customerId, LocalDate date ) implements BankingDomainEvent { } 
+		public record AccountOpened ( AccountId accountId, CustomerId customerId, LocalDate date ) implements BankingDomainEvent { } 
 		
 	}
 
 	
 	public sealed interface BankingInboundEvent {
 		
-		public record CustomerSuspended ( DomainConceptId customerId ) implements BankingInboundEvent { } 
+		public record CustomerSuspended ( CustomerId customerId ) implements BankingInboundEvent { } 
 		
 	}
 
 	
 	public sealed interface BankingOutboundEvent {
 		
-		public record AccountAnnounced ( DomainConceptId id ) implements BankingOutboundEvent { } 
+		public record AccountAnnounced ( AccountId id ) implements BankingOutboundEvent { } 
 		
 	}
 	

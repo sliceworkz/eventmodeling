@@ -193,6 +193,67 @@ features/
     AccountOverviewReadModel.java
 ```
 
+### Entities and typed ids
+
+**An `Entity` is a kind of thing with identity that events are about — account, customer, payment,
+month — and it is what a tag key names.** Declared once per kind, next to the record that identifies
+one instance of it, in the domain interface:
+
+```java
+public interface BankingDomain {
+    record AccountId  ( String value ) implements EntityId { }
+    record CustomerId ( String value ) implements EntityId { }
+
+    Entity<AccountId>  ACCOUNT  = Entity.of("account",  AccountId::new);
+    Entity<CustomerId> CUSTOMER = Entity.of("customer", CustomerId::new);
+}
+
+AccountId accountId = ACCOUNT.newId();                                  // mint
+result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
+        Tags.of(ACCOUNT.tag(accountId), CUSTOMER.tag(customerId)));     // tag
+EventQuery.forEvents(EventTypesFilter.any(), ACCOUNT.tags(accountId));  // query
+ACCOUNT.idIn(event.tags());                                             // read back, Optional<AccountId>
+```
+
+- **The id type is part of the entity, and that is what the one-line record per entity buys.**
+  `AccountOpened(AccountId, CustomerId)` cannot be built with its arguments swapped, a read model
+  asking for a `CustomerId` cannot be handed an account, and `ACCOUNT.tag(customerId)` does not
+  compile. The alternative — one shared id type for every entity, `AccountOpened(Id accountId,
+  Id customerId)` — loses because every one of those compiles, and the mistake surfaces as a query
+  that finds nothing or a tag on the wrong entity, never as an error. Every call site names the
+  entity anyway (`accountId`, `customerId`); the record makes the compiler see what the name says
+- **The record stays a plain carrier; the entity is the factory.** `Entity.id(String)` strips and
+  rejects a blank value, `Entity.newId()` mints a UUID. Validation deliberately does not live in the
+  record's constructor: an id is carried inside event payloads, and Jackson reconstructs a payload
+  record through its canonical constructor on every read of history, so a constructor that throws
+  turns a tightened rule into a poison event (the value-object rule in WHERE-VALIDATIONS-GO.md)
+- **Two things are wire format.** The entity *name* is the tag key on every event tagged with it,
+  and the id record's component must be called `value`: an id is stored as `{"value":"..."}` inside
+  the payload. Renaming either changes what new events carry and none of the old ones. The record's
+  *class* name is not stored — the serde uses no default typing — so the record can be renamed or
+  moved freely
+- **Tags are made through the entity, never through a static factory beside it.** `tag(id)`,
+  `tags(id)` and the bare `tag()` flag are instance methods, so the id type is checked and the
+  key cannot be misspelled. Static `Tag`/`Tags` factory classes taking an entity and an id — the
+  natural alternative — lose because they would duplicate these methods under a second name and
+  cannot be typed by the entity they are handed. A tag whose value is not the identity of anything
+  (a region, a channel) is an ordinary `Tag.of("region", "EU")`; not every tag is an entity
+- **Two entities are equal when their names are equal**, whatever id type each was declared with:
+  the name is what an event carries, the id type is a compile-time convenience of the declaring code.
+  A name containing `':'` is rejected at declaration, since the eventstore's `Tag` rejects it as a key
+- **Naming.** `Entity` rather than `Concept`: the id identifies an *instance* — one account — so a
+  "concept id" would name the wrong level (the concept's identity is its name). `Entity` rather than
+  `Aggregate`: an event can carry several entities' tags at once, which is the point of DCB and the
+  opposite of an aggregate boundary. `Entity` rather than `TagKey`: the type exists to give the domain
+  a vocabulary over the eventstore's tags, not to rename the mechanism
+- **In tests**, `IGNORE_ID()` goes through the same factory — `PROJECT.id(IGNORE_ID())` against an
+  actual built from `PROJECT.newId()` — so the marker sits on the record's nested `value` line, which
+  is where `assertCompareObjects` looks for it (`IgnoreIdMarkerTest`)
+- `EntityTest` in the api module pins the tag shape, normalisation, the rejections, `idIn`, equality
+  on the name and the UUID minting; the examples' `BankingDomain`, `BankingDomainWithClosingTheBooks`
+  (where a *month* is an entity, `MonthId`, with a `monthId(YearMonth)` helper so every tag spells it
+  the same way) and `PaymentsDomain` are the shapes to copy
+
 ### Core Component Interfaces
 
 **Commands:**

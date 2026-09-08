@@ -23,7 +23,6 @@ import java.util.function.BooleanSupplier;
 
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentRequested;
 import org.sliceworkz.eventmodeling.examples.payments.features.abandonedpayments.AbandonedPaymentsReadModel;
@@ -130,7 +129,7 @@ public class PaymentsExample {
 
 	/** Requesting a payment. A command would be the usual way in; this keeps the example on the automation. */
 	private static void request ( Payments payments, String id, String iban, long amountInCents ) {
-		payments.event(new PaymentRequested(DomainConceptId.of(id), iban, amountInCents));
+		payments.event(new PaymentRequested(PaymentsDomain.PAYMENT.id(id), iban, amountInCents));
 	}
 
 	private static void await ( BooleanSupplier condition, String what ) throws InterruptedException {

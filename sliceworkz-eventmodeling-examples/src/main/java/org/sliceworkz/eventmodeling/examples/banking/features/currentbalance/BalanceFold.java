@@ -19,7 +19,8 @@ package org.sliceworkz.eventmodeling.examples.banking.features.currentbalance;
 
 import java.math.BigDecimal;
 
-import org.sliceworkz.eventmodeling.domain.DomainConceptId;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyDeposited;
@@ -56,7 +57,7 @@ final class BalanceFold {
 	}
 
 	/** Which account an event concerns. Every event of this domain names one. */
-	static DomainConceptId accountOf ( BankingEvent event ) {
+	static AccountId accountOf ( BankingEvent event ) {
 		return switch ( event ) {
 			case AccountOpened opened -> opened.accountId();
 			case MoneyDeposited deposited -> deposited.accountId();

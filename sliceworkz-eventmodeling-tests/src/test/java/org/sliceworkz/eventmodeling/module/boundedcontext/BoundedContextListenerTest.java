@@ -361,7 +361,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 				{"boundedContext":"orders","logical":"orders","physical":"orders-1","process":"p123",\
 				"enabledFeatures":[{"name":"PlaceOrder","type":"STATE_CHANGE","context":"orders","chapter":"checkout","tags":[]}],\
 				"disabledFeatures":[]}""",
-				null, Tags.none(), null)));
+				Tags.none(), null)));
 
 		EventStream<BoundedContextEvent> kernelStream = EventStoreFactory.get().eventStore(eventStorage())
 				.getEventStream(streamId, BoundedContextEvent.class);
@@ -388,7 +388,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 				{"boundedContext":"orders","logical":"orders","physical":"orders-1","process":"p123",\
 				"enabledFeatures":[{"name":"PlaceOrder","type":"STATE_CHANGE","context":"orders","chapter":"checkout","tags":[]}],\
 				"disabledFeatures":[]}""",
-				null, Tags.none(), null)));
+				Tags.none(), null)));
 
 		EventStream<BoundedContextEvent> kernelStream = EventStoreFactory.get().eventStore(eventStorage())
 				.getEventStream(streamId, BoundedContextEvent.class);

@@ -77,12 +77,25 @@ public final class ProjectorProcessorAdmin {
 	 * @see ProcessorAdminCapability#restartProcessor(ProcessorKind, String)
 	 */
 	public boolean restart ( String name ) {
+		return managed(name).processor().restart();
+	}
+
+	/**
+	 * Stops the named processor if it is running.
+	 *
+	 * @see ProcessorAdminCapability#stopProcessor(ProcessorKind, String)
+	 */
+	public boolean stop ( String name ) {
+		return managed(name).processor().stopByOperator();
+	}
+
+	private Managed managed ( String name ) {
 		Managed managed = byName.get(name);
 		if ( managed == null ) {
 			throw new IllegalArgumentException("no %s processor '%s' is registered on bounded context '%s', known are %s".formatted(
 					kind, name, boundedContext, byName.keySet().stream().toList()));
 		}
-		return managed.processor().restart();
+		return managed;
 	}
 
 }

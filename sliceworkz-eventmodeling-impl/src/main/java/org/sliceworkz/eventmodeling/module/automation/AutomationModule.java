@@ -82,12 +82,24 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 	 * @see org.sliceworkz.eventmodeling.automation.AutomationAdminCapability#restartAutomation(String)
 	 */
 	public boolean restartAutomation ( String automation ) {
+		return processor(automation).restart();
+	}
+
+	/**
+	 * Stops a running automation on this instance.
+	 *
+	 * @see org.sliceworkz.eventmodeling.automation.AutomationAdminCapability#stopAutomation(String)
+	 */
+	public boolean stopAutomation ( String automation ) {
+		return processor(automation).stopByOperator();
+	}
+
+	private AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> processor ( String automation ) {
 		return automationProcessors.stream()
 				.filter(p -> p.automationId().equals(automation))
 				.findFirst()
 				.orElseThrow(() -> new IllegalArgumentException("no automation '%s' is registered on bounded context '%s', known are %s".formatted(
-						automation, boundedContext, automationProcessors.stream().map(AutomationProcessor::automationId).toList())))
-				.restart();
+						automation, boundedContext, automationProcessors.stream().map(AutomationProcessor::automationId).toList())));
 	}
 
 	public void setCapabilitiesDelegate ( AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> delegate ) {

@@ -148,7 +148,17 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 							boundedContext, name,
 							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
 							failure == null ? null : failure.getEventReference(),
-							eventEmitter.sliceFor(dispatcher.getClass())));
+							eventEmitter.sliceFor(dispatcher.getClass()),
+							BoundedContextEvent.ProcessorStopReason.FAILURE));
+				}
+			}
+
+			@Override
+			public void onStoppedByOperator ( ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.DispatcherStopped(
+							boundedContext, name, null, null, eventEmitter.sliceFor(dispatcher.getClass()),
+							BoundedContextEvent.ProcessorStopReason.OPERATOR));
 				}
 			}
 		};
@@ -162,6 +172,11 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 	/** Restarts a stopped dispatcher processor — see {@code ProcessorAdminCapability.restartProcessor}. */
 	public boolean restartProcessor ( String name ) {
 		return admin.restart(name);
+	}
+
+	/** Stops a running dispatcher processor — see {@code ProcessorAdminCapability.stopProcessor}. */
+	public boolean stopProcessor ( String name ) {
+		return admin.stop(name);
 	}
 
 	class DispatcherAdapter implements Projection<OUTBOUND_EVENT_TYPE> {

@@ -90,10 +90,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private volatile Throwable lastFailure;
 	private volatile Throwable stoppedBy;
 
-	// set when this automation retires itself through STOP_AUTOMATION, as opposed to being stopped by
-	// its lifecycle; what the leader elector reads to release the lease of a processor that will not
-	// work it (see Processor.stoppedItself). Cleared by start() and stop(): either is an explicit
-	// instruction that supersedes the self-imposed stop
+	// set when this automation is stopped on its own account -- retiring itself through STOP_AUTOMATION,
+	// or stopped by an operator -- as opposed to being stopped by its lifecycle; what the leader elector
+	// reads to release the lease of a processor that will not work it (see Processor.stoppedItself).
+	// Cleared by start() and stop(): either is an explicit instruction that supersedes it
 	private volatile boolean stoppedItself;
 
 	/**
@@ -322,7 +322,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 										// the lease for
 										stoppedItself = true;
 										processorMode = ProcessorMode.STOPPED;
-										eventEmitter.emit(new BoundedContextEvent.AutomationStopped(boundedContext, processorIdentification.id(), failureOf(outcome.lastFailure()), eventEmitter.sliceFor(automation.getClass())), tracing);
+										eventEmitter.emit(new BoundedContextEvent.AutomationStopped(boundedContext, processorIdentification.id(), failureOf(outcome.lastFailure()), eventEmitter.sliceFor(automation.getClass()), BoundedContextEvent.ProcessorStopReason.FAILURE), tracing);
 									} else if ( outcome.streamed() >= batchSize.value() && outcome.lastProducedEvent() != null ) {
 										// A full window and a bookmark that moved: there is plausibly more behind it, and the
 										// guard at the top of the loop now has something to hold us against. Without a moved
@@ -548,6 +548,32 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		LOGGER.info("restarting automation '{}'", processorIdentification);
 		stoppedBy = null; // it is running again; what stopped it stays available as lastFailure
 		start(BoundedContextEvent.AutomationStartReason.RESTART);
+		return true;
+	}
+
+	/**
+	 * Stops this processor on an operator's say-so, so it handles no further todo items until something
+	 * restarts it — see {@code AutomationAdminCapability.stopAutomation}.
+	 * <p>
+	 * Flagged as stopped on its own account rather than by the lifecycle, exactly like a self-stop: the
+	 * leader elector reads that flag to release the lease, and a lease kept by a processor that does no
+	 * work would hold the todo list off every healthy instance for as long as this process lives. The
+	 * flag is set before the mode flips, so the elector never sees a stopped processor it would renew for.
+	 *
+	 * @return {@code true} if it was running and is now stopped, {@code false} if it was already stopped
+	 */
+	boolean stopByOperator ( ) {
+		if ( processorMode == ProcessorMode.STOPPED ) {
+			LOGGER.debug("automation '{}' is already stopped, nothing to stop", processorIdentification);
+			return false;
+		}
+		LOGGER.info("stopping automation '{}' on an operator's instruction - it will not run again until it is restarted", processorIdentification);
+		stoppedItself = true;
+		processorMode = ProcessorMode.STOPPED;
+		synchronized ( this ) { // a batch in progress finishes its current item and parks; a parked loop parks on
+			this.notify();
+		}
+		eventEmitter.emit(new BoundedContextEvent.AutomationStopped(boundedContext, processorIdentification.id(), null, eventEmitter.sliceFor(automation.getClass()), BoundedContextEvent.ProcessorStopReason.OPERATOR));
 		return true;
 	}
 

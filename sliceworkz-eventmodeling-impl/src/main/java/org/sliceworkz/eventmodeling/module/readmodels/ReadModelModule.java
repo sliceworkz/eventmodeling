@@ -200,6 +200,11 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		return admin.restart(name);
 	}
 
+	/** Stops a running read model projector — see {@code ProcessorAdminCapability.stopProcessor}. */
+	public boolean stopProcessor ( String name ) {
+		return admin.stop(name);
+	}
+
 	/**
 	 * A read model that records its position alongside the state it projects, or {@code null}.
 	 * <p>
@@ -282,7 +287,17 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 							// stopped read model there has ever been
 							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
 							failure == null ? null : failure.getEventReference(),
-							eventEmitter.sliceFor(rm.getClass())));
+							eventEmitter.sliceFor(rm.getClass()),
+							BoundedContextEvent.ProcessorStopReason.FAILURE));
+				}
+			}
+
+			@Override
+			public void onStoppedByOperator ( ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorStopped(
+							boundedContext, rm.readmodelName(), storage.label(), null, null, eventEmitter.sliceFor(rm.getClass()),
+							BoundedContextEvent.ProcessorStopReason.OPERATOR));
 				}
 			}
 		};

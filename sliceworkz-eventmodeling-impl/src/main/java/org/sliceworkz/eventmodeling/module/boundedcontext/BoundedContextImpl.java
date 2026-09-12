@@ -48,6 +48,7 @@ import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
 import org.sliceworkz.eventmodeling.module.inbound.InboundModule;
 import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
+import org.sliceworkz.eventmodeling.module.management.ManagementModule;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
@@ -98,6 +99,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule;
 	private OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule;
 	private LeaderElector leaderElector;
+	/** The operator's channel into this instance, or {@code null} when the builder was given no instruction stream. */
+	private ManagementModule managementModule;
 	
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> deployedFeatureSlices;
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> undeployedFeatureSlices;
@@ -151,6 +154,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule,
 			OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule,
 			LeaderElector leaderElector,
+			ManagementModule managementModule,
 			Instance instance,
 			MeterRegistry meterRegistry,
 			AdapterRegistry adapterRegistry ) {
@@ -176,6 +180,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 		this.outboundModule = outboundModule;
 		this.leaderElector = leaderElector;
+		this.managementModule = managementModule;
 
 		this.adapterRegistry = adapterRegistry;
 		this.instance = instance;
@@ -255,6 +260,11 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.dcbDomainModule.start();
 		this.automationModule.start();
 		this.readmodelModule.start(); // blocks until the ephemeral readmodels have been projected
+		if (managementModule != null) {
+			// idempotent: subscribed once, at the stream's head, and kept across stop()/start() so an
+			// instruction can start a stopped context again
+			managementModule.start();
+		}
 		long startupDurationMs = System.currentTimeMillis() - startedAt;
 		eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), startupDurationMs));
 		LOGGER.info("started bounded context '{}' in {} ms.", name, startupDurationMs);
@@ -307,6 +317,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		// over promptly instead of waiting out the lease ttl. Leases live on the storage, which stays
 		// open: only the store below is ours to close.
 		this.leaderElector.terminate();
+		if (managementModule != null) {
+			// the one thing that ends the instruction subscription: stop() deliberately does not
+			managementModule.terminate();
+		}
 		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopped(name, instance.logical(), instance.physical(), instance.process()));
 		// The store is ours: the builder created it over the storage it was handed, and nothing outside
 		// this context holds it. Closing it releases the notification machinery it started -- left
@@ -375,6 +389,16 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		return automationModule.restartAutomation(automation);
 	}
 
+	@Override
+	public boolean stopAutomation ( String automation ) {
+		return automationModule.stopAutomation(automation);
+	}
+
+	/** Whether {@link #start()} has been called and neither {@link #stop()} nor {@link #terminate()} since. */
+	public boolean isStarted ( ) {
+		return lifecycleState == LifecycleState.STARTED;
+	}
+
 	/*
 	 * PROCESSOR ADMINISTRATION (read model projectors, translators, dispatchers)
 	 */
@@ -394,6 +418,15 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			case READ_MODEL -> readmodelModule.restartProcessor(name);
 			case TRANSLATOR -> inboundModule.restartProcessor(name);
 			case DISPATCHER -> outboundModule.restartProcessor(name);
+		};
+	}
+
+	@Override
+	public boolean stopProcessor ( ProcessorKind kind, String name ) {
+		return switch ( kind ) {
+			case READ_MODEL -> readmodelModule.stopProcessor(name);
+			case TRANSLATOR -> inboundModule.stopProcessor(name);
+			case DISPATCHER -> outboundModule.stopProcessor(name);
 		};
 	}
 

@@ -102,10 +102,11 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	// wherever this instance's projector happened to stop reading
 	private volatile boolean reseedProjector;
 	private volatile boolean potentiallyNewEventsAppended;
-	// set when this processor retires itself on a permanent projection failure, as opposed to being
-	// stopped by its lifecycle; what the leader elector reads to release the lease of a processor that
-	// will not work it (see Processor.stoppedItself). Cleared by start() and stop(): either is an
-	// explicit instruction that supersedes the self-imposed stop
+	// set when this processor is stopped on its own account -- retiring itself on a permanent projection
+	// failure, or stopped by an operator -- as opposed to being stopped by its lifecycle; what the leader
+	// elector reads to release the lease of a processor that will not work it (see
+	// Processor.stoppedItself). Cleared by start() and stop(): either is an explicit instruction that
+	// supersedes it
 	private volatile boolean stoppedItself;
 
 	// how many runs in a row have now failed without the failure being permanent; what the backoff and
@@ -307,6 +308,32 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 		LOGGER.info("restarting '{}'", processorIdentification);
 		stoppedBy = null; // it is running again; what stopped it stays available as lastFailure
 		start();
+		return true;
+	}
+
+	/**
+	 * Stops this processor on an operator's say-so, so it projects nothing further until something
+	 * restarts it — see {@code ProcessorAdminCapability.stopProcessor}. Flagged as stopped on its own
+	 * account rather than by the lifecycle, exactly like a permanent failure: that is what makes the
+	 * leader elector release the lease of a leader-only processor, so another instance takes over. The
+	 * projector's cursor is untouched — a run in progress completes its batch, or rolls it back whole,
+	 * before the loop parks — so a restart resumes where the position durably left off.
+	 *
+	 * @return {@code true} if it was running and is now stopped, {@code false} if it was already stopped
+	 */
+	public boolean stopByOperator ( ) {
+		if ( processorMode == ProcessorMode.STOPPED ) {
+			LOGGER.debug("'{}' is already stopped, nothing to stop", processorIdentification);
+			return false;
+		}
+		LOGGER.info("stopping '{}' on an operator's instruction - it will not project again until it is restarted", processorIdentification);
+		stoppedItself = true;
+		processorMode = ProcessorMode.STOPPED;
+		initialProjectionDone.countDown(); // no catch-up will happen while stopped, release anyone waiting for it
+		synchronized ( this ) {
+			this.notify();
+		}
+		notifyListener("stopped", ProjectorListener::onStoppedByOperator);
 		return true;
 	}
 
@@ -694,6 +721,13 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 		 * again; a failure worth retrying is reported through {@link #onFailed} instead, per round.
 		 */
 		default void onStopped ( ProjectorException failure ) { }
+
+		/**
+		 * Called when an operator has stopped this processor through
+		 * {@link ProjectorProcessor#stopByOperator()}, on the caller's thread. Nothing failed; the
+		 * processor projects nothing further until something starts it again.
+		 */
+		default void onStoppedByOperator ( ) { }
 
 	}
 

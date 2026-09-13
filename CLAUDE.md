@@ -557,7 +557,12 @@ processor:**
   processor (kind, name, component class, storage, running, leader, `consecutiveFailedRuns`,
   `lastFailure`, and `stoppedBy` — kept apart for the same reason `AutomationStatus` keeps them apart);
   `restartProcessor(kind, name)` mirrors `restartAutomation`: `false` when already running,
-  `IllegalArgumentException` naming the known names otherwise, addresses the instance it is called on,
+  `IllegalArgumentException` naming the known names otherwise, addresses the instance it is called on;
+  `stopProcessor(kind, name)` mirrors `stopAutomation` — a leader-only processor stopped by an operator
+  hands its lease back exactly as one retired by a permanent failure does, the projector's position is
+  untouched, and the stop is announced as the kind's `...Stopped` event with reason `OPERATOR` and no
+  failure. What it is for: rebuilding a read model (stop its projector everywhere, drop the tables, start
+  it again) or holding a dispatcher back while the system it publishes to is down,
   and a leader-only processor resumes via re-election. Restarting without fixing a permanent cause
   replays the same batch and stops again
 - `ProjectorFailureRecoveryTest` pins the recovery: a transient failure recovers with nothing
@@ -897,8 +902,17 @@ processor:**
   naming the registered ids if there is no such automation. Two things to know: the item that stopped it is
   still at the head of the todo list, so restarting without fixing the cause handles it again and stops
   again; and this addresses **the instance it is called on**, since every instance runs its own processors
-  — a remote channel is the same "name one instance" problem leader election has, so it is left out rather
-  than half-done
+  — the remote channel is the management stream, see "Management" below, and it ends up calling exactly
+  this method on the instances it names
+- **An operator can also stop a running automation, through `stopAutomation(id)`** — for the maintenance
+  window of whatever it calls, or to take one instance out of the work. It parks after the item in hand,
+  is announced as `AutomationStopped` with reason `OPERATOR` and no failure, handles nothing until
+  `restartAutomation`, and **hands its lease back**: an operator stop sets the same "stopped on its own
+  account" flag a `STOP_AUTOMATION` self-stop does (`stoppedItself`), so the elector releases the lease
+  and another instance takes the todo list over. The alternative — plain `stop()` on the processor —
+  loses because the elector keeps renewing a lifecycle-stopped leader's lease, and the automation runs
+  nowhere in the deployment, silently. Stopping it everywhere is stopping it on every instance.
+  `OperatorStopTest` pins all of it, including the hand-over
 - **`AutomationStarted` / `AutomationStopped` are the pair to fold to answer "is it running"**, the later
   of the two winning. `AutomationStarted` carries an `AutomationStartReason` (`BOUNDED_CONTEXT_START` or
   `RESTART`) and is emitted on the ordinary path too, so the running automations are announced from startup
@@ -919,6 +933,57 @@ processor:**
   its own thread under its own lease, so partitions proceed in parallel — while ordering holds within one
   automation and nowhere else, which is why the partition key must keep dependent items together. The
   `Automation` interface javadoc carries the user-facing version of this
+
+### Management — instructions from an operator, through the store
+
+**The admin capabilities are local, and the management stream is how an operator reaches them from
+outside the process.** `BoundedContextBuilder.management(EventStream<ManagementInstruction>)`
+subscribes a context to a stream of `ManagementInstruction`s (api module,
+`org.sliceworkz.eventmodeling.management`; `ManagementInstruction.STREAM` is the stream id both sides
+agree on). An operator — the dashboard, a script — appends one; every subscribed instance reads it;
+the ones its `Target` names apply it through their own admin capability and answer with a
+`BoundedContextEvent.InstructionHandled` through the ordinary listener, so the answer lands next to
+everything else the instance reports, tagged with the instruction's correlation id and actor on the
+answering instance's own tags. The others say nothing. The mirror image of the monitoring listener:
+that is how a context reports to a store, this is how a store tells it what to do, and it reuses the
+one thing every instance can already reach. The alternative — an HTTP endpoint per instance — loses
+because the framework has no network and no discovery, and the dashboard would need both.
+
+- **The instructions**: `StopAutomation`/`StartAutomation` (the automation id),
+  `StopProcessor`/`StartProcessor` (a `ProcessorKind` and name), `StopBoundedContext`/
+  `StartBoundedContext`, and `ReportStatus`, answered with an `InstanceStatusReported` carrying the
+  same `AutomationStatus`/`ProcessorStatus` lists the capabilities return locally. Every one carries a
+  `Target(boundedContext, logical, physical, process)` where null means any: the whole deployment, one
+  context, one deployed copy (the logical/physical pair a dashboard shows), or one JVM run
+- **Answered, always, with one of four outcomes** — `APPLIED`, `NO_CHANGE` (already stopped, already
+  running, already started), `REJECTED` (a name this instance does not have; the detail names what it
+  has — not an error, since a context-wide target reaches instances deploying different slices) or
+  `FAILED` (applying it threw; contained, so one bad instruction never ends the subscription). Answered
+  even for `NO_CHANGE`, because the absence of an answer is the one signal that an instruction did
+  not land
+- **Read from the head at `start()`, never bookmarked.** Instructions are things an operator did, not
+  standing rules; a process coming up must not replay all of them and stop things on the strength of
+  last week's decisions. The cost is stated on the type: an instruction issued while an instance is
+  down is not seen by it, which the missing answer says. The alternative — a bookmark per instance —
+  loses twice: the process id is minted per JVM run so a fresh process is a new reader anyway, and an
+  instruction meant for a moment that has passed is worse applied late than not at all
+- **Applied one at a time, in stream order, on a thread of the module's own.** The store serialises
+  deliveries to a subscriber, so the projector never races itself, but starting a context blocks on
+  its ephemeral read models and that is not a wait to impose on the store's notification machinery
+- **Survives `stop()`, ends at `terminate()`**, which closes the stream — a stopped context that
+  stopped listening could never be told to start again, which is why the builder asks for a stream of
+  the context's own (`ManagementModule` in the impl module)
+- **Whoever can append to the stream controls the processors.** Nothing authenticates an instruction
+  beyond the store having accepted it; protect the store and whatever appends to it as you would a
+  shell on the instance. Every instruction carries the tracing tags of whoever appended it, so the
+  stream is also the record of who did what
+- `ManagementInstructionTest` pins it end to end with two instances on one storage: an instruction
+  reaches only the instance it names (per backend) and the answer carries the correlation id, actor
+  and answering instance; a context-wide target reaches every instance; an instruction from before
+  the context started is not replayed; unknown names are rejected naming the known ones; a running
+  automation started again answers `NO_CHANGE`; processors and the whole context stop and start by
+  instruction; `ReportStatus` answers with the local statuses; and the new event shapes survive a
+  monitoring stream round trip
 
 ### Leader election — one instance per leader-only processor
 

@@ -34,7 +34,9 @@ import java.util.List;
  * <p>
  * <strong>This addresses the instance it is called on, and no other.</strong> Every instance runs its
  * own processors, so an operator restarting one across a deployment has to reach every instance —
- * the same stance {@code AutomationAdminCapability} takes, for the same reason.
+ * the same stance {@code AutomationAdminCapability} takes, for the same reason, and with the same
+ * remote channel: a {@link org.sliceworkz.eventmodeling.management.ManagementInstruction} on the
+ * management stream reaches the instances its target names, which then call these methods on themselves.
  */
 public interface ProcessorAdminCapability {
 
@@ -66,5 +68,30 @@ public interface ProcessorAdminCapability {
 	 *         this context; the message names the ones that are
 	 */
 	boolean restartProcessor ( ProcessorKind kind, String name );
+
+	/**
+	 * Stops a running processor on this instance, so it projects nothing further until something
+	 * restarts it. What it is for: rebuilding a read model (stop its projector everywhere, drop its
+	 * tables, start it again — a {@code SHARED} SQL read model with no bookmark row replays from the
+	 * beginning), or holding a dispatcher back while the system it publishes to is down for
+	 * maintenance, without the retries piling up failure events meanwhile.
+	 * <p>
+	 * A leader-only processor stopped this way hands its lease back, exactly as one retired by a
+	 * permanent failure does, so another instance takes over unless it is stopped there too. A
+	 * processor projected on every instance ({@code EPHEMERAL}, {@code LOCAL}) is simply parked here.
+	 * The projector's position is untouched: a restart resumes where it durably left off, and a
+	 * batch in progress is completed — or rolled back whole — before the processor parks, never cut
+	 * in the middle.
+	 * <p>
+	 * Announced as the kind's {@code ...Stopped} event with reason {@code OPERATOR} and no failure.
+	 * Stopping a processor that is already stopped does nothing and reports {@code false}.
+	 *
+	 * @param kind the processor's kind, from {@link ProcessorStatus#kind}
+	 * @param name the processor's name, from {@link ProcessorStatus#name}
+	 * @return {@code true} if a running processor was stopped, {@code false} if it was already stopped
+	 * @throws IllegalArgumentException if no processor of that kind with that name is registered on
+	 *         this context; the message names the ones that are
+	 */
+	boolean stopProcessor ( ProcessorKind kind, String name );
 
 }

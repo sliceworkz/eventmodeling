@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.boundedcontext;
 import java.util.List;
 import java.util.Set;
 
+import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -279,8 +280,16 @@ public sealed interface BoundedContextEvent {
 	 *        reached the projection, and is named inside the failure's own detail
 	 *        ({@code EventDeserializationException.getReference()}, quoted in the stack trace)
 	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 * @param reason whether a permanent failure retired the projector or an operator stopped it; {@code null}
+	 *        on an event written before operators could, which meant the former
 	 */
-	record ReadModelProjectorStopped ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, FeatureSlice slice ) implements BoundedContextEvent { }
+	record ReadModelProjectorStopped ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, FeatureSlice slice, ProcessorStopReason reason ) implements BoundedContextEvent {
+
+		/** The shape from before {@code reason} existed: a projector retired by a permanent failure. */
+		public ReadModelProjectorStopped ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, FeatureSlice slice ) {
+			this(boundedContext, readModel, readModelType, failure, failedAt, slice, ProcessorStopReason.FAILURE);
+		}
+	}
 
 	/**
 	 * Emitted when a read model's projector completes a run that failed — it is running, retrying, and
@@ -351,8 +360,16 @@ public sealed interface BoundedContextEvent {
 	 * @param failure what escaped the translation
 	 * @param failedAt the last inbound event the translator handled, as on {@link ReadModelProjectorStopped}
 	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 * @param reason whether a permanent failure retired the translator or an operator stopped it; {@code null}
+	 *        on an event written before operators could, which meant the former
 	 */
-	record TranslatorStopped ( String boundedContext, String translator, Failure failure, EventReference failedAt, FeatureSlice slice ) implements BoundedContextEvent { }
+	record TranslatorStopped ( String boundedContext, String translator, Failure failure, EventReference failedAt, FeatureSlice slice, ProcessorStopReason reason ) implements BoundedContextEvent {
+
+		/** The shape from before {@code reason} existed: a translator retired by a permanent failure. */
+		public TranslatorStopped ( String boundedContext, String translator, Failure failure, EventReference failedAt, FeatureSlice slice ) {
+			this(boundedContext, translator, failure, failedAt, slice, ProcessorStopReason.FAILURE);
+		}
+	}
 
 	/**
 	 * Emitted when a dispatcher's processor starts reading the outbound stream: once per dispatcher
@@ -395,8 +412,16 @@ public sealed interface BoundedContextEvent {
 	 * @param failure what escaped the dispatch
 	 * @param failedAt the last outbound event the dispatcher handled, as on {@link ReadModelProjectorStopped}
 	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 * @param reason whether a permanent failure retired the dispatcher or an operator stopped it; {@code null}
+	 *        on an event written before operators could, which meant the former
 	 */
-	record DispatcherStopped ( String boundedContext, String dispatcher, Failure failure, EventReference failedAt, FeatureSlice slice ) implements BoundedContextEvent { }
+	record DispatcherStopped ( String boundedContext, String dispatcher, Failure failure, EventReference failedAt, FeatureSlice slice, ProcessorStopReason reason ) implements BoundedContextEvent {
+
+		/** The shape from before {@code reason} existed: a dispatcher retired by a permanent failure. */
+		public DispatcherStopped ( String boundedContext, String dispatcher, Failure failure, EventReference failedAt, FeatureSlice slice ) {
+			this(boundedContext, dispatcher, failure, failedAt, slice, ProcessorStopReason.FAILURE);
+		}
+	}
 
 	/**
 	 * Emitted after an automation has processed a batch of todo items.
@@ -454,8 +479,16 @@ public sealed interface BoundedContextEvent {
 	 * @param automation the automation's id, the same one {@code AutomationStatus} and the metric tags use
 	 * @param failure what escaped the handler
 	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 * @param reason whether the automation asked to stop after a failure or an operator stopped it; {@code null}
+	 *        on an event written before operators could, which meant the former
 	 */
-	record AutomationStopped ( String boundedContext, String automation, Failure failure, FeatureSlice slice ) implements BoundedContextEvent { }
+	record AutomationStopped ( String boundedContext, String automation, Failure failure, FeatureSlice slice, ProcessorStopReason reason ) implements BoundedContextEvent {
+
+		/** The shape from before {@code reason} existed: a stop the automation asked for itself. */
+		public AutomationStopped ( String boundedContext, String automation, Failure failure, FeatureSlice slice ) {
+			this(boundedContext, automation, failure, slice, ProcessorStopReason.FAILURE);
+		}
+	}
 
 	/**
 	 * Emitted when an automation begins processing todo items: once per automation when the bounded
@@ -582,6 +615,86 @@ public sealed interface BoundedContextEvent {
 	/*
 	 * Value objects used by the events above
 	 */
+
+	/** Why a processor — an automation, a read model's projector, a translator, a dispatcher — stopped while its context stayed up. */
+	enum ProcessorStopReason {
+
+		/**
+		 * The processor retired itself: an automation through {@code STOP_AUTOMATION} from its
+		 * {@code onFailure}, a projector on a permanent projection failure. The {@code failure} on the
+		 * event says what.
+		 */
+		FAILURE,
+
+		/**
+		 * An operator stopped it — through {@code AutomationAdminCapability.stopAutomation} or
+		 * {@code ProcessorAdminCapability.stopProcessor} on that instance, or through a
+		 * {@code ManagementInstruction} that reached it. Nothing failed, so the event carries no
+		 * {@code failure}; a leader-only processor stopped this way hands its lease to another
+		 * instance exactly as a self-stopped one does.
+		 */
+		OPERATOR
+	}
+
+	/**
+	 * Emitted by an instance that a {@link org.sliceworkz.eventmodeling.management.ManagementInstruction}
+	 * addressed, saying what it did about it — once per instruction per addressed instance, and
+	 * never by an instance the instruction's target did not name, so a targeted instruction expects
+	 * exactly as many of these as instances it reached. It carries the instruction's correlation id
+	 * in its tracing tags, which is what matches an answer to its instruction; the instance it came
+	 * from is in the instance tags every kernel event carries.
+	 * <p>
+	 * An instruction issued while an instance was down is never answered by it: a context reads
+	 * instructions from the moment it starts. The absence of an answer is therefore the signal that
+	 * an instruction did not land, which is why the answer is emitted for every outcome including
+	 * {@link InstructionOutcome#NO_CHANGE}.
+	 *
+	 * @param boundedContext the context that handled the instruction
+	 * @param instruction the instruction's type, its record's simple name ({@code StopAutomation}, ...)
+	 * @param subject what it was about — the automation id, the {@code kind/name} of a processor, or
+	 *        the bounded context's name for an instruction about the whole context
+	 * @param outcome what happened
+	 * @param detail a sentence about it: the rejection's message, the failure's message, or {@code null}
+	 *        when the outcome says it all
+	 */
+	record InstructionHandled ( String boundedContext, String instruction, String subject, InstructionOutcome outcome, String detail ) implements BoundedContextEvent { }
+
+	/** What an instance did about a {@code ManagementInstruction} addressed to it. */
+	enum InstructionOutcome {
+
+		/** Done: the automation is stopped, the processor restarted, the context started. */
+		APPLIED,
+
+		/**
+		 * Nothing to do: the automation was already stopped, the processor already running, the
+		 * context already in the state asked for. Still answered, since an unanswered instruction
+		 * means it did not arrive.
+		 */
+		NO_CHANGE,
+
+		/**
+		 * The instruction named something this instance does not have — an automation or processor
+		 * that is not registered here. {@code detail} names what is. Not an error of the instance:
+		 * a target naming a whole context reaches instances deploying different slices, and each
+		 * answers for what it runs.
+		 */
+		REJECTED,
+
+		/** Applying it threw; {@code detail} carries the message and the instance's log the rest. */
+		FAILED
+	}
+
+	/**
+	 * Emitted by an instance answering a {@code ManagementInstruction.ReportStatus}: what its
+	 * automations and projector-driven processors are doing right now, exactly as
+	 * {@code AutomationAdminCapability.automations()} and {@code ProcessorAdminCapability.processors()}
+	 * report them locally. A snapshot, read without blocking the processors.
+	 *
+	 * @param boundedContext the context reporting
+	 * @param automations one status per automation registered on this instance
+	 * @param processors one status per read model projector, translator and dispatcher on this instance
+	 */
+	record InstanceStatusReported ( String boundedContext, List<AutomationStatus> automations, List<ProcessorStatus> processors ) implements BoundedContextEvent { }
 
 	/**
 	 * A feature slice descriptor: the slice name, its event-modeling {@link Type}, the

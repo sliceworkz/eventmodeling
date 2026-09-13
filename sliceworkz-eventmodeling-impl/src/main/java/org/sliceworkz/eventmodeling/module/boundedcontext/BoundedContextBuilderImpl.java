@@ -55,6 +55,8 @@ import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
 import org.sliceworkz.eventmodeling.module.automation.AutomationProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
+import org.sliceworkz.eventmodeling.module.management.ManagementModule;
+import org.sliceworkz.eventmodeling.management.ManagementInstruction;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateSpecificationImpl;
 import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
@@ -140,6 +142,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private FeaturesSpecificationImpl<C> featuresSpecification = new FeaturesSpecificationImpl<>(this);
 
 	private BoundedContextListener boundedContextListener = BoundedContextListener.NO_OP;
+	private EventStream<ManagementInstruction> managementInstructions;
 
 	private MeterRegistry meterRegistry = Metrics.globalRegistry;
 	private MeterOptions meterOptions = MeterOptions.defaults();
@@ -202,6 +205,15 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			throw new IllegalArgumentException("listener must not be null");
 		}
 		this.boundedContextListener = listener;
+		return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<C> management ( EventStream<ManagementInstruction> instructions ) {
+		if ( instructions == null ) {
+			throw new IllegalArgumentException("instructions stream must not be null");
+		}
+		this.managementInstructions = instructions;
 		return this;
 	}
 
@@ -618,6 +630,11 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		LeaderElector leaderElector = new LeaderElector(name, eventStorage, instance.process(),
 				leadershipPriority, leadershipHeartbeat, leadershipTtl, electables, eventEmitter);
 
+		// the operator's channel in, if one was given: subscribed by start(), released by terminate()
+		ManagementModule managementModule = managementInstructions == null
+				? null
+				: new ManagementModule(name, instance, managementInstructions, eventEmitter);
+
 		BoundedContextImpl bc =
 				new BoundedContextImpl(name, deployedFeatureSlices, undeployedFeatureSlices,
 						featuresSpecification.mustDeployCommands(),
@@ -625,7 +642,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
-						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, instance, meterRegistry, adapterRegistry);
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, managementModule, instance, meterRegistry, adapterRegistry);
 
 		// From here the context owns the modules, and it is the only thing that can release them
 		// completely: its constructor registered a JVM shutdown hook holding it, which only its own
@@ -637,6 +654,9 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		// this is only possible after creation
 		am.setCapabilitiesDelegate(bc);
 		im.setCapabilitiesDelegate(bc);
+		if ( managementModule != null ) {
+			managementModule.attach(bc);
+		}
 
 		C result;
 		if ( returnType.isInterface()) {

@@ -29,6 +29,7 @@ import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
+import org.sliceworkz.eventmodeling.management.ManagementInstruction;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
@@ -37,6 +38,7 @@ import org.sliceworkz.eventstore.MeterOptions;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingKeyStore;
 import org.sliceworkz.eventstore.spi.EventStorage;
+import org.sliceworkz.eventstore.stream.EventStream;
 
 import io.micrometer.core.instrument.MeterRegistry;
 
@@ -184,6 +186,48 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * @return this builder
 	 */
 	BoundedContextBuilder<C> listener ( BoundedContextListener listener );
+
+	/**
+	 * Subscribes this bounded context to a stream of
+	 * {@link org.sliceworkz.eventmodeling.management.ManagementInstruction}s: the channel by which an
+	 * operator — a dashboard, a script — stops and restarts this instance's automations and processors,
+	 * or the context as a whole, from outside the process. The counterpart of {@link #listener}: the
+	 * listener is how the context reports on itself to a store, this is how a store tells it what to do.
+	 * <pre>
+	 *   EventStream&lt;ManagementInstruction&gt; instructions = managementStore.getEventStream(
+	 *       ManagementInstruction.STREAM, ManagementInstruction.class);
+	 *   ...
+	 *   .listener(DashboardModule.monitoringListener(monitoringStore))
+	 *   .management(instructions)
+	 * </pre>
+	 * Every instance of the deployment subscribes to the same stream and reads every instruction;
+	 * the ones an instruction's {@code Target} names act on it through their own admin capabilities
+	 * ({@code AutomationAdminCapability}, {@code ProcessorAdminCapability}, {@code stop()}/{@code start()})
+	 * and answer with a {@link BoundedContextEvent.InstructionHandled} through the listener, so the
+	 * outcome lands next to everything else the instance reports. The others stay silent.
+	 * <p>
+	 * <strong>What the stream is, and is not.</strong> It is read from its head at {@code start()},
+	 * without a bookmark: instructions are things an operator did, not standing rules, and a process
+	 * coming up must not replay all of them. An instruction issued while this instance was down is
+	 * therefore not seen by it — visible from outside as the answer that never comes. The stream
+	 * keeps being read while the context is {@code stop()}ped (that is what lets a
+	 * {@code StartBoundedContext} bring it back) and is released by {@code terminate()}, which closes
+	 * it: hand the context a stream of its own rather than one something else subscribes to.
+	 * <p>
+	 * <strong>Whoever can append to that stream controls this instance.</strong> Nothing here
+	 * authenticates an instruction beyond the store having accepted it, so put the stream on a store
+	 * with the reach and the protection that implies — usually the monitoring store, which every
+	 * instance and the operator's tooling can already reach — and protect whatever appends to it as
+	 * you would a shell on the instance. Instructions are applied one at a time, in stream order, on
+	 * a thread of their own, so a slow one (starting a context waits for its ephemeral read models)
+	 * never blocks the store's notification path.
+	 * <p>
+	 * When none is registered the context reads no instructions and there is no overhead.
+	 *
+	 * @param instructions the stream to read instructions from; must not be {@code null}
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> management ( EventStream<ManagementInstruction> instructions );
 
 	/**
 	 * Declares the commands a feature slice contains, so that the slice reports them from the moment

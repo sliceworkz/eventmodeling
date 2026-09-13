@@ -167,7 +167,17 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 							boundedContext, name,
 							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
 							failure == null ? null : failure.getEventReference(),
-							eventEmitter.sliceFor(translator.getClass())));
+							eventEmitter.sliceFor(translator.getClass()),
+							BoundedContextEvent.ProcessorStopReason.FAILURE));
+				}
+			}
+
+			@Override
+			public void onStoppedByOperator ( ) {
+				if ( eventEmitter.enabled() ) {
+					eventEmitter.emit(new BoundedContextEvent.TranslatorStopped(
+							boundedContext, name, null, null, eventEmitter.sliceFor(translator.getClass()),
+							BoundedContextEvent.ProcessorStopReason.OPERATOR));
 				}
 			}
 		};
@@ -181,6 +191,11 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	/** Restarts a stopped translator processor — see {@code ProcessorAdminCapability.restartProcessor}. */
 	public boolean restartProcessor ( String name ) {
 		return admin.restart(name);
+	}
+
+	/** Stops a running translator processor — see {@code ProcessorAdminCapability.stopProcessor}. */
+	public boolean stopProcessor ( String name ) {
+		return admin.stop(name);
 	}
 
 	class TranslatorAdapter implements Projection<INBOUND_EVENT_TYPE> {

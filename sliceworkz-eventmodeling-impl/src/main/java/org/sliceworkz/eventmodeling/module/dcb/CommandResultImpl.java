@@ -25,6 +25,7 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
@@ -196,7 +197,7 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 						+ " is effectively at-least-once, so an unkeyed outbound event is a duplicate publication on the first retry."
 						+ " Key the event from the work item it publishes for (raiseEvent(event, tags, key), CommandResult.idempotencyKey(...),"
 						+ " or an externally provided key), or call forbidIdempotencyKey() to publish without de-duplication deliberately")
-							.formatted(commandName, event.data().getClass().getSimpleName()));
+							.formatted(commandName, EventType.of(event.data().getClass()).name()));
 			}
 		}
 	}

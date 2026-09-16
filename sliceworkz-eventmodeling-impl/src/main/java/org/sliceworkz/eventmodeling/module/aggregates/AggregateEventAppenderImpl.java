@@ -28,6 +28,7 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
@@ -82,7 +83,7 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 		// Record metrics for each raised domain event with tracing tags
 		String channel = (tracing != null && tracing.channel() != null) ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 		for (EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event : events) {
-			String eventName = event.data().getClass().getSimpleName();
+			String eventName = EventType.of(event.data().getClass()).name();
 			String cacheKey = eventName + ":" + channel;
 
 			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->

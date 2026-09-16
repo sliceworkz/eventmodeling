@@ -26,6 +26,7 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Sto
 import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
 import org.sliceworkz.eventstore.query.EventQuery;
 
@@ -80,7 +81,7 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN
 
 	@Override
 	public void when(Event<DOMAIN_EVENT_TYPE> eventWithMeta) {
-		String eventName = eventWithMeta.data().getClass().getSimpleName();
+		String eventName = EventType.of(eventWithMeta.data().getClass()).name();
 		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 		String cacheKey = readModelName + ":" + readModelType + ":" + eventName + ":" + channel;
 

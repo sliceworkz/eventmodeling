@@ -27,6 +27,7 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
+import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 
 import io.micrometer.core.instrument.Counter;
@@ -198,7 +199,7 @@ public final class BoundedContextEventEmitter {
 	 * suppressed.
 	 */
 	private void noteFailure ( BoundedContextEvent event, Exception failure ) {
-		String eventName = event.getClass().getSimpleName();
+		String eventName = EventType.of(event.getClass()).name();
 		failureCounters.computeIfAbsent(eventName, name -> meterRegistry.counter(FAILURE_METER,
 				io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", name))).increment();
 

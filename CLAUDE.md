@@ -534,6 +534,20 @@ processor:**
   the database a read model writes into, on one WARN line, with a bounded context restart as the only
   way back. The failure the eventstore taxonomy calls *possibly transient* is the common one, and it is
   precisely the one that self-heals if anyone retries
+- **A processor reads its event-store bookmark once, before its first execution, and the framework
+  says so itself rather than taking the eventstore's default.** The eventstore's bookmark builder
+  defaults to reading the bookmark before *each* execution, and a projector in that mode follows a
+  bookmark removed or rewound by hand: an absent bookmark resets its position to the start of the
+  stream and the next run replays everything. `ProjectorProcessor.createProjector` sets the
+  frequency on both branches — `readBeforeFirstExecution()` for a processor on the shared bookmark,
+  `readOnManualTriggerOnly()` for a `SelfBookmarkingProjection` whose bookmark is written and never
+  read — because the processor owns the bookmark it writes: it resumes from it at start and re-seeds
+  on promotion, and nothing else is meant to move it underneath a running processor. Left to the
+  default, an operator removing a bookmark to rebuild a read model, or the framework dropping an
+  `EPHEMERAL` one, would replay history into a read model that already holds it, with nothing to say
+  so; every other `Projector` the framework builds (live models, decision models, aggregates, the
+  management stream) has no reader, so the default is moot there. `ProjectorBookmarkReadOnceTest`
+  pins it: a bookmark removed under a running processor is not followed
 - **Retrying never skips an event, which is what makes it safe to do by default.** The eventstore's
   `Projector` rolls its cursor back to the start of a failed batch before throwing, and no bookmark is
   placed for it — so the next `run()` re-offers exactly those events. A retry has the same at-least-once
@@ -1263,6 +1277,12 @@ The framework supports the 4 Event Modeling patterns:
 **Events:**
 - Past-tense records (e.g., `AccountOpened`, `MoneyDeposited`)
 - Typically defined as sealed interfaces with record implementations
+- The stored type name is the record's simple name unless the record declares an eventstore
+  `@EventName`, which is the way out of a rename or of two contexts sharing a simple name in one
+  store. Everywhere the framework names an event — the `event` tag on its meters, the monitoring
+  events, its log lines — it resolves the name through `EventType.of(eventClass)`, never through
+  `getSimpleName()`, so what a dashboard shows for a command's raised events is the name the store
+  holds them under
 
 **Packages:**
 - Root: `org.sliceworkz.eventmodeling.*`

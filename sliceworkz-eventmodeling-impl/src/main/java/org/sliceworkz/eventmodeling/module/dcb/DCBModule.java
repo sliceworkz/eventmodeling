@@ -37,6 +37,7 @@ import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
@@ -181,7 +182,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			// Record metrics for each raised domain event
 			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 			for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : commandResult.raisedEvents()) {
-				String eventName = event.data().getClass().getSimpleName();
+				String eventName = EventType.of(event.data().getClass()).name();
 				String cacheKey = eventName + ":" + channel;
 				Counter eventCounter = domainEventCounters.computeIfAbsent(cacheKey, key ->
 					meterRegistry.counter("sliceworkz.eventmodeling.domain.event",

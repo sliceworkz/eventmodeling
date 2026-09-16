@@ -42,6 +42,7 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -193,7 +194,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 
 		@Override
 		public void when(Event<OUTBOUND_EVENT_TYPE> eventWithMeta) {
-			String eventName = eventWithMeta.data().getClass().getSimpleName();
+			String eventName = EventType.of(eventWithMeta.data().getClass()).name();
 			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 			String cacheKey = dispatcherName + ":" + eventName + ":" + channel;
 

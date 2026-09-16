@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.boundedcontext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
+import org.sliceworkz.eventstore.events.EventType;
 
 /**
  * A {@link BoundedContextListener} that logs every {@link BoundedContextEvent} via SLF4J on the
@@ -36,7 +37,7 @@ public class LoggingBoundedContextListener implements BoundedContextListener {
 	@Override
 	public void on ( EphemeralEvent<BoundedContextEvent> event ) {
 		LOGGER.info("log=boundedcontext type={} data={} tags={}",
-				event.data().getClass().getSimpleName(), event.data(), event.tags());
+				EventType.of(event.data().getClass()).name(), event.data(), event.tags());
 	}
 
 }

@@ -64,6 +64,7 @@ import org.sliceworkz.eventstore.shredding.SubjectErasureReport;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -476,7 +477,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing ) {
 		tracing = tracing.instance(instance);
-		String eventName = event.getClass().getSimpleName();
+		String eventName = EventType.of(event.getClass()).name();
 		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 		String cacheKey = eventName + ":" + channel;
 
@@ -517,7 +518,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
 		tracing = tracing.instance(instance);
-		String eventName = event.getClass().getSimpleName();
+		String eventName = EventType.of(event.getClass()).name();
 		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 		String cacheKey = eventName + ":" + channel;
 
@@ -537,7 +538,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public List<EventReference> translate(INBOUND_EVENT_TYPE event, Tracing tracing) {
 		tracing = tracing.instance(instance);
-		String eventName = event.getClass().getSimpleName();
+		String eventName = EventType.of(event.getClass()).name();
 		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 		String cacheKey = eventName + ":" + channel;
 

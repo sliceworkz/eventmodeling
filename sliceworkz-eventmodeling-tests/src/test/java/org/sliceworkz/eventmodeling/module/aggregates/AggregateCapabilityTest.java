@@ -273,7 +273,7 @@ class MockAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<MockA
 	}
 	
 	@Override
-	public void when(MockDomainEvent event) {
+	public void when ( Event<MockDomainEvent> event ) {
 		counterOnTopOfSnapshot++;
 		data.counter++;
 	}

@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.readmodels;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 public class ReadModelTest {
@@ -38,7 +39,7 @@ public class ReadModelTest {
 		}
 
 		@Override
-		public void when(Object event) {
+		public void when ( Event<Object> event ) {
 			
 		}
 		
@@ -57,7 +58,7 @@ public class ReadModelTest {
 		}
 
 		@Override
-		public void when(Object event) {
+		public void when ( Event<Object> event ) {
 			
 		}
 		

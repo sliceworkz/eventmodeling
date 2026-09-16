@@ -25,6 +25,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
@@ -47,9 +48,9 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 	}
 
 	@Override
-	public void when(BankingDomainEvent event) {
+	public void when ( Event<BankingDomainEvent> event ) {
 		
-		switch ( event ) {
+		switch ( event.data() ) {
 			case AccountOpened ao: 
 				this.account = AccountDetails.of(ao.accountId().value(), ao.customerId().value(), ao.date());  
 				break;

@@ -30,7 +30,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
  *
  * <p>Whether it is projected on every instance of the deployment or on a single elected leader is not
  * configured here either: it follows from the read model's own
- * {@link ReadModelWithMetaData#storage()}.
+ * {@link ReadModel#storage()}.
  *
  * <p><b>{@link #eventuallyConsistent()} has to be called.</b> {@code readmodel(...)} on its own
  * registers the read model but says nothing about how it is projected, and {@code build()} rejects
@@ -55,7 +55,7 @@ public interface EventuallyConsistentReadModelSpecification<C extends BoundedCon
 	 * costs nothing but looking at the state it holds.
 	 *
 	 * <p>What that state costs to keep, and how far behind it may be, follows from
-	 * {@link ReadModelWithMetaData#storage()}: {@code EPHEMERAL} is rebuilt from the stream at every
+	 * {@link ReadModel#storage()}: {@code EPHEMERAL} is rebuilt from the stream at every
 	 * process start (which {@code start()} waits for), {@code LOCAL} and {@code SHARED} resume from
 	 * their bookmark. Either way the answer lags the stream by up to a poll interval.
 	 *

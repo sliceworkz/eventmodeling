@@ -34,8 +34,8 @@ import org.sliceworkz.eventmodeling.events.Tracing;
  */
 public interface UnboundedReadModelCapability<DOMAIN_EVENT_TYPE> {
 
-	<T> T readUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params );
+	<T> T readUnbounded ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params );
 
-	<T> T readUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass,  Object... params );
+	<T> T readUnbounded ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass,  Object... params );
 
 }

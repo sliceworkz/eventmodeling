@@ -68,7 +68,7 @@ import org.sliceworkz.eventmodeling.module.snapshots.LiveModelSnapshotSpecificat
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
 import org.sliceworkz.eventmodeling.snapshots.LiveModelSnapshotSpecification;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
@@ -288,7 +288,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	@Override
-	public LiveModelSpecification<C> readmodel ( Class<? extends ReadModelWithMetaData<?>> readModelClass ) {
+	public LiveModelSpecification<C> readmodel ( Class<? extends ReadModel<?>> readModelClass ) {
 		var m = new LiveModelSpecificationImpl(this, readModelClass);
 		liveModelSpecs.add(m);
 		// A live model is instantiated per projection, so only its class is known here. That matches
@@ -298,7 +298,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	@Override
-	public EventuallyConsistentReadModelSpecification<C> readmodel ( ReadModelWithMetaData<?> readModel ) {
+	public EventuallyConsistentReadModelSpecification<C> readmodel ( ReadModel<?> readModel ) {
 		// A seed says where a *read* resumes projecting, and only the live path ever asks for one. An
 		// eventually consistent processor resumes from its bookmark (or from SelfBookmarkingProjection),
 		// so this registration would leave seed() never called and the read model silently ordinary.
@@ -601,7 +601,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		// how each of these is projected (every instance or a single leader) follows from the read
 		// model's own storage class, see ReadModelModule.createProjectorProcessors
-		Collection<ReadModelWithMetaData> eventuallyConsistentReadModels = eventuallyConsistentReadModelSpecs.stream().map(EventuallyConsistentReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		Collection<ReadModel> eventuallyConsistentReadModels = eventuallyConsistentReadModelSpecs.stream().map(EventuallyConsistentReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
 
 		// each module is recorded as soon as it exists, so a failure in the next one still finds it --
 		// see releasePartiallyBuilt
@@ -692,12 +692,12 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	public class LiveModelSpecificationImpl implements LiveModelSpecification<C>, LiveModelSpecificationAccessor {
 
 		private BoundedContextBuilder<C> builder;
-		private Class<? extends ReadModelWithMetaData<?>> readModelClass;
+		private Class<? extends ReadModel<?>> readModelClass;
 		private LiveModelSnapshotSpecificationImpl snapshotSpecification;
 		// whether the caller has said how this read model is projected -- see rejectReadModelsWithoutAChosenMode
 		private boolean modeChosen;
 
-		public LiveModelSpecificationImpl ( BoundedContextBuilder<C> builder, Class<? extends ReadModelWithMetaData<?>> readModelClass ) {
+		public LiveModelSpecificationImpl ( BoundedContextBuilder<C> builder, Class<? extends ReadModel<?>> readModelClass ) {
 			this.builder = builder;
 			this.readModelClass = readModelClass;
 		}
@@ -737,7 +737,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			return snapshotSpecification;
 		}
 
-		public Class<? extends ReadModelWithMetaData<?>> readModelClass ( ) {
+		public Class<? extends ReadModel<?>> readModelClass ( ) {
 			return readModelClass;
 		}
 
@@ -762,11 +762,11 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	public class EventuallyConsistentReadModelSpecificationImpl implements EventuallyConsistentReadModelSpecification<C> {
 
 		private BoundedContextBuilder<C> builder;
-		private ReadModelWithMetaData<?> readModel;
+		private ReadModel<?> readModel;
 		// whether the caller has said how this read model is projected -- see rejectReadModelsWithoutAChosenMode
 		private boolean modeChosen;
 
-		public EventuallyConsistentReadModelSpecificationImpl ( BoundedContextBuilder<C> builder, ReadModelWithMetaData<?> readModel ) {
+		public EventuallyConsistentReadModelSpecificationImpl ( BoundedContextBuilder<C> builder, ReadModel<?> readModel ) {
 			this.builder = builder;
 			this.readModel= readModel;
 		}
@@ -786,7 +786,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			return modeChosen;
 		}
 
-		public ReadModelWithMetaData<?> readModel ( ) {
+		public ReadModel<?> readModel ( ) {
 			return readModel;
 		}
 

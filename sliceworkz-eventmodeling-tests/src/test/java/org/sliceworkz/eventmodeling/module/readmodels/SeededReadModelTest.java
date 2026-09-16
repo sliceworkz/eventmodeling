@@ -337,7 +337,7 @@ class FullCounts implements ReadModel<MockDomainEvent> {
 	}
 
 	@Override
-	public void when ( MockDomainEvent event ) {
+	public void when ( Event<MockDomainEvent> event ) {
 		count++;
 	}
 

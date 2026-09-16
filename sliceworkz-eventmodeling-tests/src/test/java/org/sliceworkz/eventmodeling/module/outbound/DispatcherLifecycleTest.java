@@ -207,11 +207,11 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void when ( MockOutboundEvent event ) {
+		public void when ( Event<MockOutboundEvent> event ) {
 			if ( failing.get() ) {
 				throw new IllegalStateException("the external system this dispatcher publishes to is down");
 			}
-			published.add(((SomeOutboundEvent) event).someValue());
+			published.add(((SomeOutboundEvent) event.data()).someValue());
 		}
 
 		List<String> published ( ) {
@@ -228,8 +228,8 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void when ( MockOutboundEvent event ) {
-			throw new EventDeserializationException(EventType.of(event.getClass()), "this outbound event cannot be read");
+		public void when ( Event<MockOutboundEvent> event ) {
+			throw new EventDeserializationException(EventType.of(event.data().getClass()), "this outbound event cannot be read");
 		}
 	}
 

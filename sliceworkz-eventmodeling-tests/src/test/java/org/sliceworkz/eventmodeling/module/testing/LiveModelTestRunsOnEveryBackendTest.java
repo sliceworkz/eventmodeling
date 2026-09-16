@@ -25,7 +25,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDo
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.testing.LiveModelTest;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
@@ -42,7 +42,7 @@ import org.sliceworkz.eventstore.testing.ForEachBackend;
 public class LiveModelTestRunsOnEveryBackendTest extends LiveModelTest<MockDomainEvent, MockInboundEvent, MockOutboundEvent> {
 
 	@Override
-	public Class<? extends ReadModelWithMetaData<MockDomainEvent>> getLiveModelClass ( ) {
+	public Class<? extends ReadModel<MockDomainEvent>> getLiveModelClass ( ) {
 		return MockReadModel.class;
 	}
 

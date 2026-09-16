@@ -51,7 +51,7 @@ import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.management.ManagementModule;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.UnboundedReadModelCapability;
 import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.Slice;
@@ -366,22 +366,22 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 */
 
 	@Override
-	public <T> T read(Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params) {
+	public <T> T read(Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params) {
 		return readmodelModule.liveModel(readModelClass, tracing.instance(instance), params);
 	}
 
 	@Override
-	public <T> T read(Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... params) {
+	public <T> T read(Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... params) {
 		return readmodelModule.liveModel(readModelClass, Tracing.init(instance), params);
 	}
 
 	@Override
-	public <T> T readUnbounded(Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... params) {
+	public <T> T readUnbounded(Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... params) {
 		return readmodelModule.liveModelUnbounded(readModelClass, Tracing.init(instance), params);
 	}
 
 	@Override
-	public <T> T readUnbounded(Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params) {
+	public <T> T readUnbounded(Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params) {
 		return readmodelModule.liveModelUnbounded(readModelClass, tracing.instance(instance), params);
 	}
 

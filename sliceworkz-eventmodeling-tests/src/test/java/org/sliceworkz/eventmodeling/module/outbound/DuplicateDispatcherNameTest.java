@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
@@ -95,7 +96,7 @@ public class DuplicateDispatcherNameTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void when ( MockOutboundEvent event ) {
+		public void when ( Event<MockOutboundEvent> event ) {
 			// no-op for the test
 		}
 	}

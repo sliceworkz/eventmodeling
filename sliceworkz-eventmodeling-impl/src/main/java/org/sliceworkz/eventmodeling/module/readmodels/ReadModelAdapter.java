@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
@@ -36,7 +36,7 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 
 /**
- * Adapter that wraps a ReadModelWithMetaData and adds Micrometer monitoring for
+ * Adapter that wraps a ReadModel and adds Micrometer monitoring for
  * eventually consistent read model processing.
  *
  * Metrics recorded:
@@ -48,7 +48,7 @@ import io.micrometer.core.instrument.Timer;
  */
 class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN_EVENT_TYPE> {
 
-	private final ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel;
+	private final ReadModel<DOMAIN_EVENT_TYPE> readModel;
 	private final String boundedContext;
 	private final String readModelName;
 	private final String readModelType;
@@ -65,7 +65,7 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN
 	private Timer.Sample batchSample;
 	private final AtomicLong batchEventCount = new AtomicLong(0);
 
-	public ReadModelAdapter(ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel, String boundedContext, Storage storage, MeterRegistry meterRegistry, Tracing tracing) {
+	public ReadModelAdapter(ReadModel<DOMAIN_EVENT_TYPE> readModel, String boundedContext, Storage storage, MeterRegistry meterRegistry, Tracing tracing) {
 		this.readModel = readModel;
 		this.boundedContext = boundedContext;
 		this.readModelName = readModel.readmodelName();

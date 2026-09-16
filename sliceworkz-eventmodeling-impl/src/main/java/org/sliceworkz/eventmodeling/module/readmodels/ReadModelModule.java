@@ -45,7 +45,7 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Sto
 import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
 import org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
@@ -73,8 +73,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 	private EventSource<DOMAIN_EVENT_TYPE> domainEventStream;
 	private EventSource<Object> allInStorageEventStream;
-	private Map<Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>, LiveModelInfo<DOMAIN_EVENT_TYPE>> liveModels = new HashMap<>();
-	private Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels = new ArrayList<>();
+	private Map<Class<? extends ReadModel<DOMAIN_EVENT_TYPE>>, LiveModelInfo<DOMAIN_EVENT_TYPE>> liveModels = new HashMap<>();
+	private Collection<ReadModel<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels = new ArrayList<>();
 	private String boundedContext;
 	private Instance instance;
 
@@ -83,7 +83,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private ProjectorProcessorAdmin admin;
 
 	public record LiveModelInfo<DOMAIN_EVENT_TYPE> (
-			Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass,
+			Class<? extends ReadModel<DOMAIN_EVENT_TYPE>> readModelClass,
 			SnapshotStorage<Object> snapshotStorage,
 			boolean readSnapshots,
 			boolean writeSnapshots,
@@ -102,7 +102,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventSource<Object> allInStorageEventStream,
 			List<LMSI> liveModelSpecs,
-			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels,
+			Collection<ReadModel<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels,
 			Instance instance,
 			MeterRegistry meterRegistry,
 			BoundedContextEventEmitter eventEmitter
@@ -116,7 +116,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 		for ( LMSI spec : liveModelSpecs ) {
 			@SuppressWarnings("unchecked")
-			Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModelClass = (Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>>) (Class<?>) spec.readModelClass();
+			Class<? extends ReadModel<DOMAIN_EVENT_TYPE>> readModelClass = (Class<? extends ReadModel<DOMAIN_EVENT_TYPE>>) (Class<?>) spec.readModelClass();
 			if ( this.liveModels.containsKey(readModelClass) ) {
 				LOGGER.error("multiple live readmodels of type '%s' registered".formatted(readModelClass));
 				throw new IllegalArgumentException("duplicate live readmodel %s".formatted(readModelClass));
@@ -143,11 +143,11 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		// — see ProcessorNames for what a duplicate or an unstable one costs. Live models key no bookmark
 		// of their own, but they share the name space a read is addressed by, so they are reserved.
 		ProcessorNames names = ProcessorNames.of(ProcessorIdentification.TYPE_READMODEL);
-		for ( Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> liveClass : this.liveModels.keySet() ) {
+		for ( Class<? extends ReadModel<DOMAIN_EVENT_TYPE>> liveClass : this.liveModels.keySet() ) {
 			names.reserve(liveClass.getSimpleName());
 		}
 
-		for ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> eventuallyConsistentReadModel : eventuallyConsistentReadModels ) {
+		for ( ReadModel<DOMAIN_EVENT_TYPE> eventuallyConsistentReadModel : eventuallyConsistentReadModels ) {
 			names.claim(eventuallyConsistentReadModel, eventuallyConsistentReadModel.readmodelName());
 			this.eventuallyConsistentReadModels.add(eventuallyConsistentReadModel);
 		}
@@ -166,7 +166,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		return projectorProcessors.stream().filter(p -> p.configuredMode() == ProcessorMode.RUNNING_ON_SINGLE_LEADER).toList();
 	}
 
-	Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> createProjectorProcessors ( Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> readModels ) {
+	Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> createProjectorProcessors ( Collection<ReadModel<DOMAIN_EVENT_TYPE>> readModels ) {
 		Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> result = new ArrayList<>();
 
 		readModels.forEach(rm -> {
@@ -212,7 +212,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	 * the adapter is a metrics decorator around every read model alike and cannot answer for one of
 	 * them without answering for all.
 	 */
-	private static SelfBookmarkingProjection ownBookmarkOf ( ReadModelWithMetaData<?> readModel ) {
+	private static SelfBookmarkingProjection ownBookmarkOf ( ReadModel<?> readModel ) {
 		return readModel instanceof SelfBookmarkingProjection selfBookmarking ? selfBookmarking : null;
 	}
 
@@ -242,7 +242,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	 * accurate — including the full rebuild of an ephemeral read model on processor start (which spans
 	 * several query batches).
 	 */
-	private ProjectorProcessor.ProjectorListener ecProjectorListener ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> rm, Storage storage ) {
+	private ProjectorProcessor.ProjectorListener ecProjectorListener ( ReadModel<DOMAIN_EVENT_TYPE> rm, Storage storage ) {
 		// the projector runs on its own (system) thread, not on behalf of any user operation, so the
 		// events are emitted with kernel tracing (actor "system", no channel)
 		return new ProjectorProcessor.ProjectorListener() {
@@ -304,7 +304,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	}
 
 	@SuppressWarnings("unchecked")
-	public <T> T liveModel ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
+	public <T> T liveModel ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
 			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
@@ -322,7 +322,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	}
 
 	@SuppressWarnings("unchecked")
-	public <T> T liveModelUnbounded ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
+	public <T> T liveModelUnbounded ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
 			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
@@ -339,10 +339,10 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private ReadModelWithMetaData<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams ) {
+	private ReadModel<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams ) {
 		long start = System.currentTimeMillis();
 		try {
-			ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel = (ReadModelWithMetaData<DOMAIN_EVENT_TYPE>) selectConstructor(readModelClass, constructorParams).newInstance(constructorParams);
+			ReadModel<DOMAIN_EVENT_TYPE> readModel = (ReadModel<DOMAIN_EVENT_TYPE>) selectConstructor(readModelClass, constructorParams).newInstance(constructorParams);
 
 			EventReference lastEventReference = null;
 
@@ -392,7 +392,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	}
 
 	@SuppressWarnings("unchecked")
-	private void saveSnapshotIfNeeded ( ReadModelWithMetaData<DOMAIN_EVENT_TYPE> readModel, LiveModelInfo<DOMAIN_EVENT_TYPE> info, ProjectorMetrics projectorMetrics, Object[] constructorParams ) {
+	private void saveSnapshotIfNeeded ( ReadModel<DOMAIN_EVENT_TYPE> readModel, LiveModelInfo<DOMAIN_EVENT_TYPE> info, ProjectorMetrics projectorMetrics, Object[] constructorParams ) {
 		SnapshotStorage<Object> snapshotStorageForWrite = info.snapshotStorageForWrite();
 		if ( snapshotStorageForWrite != null
 				&& projectorMetrics.eventsStreamed() >= info.snapshotEventCountThreshold()

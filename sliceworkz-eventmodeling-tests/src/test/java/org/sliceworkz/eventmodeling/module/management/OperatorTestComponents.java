@@ -158,7 +158,7 @@ final class OperatorTestComponents {
 		}
 
 		@Override
-		public void when ( MockOutboundEvent event ) {
+		public void when ( Event<MockOutboundEvent> event ) {
 			// nothing to publish in these tests
 		}
 	}

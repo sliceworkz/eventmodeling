@@ -21,12 +21,12 @@ import java.util.Arrays;
 import java.util.function.Consumer;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Tags;
 
 public abstract class LiveModelTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> extends AbstractBoundedContextTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 	
-	public abstract Class<? extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> getLiveModelClass ( );
+	public abstract Class<? extends ReadModel<DOMAIN_EVENT_TYPE>> getLiveModelClass ( );
 	
 	@Override
 	public void configure ( BoundedContextBuilder<?> boundedContextBuilder ) {

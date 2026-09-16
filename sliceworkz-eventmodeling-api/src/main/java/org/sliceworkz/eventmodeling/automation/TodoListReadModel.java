@@ -20,11 +20,11 @@ package org.sliceworkz.eventmodeling.automation;
 import java.util.Optional;
 import java.util.stream.Stream;
 
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.Limit;
 
-public interface TodoListReadModel<EVENT_TYPE, TODO_ITEM_TYPE> extends ReadModelWithMetaData<EVENT_TYPE> {
+public interface TodoListReadModel<EVENT_TYPE, TODO_ITEM_TYPE> extends ReadModel<EVENT_TYPE> {
 
 	/**
 	 * The outstanding work, oldest first, at most {@code limit} items.

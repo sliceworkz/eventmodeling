@@ -262,7 +262,7 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void when(MockDomainEvent event) {
+		public void when ( Event<MockDomainEvent> event ) {
 			counter++;
 		}
 

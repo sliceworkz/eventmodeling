@@ -32,6 +32,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthClosed;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthOpened;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
@@ -81,8 +82,8 @@ public class MonthStatementReadModel implements ReadModel<BankingEvent> {
 	}
 
 	@Override
-	public void when(BankingEvent event) {
-		switch (event) {
+	public void when ( Event<BankingEvent> event ) {
+		switch ( event.data() ) {
 			case AccountOpened ao -> {
 				// Only seen if this is the first month (opening month matches)
 				openingBalance = BigDecimal.ZERO;

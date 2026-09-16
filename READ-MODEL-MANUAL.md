@@ -99,8 +99,8 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
     }
 
     @Override
-    public void when ( BankingDomainEvent event ) {
-        switch ( event ) {
+    public void when ( Event<BankingDomainEvent> event ) {
+        switch ( event.data() ) {
             case AccountOpened ao -> this.account = AccountDetails.of(...);
             default -> { }
         }
@@ -125,9 +125,11 @@ Three things to internalise here, because everything later builds on them:
 - **Constructor parameters are the read's parameters.** `bc.read(X.class, a, b)` picks the
   constructor with a matching parameter count. This is what scopes the model to one entity — and
   what scopes its `eventQuery()`.
-- **`ReadModel` hides event metadata; `ReadModelWithMetaData` exposes it.** Start with `ReadModel`
-  (`when(D event)` — just the data); switch to the metadata variant when you need tags, timestamps or
-  the event reference.
+- **Every event arrives with its metadata, and the domain event is `event.data()`.** There is one
+  `when`, taking the `Event`: switch on `event.data()` for the domain event, and read the tags, the
+  timestamp or the reference off the same argument when a projection needs them. There is no
+  second read model interface that hides the metadata — see the eventstore's `EventHandler` for
+  why one `when` is the whole contract.
 
 **The one rule of live models: the replay must be bounded by design.** A live model scoped by tag to
 one entity with a short life is perfect. One that replays an unbounded, ever-growing set is correct

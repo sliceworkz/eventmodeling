@@ -26,6 +26,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.*;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
@@ -72,8 +73,8 @@ public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 	}
 
 	@Override
-	public void when(BankingEvent event) {
-		switch (event) {
+	public void when ( Event<BankingEvent> event ) {
+		switch ( event.data() ) {
 			case AccountOpened ao -> {
 				activeMonth = ao.initialMonth();
 				balance = BigDecimal.ZERO;

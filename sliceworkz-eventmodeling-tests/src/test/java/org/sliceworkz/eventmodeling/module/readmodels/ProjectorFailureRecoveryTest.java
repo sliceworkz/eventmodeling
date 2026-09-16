@@ -43,8 +43,8 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
 import org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
@@ -278,11 +278,11 @@ public class ProjectorFailureRecoveryTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void when ( MockDomainEvent event ) {
+		public void when ( Event<MockDomainEvent> event ) {
 			if ( failing.get() ) {
 				throw new IllegalStateException("the database this read model writes into is down");
 			}
-			applied.add(((FirstDomainEvent) event).value());
+			applied.add(((FirstDomainEvent) event.data()).value());
 		}
 
 		List<String> applied ( ) {
@@ -295,7 +295,7 @@ public class ProjectorFailureRecoveryTest extends AbstractMockDomainTest {
 	 * {@code afterBatch} commits — and can fail, which must take the whole batch with it so the retry
 	 * re-offers every event of it.
 	 */
-	static class CommittingReadModel implements ReadModelWithMetaData<MockDomainEvent>, BatchAwareProjection<MockDomainEvent> {
+	static class CommittingReadModel implements ReadModel<MockDomainEvent>, BatchAwareProjection<MockDomainEvent> {
 
 		final AtomicBoolean failNextCommit = new AtomicBoolean();
 		private final String name;
@@ -355,7 +355,7 @@ public class ProjectorFailureRecoveryTest extends AbstractMockDomainTest {
 	 * construction — and then fails, which is what a promotion's reseed looks like while the read
 	 * model's database is down.
 	 */
-	static class ReseedFailingReadModel implements ReadModelWithMetaData<MockDomainEvent>, SelfBookmarkingProjection {
+	static class ReseedFailingReadModel implements ReadModel<MockDomainEvent>, SelfBookmarkingProjection {
 
 		final AtomicInteger resumeFromCalls = new AtomicInteger();
 		private final String name;

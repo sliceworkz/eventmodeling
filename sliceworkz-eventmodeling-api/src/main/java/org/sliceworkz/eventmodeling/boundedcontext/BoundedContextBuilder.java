@@ -33,7 +33,7 @@ import org.sliceworkz.eventmodeling.management.ManagementInstruction;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.MeterOptions;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingKeyStore;
@@ -267,9 +267,9 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
 	AggregateSpecification<C> aggregate(Class<? extends Aggregate<?>> aggregateClass);
 
-	LiveModelSpecification<C> readmodel(Class<? extends ReadModelWithMetaData<?>> readModelClass);
+	LiveModelSpecification<C> readmodel(Class<? extends ReadModel<?>> readModelClass);
 
-	EventuallyConsistentReadModelSpecification<C> readmodel(ReadModelWithMetaData<?> readModel);
+	EventuallyConsistentReadModelSpecification<C> readmodel(ReadModel<?> readModel);
 
 	BoundedContextBuilder<C> automation(Automation<?,?,?> automation);
 

@@ -38,7 +38,7 @@ import org.sliceworkz.eventstore.events.EventReference;
  * its class' simple name, and names key bookmarks and leases, so every automation needs its own), with
  * its own todo list projecting a disjoint share of the items — one todo list class can serve all of
  * them under different names via
- * {@link org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData#readmodelName()}. Each then
+ * {@link org.sliceworkz.eventmodeling.readmodels.ReadModel#readmodelName()}. Each then
  * processes on its own thread, under its own lease, so the partitions proceed in parallel and a
  * deployment may even spread them over different instances. The partition must be stable — an item,
  * and everything that must stay ordered with it (derive the partition from something like a customer

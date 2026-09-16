@@ -48,7 +48,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -550,7 +550,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	 * carries the same class name and so contends for the same lease. Applications are counted
 	 * statically, across instances, like {@link SharedApplyLog}.
 	 */
-	static class FlakyApplyLog implements ReadModelWithMetaData<MockDomainEvent> {
+	static class FlakyApplyLog implements ReadModel<MockDomainEvent> {
 
 		private static final Map<String,AtomicInteger> APPLICATIONS = new ConcurrentHashMap<>();
 
@@ -598,7 +598,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	 * an {@code EventDeserializationException}, identical on every retry — which retires its projector
 	 * outright instead of backing off.
 	 */
-	static class PoisonApplyLog implements ReadModelWithMetaData<MockDomainEvent> {
+	static class PoisonApplyLog implements ReadModel<MockDomainEvent> {
 
 		private static final Map<String,AtomicInteger> APPLICATIONS = new ConcurrentHashMap<>();
 
@@ -689,7 +689,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	 * instance, which is the point: SHARED means one storage all instances write, so a double
 	 * application anywhere shows up here.
 	 */
-	static class SharedApplyLog implements ReadModelWithMetaData<MockDomainEvent> {
+	static class SharedApplyLog implements ReadModel<MockDomainEvent> {
 
 		private static final Map<String,AtomicInteger> APPLICATIONS = new ConcurrentHashMap<>();
 

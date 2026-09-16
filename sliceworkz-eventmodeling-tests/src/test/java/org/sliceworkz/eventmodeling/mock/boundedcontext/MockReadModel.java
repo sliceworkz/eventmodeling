@@ -21,6 +21,7 @@ import java.util.List;
 
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
@@ -67,7 +68,7 @@ public class MockReadModel implements ReadModel<MockDomainEvent> {
 	}
 
 	@Override
-	public synchronized void when(MockDomainEvent event) {
+	public synchronized void when(Event<MockDomainEvent> event) {
 		eventCount++;
 		
 		Integer current = eventCountPerThread.get();

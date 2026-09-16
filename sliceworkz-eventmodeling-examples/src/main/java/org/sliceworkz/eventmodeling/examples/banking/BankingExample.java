@@ -77,7 +77,7 @@ public class BankingExample {
 		 * logged). Pass a StreamAppendingBoundedContextListener instead to persist them to a stream.
 		 * So at this point the event store is still empty.
 		 */
-		eventStore.getEventStream(EventStreamId.anyContext()).query(EventQuery.matchAll()).forEach(System.out::println);
+		eventStore.getRawEventStream(EventStreamId.anyContext()).query(EventQuery.matchAll()).forEach(System.out::println);
 		
 		/*
 		 * Register a Subscriber on all event updates that justs prints out what has been added to the eventlog 
@@ -89,7 +89,7 @@ public class BankingExample {
 					
 					@Override
 					public EventReference eventsAppended(EventReference atLeastUntil) {
-						List<Event<BankingDomainEvent>> events = eventStream.query(EventQuery.matchAll(), lastSeen).toList();
+						List<Event<BankingDomainEvent>> events = eventStream.query(EventQuery.matchAll(), lastSeen);
 						events.forEach(System.out::println);
 						if ( events.size() > 0 ) {
 							lastSeen = events.getLast().reference();
@@ -104,7 +104,7 @@ public class BankingExample {
 		Optional<EventReference> ref = bc.execute(new OpenAccountCommand(BankingDomain.CUSTOMER.newId()));
 		
 		// Go fetch the AccountOpened Event that should have been raised by the OpenAccountCommmand
-		AccountOpened ao = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none()))
+		AccountOpened ao = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none())).stream()
 			.filter(e -> e.reference().id().equals(ref.get().id()))
 			.map(Event::data)
 			.map(e -> (AccountOpened) e)

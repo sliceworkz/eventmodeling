@@ -213,7 +213,7 @@ public class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecut
 	}
 
 	private List<PaymentsDomainEvent> domainEvents ( ) {
-		return domainStream().query(EventQuery.matchAll()).map(Event::data).toList();
+		return domainStream().query(EventQuery.matchAll()).stream().map(Event::data).toList();
 	}
 
 	/** Guards the deterministic gateway reference the assertions above rely on. */

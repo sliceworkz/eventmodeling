@@ -81,11 +81,11 @@ public class OutboundCommandGuardsTest extends AbstractMockDomainTest {
 	}
 
 	private List<? extends Event<MockDomainEvent>> domainEvents() {
-		return domainStream.query(EventQuery.matchAll()).toList();
+		return domainStream.query(EventQuery.matchAll());
 	}
 
 	private List<? extends Event<MockOutboundEvent>> outboundEvents() {
-		return outboundStream.query(EventQuery.matchAll()).toList();
+		return outboundStream.query(EventQuery.matchAll());
 	}
 
 	private AutomationContext<MockDomainEvent, MockOutboundEvent> automationContext(Mock domain) {

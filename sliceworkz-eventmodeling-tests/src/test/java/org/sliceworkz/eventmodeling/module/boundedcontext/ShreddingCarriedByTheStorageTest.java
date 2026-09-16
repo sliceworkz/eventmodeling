@@ -120,6 +120,6 @@ public class ShreddingCarriedByTheStorageTest {
 	private static ShreddingDomainEvent.TransferMade transfer ( EventStore reader ) {
 		return (ShreddingDomainEvent.TransferMade) reader
 				.getEventStream(EventStreamId.forContext("ShreddingFromStorage").withPurpose("domain"), ShreddingDomainEvent.class)
-				.query(EventQuery.matchAll()).findFirst().orElseThrow().data();
+				.query(EventQuery.matchAll()).stream().findFirst().orElseThrow().data();
 	}
 }

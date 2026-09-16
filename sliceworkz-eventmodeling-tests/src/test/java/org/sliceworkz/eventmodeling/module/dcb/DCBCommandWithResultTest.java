@@ -70,7 +70,7 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 	}
 
 	private long countDomainEvents() {
-		return directStream.query(EventQuery.matchAll()).toList().size();
+		return directStream.query(EventQuery.matchAll()).size();
 	}
 
 	// ════════════════════════════════════════════════════════════════════

@@ -149,7 +149,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 		try ( EventStore store = EventStoreFactory.get().eventStore(eventStorage()) ) {
 			var stored = store
 					.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class)
-					.query(EventQuery.matchAll()).toList();
+					.query(EventQuery.matchAll());
 			assertEquals(1, stored.size(), "the domain event must be durably appended: " + stored);
 			assertEquals(new FirstDomainEvent("x"), stored.get(0).data());
 		}

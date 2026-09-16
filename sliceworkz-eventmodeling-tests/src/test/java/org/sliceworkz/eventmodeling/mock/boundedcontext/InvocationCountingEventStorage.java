@@ -21,13 +21,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 import org.sliceworkz.eventstore.events.Bookmark;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -42,11 +41,11 @@ public class InvocationCountingEventStorage implements EventStorage {
 
 	private int heads = 0;
 
-	private final List<EventQuery> queriesSeen = new ArrayList<>();
+	private final List<EventFilter> queriesSeen = new ArrayList<>();
 
 	private AppendCriteria lastAppendCriteria;
 
-	private Predicate<EventQuery> afterQueryMatching;
+	private Predicate<EventFilter> afterQueryMatching;
 
 	private Runnable afterQueryHook;
 
@@ -66,7 +65,7 @@ public class InvocationCountingEventStorage implements EventStorage {
 	}
 
 	/** Every query issued, in order, so a test can assert on the shape a read was made with. */
-	public List<EventQuery> queriesSeen ( ) {
+	public List<EventFilter> queriesSeen ( ) {
 		return List.copyOf(queriesSeen);
 	}
 
@@ -81,7 +80,7 @@ public class InvocationCountingEventStorage implements EventStorage {
 	 * command: the storage's query is eager, so by the time the hook runs the read it follows is done
 	 * and the read after it has not started.
 	 */
-	public void afterQuery ( Predicate<EventQuery> which, Runnable hook ) {
+	public void afterQuery ( Predicate<EventFilter> which, Runnable hook ) {
 		this.afterQueryMatching = which;
 		this.afterQueryHook = hook;
 	}
@@ -117,11 +116,11 @@ public class InvocationCountingEventStorage implements EventStorage {
 	}
 
 	@Override
-	public Stream<StoredEvent> query(EventQuery query, Optional<EventStreamId> stream, EventReference from, Limit limit, QueryDirection queryDirection) {
+	public List<StoredEvent> query(EventFilter filter, EventStreamId stream, EventReference from, Limit limit, QueryDirection queryDirection) {
 		queries++;
-		queriesSeen.add(query);
-		Stream<StoredEvent> result = wrapped.query(query, stream, from, limit, queryDirection);
-		if ( afterQueryHook != null && afterQueryMatching.test(query) ) {
+		queriesSeen.add(filter);
+		List<StoredEvent> result = wrapped.query(filter, stream, from, limit, queryDirection);
+		if ( afterQueryHook != null && afterQueryMatching.test(filter) ) {
 			Runnable hook = afterQueryHook;
 			afterQueryHook = null;
 			afterQueryMatching = null;
@@ -136,13 +135,13 @@ public class InvocationCountingEventStorage implements EventStorage {
 	 * the same reason the store meters them apart.
 	 */
 	@Override
-	public Optional<EventReference> head ( Optional<EventStreamId> stream ) {
+	public Optional<EventReference> head ( EventStreamId stream ) {
 		heads++;
 		return wrapped.head(stream);
 	}
 
 	@Override
-	public List<StoredEvent> append(AppendCriteria appendCriteria, Optional<EventStreamId> stream, List<EventToStore> events) {
+	public List<StoredEvent> append(AppendCriteria appendCriteria, EventStreamId stream, List<EventToStore> events) {
 		if ( appendFailure != null ) {
 			throw appendFailure;
 		}

@@ -83,6 +83,7 @@ import org.sliceworkz.eventstore.shredding.AesGcmShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingKeyStore;
 import org.sliceworkz.eventstore.spi.EventStorage;
+import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
@@ -538,7 +539,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	private C assemble ( Class<?> returnType, EventStore eventStore, List<LifecycleCapability> constructed ) {
 
-		EventStream<Object> readAllInStoreEventStream;
+		EventSource<Object> readAllInStoreEventStream;
 		EventStream domainEventStream;
 		EventStream inboundEventStream;
 		EventStream outboundEventStream;
@@ -552,7 +553,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		outboundEventStream = historicalOutboundEventRootType != null
 			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OUTBOUND), outboundEventRootType, historicalOutboundEventRootType)
 			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OUTBOUND), outboundEventRootType);
-		readAllInStoreEventStream = eventStore.getEventStream(EventStreamId.anyContext().anyPurpose());
+		readAllInStoreEventStream = eventStore.getRawEventStream(EventStreamId.anyContext().anyPurpose());
 
 		List<Slice<C>> deployedFeatureSlices = Collections.emptyList();
 		List<Slice<C>> undeployedFeatureSlices = Collections.emptyList();

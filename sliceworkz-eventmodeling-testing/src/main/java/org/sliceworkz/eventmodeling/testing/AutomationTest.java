@@ -243,8 +243,8 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 				todoListProjector.run();
 			}
 
-			EventReference domainBookmark = lastReferenceOf(domainStream().query(EventQuery.matchAll()).map(Event::reference).toList());
-			EventReference outboundBookmark = lastReferenceOf(outboundStream().query(EventQuery.matchAll()).map(Event::reference).toList());
+			EventReference domainBookmark = domainStream().head().orElse(null);
+			EventReference outboundBookmark = outboundStream().head().orElse(null);
 
 			AutomationBatch.Outcome outcome = AutomationBatch.handleBatch(
 					automation, automationContexts(), AutomationBatch.batchSizeOf(automation),
@@ -254,14 +254,11 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 				automationStopped = true;
 			}
 
-			List<Event<DOMAIN_EVENT_TYPE>> newDomainEvents = domainStream().query(EventQuery.matchAll(), domainBookmark, Limit.none()).toList();
-			List<Event<OUTBOUND_EVENT_TYPE>> newOutboundEvents = outboundStream().query(EventQuery.matchAll(), outboundBookmark, Limit.none()).toList();
+			List<Event<DOMAIN_EVENT_TYPE>> newDomainEvents = domainStream().query(EventQuery.matchAll(), domainBookmark);
+			List<Event<OUTBOUND_EVENT_TYPE>> newOutboundEvents = outboundStream().query(EventQuery.matchAll(), outboundBookmark);
 			return new BatchResult(this, outcome, newDomainEvents, newOutboundEvents);
 		}
 
-		private EventReference lastReferenceOf ( List<EventReference> references ) {
-			return references.isEmpty() ? null : references.get(references.size() - 1);
-		}
 	}
 
 	/**

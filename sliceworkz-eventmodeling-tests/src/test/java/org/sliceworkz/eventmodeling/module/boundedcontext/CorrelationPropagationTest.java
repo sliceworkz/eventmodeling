@@ -21,7 +21,6 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -186,11 +185,11 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 	}
 
 	private List<? extends Event<MockDomainEvent>> domainEvents ( ) {
-		return domainStream.query(EventQuery.matchAll()).toList();
+		return domainStream.query(EventQuery.matchAll());
 	}
 
 	private List<? extends Event<MockDomainEvent>> stored ( Class<? extends MockDomainEvent> type ) {
-		return domainStream.query(EventQuery.forEvents(EventTypesFilter.of(type), Tags.none())).toList();
+		return domainStream.query(EventQuery.forEvents(EventTypesFilter.of(type), Tags.none()));
 	}
 
 	private BoundedContextBuilder<Mock> baseBuilder ( ) {

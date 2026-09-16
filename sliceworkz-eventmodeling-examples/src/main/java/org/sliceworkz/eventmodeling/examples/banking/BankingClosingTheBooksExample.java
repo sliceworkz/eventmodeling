@@ -133,7 +133,7 @@ public class BankingClosingTheBooksExample {
 		Optional<EventReference> ref = bc.execute(new OpenBankAccountCommand(customerId, january));
 
 		// Retrieve the AccountOpened event to get the generated accountId
-		AccountOpened accountOpened = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none()))
+		AccountOpened accountOpened = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none())).stream()
 			.filter(e -> e.reference().id().equals(ref.get().id()))
 			.map(Event::data)
 			.map(e -> (AccountOpened) e)

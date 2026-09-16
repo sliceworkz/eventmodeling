@@ -24,7 +24,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
@@ -41,6 +40,7 @@ import org.sliceworkz.eventstore.events.Bookmark;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
@@ -134,12 +134,12 @@ public class FailedBuildReleasesWhatItBuiltTest extends AbstractMockDomainTest {
 		@Override public void close ( ) { wrapped.close(); }
 
 		@Override
-		public Stream<StoredEvent> query ( EventQuery query, Optional<EventStreamId> stream, EventReference from, Limit limit, QueryDirection direction ) {
-			return wrapped.query(query, stream, from, limit, direction);
+		public List<StoredEvent> query ( EventFilter filter, EventStreamId stream, EventReference from, Limit limit, QueryDirection direction ) {
+			return wrapped.query(filter, stream, from, limit, direction);
 		}
 
 		@Override
-		public List<StoredEvent> append ( AppendCriteria criteria, Optional<EventStreamId> stream, List<EventToStore> events ) {
+		public List<StoredEvent> append ( AppendCriteria criteria, EventStreamId stream, List<EventToStore> events ) {
 			return wrapped.append(criteria, stream, events);
 		}
 

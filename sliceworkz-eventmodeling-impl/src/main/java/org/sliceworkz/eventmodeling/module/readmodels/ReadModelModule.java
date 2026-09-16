@@ -100,7 +100,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	public <LMSI extends LiveModelSpecificationAccessor> ReadModelModule (
 			String boundedContext,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
-			EventStream<Object> allInStorageEventStream,
+			EventSource<Object> allInStorageEventStream,
 			List<LMSI> liveModelSpecs,
 			Collection<ReadModelWithMetaData<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels,
 			Instance instance,

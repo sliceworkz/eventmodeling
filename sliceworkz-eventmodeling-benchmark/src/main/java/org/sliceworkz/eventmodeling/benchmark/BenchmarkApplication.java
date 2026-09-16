@@ -41,7 +41,7 @@ import org.sliceworkz.eventstore.infra.postgres.DatabaseInitMode;
 import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorage;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.spi.EventStorage;
-import org.sliceworkz.eventstore.stream.EventStream;
+import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
 import io.javalin.Javalin;
@@ -115,7 +115,7 @@ public class BenchmarkApplication {
 		// a second store on the same storage, for the progress queries below -- named so it can be
 		// closed at the end, since the bounded context only closes the store it built itself
 		EventStore progressEventStore = EventStoreFactory.get().eventStore(eventStorage);
-		EventStream<Object> domainStream = progressEventStore.getEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("domain"));
+		EventSource<Object> domainStream = progressEventStore.getRawEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("domain"));
 
 
 		ExecutorService executor = Executors.newFixedThreadPool(PARALLEL_PRODUCERS);
@@ -140,7 +140,7 @@ public class BenchmarkApplication {
 		
 		while ( !executor.isTerminated() ) {
 			System.err.println("events ingested  : %d".formatted(orderNumbering.get()));
-			long totalEvents = domainStream.query(EventQuery.matchAll().backwards().limit(1)).map(Event::reference).map(EventReference::position).findFirst().orElse(Long.valueOf(0));
+			long totalEvents = domainStream.head().map(EventReference::position).orElse(0L);
 			System.err.println("total events     : %d / %d".formatted(totalEvents, TOTAL_EVENTS_EXPECTED));
 			executor.awaitTermination(5, TimeUnit.SECONDS);
 		}
@@ -150,9 +150,9 @@ public class BenchmarkApplication {
 
 		long totalEvents = 0;
 		while ( totalEvents < TOTAL_EVENTS_EXPECTED ) {
-			totalEvents = domainStream.query(EventQuery.matchAll().backwards().limit(1)).findFirst().get().reference().position();
-//			int eventsDomain = domainStream.query(EventQuery.matchAll()).toList().size();
-//			eventsOutbound = outboundStream.query(EventQuery.matchAll()).toList().size();
+			totalEvents = domainStream.head().orElseThrow().position();
+//			int eventsDomain = domainStream.query(EventQuery.matchAll()).size();
+//			eventsOutbound = outboundStream.query(EventQuery.matchAll()).size();
 //			System.err.println("events in domain : %d".formatted(eventsDomain));
 //			System.err.println("events outbound  : %d".formatted(eventsOutbound));
 			System.err.println("total events     : %d / %d".formatted(totalEvents, TOTAL_EVENTS_EXPECTED));
@@ -161,8 +161,8 @@ public class BenchmarkApplication {
 		
 		Instant done = Instant.now();
 		
-//		int eventsDomain = domainStream.query(EventQuery.matchAll()).toList().size();
-//		eventsOutbound = outboundStream.query(EventQuery.matchAll()).toList().size();
+//		int eventsDomain = domainStream.query(EventQuery.matchAll()).size();
+//		eventsOutbound = outboundStream.query(EventQuery.matchAll()).size();
 //		System.err.println("DONE events in domain : %d".formatted(eventsDomain));
 //		System.err.println("DONE events outbound  : %d".formatted(eventsOutbound));
 

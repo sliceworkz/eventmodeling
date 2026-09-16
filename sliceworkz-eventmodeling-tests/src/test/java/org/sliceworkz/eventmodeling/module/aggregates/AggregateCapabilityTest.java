@@ -56,7 +56,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 	@ForEachBackend
 	void testAggregate ( ) {
 		
-		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage()).getEventStream(EventStreamId.anyContext().withPurpose("domain"));
+		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage()).getEventStream(EventStreamId.anyContext().withPurpose("domain"), MockDomainEvent.class);
 		
 		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 0);
 		
@@ -70,7 +70,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		
 		bo123.doSomething();
 		
-		List<? extends Event<MockDomainEvent>> all = allStream.query(EventQuery.matchAll()).toList();
+		List<? extends Event<MockDomainEvent>> all = allStream.query(EventQuery.matchAll());
 		assertEquals(1, all.size());
 		assertTrue(all.get(0).tags().containsAll(Tags.of("businessObject", "123")));
 		
@@ -118,14 +118,14 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 	@ForEachBackend
 	void testAggregateRaisingSeveralEventsAtOnce ( ) {
 
-		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage()).getEventStream(EventStreamId.anyContext().withPurpose("domain"));
+		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage()).getEventStream(EventStreamId.anyContext().withPurpose("domain"), MockDomainEvent.class);
 
 		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 0);
 
 		MockAggregate bo = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
 		bo.doThreeThings();
 
-		List<? extends Event<MockDomainEvent>> all = allStream.query(EventQuery.matchAll()).toList();
+		List<? extends Event<MockDomainEvent>> all = allStream.query(EventQuery.matchAll());
 		assertEquals(3, all.size(), "all three raised events should have been appended");
 		all.forEach(event -> assertTrue(event.tags().containsAll(Tags.of("businessObject", "123"))));
 
@@ -134,7 +134,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		// and the appender's lock reference moved with them, so the same instance can carry on
 		bo.doSomething();
 		assertEquals(4, bo.getCounter());
-		assertEquals(4, allStream.query(EventQuery.matchAll()).toList().size());
+		assertEquals(4, allStream.query(EventQuery.matchAll()).size());
 	}
 
 	@ForEachBackend

@@ -33,7 +33,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.Limit;
 
 public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> extends AbstractBoundedContextTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 	
@@ -92,10 +91,9 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 
 		public TestDefinition when ( Command<DOMAIN_EVENT_TYPE> command ) {
 			try {
-				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), null, Limit.none()).reduce((first, second)->second).map(Event::reference).orElse(null);
+				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
 				kernel().execute(command);
-				@SuppressWarnings("unchecked")
-				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark, Limit.none()).map(e->(Event<DOMAIN_EVENT_TYPE>)e).toList();
+				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark);
 				this.result = new TestResultImpl ( newEvents );
 			} catch (Exception exception) {
 				this.result = new TestResultImpl ( exception );
@@ -105,10 +103,9 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 
 		public <RESPONSE_TYPE> TestDefinition when ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command ) {
 			try {
-				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), null, Limit.none()).reduce((first, second)->second).map(Event::reference).orElse(null);
+				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
 				CommandExecutionResult<RESPONSE_TYPE> executionResult = kernel().execute(command);
-				@SuppressWarnings("unchecked")
-				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark, Limit.none()).map(e->(Event<DOMAIN_EVENT_TYPE>)e).toList();
+				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark);
 				this.result = new TestResultWithResponseImpl<> ( newEvents, executionResult.response() );
 			} catch (Exception exception) {
 				this.result = new TestResultImpl ( exception );

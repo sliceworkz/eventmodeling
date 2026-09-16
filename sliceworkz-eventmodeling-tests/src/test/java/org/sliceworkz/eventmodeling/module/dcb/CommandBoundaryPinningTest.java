@@ -44,6 +44,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
@@ -255,9 +256,9 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 
 		domain.execute(decideOnFirstsAndSeconds());
 
-		List<EventQuery> reads = countingStorage.queriesSeen().stream().filter(q -> !q.isMatchAll()).toList();
+		List<EventFilter> reads = countingStorage.queriesSeen().stream().filter(q -> !q.isMatchAll()).toList();
 		assertTrue(reads.size() >= 3, "expected the plain read, the savepoint read and the savepoint model's read, got " + reads);
-		for ( EventQuery read : reads ) {
+		for ( EventFilter read : reads ) {
 			assertEquals(head, read.until(), "a decision model read must be bounded at the pinned head: " + read);
 		}
 	}
@@ -277,7 +278,7 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 	// --- helpers ------------------------------------------------------------------------------------
 
 	/** The plain model's read: matches Firsts and nothing else (a match-all pin would match both). */
-	private static boolean isTheFirstsRead ( EventQuery query ) {
+	private static boolean isTheFirstsRead ( EventFilter query ) {
 		EventReference any = EventReference.create(1, 1);
 		return !query.isMatchAll() && query.matches(FIRST, Tags.none(), any) && !query.matches(SECOND, Tags.none(), any);
 	}

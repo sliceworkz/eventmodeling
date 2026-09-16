@@ -17,8 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.testing.sql;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -218,7 +217,7 @@ public abstract class SqlReadModelTest<T> {
 					EventType.of(eventData),
 					eventData,
 					Tags.none(),
-					LocalDateTime.now(ZoneOffset.UTC)
+					Instant.now()
 				);
 				projector.when(event);
 				last = ref;

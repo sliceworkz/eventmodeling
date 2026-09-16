@@ -214,7 +214,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 		@Override
 		public void when(Event<INBOUND_EVENT_TYPE> eventWithMeta) {
-			String eventName = eventWithMeta.data().getClass().getSimpleName();
+			String eventName = EventType.of(eventWithMeta.data().getClass()).name();
 			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 
 			// one translation is one step of one flow: the tracing is derived per inbound event, and the
@@ -275,7 +275,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	 * @throws NoTranslatorRegisteredException if no registered translator matches the event
 	 */
 	public List<EventReference> translate ( INBOUND_EVENT_TYPE event, Tracing tracing ) {
-		String eventName = event.getClass().getSimpleName();
+		String eventName = EventType.of(event.getClass()).name();
 		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
 
 		List<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> matching = translators.stream()

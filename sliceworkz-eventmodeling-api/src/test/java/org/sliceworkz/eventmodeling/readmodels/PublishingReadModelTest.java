@@ -21,8 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -165,7 +164,7 @@ class PublishingReadModelTest {
 				EventType.of(data),
 				data,
 				Tags.none(),
-				LocalDateTime.now(ZoneOffset.UTC));
+				Instant.now());
 	}
 
 	record TestEvent ( String value ) { }

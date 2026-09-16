@@ -29,6 +29,7 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.Limit;
+import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStreamId;
@@ -103,6 +104,13 @@ public class InvocationCountingEventStorage implements EventStorage {
 	 * for a storage holding nothing, but a decorator that inherited that default would silently keep
 	 * the storage it wraps open.
 	 */
+	@Override
+	public Optional<ShreddingCodec> shreddingCodec ( ) {
+		// the codec travels with the storage, so a wrapper that answered the interface default (empty)
+		// would silently strip the shredding a backend's storage was built with
+		return wrapped.shreddingCodec();
+	}
+
 	@Override
 	public void close() {
 		wrapped.close();

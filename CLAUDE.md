@@ -213,6 +213,7 @@ result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
         Tags.of(ACCOUNT.tag(accountId), CUSTOMER.tag(customerId)));     // tag
 EventQuery.forEvents(EventTypesFilter.any(), ACCOUNT.tags(accountId));  // query
 ACCOUNT.idIn(event.tags());                                             // read back, Optional<AccountId>
+ACCOUNT.idsIn(transfer.tags());                                         // an event about two accounts, Set<AccountId>
 ```
 
 - **The id type is part of the entity, and that is what the one-line record per entity buys.**
@@ -222,6 +223,13 @@ ACCOUNT.idIn(event.tags());                                             // read 
   Id customerId)` — loses because every one of those compiles, and the mistake surfaces as a query
   that finds nothing or a tag on the wrong entity, never as an error. Every call site names the
   entity anyway (`accountId`, `customerId`); the record makes the compiler see what the name says
+- **An event is about as many instances of an entity as it is tagged with, and the two reads say
+  which shape they answer.** `idIn(tags)` answers an event about *one* instance and throws
+  `IllegalStateException` for one tagged with several — a transfer carrying `account:from` and
+  `account:to` has no single account to answer with, and the eventstore's `Tags.tag(key)` refuses
+  to pick whichever hash order put first; `idsIn(tags)` is the read for that shape, built on
+  `Tags.tags(key)`. A todo list or read model over events that can carry two ids of one entity
+  reads them with `idsIn`
 - **The record stays a plain carrier; the entity is the factory.** `Entity.id(String)` strips and
   rejects a blank value, `Entity.newId()` mints a UUID. Validation deliberately does not live in the
   record's constructor: an id is carried inside event payloads, and Jackson reconstructs a payload
@@ -308,6 +316,18 @@ together:**
   externally provided (`execute(command, key)` — what `publishAndRecord` does). The deliberate opt-out
   is `forbidIdempotencyKey()`, which declares the command publishes without de-duplication on purpose
   — greppable, and it costs exactly that: an at-least-once caller may publish twice
+- **A command-level key on a command raising several events becomes a key per event.** The store
+  holds a key per event, scoped to the stream, and refuses a batch repeating one — so
+  `CommandResultImpl.applyIdempotencyKey` leaves a single event's key as it is (what every key on
+  record was written under) and gives the events of a larger batch `<key>/1`, `<key>/2`, … in raise
+  order, skipping events keyed by hand without shifting the others. That is the shape the eventstore
+  prescribes (see "Idempotent appends" in its CLAUDE.md), and it buys its batch rule whole: a retry
+  finds every derived key stored and is swallowed as `Optional.empty()`, and a batch mixing stored
+  keys with new ones — a re-execution under the same key that raised a different set of events — is
+  refused as `IdempotencyKeyConflictException` with nothing stored, rather than landing half a
+  decision. Derivation by position is stable only for a command raising the same events in the same
+  order each time; a command whose event count varies under one key keys its events itself, from what
+  each is about. `DCBCommandIdempotencyTest` pins the derivation, the swallowed retry and the refusal
 - **Where latency permits, prefer not needing the pair at all**: keep the command domain-only and derive
   the publication — a todo list projects the domain event and an automation executes the
   `OutboundCommand`. Command → domain event → todo list → automation → outbound event → dispatcher:
@@ -514,6 +534,20 @@ processor:**
   the database a read model writes into, on one WARN line, with a bounded context restart as the only
   way back. The failure the eventstore taxonomy calls *possibly transient* is the common one, and it is
   precisely the one that self-heals if anyone retries
+- **A processor reads its event-store bookmark once, before its first execution, and the framework
+  says so itself rather than taking the eventstore's default.** The eventstore's bookmark builder
+  defaults to reading the bookmark before *each* execution, and a projector in that mode follows a
+  bookmark removed or rewound by hand: an absent bookmark resets its position to the start of the
+  stream and the next run replays everything. `ProjectorProcessor.createProjector` sets the
+  frequency on both branches — `readBeforeFirstExecution()` for a processor on the shared bookmark,
+  `readOnManualTriggerOnly()` for a `SelfBookmarkingProjection` whose bookmark is written and never
+  read — because the processor owns the bookmark it writes: it resumes from it at start and re-seeds
+  on promotion, and nothing else is meant to move it underneath a running processor. Left to the
+  default, an operator removing a bookmark to rebuild a read model, or the framework dropping an
+  `EPHEMERAL` one, would replay history into a read model that already holds it, with nothing to say
+  so; every other `Projector` the framework builds (live models, decision models, aggregates, the
+  management stream) has no reader, so the default is moot there. `ProjectorBookmarkReadOnceTest`
+  pins it: a bookmark removed under a running processor is not followed
 - **Retrying never skips an event, which is what makes it safe to do by default.** The eventstore's
   `Projector` rolls its cursor back to the start of a failed batch before throwing, and no bookmark is
   placed for it — so the next `run()` re-offers exactly those events. A retry has the same at-least-once
@@ -522,8 +556,11 @@ processor:**
 - **The classification is a closed list of permanent causes, everything else retries.** Permanent —
   `ProjectorException.getCause()` being `EventDeserializationException`, `EventSerializationException`,
   `EventStorageClosedException` (checked before its parent `EventStorageException`, which is exactly the
-  retryable kind) or `StaleLeadershipException` (the stored fencing token only grows; retiring is what
-  hands the lease back) — stops the processor as before. Everything else, including whatever the
+  retryable kind), `StaleLeadershipException` (the stored fencing token only grows; retiring is what
+  hands the lease back) or `IdempotencyKeyConflictException` (a translator's batch mixing stored and
+  new keys is refused whole and identically on every attempt; the eventstore extends it from
+  `RuntimeException`, not `EventStorageException`, because it is never worth retrying) — stops the
+  processor as before. `ProjectorPermanentFailureTest` pins the list. Everything else, including whatever the
   projection's own code throws — a dead target database and an outright bug are indistinguishable from
   here — is retried: of the two ways to be wrong, retrying a bug is a *visible* stall (a climbing
   `consecutiveFailedRuns`, one `…Failed` event per round) where stopping on an outage was a read model
@@ -1240,6 +1277,12 @@ The framework supports the 4 Event Modeling patterns:
 **Events:**
 - Past-tense records (e.g., `AccountOpened`, `MoneyDeposited`)
 - Typically defined as sealed interfaces with record implementations
+- The stored type name is the record's simple name unless the record declares an eventstore
+  `@EventName`, which is the way out of a rename or of two contexts sharing a simple name in one
+  store. Everywhere the framework names an event — the `event` tag on its meters, the monitoring
+  events, its log lines — it resolves the name through `EventType.of(eventClass)`, never through
+  `getSimpleName()`, so what a dashboard shows for a command's raised events is the name the store
+  holds them under
 
 **Packages:**
 - Root: `org.sliceworkz.eventmodeling.*`
@@ -1336,6 +1379,17 @@ EventStorage storage = InMemoryEventStorage.newBuilder().build();
 EventStore eventStore = EventStoreFactory.get().eventStore(storage);
 ```
 
+**What the eventstore puts on the classpath, and what this project declares itself.** The eventstore
+api carries Micrometer and SLF4J and no Jackson proper: its serde is Jackson 3 (`tools.jackson.*`),
+which arrives with its impl and backends, and the one Jackson 2 artifact its api names —
+`jackson-annotations`, shared by Jackson 2 and Jackson 3 — is optional there. So a module here that
+imports Jackson declares it: the api declares `jackson-annotations` (optional, for the
+`@JsonIgnoreProperties`/`@JsonSetter` on `BoundedContextEvent` and `ManagementInstruction`, which a
+JVM ignores when the type is absent) and the testing module declares `jackson-databind`. The parent
+pom manages both at the versions the eventstore's parent pom does, so the two agree on a consumer's
+classpath. An `Event.timestamp()` is an `Instant` (the moment the store persisted the event, on the
+storage's clock), as are `Bookmark.updatedAt` and the timestamps of `StoredEvent` and `EventToImport`.
+
 **EventStream Usage:**
 ```java
 EventStream<DomainEvent> stream = eventStore.getEventStream(
@@ -1400,8 +1454,23 @@ payments.erase(DataSubject.of("customer", "alice-42"),
   production, `new InMemoryFsShreddingKeyStore(dir)` beside file-backed events, or
   `new InMemoryShreddingKeyStore()` for development. `shredding(ShreddingCodec)` is the seam for taking
   over the cryptography as well, for a codec that keeps keys inside an HSM.
-- **Without it, a domain event declaring a `Shreddable` cannot be registered**, so the context fails at
-  startup rather than storing personal data in the clear with no key to destroy.
+- **The codec travels with the storage, so a storage built with `.shredding(...)` needs nothing
+  repeated on the context.** `EventStorage.shreddingCodec()` answers what a storage builder was given,
+  and a context built without `shredding(...)` of its own takes it — `BoundedContextBuilderImpl`
+  passes its null codec to the eventstore factory, which reads null as "the storage's". A codec given
+  on the context wins, which is how a context reads a narrower view than the storage's codec unlocks
+  (a restricted or withholding codec on a storage whose codec holds every key).
+  `ShreddingCarriedByTheStorageTest` pins both halves
+- **With neither, a domain event declaring a `Shreddable` cannot be registered**, so the context fails
+  at startup rather than storing personal data in the clear with no key to destroy.
+- **`erase(subject, reason)` erases one category; `eraseAllCategories(type, id, reason)` erases the
+  person.** A `DataSubject` always names a category (`DataSubject.of(type, id)` is the `default` one),
+  and `erase` destroys the keys of that category only — right for a request scoped to one category,
+  and wrong for a request to be forgotten, where a category left readable is an erasure reported as
+  done and not performed. `PrivacyCapability.eraseAllCategories` takes no category, so it cannot be
+  narrowed by accident, and answers a `SubjectErasureReport` with one `ErasureReport` per category
+  that held live keys. `BoundedContextShreddingTest.erasingAPersonReachesEveryCategoryWhereErasingASubjectReachesOne`
+  pins the difference
 - **The framework is otherwise untouched.** Commands, projectors, automations, translators and
   dispatchers see a `Shreddable` as an ordinary payload value. There is nothing to configure per slice.
 - **The key store stays yours**, exactly like the storage: `terminate()` closes the store the context

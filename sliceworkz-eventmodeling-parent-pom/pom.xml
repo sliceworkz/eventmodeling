@@ -36,6 +36,15 @@
 
 	<properties>
 		<slf4j.version>2.0.18</slf4j.version>
+		<!--
+			The eventstore builds its serde on Jackson 3 (tools.jackson.*) and marks the one Jackson 2
+			artifact its api names, jackson-annotations, optional: nothing Jackson reaches a consumer's
+			classpath through sliceworkz-eventstore-api. Modules here that import Jackson declare it
+			themselves, at the versions the eventstore parent pom manages, so the two never diverge on
+			the classpath of a consumer using both.
+		-->
+		<jackson.version>3.2.2</jackson.version>
+		<jackson-annotations.version>2.22</jackson-annotations.version>
 		<junit-jupiter.version>6.1.3</junit-jupiter.version>
 		<postgresql.jdbc.version>42.7.13</postgresql.jdbc.version>
 		<micrometer.version>1.17.1</micrometer.version>
@@ -73,6 +82,18 @@
 				<scope>import</scope>
 			</dependency>
 			
+			<!-- Jackson: the 3.x databind (tools.jackson.*) and the 2.x annotations it shares with Jackson 2 -->
+			<dependency>
+			    <groupId>tools.jackson.core</groupId>
+			    <artifactId>jackson-databind</artifactId>
+			    <version>${jackson.version}</version>
+			</dependency>
+			<dependency>
+			    <groupId>com.fasterxml.jackson.core</groupId>
+			    <artifactId>jackson-annotations</artifactId>
+			    <version>${jackson-annotations.version}</version>
+			</dependency>
+
 			<!-- SLF4J -->
 			<dependency>
 			    <groupId>org.slf4j</groupId>

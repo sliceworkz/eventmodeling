@@ -22,8 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.SQLException;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -243,7 +242,7 @@ class SqlReadModelFencingTest {
 				EventType.of(new TestEvent(key)),
 				new TestEvent(key),
 				Tags.none(),
-				LocalDateTime.now(ZoneOffset.UTC));
+				Instant.now());
 	}
 
 	private static EventReference reference ( long position, long tx ) {

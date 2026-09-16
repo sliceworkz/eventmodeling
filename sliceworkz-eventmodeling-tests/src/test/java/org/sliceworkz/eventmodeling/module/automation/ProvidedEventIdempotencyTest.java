@@ -139,7 +139,7 @@ public class ProvidedEventIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	private long stored ( Class<? extends MockDomainEvent> type ) {
-		return domainStream.query(EventQuery.forEvents(EventTypesFilter.of(type), Tags.none())).count();
+		return domainStream.query(EventQuery.forEvents(EventTypesFilter.of(type), Tags.none())).size();
 	}
 
 	private Mock startPlainContext ( ) {

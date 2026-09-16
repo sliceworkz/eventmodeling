@@ -19,7 +19,9 @@ package org.sliceworkz.eventmodeling.module.dcb;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
@@ -32,7 +34,6 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.MergedEventQueries;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> implements CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
@@ -93,8 +94,8 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		// Partition the decision models. Models with a savepoint (initQuery) keep their own projector so
 		// the Projector handles their initQuery/eventQuery cursor management; their eventQuery replay must
 		// start after the savepoint and therefore cannot be merged with other reads. Plain models (no
-		// initQuery) can have their eventQueries reduced by the event store into the minimal set of merged
-		// physical queries and projected together through a single composite read per merged query.
+		// initQuery) have their eventQueries reduced to the minimal set of merged physical queries (see
+		// merge below) and are projected together through a single composite read per merged query.
 		List<DecisionModel<CONSUMED_EVENT_TYPE>> savepointModels = new ArrayList<>();
 		List<DecisionModel<CONSUMED_EVENT_TYPE>> plainModels = new ArrayList<>();
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
@@ -106,11 +107,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			}
 		}
 
-		List<EventQuery> plainQueries = new ArrayList<>();
-		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: plainModels ) {
-			plainQueries.add(p.eventQuery());
-		}
-		MergedEventQueries mergedPlainQueries = EventQuery.merge(plainQueries);
+		List<MergedRead<CONSUMED_EVENT_TYPE>> mergedReads = merge(plainModels);
 
 		// The consistency boundary, pinned BEFORE any read: the domain stream's head. Every read below is
 		// bounded at it and the append presents it as the expected reference, so however many physical
@@ -134,14 +131,9 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 		// project the plain models: one composite read per merged query, dispatching each event to the
 		// plain models whose own eventQuery matches it
-		for ( EventQuery mergedQuery: mergedPlainQueries.mergedQueries() ) {
-			List<DecisionModel<CONSUMED_EVENT_TYPE>> modelsForRead = new ArrayList<>();
-			for ( DecisionModel<CONSUMED_EVENT_TYPE> p: plainModels ) {
-				if ( mergedQuery.equals(mergedPlainQueries.mergedFor(p.eventQuery())) ) {
-					modelsForRead.add(p);
-				}
-			}
-			CompositeDecisionModel<CONSUMED_EVENT_TYPE> composite = new CompositeDecisionModel<>(mergedQuery, modelsForRead);
+		for ( MergedRead<CONSUMED_EVENT_TYPE> read: mergedReads ) {
+			List<DecisionModel<CONSUMED_EVENT_TYPE>> modelsForRead = read.models();
+			CompositeDecisionModel<CONSUMED_EVENT_TYPE> composite = new CompositeDecisionModel<>(read.query(), modelsForRead);
 			long start = System.currentTimeMillis();
 			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).towards(composite).build();
 			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
@@ -196,9 +188,46 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	private static EventQuery union ( List<EventQuery> queries ) {
 		EventQuery combined = null;
 		for ( EventQuery query: queries ) {
-			combined = ( combined == null ) ? query : combined.combineWith(query);
+			combined = ( combined == null ) ? query : combined.or(query);
 		}
 		return ( combined == null ) ? EventQuery.matchNone() : combined;
+	}
+
+	/**
+	 * One physical read and the plain decision models projected from it.
+	 */
+	private record MergedRead<E> ( EventQuery query, List<DecisionModel<E>> models ) { }
+
+	/**
+	 * Reduces the plain models' queries to the minimal set of physical reads. Unlimited queries with
+	 * the same direction and {@code until} are folded into one query through {@link EventQuery#or},
+	 * which is the union of their filters (a match-all member makes the union match-all); a query
+	 * carrying a limit is read on its own, since a limit over a union does not mean "the newest n of
+	 * each". Direction and {@code until} are what {@code or} refuses to combine, so grouping on them
+	 * is what keeps the fold well-defined. Reads come out in the order the models were given.
+	 */
+	private static <E> List<MergedRead<E>> merge ( List<DecisionModel<E>> plainModels ) {
+		record GroupKey ( EventQuery.Direction direction, EventReference until ) { }
+		List<MergedRead<E>> reads = new ArrayList<>();
+		Map<GroupKey, Integer> groupIndex = new LinkedHashMap<>();
+		for ( DecisionModel<E> model: plainModels ) {
+			EventQuery query = model.eventQuery();
+			if ( query.limit().isSet() ) {
+				reads.add(new MergedRead<>(query, new ArrayList<>(List.of(model))));
+				continue;
+			}
+			GroupKey key = new GroupKey(query.direction(), query.until());
+			Integer index = groupIndex.get(key);
+			if ( index == null ) {
+				groupIndex.put(key, reads.size());
+				reads.add(new MergedRead<>(query, new ArrayList<>(List.of(model))));
+			} else {
+				MergedRead<E> read = reads.get(index);
+				read.models().add(model);
+				reads.set(index, new MergedRead<>(read.query().or(query), read.models()));
+			}
+		}
+		return reads;
 	}
 
 	/**

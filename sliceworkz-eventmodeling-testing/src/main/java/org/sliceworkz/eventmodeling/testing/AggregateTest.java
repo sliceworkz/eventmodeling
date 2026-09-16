@@ -31,7 +31,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.Limit;
 
 /**
  * Base class for testing Aggregates.
@@ -155,22 +154,16 @@ public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBO
 				// Get a bookmark before executing the action
 				EventReference bookmark = eventStore()
 						.getEventStream(eventStreamId(), domainEventType())
-						.query(EventQuery.matchAll(), null, Limit.none())
-						.reduce((first, second) -> second)
-						.map(Event::reference)
-						.orElse(null);
+						.head().orElse(null);
 
 				// Load the aggregate and execute the action
 				AGGREGATE aggregate = kernel().aggregate(getAggregateClass(), identity);
 				action.accept(aggregate);
 
 				// Collect events raised after the action
-				@SuppressWarnings("unchecked")
 				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore()
 						.getEventStream(eventStreamId(), domainEventType())
-						.query(EventQuery.matchAll(), bookmark, Limit.none())
-						.map(e -> (Event<DOMAIN_EVENT_TYPE>) e)
-						.toList();
+						.query(EventQuery.matchAll(), bookmark);
 
 				this.result = new TestResultImpl(newEvents);
 			} catch (Exception exception) {

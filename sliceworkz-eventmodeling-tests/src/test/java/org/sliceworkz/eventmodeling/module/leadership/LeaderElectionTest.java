@@ -53,6 +53,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
@@ -413,14 +414,14 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public java.util.stream.Stream<StoredEvent> query ( EventQuery query, Optional<org.sliceworkz.eventstore.stream.EventStreamId> stream,
+		public List<StoredEvent> query ( EventFilter filter, org.sliceworkz.eventstore.stream.EventStreamId stream,
 				EventReference after, Limit limit, QueryDirection queryDirection ) {
-			return delegate.query(query, stream, after, limit, queryDirection);
+			return delegate.query(filter, stream, after, limit, queryDirection);
 		}
 
 		@Override
 		public List<StoredEvent> append ( org.sliceworkz.eventstore.stream.AppendCriteria appendCriteria,
-				Optional<org.sliceworkz.eventstore.stream.EventStreamId> stream, List<EventToStore> events ) {
+				org.sliceworkz.eventstore.stream.EventStreamId stream, List<EventToStore> events ) {
 			return delegate.append(appendCriteria, stream, events);
 		}
 

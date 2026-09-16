@@ -32,7 +32,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.Limit;
 
 /**
  * Base for testing {@link Translator}s: seed domain history if the translation needs any, hand an
@@ -140,18 +139,18 @@ public abstract class TranslatorTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 
 		/** Runs every matching registered translator synchronously, capturing what it raised or threw. */
 		public TestDefinition when ( INBOUND_EVENT_TYPE inboundEvent ) {
-			long inboundEventsBefore = inboundStream().query(EventQuery.matchAll()).count();
+			long inboundEventsBefore = inboundStream().query(EventQuery.matchAll()).size();
 			try {
-				EventReference bookmark = domainStream().query(EventQuery.matchAll()).reduce((first, second) -> second).map(Event::reference).orElse(null);
+				EventReference bookmark = domainStream().head().orElse(null);
 				kernel().translate(inboundEvent);
-				List<Event<DOMAIN_EVENT_TYPE>> newEvents = new ArrayList<>(domainStream().query(EventQuery.matchAll(), bookmark, Limit.none()).toList());
+				List<Event<DOMAIN_EVENT_TYPE>> newEvents = new ArrayList<>(domainStream().query(EventQuery.matchAll(), bookmark));
 				this.result = new TestResultImpl(newEvents);
 			} catch ( Exception exception ) {
 				this.result = new TestResultImpl(exception);
 			}
 			// part of translate()'s contract, so checked on every test: the interactive path never
 			// persists the inbound event, whatever the translation did
-			assertEquals(inboundEventsBefore, inboundStream().query(EventQuery.matchAll()).count(),
+			assertEquals(inboundEventsBefore, inboundStream().query(EventQuery.matchAll()).size(),
 					"translate() must not persist the inbound event");
 			return this;
 		}

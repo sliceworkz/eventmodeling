@@ -29,7 +29,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -338,7 +337,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 
 		buildDomain(new StreamAppendingBoundedContextListener(kernelStream));
 
-		List<BoundedContextEvent> persisted = kernelStream.query(EventQuery.matchAll())
+		List<BoundedContextEvent> persisted = kernelStream.query(EventQuery.matchAll()).stream()
 				.map(org.sliceworkz.eventstore.events.Event::data)
 				.toList();
 
@@ -355,7 +354,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		// on BoundedContextEvent is for; without it the store's strict deserializer rejects the event and
 		// every reader of the stream breaks on the history it already has.
 		EventStreamId streamId = EventStreamId.forContext(CONTEXT_NAME).withPurpose("kernel");
-		eventStorage().append(AppendCriteria.none(), Optional.of(streamId), List.of(new EventToStore(streamId,
+		eventStorage().append(AppendCriteria.none(), streamId, List.of(new EventToStore(streamId,
 				EventType.of(BoundedContextStarted.class),
 				"""
 				{"boundedContext":"orders","logical":"orders","physical":"orders-1","process":"p123",\
@@ -365,7 +364,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 
 		EventStream<BoundedContextEvent> kernelStream = EventStoreFactory.get().eventStore(eventStorage())
 				.getEventStream(streamId, BoundedContextEvent.class);
-		List<BoundedContextEvent> persisted = kernelStream.query(EventQuery.matchAll())
+		List<BoundedContextEvent> persisted = kernelStream.query(EventQuery.matchAll()).stream()
 				.map(org.sliceworkz.eventstore.events.Event::data)
 				.toList();
 
@@ -382,7 +381,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		// members must still bind, with the absent property reading as "declares nothing" rather than
 		// null - otherwise every reader has to null-check a collection that is never null going forward.
 		EventStreamId streamId = EventStreamId.forContext(CONTEXT_NAME).withPurpose("kernel-legacy-slices");
-		eventStorage().append(AppendCriteria.none(), Optional.of(streamId), List.of(new EventToStore(streamId,
+		eventStorage().append(AppendCriteria.none(), streamId, List.of(new EventToStore(streamId,
 				EventType.of(BoundedContextEvent.BoundedContextStarting.class),
 				"""
 				{"boundedContext":"orders","logical":"orders","physical":"orders-1","process":"p123",\
@@ -393,7 +392,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		EventStream<BoundedContextEvent> kernelStream = EventStoreFactory.get().eventStore(eventStorage())
 				.getEventStream(streamId, BoundedContextEvent.class);
 		BoundedContextEvent.BoundedContextStarting starting = (BoundedContextEvent.BoundedContextStarting)
-				kernelStream.query(EventQuery.matchAll()).map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
+				kernelStream.query(EventQuery.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
 
 		BoundedContextEvent.FeatureSlice placeOrder = starting.enabledFeatures().iterator().next();
 		assertEquals("PlaceOrder", placeOrder.name());

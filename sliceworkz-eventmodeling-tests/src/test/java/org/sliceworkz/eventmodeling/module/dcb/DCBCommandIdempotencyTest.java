@@ -36,6 +36,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.spi.EventStorage.StoredEvent;
@@ -81,13 +82,13 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	private long countDomainEvents() {
-		return directStream.query(EventQuery.matchAll()).toList().size();
+		return directStream.query(EventQuery.matchAll()).size();
 	}
 
 	/** The keys as stored, in stream order: the public {@code Event} does not carry them. */
 	private List<String> storedKeys() {
-		return eventStorage().query(EventQuery.matchAll(),
-				Optional.of(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain")), null, Limit.none())
+		return eventStorage().query(EventFilter.matchAll(),
+				EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"), null, Limit.none()).stream()
 				.map(StoredEvent::idempotencyKey).toList();
 	}
 

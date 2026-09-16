@@ -171,7 +171,7 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 	private List<MockDomainEvent> translatedDomainEvents ( ) {
 		EventStream<MockDomainEvent> domainStream = EventStoreFactory.get().eventStore(eventStorage())
 				.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class);
-		return domainStream.query(EventQuery.matchAll()).map(Event::data).toList();
+		return domainStream.query(EventQuery.matchAll()).stream().map(Event::data).toList();
 	}
 
 	/** A translator that fails while the flag is set — what its target being down looks like from the processor. */

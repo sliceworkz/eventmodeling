@@ -98,7 +98,7 @@ public class TranslatorTestRunsOnEveryBackendTest extends TranslatorTest<MockDom
 			.event(new FirstDomainEvent("hello"));
 
 		// the raised event went through the backend's own storage
-		assertEquals(1, domainStream().query(EventQuery.matchAll()).count());
+		assertEquals(1, domainStream().query(EventQuery.matchAll()).size());
 	}
 
 	@ForEachBackend

@@ -51,8 +51,8 @@ public class TranslateTest extends AbstractMockDomainTest {
 	void translateRunsMatchingTranslatorSynchronouslyAndBypassesInboundStream ( ) {
 		Mock ctx = buildBoundedContext(baseBuilder().translator(new SomeInboundTranslator()));
 
-		int inboundBefore = inboundStream().query(EventQuery.matchAll()).toList().size();
-		int domainBefore = domainStream().query(EventQuery.matchAll()).toList().size();
+		int inboundBefore = inboundStream().query(EventQuery.matchAll()).size();
+		int domainBefore = domainStream().query(EventQuery.matchAll()).size();
 
 		List<EventReference> raised = ctx.translate(new SomeInboundEvent("hello"));
 
@@ -61,10 +61,10 @@ public class TranslateTest extends AbstractMockDomainTest {
 		assertNotNull(raised.get(0));
 
 		// the interactive path does NOT append to the inbound stream ...
-		assertEquals(inboundBefore, inboundStream().query(EventQuery.matchAll()).toList().size());
+		assertEquals(inboundBefore, inboundStream().query(EventQuery.matchAll()).size());
 
 		// ... but the raised domain event IS persisted synchronously
-		List<MockDomainEvent> domainEvents = domainStream().query(EventQuery.matchAll()).map(Event::data).toList();
+		List<MockDomainEvent> domainEvents = domainStream().query(EventQuery.matchAll()).stream().map(Event::data).toList();
 		assertEquals(domainBefore + 1, domainEvents.size());
 		assertEquals(new FirstDomainEvent("hello"), domainEvents.get(domainEvents.size() - 1));
 	}
@@ -74,7 +74,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 		// the registered translator only matches FirstDomainEvent, so the inbound event matches nothing
 		Mock ctx = buildBoundedContext(baseBuilder().translator(new NonMatchingTranslator()));
 
-		int domainBefore = domainStream().query(EventQuery.matchAll()).toList().size();
+		int domainBefore = domainStream().query(EventQuery.matchAll()).size();
 
 		NoTranslatorRegisteredException cause = assertTranslateThrows(() -> ctx.translate(new SomeInboundEvent("hello")));
 		assertEquals(
@@ -82,7 +82,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 			cause.getMessage());
 
 		// nothing was raised
-		assertEquals(domainBefore, domainStream().query(EventQuery.matchAll()).toList().size());
+		assertEquals(domainBefore, domainStream().query(EventQuery.matchAll()).size());
 	}
 
 	@Test
@@ -107,7 +107,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 
 	private EventStream<MockInboundEvent> inboundStream ( ) {
 		return EventStoreFactory.get().eventStore(eventStorage())
-			.getEventStream(EventStreamId.anyContext().withPurpose("inbound"));
+			.getEventStream(EventStreamId.anyContext().withPurpose("inbound"), MockInboundEvent.class);
 	}
 
 	private BoundedContextBuilder<Mock> baseBuilder ( ) {

@@ -78,7 +78,7 @@ public class BoundedContextShreddingTest extends AbstractBoundedContextTest<Shre
 				Tags.of("transfer", "t-9001")));
 
 		ShreddingDomainEvent.TransferMade before =
-				(ShreddingDomainEvent.TransferMade) domainStream().query(EventQuery.matchAll()).findFirst().orElseThrow().data();
+				(ShreddingDomainEvent.TransferMade) domainStream().query(EventQuery.matchAll()).stream().findFirst().orElseThrow().data();
 		assertEquals("Alice Martin", before.from().orElse(null));
 		assertEquals("Bob Jansen", before.to().orElse(null));
 
@@ -87,7 +87,7 @@ public class BoundedContextShreddingTest extends AbstractBoundedContextTest<Shre
 		assertFalse(report.isNoop());
 
 		ShreddingDomainEvent.TransferMade after =
-				(ShreddingDomainEvent.TransferMade) domainStream().query(EventQuery.matchAll()).findFirst().orElseThrow().data();
+				(ShreddingDomainEvent.TransferMade) domainStream().query(EventQuery.matchAll()).stream().findFirst().orElseThrow().data();
 
 		assertTrue(after.from().isShredded(), "the erased subject's data is still readable");
 		assertEquals("Bob Jansen", after.to().orElse(null), "erasing one subject took the other's data with it");
@@ -131,7 +131,7 @@ public class BoundedContextShreddingTest extends AbstractBoundedContextTest<Shre
 
 	private ShreddingDomainEvent.TransferMade transfer ( String transferId ) {
 		return (ShreddingDomainEvent.TransferMade) domainStream()
-				.query(EventQuery.forTags(Tags.of("transfer", transferId))).findFirst().orElseThrow().data();
+				.query(EventQuery.forTags(Tags.of("transfer", transferId))).stream().findFirst().orElseThrow().data();
 	}
 
 	@Test

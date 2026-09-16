@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
@@ -167,7 +167,7 @@ public class TracingTest {
 				EventStreamId.forContext("unittests"),
 				EventReference.create(1, 1),
 				stored.type(), stored.type(), stored.data(), stored.tags(),
-				LocalDateTime.now());
+				Instant.now());
 
 		assertEquals("flow-42", Tracing.readFrom(persisted).correlationId());
 	}
@@ -179,7 +179,7 @@ public class TracingTest {
 				EventReference.create(1, 1),
 				EventType.ofType("String"), EventType.ofType("String"), "hello",
 				Tags.of("x-actor", "alice"),
-				LocalDateTime.now());
+				Instant.now());
 
 		assertNull(Tracing.readFrom(legacy).correlationId());
 	}

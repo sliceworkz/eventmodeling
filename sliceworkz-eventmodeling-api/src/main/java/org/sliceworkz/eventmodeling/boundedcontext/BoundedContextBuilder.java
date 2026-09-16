@@ -115,8 +115,14 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * // reads as erased
 	 * .shredding(new InMemoryShreddingKeyStore())
 	 * }</pre>
-	 * Without this, an event type declaring a {@code Shreddable} component cannot be registered at all:
-	 * the context fails at startup rather than storing personal data in the clear with no key to destroy.
+	 * Without this, the context's store uses the codec the {@link EventStorage} itself was built with, if
+	 * any: a storage builder's {@code .shredding(...)} travels with the storage
+	 * ({@code EventStorage.shreddingCodec()}), so a storage configured that way needs nothing repeated
+	 * here. A codec given here wins over the storage's — which is how a context reads a narrower view of
+	 * the personal data than the storage's codec unlocks, through a restricted or withholding codec on a
+	 * storage whose codec holds every key. With neither, an event type declaring a {@code Shreddable}
+	 * component cannot be registered at all: the context fails at startup rather than storing personal
+	 * data in the clear with no key to destroy.
 	 * <p>
 	 * The key store stays yours, exactly as {@link #eventStorage(EventStorage)} does — the context never
 	 * closes it. Where the key store shares the storage's {@code DataSource}, closing the storage is

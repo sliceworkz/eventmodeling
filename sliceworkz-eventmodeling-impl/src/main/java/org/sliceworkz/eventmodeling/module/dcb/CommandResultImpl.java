@@ -138,14 +138,41 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 		};
 	}
 
+	/**
+	 * Applies a command-level key to the events the command raised, giving each event that has no key
+	 * of its own one derived from it.
+	 * <p>
+	 * The store holds a key per event, scoped to the stream, and refuses a batch in which two events
+	 * carry the same key — so a command-level key cannot simply be stamped on every event. A command
+	 * raising one event keeps the key as it is, which is what every existing key on record was written
+	 * under. A command raising several gets {@code <key>/1}, {@code <key>/2}, … in the order the events
+	 * were raised: the shape the eventstore prescribes for a command whose one decision produces several
+	 * events. What that buys is the store's de-duplication rule applied to the whole batch — a retry
+	 * finds every derived key stored and is swallowed whole, and a batch mixing stored keys with new
+	 * ones (a re-execution that raised a different set of events under the same command key) is refused
+	 * as {@code IdempotencyKeyConflictException}, nothing stored, rather than silently landing half of
+	 * it. An event keyed by the command itself ({@code raiseEvent(event, tags, key)}) keeps its own
+	 * key; the derived key is spent on the position all the same, so the derived keys of the other
+	 * events do not shift when one event in the middle is keyed by hand.
+	 * <p>
+	 * The derivation is by position, which is stable only for a command that raises the same events in
+	 * the same order on every execution — the ordinary shape of a decision made on the same facts. A
+	 * command that raises a varying number of events under one key should key its events itself, from
+	 * what each event is about, rather than from where it sits in the batch.
+	 */
 	public void applyIdempotencyKey ( String idempotencyKey ) {
 		if ( events.size() == 1 ) {
 			EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event = events.get(0);
 			if ( event.idempotencyKey() == null ) {
 				events.set(0, event.withIdempotencyKey(idempotencyKey));
 			}
-		} else if ( events.size() > 1 ) {
-			throw new IllegalArgumentException("command-level idempotency key cannot be used with commands that raise multiple events");
+			return;
+		}
+		for ( int i = 0; i < events.size(); i++ ) {
+			EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event = events.get(i);
+			if ( event.idempotencyKey() == null ) {
+				events.set(i, event.withIdempotencyKey(idempotencyKey + "/" + (i + 1)));
+			}
 		}
 	}
 

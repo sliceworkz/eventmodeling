@@ -60,6 +60,7 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.shredding.DataSubject;
 import org.sliceworkz.eventstore.shredding.ErasureReason;
 import org.sliceworkz.eventstore.shredding.ErasureReport;
+import org.sliceworkz.eventstore.shredding.SubjectErasureReport;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -348,6 +349,14 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		// nothing about it, and "which bounded context was asked" is the part the store cannot say.
 		LOGGER.info("bounded context '{}' erased data subject {}: {} key(s) shredded ({})",
 				name, subject, report.keysShredded(), reason);
+		return report;
+	}
+
+	@Override
+	public SubjectErasureReport eraseAllCategories ( String subjectType, String subjectId, ErasureReason reason ) {
+		SubjectErasureReport report = eventStore.eraseAllCategories(subjectType, subjectId, reason);
+		LOGGER.info("bounded context '{}' erased data subject {}/{} across {}: {} key(s) shredded ({})",
+				name, subjectType, subjectId, report.categoriesErased(), report.keysShredded(), reason);
 		return report;
 	}
 

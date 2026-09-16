@@ -22,8 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.SQLException;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -360,7 +359,7 @@ class SqlReadModelBookmarkTest {
 				EventType.of(new TestEvent(key)),
 				new TestEvent(key),
 				Tags.none(),
-				LocalDateTime.now(ZoneOffset.UTC));
+				Instant.now());
 	}
 
 	private int totalFor ( String key ) {
@@ -408,7 +407,7 @@ class SqlReadModelBookmarkTest {
 			projector.when(Event.of(
 					EventStreamId.forContext("test"), reference,
 					EventType.of(orders[i]), EventType.of(orders[i]), orders[i],
-					Tags.none(), LocalDateTime.now(ZoneOffset.UTC)));
+					Tags.none(), Instant.now()));
 			last = reference;
 		}
 		projector.afterBatch(Optional.ofNullable(last));

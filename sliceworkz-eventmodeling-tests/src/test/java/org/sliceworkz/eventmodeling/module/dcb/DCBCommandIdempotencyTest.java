@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -36,8 +37,11 @@ import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.Limit;
+import org.sliceworkz.eventstore.spi.EventStorage.StoredEvent;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
+import org.sliceworkz.eventstore.stream.IdempotencyKeyConflictException;
 
 /**
  * Tests for command-level idempotency key support.
@@ -80,6 +84,13 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		return directStream.query(EventQuery.matchAll()).toList().size();
 	}
 
+	/** The keys as stored, in stream order: the public {@code Event} does not carry them. */
+	private List<String> storedKeys() {
+		return eventStorage().query(EventQuery.matchAll(),
+				Optional.of(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain")), null, Limit.none())
+				.map(StoredEvent::idempotencyKey).toList();
+	}
+
 	// ════════════════════════════════════════════════════════════════════
 	// COMMANDS
 	// ════════════════════════════════════════════════════════════════════
@@ -102,12 +113,35 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 
 	static class MultiEventCommand implements Command<MockDomainEvent> {
 
+		private final int count;
+
+		MultiEventCommand() {
+			this(2);
+		}
+
+		MultiEventCommand(int count) {
+			this.count = count;
+		}
+
 		@Override
 		public void execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.noDecisionModels();
-			result.raiseEvent(new FirstDomainEvent("first"), Tags.none());
-			result.raiseEvent(new FirstDomainEvent("second"), Tags.none());
+			for ( int i = 1; i <= count; i++ ) {
+				result.raiseEvent(new FirstDomainEvent("event-" + i), Tags.none());
+			}
+		}
+	}
+
+	/** Raises two events, keying the first itself and leaving the second to the command-level key. */
+	static class PartlyKeyedMultiEventCommand implements Command<MockDomainEvent> {
+
+		@Override
+		public void execute(
+				CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			var result = context.noDecisionModels();
+			result.raiseEvent(new FirstDomainEvent("own"), Tags.none(), "own-key");
+			result.raiseEvent(new FirstDomainEvent("derived"), Tags.none());
 		}
 	}
 
@@ -258,11 +292,49 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	@Test
-	void externalKey_multipleEvents_throwsException() {
+	void externalKey_multipleEvents_eachEventGetsAKeyDerivedFromIt() {
 		Mock domain = buildDomain();
 
-		assertThrows(IllegalArgumentException.class,
-				() -> domain.execute(new MultiEventCommand(), "key-1"));
+		Optional<EventReference> result = domain.execute(new MultiEventCommand(), "key-1");
+
+		assertTrue(result.isPresent());
+		assertEquals(2, countDomainEvents());
+		// the shape the eventstore prescribes for a command whose one decision produces several events
+		assertEquals(List.of("key-1/1", "key-1/2"), storedKeys());
+	}
+
+	@Test
+	void externalKey_multipleEvents_retryIsSwallowedWhole() {
+		Mock domain = buildDomain();
+
+		assertTrue(domain.execute(new MultiEventCommand(), "key-1").isPresent());
+		Optional<EventReference> retry = domain.execute(new MultiEventCommand(), "key-1");
+
+		assertTrue(retry.isEmpty(), "every derived key was stored before, so the batch is a retry");
+		assertEquals(2, countDomainEvents());
+	}
+
+	@Test
+	void externalKey_multipleEvents_aBatchMixingStoredAndNewKeysIsRefusedWhole() {
+		Mock domain = buildDomain();
+
+		assertTrue(domain.execute(new MultiEventCommand(2), "key-1").isPresent());
+
+		// the same command key, a different set of events: key-1/1 and key-1/2 are stored, key-1/3 is
+		// not, so this is not a retry -- and storing the third alone would land half a decision
+		assertThrows(IdempotencyKeyConflictException.class,
+				() -> domain.execute(new MultiEventCommand(3), "key-1"));
+		assertEquals(2, countDomainEvents());
+	}
+
+	@Test
+	void externalKey_multipleEvents_anEventKeyedByTheCommandKeepsItsOwnKey() {
+		Mock domain = buildDomain();
+
+		domain.execute(new PartlyKeyedMultiEventCommand(), "key-1");
+
+		// the derived key is spent on the position, so the second event's key does not shift to /1
+		assertEquals(List.of("own-key", "key-1/2"), storedKeys());
 	}
 
 	@Test

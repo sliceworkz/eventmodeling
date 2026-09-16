@@ -25,6 +25,18 @@ public interface CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
 	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags, String idempotencyKey );
 
+	/*
+	 * A command-level key -- one the caller provides to execute(command, key), or one of the methods
+	 * below sets -- is applied to the events the command raised when it is persisted. The store holds a
+	 * key per event, scoped to the stream, and refuses a batch repeating one, so a command raising one
+	 * event keeps the key as it is, and a command raising several gets <key>/1, <key>/2, ... in raise
+	 * order for every event not keyed through raiseEvent(event, tags, key) itself. A retry then finds
+	 * every key stored and is swallowed whole (Optional.empty()), and a re-execution under the same key
+	 * that raises a different set of events is refused as IdempotencyKeyConflictException with nothing
+	 * stored. The derivation is by position, so a command whose event count varies under one key should
+	 * key its events itself, from what each event is about.
+	 */
+
 	/**
 	 * Requires that an idempotency key was externally provided by the caller.
 	 * Throws {@link IllegalStateException} if no external key was provided.

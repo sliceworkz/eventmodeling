@@ -490,7 +490,11 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		// The four-argument factory, so that a context configured with shredding hands its codec to the
 		// store: it is what seals Shreddable values on append, unseals them on read, and holds the keys
-		// that erase() destroys. A null codec is the unprotected store this call has always built.
+		// that erase() destroys. A null codec is not "no codec": the store then takes the one the
+		// storage was built with (EventStorage.shreddingCodec(), what a storage builder's .shredding(...)
+		// configures), and only a storage carrying none gives an unprotected store. A codec given here
+		// wins over the storage's, so a context can still narrow what it reads (a restricted or
+		// withholding codec) on a storage whose codec holds every key.
 		EventStore eventStore = EventStoreFactory.get()
 				.eventStore(eventStorage, meterRegistry, meterOptions, shreddingCodec);
 

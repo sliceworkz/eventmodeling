@@ -46,6 +46,20 @@
 			<artifactId>sliceworkz-eventstore-api</artifactId>
 		</dependency>
 		<!--
+			BoundedContextEvent and ManagementInstruction carry Jackson annotations
+			(@JsonIgnoreProperties, @JsonSetter) so that an event written by a newer release reads
+			under an older one. Optional, as the eventstore api declares it: a JVM ignores an
+			annotation whose type is absent at runtime, so a consumer that serializes nothing resolves
+			nothing and loses nothing, and one that does already has it — this is the 2.x annotations
+			artifact that Jackson 2 and Jackson 3 share (Jackson 3's databind depends on it). The
+			eventstore api marks it optional too, so it no longer arrives transitively from there.
+		-->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-annotations</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<!--
 			Test scope only. SqlReadModelProjector writes SQL that has to survive a real database:
 			its bookmark upsert and its idempotent-write helpers were previously asserted against a
 			mock Connection, which cannot tell whether the statements parse, let alone whether the

@@ -63,6 +63,15 @@
 			<artifactId>junit-jupiter-api</artifactId>
 			<scope>compile</scope>
 		</dependency>
+		<!--
+			AbstractBoundedContextTest renders the objects it compares with a Jackson 3 mapper. The
+			eventstore's api no longer carries Jackson, so what this module imports it declares:
+			jackson-databind brings the shared 2.x jackson-annotations along.
+		-->
+		<dependency>
+			<groupId>tools.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
 
 		<!-- ArchUnit Testing -->
 		<dependency>

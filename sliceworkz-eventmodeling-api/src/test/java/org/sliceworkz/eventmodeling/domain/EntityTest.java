@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -90,6 +91,24 @@ public class EntityTest {
 		assertEquals(Optional.empty(), Entity.of("order", AccountId::new).idIn(tags));
 		assertEquals(Optional.empty(), ACCOUNT.idIn(Tags.of(ACCOUNT.tag())));
 		assertEquals(Optional.empty(), ACCOUNT.idIn(Tags.none()));
+	}
+
+	@Test
+	void anEventAboutSeveralInstancesAnswersAllOfThemAndRefusesToPickOne ( ) {
+		AccountId from = ACCOUNT.newId();
+		AccountId to = ACCOUNT.newId();
+		CustomerId customer = CUSTOMER.newId();
+		Tags transfer = Tags.of(ACCOUNT.tag(from), ACCOUNT.tag(to), CUSTOMER.tag(customer));
+
+		assertEquals(Set.of(from, to), ACCOUNT.idsIn(transfer));
+		assertEquals(Set.of(customer), CUSTOMER.idsIn(transfer));
+		assertEquals(Set.of(), Entity.of("order", AccountId::new).idsIn(transfer));
+		assertEquals(Set.of(), ACCOUNT.idsIn(Tags.of(ACCOUNT.tag())));
+		assertEquals(Set.of(), ACCOUNT.idsIn(Tags.none()));
+
+		// two accounts, one Optional: neither is "the" account, so the single-id read does not guess
+		assertThrows(IllegalStateException.class, ( ) -> ACCOUNT.idIn(transfer));
+		assertEquals(Optional.of(customer), CUSTOMER.idIn(transfer));
 	}
 
 	@Test

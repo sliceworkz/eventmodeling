@@ -33,6 +33,7 @@ import org.sliceworkz.eventstore.shredding.DataSubject;
 import org.sliceworkz.eventstore.shredding.ErasureReason;
 import org.sliceworkz.eventstore.shredding.ErasureReport;
 import org.sliceworkz.eventstore.shredding.Shreddable;
+import org.sliceworkz.eventstore.shredding.SubjectErasureReport;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 
 /**
@@ -95,6 +96,42 @@ public class BoundedContextShreddingTest extends AbstractBoundedContextTest<Shre
 		assertEquals("t-9001", after.transferId());
 		assertEquals(25000, after.cents());
 		assertEquals("alice-42", after.fromCustomerId());
+	}
+
+	@Test
+	void erasingAPersonReachesEveryCategoryWhereErasingASubjectReachesOne ( ) {
+		// Alice's data under two categories: the default one and 'marketing', each under its own key
+		DataSubject aliceMarketing = ALICE.withCategory("marketing");
+		domainStream().append(AppendCriteria.none(), Event.of(
+				new ShreddingDomainEvent.TransferMade("t-9002", 100, "alice-42", "alice-42",
+						Shreddable.of("Alice Martin", ALICE),
+						Shreddable.of("alice@example.com", aliceMarketing)),
+				Tags.of("transfer", "t-9002")));
+
+		// the per-category erasure is exactly that: the other category stays readable
+		ErasureReport oneCategory = kernel().erase(ALICE, ErasureReason.of("marketing opt-out #12"));
+		assertEquals(1, oneCategory.keysShredded());
+		ShreddingDomainEvent.TransferMade afterOne = transfer("t-9002");
+		assertTrue(afterOne.from().isShredded());
+		assertEquals("alice@example.com", afterOne.to().orElse(null),
+				"erasing one category must not touch another, or a per-category request could not be honoured");
+
+		// the whole-person erasure takes no category and reaches the one still holding a live key
+		SubjectErasureReport person = kernel().eraseAllCategories("customer", "alice-42", ErasureReason.of("GDPR art.17 request #4712"));
+		assertEquals(1, person.keysShredded());
+		assertEquals(java.util.List.of("marketing"), person.categoriesErased());
+		assertFalse(person.isNoop());
+		ShreddingDomainEvent.TransferMade afterAll = transfer("t-9002");
+		assertTrue(afterAll.from().isShredded());
+		assertTrue(afterAll.to().isShredded(), "a request to be forgotten must reach every category");
+
+		// idempotent, like erase
+		assertTrue(kernel().eraseAllCategories("customer", "alice-42", ErasureReason.of("again")).isNoop());
+	}
+
+	private ShreddingDomainEvent.TransferMade transfer ( String transferId ) {
+		return (ShreddingDomainEvent.TransferMade) domainStream()
+				.query(EventQuery.forTags(Tags.of("transfer", transferId))).findFirst().orElseThrow().data();
 	}
 
 	@Test

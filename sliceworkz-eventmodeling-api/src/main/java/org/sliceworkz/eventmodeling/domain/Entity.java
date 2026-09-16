@@ -19,8 +19,10 @@ package org.sliceworkz.eventmodeling.domain;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
@@ -160,9 +162,29 @@ public final class Entity<ID extends EntityId> {
 	/**
 	 * The id of this entity an event carries, read back off its tags — the inverse of
 	 * {@link #tag(EntityId)}. Empty when the tags hold no tag of this entity, or only the bare flag.
+	 * <p>
+	 * This answers an event about <i>one</i> instance of the entity. An event about several — a
+	 * transfer tagged with two accounts — has no single id to answer with, and rather than returning
+	 * whichever hash order put first, this throws: {@link #idsIn(Tags)} is the read for that shape.
+	 *
+	 * @throws IllegalStateException when the tags carry more than one id of this entity
 	 */
 	public Optional<ID> idIn ( Tags tags ) {
 		return tags.tag(name).map(Tag::value).filter(value -> value != null && !value.isBlank()).map(this::id);
+	}
+
+	/**
+	 * Every id of this entity an event carries, read back off its tags. An event is about as many
+	 * instances of an entity as it is tagged with — a transfer is about two accounts — and this is the
+	 * read for that shape, where {@link #idIn(Tags)} answers only an event about one. Empty when the
+	 * tags hold no tag of this entity, or only the bare flag.
+	 */
+	public Set<ID> idsIn ( Tags tags ) {
+		return tags.tags(name).stream()
+				.map(Tag::value)
+				.filter(value -> value != null && !value.isBlank())
+				.map(this::id)
+				.collect(Collectors.toUnmodifiableSet());
 	}
 
 	@Override

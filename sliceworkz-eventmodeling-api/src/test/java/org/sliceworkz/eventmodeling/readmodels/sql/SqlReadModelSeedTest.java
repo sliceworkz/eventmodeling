@@ -21,8 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -177,7 +176,7 @@ class SqlReadModelSeedTest {
 				EventType.of(new TestEvent(key)),
 				new TestEvent(key),
 				Tags.none(),
-				LocalDateTime.now(ZoneOffset.UTC));
+				Instant.now());
 	}
 
 	/** What a caller sees when the load runs: how many times it has been called so far. */

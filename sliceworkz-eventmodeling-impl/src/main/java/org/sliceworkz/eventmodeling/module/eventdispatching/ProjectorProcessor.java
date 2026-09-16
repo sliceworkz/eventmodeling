@@ -41,6 +41,7 @@ import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventstore.spi.EventStorageClosedException;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStreamEventuallyConsistentAppendListener;
+import org.sliceworkz.eventstore.stream.IdempotencyKeyConflictException;
 
 /**
  * A thin lifecycle wrapper around {@link Projector} that provides background thread management,
@@ -602,13 +603,19 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	 * <li>{@code StaleLeadershipException} — this leadership was fenced out by a newer leader; the
 	 *     stored token only grows, so retrying here fights the fence forever. Retiring is what hands
 	 *     the lease back (the elector reads {@code stoppedItself})</li>
+	 * <li>{@code IdempotencyKeyConflictException} — a batch this projection appends (a translator's
+	 *     raised events) mixes idempotency keys already stored with keys that are not, so it is not the
+	 *     retry of a stored batch and the store refuses it whole. Nothing about the batch changes
+	 *     between attempts; the eventstore extends it from {@code RuntimeException} rather than from
+	 *     {@code EventStorageException} for exactly this reason</li>
 	 * </ul>
 	 */
 	static boolean isPermanentFailure ( Throwable cause ) {
 		return cause instanceof EventDeserializationException
 				|| cause instanceof EventSerializationException
 				|| cause instanceof EventStorageClosedException
-				|| cause instanceof StaleLeadershipException;
+				|| cause instanceof StaleLeadershipException
+				|| cause instanceof IdempotencyKeyConflictException;
 	}
 
 	/**

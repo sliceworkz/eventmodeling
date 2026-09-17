@@ -33,7 +33,6 @@ import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.infra.inmem.shredding.InMemoryShreddingKeyStore;
@@ -82,13 +81,13 @@ public class ShreddingCarriedByTheStorageTest {
 				Tags.of("transfer", "t-1"));
 
 		// a store built over the same storage, with nothing configured, reads under the same codec
-		EventStore reader = EventStoreFactory.get().eventStore(storage);
+		EventStore reader = EventStore.on(storage).build();
 		toClose.add(reader);
 		ShreddingDomainEvent.TransferMade sealed = transfer(reader);
 		assertEquals("Alice Martin", sealed.from().orElse(null));
 
 		// and the context erases through the keys the storage holds
-		assertEquals(1, context.erase(ALICE, ErasureReason.of("art.17")).keysShredded());
+		assertEquals(1, context.eraseCategory(ALICE, ErasureReason.of("art.17")).keysShredded());
 		ShreddingDomainEvent.TransferMade erased = transfer(reader);
 		assertTrue(erased.from().isShredded());
 		assertEquals("Bob Jansen", erased.to().orElse(null));

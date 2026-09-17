@@ -39,7 +39,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.module.aggregates.MockAggregate.MockAggregateData;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -56,7 +56,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 	@ForEachBackend
 	void testAggregate ( ) {
 		
-		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage()).getEventStream(EventStreamId.anyContext().withPurpose("domain"), MockDomainEvent.class);
+		EventStream<MockDomainEvent> allStream = EventStore.on(eventStorage()).build().getEventStream(EventStreamId.anyContext().withPurpose("domain"), MockDomainEvent.class);
 		
 		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 0);
 		
@@ -118,7 +118,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 	@ForEachBackend
 	void testAggregateRaisingSeveralEventsAtOnce ( ) {
 
-		EventStream<MockDomainEvent> allStream = EventStoreFactory.get().eventStore(eventStorage()).getEventStream(EventStreamId.anyContext().withPurpose("domain"), MockDomainEvent.class);
+		EventStream<MockDomainEvent> allStream = EventStore.on(eventStorage()).build().getEventStream(EventStreamId.anyContext().withPurpose("domain"), MockDomainEvent.class);
 
 		Mock domain = domainWithAggregate(List.of(MockAggregate.class), 0);
 

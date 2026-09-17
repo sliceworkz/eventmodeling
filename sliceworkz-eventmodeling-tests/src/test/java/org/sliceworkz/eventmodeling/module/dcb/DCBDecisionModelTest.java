@@ -33,7 +33,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.ThirdDomainEvent;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
@@ -71,7 +71,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(builder);
 
 		// Create a direct event stream for injecting concurrent events during command execution
-		directStream = EventStoreFactory.get().eventStore(eventStorage())
+		directStream = EventStore.on(eventStorage()).build()
 				.getEventStream(
 						EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
 						MockDomainEvent.class);

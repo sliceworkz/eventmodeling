@@ -135,7 +135,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			List<DecisionModel<CONSUMED_EVENT_TYPE>> modelsForRead = read.models();
 			CompositeDecisionModel<CONSUMED_EVENT_TYPE> composite = new CompositeDecisionModel<>(read.query(), modelsForRead);
 			long start = System.currentTimeMillis();
-			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).towards(composite).build();
+			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).into(composite).build();
 			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
 			long durationMs = System.currentTimeMillis() - start;
 			accumulatedMetrics = accumulatedMetrics.add(metrics);
@@ -149,7 +149,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		// project each savepoint model through its own projector so its initQuery savepoint is honoured
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: savepointModels ) {
 			long start = System.currentTimeMillis();
-			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).towards(p).build();
+			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).into(p).build();
 			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
 			long durationMs = System.currentTimeMillis() - start;
 			accumulatedMetrics = accumulatedMetrics.add(metrics);

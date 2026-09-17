@@ -33,7 +33,6 @@ import org.sliceworkz.eventmodeling.examples.banking.features.accountoverview.Ac
 import org.sliceworkz.eventmodeling.examples.banking.features.openaccount.OpenAccountCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.openaccountwithresult.OpenAccountWithResultCommand;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -50,7 +49,7 @@ public class BankingExample {
 	public static void main ( String[] args ) {
 		
 		EventStorage eventStorage = InMemoryEventStorage.newBuilder().build();
-		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage);
+		EventStore eventStore = EventStore.on(eventStorage).build();
 
 		Instance instance = InstanceFactory.determine("banking-app");
 		

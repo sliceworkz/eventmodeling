@@ -77,7 +77,6 @@ import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.MeterOptions;
 import org.sliceworkz.eventstore.shredding.AesGcmShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
@@ -489,15 +488,20 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		logEventTypes("INBOUND", inboundEventRootType);
 		logEventTypes("OUTBOUND", outboundEventRootType);
 
-		// The four-argument factory, so that a context configured with shredding hands its codec to the
-		// store: it is what seals Shreddable values on append, unseals them on read, and holds the keys
-		// that erase() destroys. A null codec is not "no codec": the store then takes the one the
-		// storage was built with (EventStorage.shreddingCodec(), what a storage builder's .shredding(...)
-		// configures), and only a storage carrying none gives an unprotected store. A codec given here
-		// wins over the storage's, so a context can still narrow what it reads (a restricted or
-		// withholding codec) on a storage whose codec holds every key.
-		EventStore eventStore = EventStoreFactory.get()
-				.eventStore(eventStorage, meterRegistry, meterOptions, shreddingCodec);
+		// A context configured with shredding hands its codec to the store: it is what seals Shreddable
+		// values on append, unseals them on read, and holds the keys that erase() destroys. A codec
+		// left unset is not "no codec": the store then takes the one the storage was built with
+		// (EventStorage.shreddingCodec(), what a storage builder's .shredding(...) configures), and
+		// only a storage carrying none gives an unprotected store. A codec given here wins over the
+		// storage's, so a context can still narrow what it reads (a restricted or withholding codec)
+		// on a storage whose codec holds every key.
+		EventStore.Builder storeBuilder = EventStore.on(eventStorage)
+				.meterRegistry(meterRegistry)
+				.meterOptions(meterOptions);
+		if ( shreddingCodec != null ) {
+			storeBuilder.shredding(shreddingCodec);
+		}
+		EventStore eventStore = storeBuilder.build();
 
 		// Everything from here on belongs to a context that does not exist yet. A builder that throws
 		// hands the caller nothing -- no context, so no terminate() and no shutdown hook -- so whatever
@@ -539,7 +543,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	private C assemble ( Class<?> returnType, EventStore eventStore, List<LifecycleCapability> constructed ) {
 
-		EventSource<Object> readAllInStoreEventStream;
+		EventSource<String> readAllInStoreEventStream;
 		EventStream domainEventStream;
 		EventStream inboundEventStream;
 		EventStream outboundEventStream;

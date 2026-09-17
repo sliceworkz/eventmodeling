@@ -53,7 +53,6 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -146,7 +145,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 		assertEquals(1, listener.failures(), "the listener really did throw");
 
 		// and the event is genuinely in the store - the append happened before the listener ran
-		try ( EventStore store = EventStoreFactory.get().eventStore(eventStorage()) ) {
+		try ( EventStore store = EventStore.on(eventStorage()).build() ) {
 			var stored = store
 					.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class)
 					.query(EventQuery.matchAll());

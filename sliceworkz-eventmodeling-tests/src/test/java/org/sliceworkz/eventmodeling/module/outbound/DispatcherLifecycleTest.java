@@ -41,7 +41,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventDeserializationException;
 import org.sliceworkz.eventstore.events.EventType;
@@ -170,7 +170,7 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 	 * command plumbing.
 	 */
 	private void appendOutbound ( MockOutboundEvent event ) {
-		EventStream<MockOutboundEvent> outboundStream = EventStoreFactory.get().eventStore(eventStorage())
+		EventStream<MockOutboundEvent> outboundStream = EventStore.on(eventStorage()).build()
 				.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("outbound"), MockOutboundEvent.class);
 		outboundStream.append(AppendCriteria.none(), Event.of(event, Tags.none()));
 	}

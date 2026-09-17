@@ -31,7 +31,6 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Bookmark;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
@@ -47,7 +46,7 @@ import org.sliceworkz.eventstore.stream.EventStreamId;
  * and a projector in that mode follows a bookmark removed or rewound by hand: an absent bookmark
  * resets its position to the start of the stream, so the next run replays everything. The framework
  * sets the read frequency itself on both of {@code ProjectorProcessor}'s branches
- * ({@code readBeforeFirstExecution()}, or {@code readOnManualTriggerOnly()} for a projection keeping
+ * ({@code readBookmarkOnce()}, or {@code readBookmarkOnRequest()} for a projection keeping
  * its own position), because the processor owns the bookmark it writes: it resumes from it at start
  * and re-seeds on promotion, and nothing else is meant to move it underneath a running processor. Left
  * to the default, an operator removing a bookmark to rebuild a read model — or the framework itself
@@ -100,7 +99,7 @@ public class ProjectorBookmarkReadOnceTest extends AbstractMockDomainTest {
 	}
 
 	private EventStream<MockDomainEvent> domainStream ( ) {
-		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage());
+		EventStore eventStore = EventStore.on(eventStorage()).build();
 		return eventStore.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class);
 	}
 

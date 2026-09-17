@@ -144,7 +144,7 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationUnderTest ( ) {
 		if ( automationUnderTest == null ) {
 			automationUnderTest = automation();
-			todoListProjector = Projector.from(domainStream()).towards(automationUnderTest.getTodoList()).build();
+			todoListProjector = Projector.from(domainStream()).into(automationUnderTest.getTodoList()).build();
 		}
 		return automationUnderTest;
 	}

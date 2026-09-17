@@ -34,22 +34,25 @@ import org.sliceworkz.eventstore.shredding.SubjectErasureReport;
  *
  * <h2>Handling an erasure request</h2>
  * <pre>{@code
- * ErasureReport report = context.erase(
- *         DataSubject.of("customer", customerId),
- *         ErasureReason.of("GDPR art.17 request #4711, approved by DPO " + today));
- *
- * report.keysShredded();   // 0 when the subject held no keys -- erasure is idempotent
- * }</pre>
- * A {@link DataSubject} always names a <i>category</i> of the person's data — {@code DataSubject.of(type, id)}
- * is the {@code default} one — and {@link #erase} destroys the keys of that category only. That is right
- * for a request scoped to one category ("stop using my data for marketing") and wrong for a request to
- * be forgotten, where a category left readable is an erasure reported as done and not performed. The
- * whole-person erasure is {@link #eraseAllCategories(String, String, ErasureReason)}:
- * <pre>{@code
- * SubjectErasureReport report = context.eraseAllCategories("customer", customerId,
+ * SubjectErasureReport report = context.erase("customer", customerId,
  *         ErasureReason.of("GDPR art.17 request #4711, approved by DPO " + today));
  *
  * report.categoriesErased();   // every category that held live keys for the person
+ * report.keysShredded();       // 0 when the person held no keys -- erasure is idempotent
+ * }</pre>
+ * That is the whole-person erasure a request to be forgotten calls for: it takes the subject's type and
+ * id and no category, so it cannot be narrowed by accident. A {@link DataSubject} always names a
+ * <i>category</i> of the person's data — {@code DataSubject.of(type, id)} is the {@code default} one —
+ * and a category is what a subject's data is <i>written</i> under, so which one a caller happens to
+ * name says nothing about the others. The erasure that can leave data readable therefore carries the
+ * qualifier: {@link #eraseCategory(DataSubject, ErasureReason)} destroys the keys of the one category
+ * its subject names, which is right for a request scoped to one category ("stop using my data for
+ * marketing") and wrong for a request to be forgotten, where a category left readable is an erasure
+ * reported as done and not performed.
+ * <pre>{@code
+ * ErasureReport report = context.eraseCategory(
+ *         DataSubject.of("customer", customerId).withCategory("marketing"),
+ *         ErasureReason.of("marketing opt-out #12"));
  * }</pre>
  * The pseudonymous identifiers stay: a projection can still count the customer's orders and a ledger
  * still reconciles. Only what was wrapped in a {@code Shreddable} becomes unreadable, and it reads back
@@ -82,45 +85,44 @@ import org.sliceworkz.eventstore.shredding.SubjectErasureReport;
 public interface PrivacyCapability {
 
 	/**
-	 * Erases a data subject's personal data by destroying the keys that protect it.
+	 * Erases a person's data across every category it was written under, by destroying every key held
+	 * for the subject type and id whatever the category.
 	 * <p>
-	 * Idempotent: a subject that holds no keys — never appended for, or erased already — reports
-	 * {@link ErasureReport#isNoop()} rather than failing. Data appended for the subject afterwards gets
-	 * a fresh key and is readable; only what was sealed under the destroyed keys is gone.
+	 * This is the erasure a request to be forgotten calls for. It takes no category, so it cannot be
+	 * narrowed by accident, and answers one {@link ErasureReport} per category that held live keys.
+	 * Idempotent: a person holding no keys — never appended for, or erased already — reports
+	 * {@link SubjectErasureReport#isNoop()} rather than failing. Data appended for the person afterwards
+	 * gets fresh keys and is readable; only what was sealed under the destroyed keys is gone.
 	 *
-	 * @param subject whose data to erase; the unit of erasure is the data subject, not a field or an event
-	 * @param reason  why, recorded alongside the destroyed key — the events record nothing about the
-	 *                erasure, so this is the whole audit trail
+	 * @param subjectType the kind of subject, as {@link DataSubject#type()} — {@code "customer"}
+	 * @param subjectId   the pseudonymous id, as {@link DataSubject#id()} — never personal data itself
+	 * @param reason      why, recorded alongside every destroyed key — the events record nothing about
+	 *                    the erasure, so this is the whole audit trail
+	 * @return what was destroyed, per category
+	 * @throws UnsupportedOperationException if this context's store holds no keys, or its key store
+	 *                                       cannot erase across categories
+	 * @throws org.sliceworkz.eventstore.shredding.ShreddingException if the key store cannot be reached
+	 * @throws IllegalArgumentException if an argument is null or blank
+	 */
+	SubjectErasureReport erase ( String subjectType, String subjectId, ErasureReason reason );
+
+	/**
+	 * Erases one category of a data subject's personal data, by destroying the keys held for the
+	 * category the subject names and no other.
+	 * <p>
+	 * The unit of erasure is the data subject, not a field or an event: everything sealed for that
+	 * subject under that category becomes unreadable, and anything the person holds under another
+	 * category stays readable. For a request to be forgotten, use {@link #erase(String, String, ErasureReason)}.
+	 * <p>
+	 * Idempotent like {@link #erase}: a subject that holds no keys reports {@link ErasureReport#isNoop()}.
+	 *
+	 * @param subject whose data to erase, naming the category
+	 * @param reason  why, recorded alongside the destroyed key
 	 * @return what was destroyed
 	 * @throws UnsupportedOperationException if this context was built without shredding configured
 	 * @throws org.sliceworkz.eventstore.shredding.ShreddingException if the key store cannot be reached
 	 * @throws IllegalArgumentException if either argument is null
 	 */
-	ErasureReport erase ( DataSubject subject, ErasureReason reason );
-
-	/**
-	 * Erases a person's data across every category it was written under, by destroying every key held
-	 * for the subject type and id whatever the category.
-	 * <p>
-	 * This is the erasure a request to be forgotten calls for. {@link #erase(DataSubject, ErasureReason)}
-	 * destroys the keys of the one category its subject names, and a category is what a subject's data
-	 * is <i>written</i> under — so which one a caller happens to name says nothing about the others,
-	 * and erasing the {@code default} category of a customer who also holds {@code marketing} data
-	 * leaves the marketing data readable while reporting success. This method takes no category, so it
-	 * cannot be narrowed by accident, and answers one {@link ErasureReport} per category that held live
-	 * keys.
-	 * <p>
-	 * Idempotent like {@link #erase}: a person holding no keys reports {@link SubjectErasureReport#isNoop()}.
-	 *
-	 * @param subjectType the kind of subject, as {@link DataSubject#type()} — {@code "customer"}
-	 * @param subjectId   the pseudonymous id, as {@link DataSubject#id()} — never personal data itself
-	 * @param reason      why, recorded alongside every destroyed key
-	 * @return what was destroyed, per category
-	 * @throws UnsupportedOperationException if this context's store holds no keys, or its key store
-	 *                                       predates whole-person erasure
-	 * @throws org.sliceworkz.eventstore.shredding.ShreddingException if the key store cannot be reached
-	 * @throws IllegalArgumentException if an argument is null or blank
-	 */
-	SubjectErasureReport eraseAllCategories ( String subjectType, String subjectId, ErasureReason reason );
+	ErasureReport eraseCategory ( DataSubject subject, ErasureReason reason );
 
 }

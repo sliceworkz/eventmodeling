@@ -32,7 +32,6 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tag;
@@ -114,8 +113,8 @@ public class BenchmarkApplication {
 
 		// a second store on the same storage, for the progress queries below -- named so it can be
 		// closed at the end, since the bounded context only closes the store it built itself
-		EventStore progressEventStore = EventStoreFactory.get().eventStore(eventStorage);
-		EventSource<Object> domainStream = progressEventStore.getRawEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("domain"));
+		EventStore progressEventStore = EventStore.on(eventStorage).build();
+		EventSource<String> domainStream = progressEventStore.getRawEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("domain"));
 
 
 		ExecutorService executor = Executors.newFixedThreadPool(PARALLEL_PRODUCERS);

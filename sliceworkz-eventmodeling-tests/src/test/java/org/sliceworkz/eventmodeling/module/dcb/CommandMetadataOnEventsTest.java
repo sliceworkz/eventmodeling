@@ -40,7 +40,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
@@ -68,10 +68,10 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 
 		Mock domain = buildBoundedContext(builder);
 
-		domainStream = EventStoreFactory.get().eventStore(eventStorage())
+		domainStream = EventStore.on(eventStorage()).build()
 				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
 						MockDomainEvent.class);
-		outboundStream = EventStoreFactory.get().eventStore(eventStorage())
+		outboundStream = EventStore.on(eventStorage()).build()
 				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("outbound"),
 						MockOutboundEvent.class);
 

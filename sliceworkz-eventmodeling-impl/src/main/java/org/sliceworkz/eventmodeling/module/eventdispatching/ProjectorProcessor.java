@@ -194,7 +194,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 	 * leader continues where the deployment got to, not where this JVM did.
 	 */
 	private Projector<EVENT_TYPE> createProjector ( ) {
-		Projector.Builder<EVENT_TYPE> builder = Projector.from(eventSource).towards(projection);
+		Projector.Builder<EVENT_TYPE> builder = Projector.from(eventSource).into(projection);
 
 		if ( ownBookmark != null ) {
 			// The projection wrote its position and its state in one transaction, so its position is
@@ -205,19 +205,16 @@ public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyCons
 			LOGGER.info("'{}' keeps its own bookmark, resuming from {}", processorIdentification,
 					resumeFrom == null ? "the beginning of the stream" : resumeFrom);
 			builder = builder.startingAfter(resumeFrom)
-					.bookmarkProgress()
-						.withReader(processorIdentification.toString())
-						.withTags(processorIdentification.toTags(instance))
-						// written, never read: the event store bookmark stays as the record an
-						// operator and the dashboard read, and lags the truth by at most one batch
-						.readOnManualTriggerOnly()
-						.done();
+					.bookmarkAs(processorIdentification.toString(), processorIdentification.toTags(instance))
+					// written, never read: the event store bookmark stays as the record an
+					// operator and the dashboard read, and lags the truth by at most one batch
+					.readBookmarkOnRequest();
 		} else {
-			builder = builder.bookmarkProgress()
-					.withReader(processorIdentification.toString())
-					.withTags(processorIdentification.toTags(instance))
-					.readBeforeFirstExecution()
-					.done();
+			builder = builder
+					.bookmarkAs(processorIdentification.toString(), processorIdentification.toTags(instance))
+					// read once, before the first run: the processor owns the bookmark it writes, and
+					// nothing else is meant to move it underneath a running processor
+					.readBookmarkOnce();
 		}
 
 		return builder.build();

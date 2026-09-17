@@ -113,7 +113,7 @@ public class ManagementModule {
 		// beginning is starting from the head
 		EventReference head = instructions.head().orElse(null);
 		Projector.from(instructions)
-				.towards(new InstructionProjection())
+				.into(new InstructionProjection())
 				.startingAfter(head)
 				.subscribe()
 				.build();

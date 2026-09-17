@@ -172,8 +172,8 @@ class SqlReadModelSeedTest {
 		return Event.of(
 				EventStreamId.forContext("test"),
 				EventReference.of(EventId.create(), position, tx),
-				EventType.of(new TestEvent(key)),
-				EventType.of(new TestEvent(key)),
+				EventType.of(TestEvent.class),
+				EventType.of(TestEvent.class),
 				new TestEvent(key),
 				Tags.none(),
 				Instant.now());

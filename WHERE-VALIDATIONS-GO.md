@@ -204,7 +204,7 @@ A new or tightened rule changes what may be *written from now on*; the events al
 valid under the rules of their day and stay readable under yours. Concretely:
 
 - The rule lands in the factory (step 1) and the command (steps 2–4). Never in the canonical
-  constructor of a persisted record, and never in an upcaster — `@Upcast` runs on the read path, and
+  constructor of a persisted record, and never in an upcaster — an `Upcaster` runs on the read path, and
   an upcaster that throws on legacy data manufactures the same poison event a throwing constructor
   does (`SerdeFailureTest` pins what that looks like).
 - Where old data must be brought up to the new shape, an upcaster *converts* — defaults a missing

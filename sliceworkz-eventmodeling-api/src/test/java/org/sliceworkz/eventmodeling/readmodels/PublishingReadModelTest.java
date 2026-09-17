@@ -160,8 +160,8 @@ class PublishingReadModelTest {
 		return Event.of(
 				EventStreamId.forContext("test"),
 				EventReference.of(EventId.create(), position, position),
-				EventType.of(data),
-				EventType.of(data),
+				EventType.of(data.getClass()),
+				EventType.of(data.getClass()),
 				data,
 				Tags.none(),
 				Instant.now());

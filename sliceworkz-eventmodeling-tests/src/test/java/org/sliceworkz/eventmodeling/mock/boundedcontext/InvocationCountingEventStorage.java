@@ -27,6 +27,7 @@ import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
+import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -116,7 +117,7 @@ public class InvocationCountingEventStorage implements EventStorage {
 	}
 
 	@Override
-	public List<StoredEvent> query(EventFilter filter, EventStreamId stream, EventReference from, Limit limit, QueryDirection queryDirection) {
+	public List<StoredEvent> query(EventFilter filter, EventStreamId stream, EventReference from, Limit limit, EventQuery.Direction queryDirection) {
 		queries++;
 		queriesSeen.add(filter);
 		List<StoredEvent> result = wrapped.query(filter, stream, from, limit, queryDirection);

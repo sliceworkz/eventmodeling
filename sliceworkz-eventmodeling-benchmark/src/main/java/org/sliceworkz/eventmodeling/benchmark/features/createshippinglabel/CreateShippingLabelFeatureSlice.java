@@ -32,7 +32,7 @@ public class CreateShippingLabelFeatureSlice implements Slice<OrderProcessing>{
 	@Override
 	public void configureAutomation(BoundedContextBuilder<OrderProcessing> builder) {
 		var requiredShippingLabels = new RequiredShippingLabels(builder.port(DataSource.class));
-		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
+		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.RECREATE ) {
 			requiredShippingLabels.initialize();
 		}
 		builder.readmodel(requiredShippingLabels).eventuallyConsistent();

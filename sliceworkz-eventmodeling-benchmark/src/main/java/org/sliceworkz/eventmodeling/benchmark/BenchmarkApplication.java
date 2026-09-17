@@ -71,7 +71,7 @@ public class BenchmarkApplication {
 		System.out.println("initializeDatabase=" + initializeDatabase);
 		boolean finalInitializeDatabase = initializeDatabase;
 		
-		DatabaseInitMode databaseInitMode = finalInitializeDatabase?DatabaseInitMode.INITIALIZE:DatabaseInitMode.VALIDATE;
+		DatabaseInitMode databaseInitMode = finalInitializeDatabase?DatabaseInitMode.RECREATE:DatabaseInitMode.VALIDATE;
 		
 		/**
 		 * Starting PrometheusRegistry and Javalin REST API to expose metrics 

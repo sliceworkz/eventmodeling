@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.module.historical;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
-import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.sliceworkz.eventmodeling.Untyped;
@@ -35,7 +34,7 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.LegacyEvent;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.events.Upcast;
+import org.sliceworkz.eventstore.events.Upcaster;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
@@ -49,7 +48,7 @@ import org.sliceworkz.eventstore.testing.ForEachBackend;
  * <p>Scenario: A domain originally stored events using {@link OriginalDomainEvent} types.
  * Over time, the event schema evolved to {@link CurrentDomainEvent} types with richer data.
  * Historical events are defined in {@link HistoricalDomainEvent} with {@link LegacyEvent}
- * annotations and {@link Upcast} implementations to transparently transform old events
+ * annotations and {@link Upcaster} implementations to transparently transform old events
  * to current types when read from the event store.</p>
  */
 @SuppressWarnings("unchecked")
@@ -155,32 +154,24 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 	// --- Historical event types with upcasters ---
 
 	public sealed interface HistoricalDomainEvent {
-		@LegacyEvent(upcast = ItemAddedUpcaster.class)
+		@LegacyEvent(upcaster = ItemAddedUpcaster.class)
 		record ItemAdded(String name, int quantity) implements HistoricalDomainEvent {}
 
-		@LegacyEvent(upcast = ItemRemovedUpcaster.class)
+		@LegacyEvent(upcaster = ItemRemovedUpcaster.class)
 		record ItemRemoved(String name) implements HistoricalDomainEvent {}
 	}
 
-	public static class ItemAddedUpcaster implements Upcast<HistoricalDomainEvent.ItemAdded, CurrentDomainEvent.ItemAddedV2> {
+	public static class ItemAddedUpcaster implements Upcaster<HistoricalDomainEvent.ItemAdded, CurrentDomainEvent.ItemAddedV2> {
 		@Override
 		public List<CurrentDomainEvent.ItemAddedV2> upcast(HistoricalDomainEvent.ItemAdded historicalEvent) {
 			return List.of(new CurrentDomainEvent.ItemAddedV2(historicalEvent.name(), historicalEvent.quantity(), "unknown"));
 		}
-		@Override
-		public Set<Class<? extends CurrentDomainEvent.ItemAddedV2>> targetTypes() {
-			return Set.of(CurrentDomainEvent.ItemAddedV2.class);
-		}
 	}
 
-	public static class ItemRemovedUpcaster implements Upcast<HistoricalDomainEvent.ItemRemoved, CurrentDomainEvent.ItemRemovedV2> {
+	public static class ItemRemovedUpcaster implements Upcaster<HistoricalDomainEvent.ItemRemoved, CurrentDomainEvent.ItemRemovedV2> {
 		@Override
 		public List<CurrentDomainEvent.ItemRemovedV2> upcast(HistoricalDomainEvent.ItemRemoved historicalEvent) {
 			return List.of(new CurrentDomainEvent.ItemRemovedV2(historicalEvent.name(), "no reason recorded"));
-		}
-		@Override
-		public Set<Class<? extends CurrentDomainEvent.ItemRemovedV2>> targetTypes() {
-			return Set.of(CurrentDomainEvent.ItemRemovedV2.class);
 		}
 	}
 

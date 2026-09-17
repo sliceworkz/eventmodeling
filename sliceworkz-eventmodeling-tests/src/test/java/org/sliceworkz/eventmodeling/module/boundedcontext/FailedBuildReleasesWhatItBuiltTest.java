@@ -134,7 +134,7 @@ public class FailedBuildReleasesWhatItBuiltTest extends AbstractMockDomainTest {
 		@Override public void close ( ) { wrapped.close(); }
 
 		@Override
-		public List<StoredEvent> query ( EventFilter filter, EventStreamId stream, EventReference from, Limit limit, QueryDirection direction ) {
+		public List<StoredEvent> query ( EventFilter filter, EventStreamId stream, EventReference from, Limit limit, EventQuery.Direction direction ) {
 			return wrapped.query(filter, stream, from, limit, direction);
 		}
 

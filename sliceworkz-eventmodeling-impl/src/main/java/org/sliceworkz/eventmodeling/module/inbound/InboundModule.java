@@ -312,7 +312,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		if ( items.isEmpty() ) {
 			return false; // empty items = match none
 		}
-		EventType type = EventType.of(event);
+		EventType type = EventType.of(event.getClass());
 		return items.stream().anyMatch(item -> item.matches(type, Tags.none()));
 	}
 

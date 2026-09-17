@@ -355,8 +355,8 @@ class SqlReadModelBookmarkTest {
 		return Event.of(
 				EventStreamId.forContext("test"),
 				EventReference.of(EventId.create(), position, tx),
-				EventType.of(new TestEvent(key)),
-				EventType.of(new TestEvent(key)),
+				EventType.of(TestEvent.class),
+				EventType.of(TestEvent.class),
 				new TestEvent(key),
 				Tags.none(),
 				Instant.now());
@@ -406,7 +406,7 @@ class SqlReadModelBookmarkTest {
 					EventId.of(UUID.nameUUIDFromBytes(("order-" + i).getBytes()).toString()), i + 1, i + 1);
 			projector.when(Event.of(
 					EventStreamId.forContext("test"), reference,
-					EventType.of(orders[i]), EventType.of(orders[i]), orders[i],
+					EventType.of(Order.class), EventType.of(Order.class), orders[i],
 					Tags.none(), Instant.now()));
 			last = reference;
 		}

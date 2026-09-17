@@ -100,7 +100,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		List<DecisionModel<CONSUMED_EVENT_TYPE>> plainModels = new ArrayList<>();
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
 			EventQuery initQuery = p.initQuery();
-			if ( initQuery != null && !initQuery.isMatchNone() ) {
+			if ( initQuery != null && !initQuery.filter().isMatchNone() ) {
 				savepointModels.add(p);
 			} else {
 				plainModels.add(p);
@@ -216,7 +216,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 				reads.add(new MergedRead<>(query, new ArrayList<>(List.of(model))));
 				continue;
 			}
-			GroupKey key = new GroupKey(query.direction(), query.until());
+			GroupKey key = new GroupKey(query.direction(), query.filter().until());
 			Integer index = groupIndex.get(key);
 			if ( index == null ) {
 				groupIndex.put(key, reads.size());
@@ -256,7 +256,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		public void when ( Event<E> event ) {
 			for ( int i = 0; i < models.size(); i++ ) {
 				DecisionModel<E> model = models.get(i);
-				if ( model.eventQuery().matches(event) ) {
+				if ( model.eventQuery().filter().matches(event) ) {
 					model.when(event);
 					handled[i]++;
 				}

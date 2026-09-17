@@ -32,7 +32,7 @@ public class PackageOrderFeatureSlice implements Slice<OrderProcessing>{
 	@Override
 	public void configureAutomation(BoundedContextBuilder<OrderProcessing> builder) {
 		var ordersReadyToPackage = new OrdersReadyToPackage(builder.port(DataSource.class));
-		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
+		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.RECREATE ) {
 			ordersReadyToPackage.initialize();
 		}
 		builder.readmodel(ordersReadyToPackage).eventuallyConsistent();

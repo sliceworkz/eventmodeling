@@ -32,7 +32,7 @@ public class AnnounceShipmentFeatureSlice implements Slice<OrderProcessing>{
 	@Override
 	public void configureAutomation(BoundedContextBuilder<OrderProcessing> builder) {
 		var shipmentsToBeAnounced = new ShipmentsToBeAnounced(builder.port(DataSource.class));
-		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
+		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.RECREATE ) {
 			shipmentsToBeAnounced.initialize();
 		}
 		builder.readmodel(shipmentsToBeAnounced).eventuallyConsistent();

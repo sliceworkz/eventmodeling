@@ -415,7 +415,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 
 		@Override
 		public List<StoredEvent> query ( EventFilter filter, org.sliceworkz.eventstore.stream.EventStreamId stream,
-				EventReference after, Limit limit, QueryDirection queryDirection ) {
+				EventReference after, Limit limit, EventQuery.Direction queryDirection ) {
 			return delegate.query(filter, stream, after, limit, queryDirection);
 		}
 

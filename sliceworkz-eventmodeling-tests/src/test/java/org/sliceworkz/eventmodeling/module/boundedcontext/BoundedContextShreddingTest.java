@@ -82,7 +82,7 @@ public class BoundedContextShreddingTest extends AbstractBoundedContextTest<Shre
 		assertEquals("Alice Martin", before.from().orElse(null));
 		assertEquals("Bob Jansen", before.to().orElse(null));
 
-		ErasureReport report = kernel().erase(ALICE, ErasureReason.of("GDPR art.17 request #4711"));
+		ErasureReport report = kernel().eraseCategory(ALICE, ErasureReason.of("GDPR art.17 request #4711"));
 		assertEquals(1, report.keysShredded());
 		assertFalse(report.isNoop());
 
@@ -109,7 +109,7 @@ public class BoundedContextShreddingTest extends AbstractBoundedContextTest<Shre
 				Tags.of("transfer", "t-9002")));
 
 		// the per-category erasure is exactly that: the other category stays readable
-		ErasureReport oneCategory = kernel().erase(ALICE, ErasureReason.of("marketing opt-out #12"));
+		ErasureReport oneCategory = kernel().eraseCategory(ALICE, ErasureReason.of("marketing opt-out #12"));
 		assertEquals(1, oneCategory.keysShredded());
 		ShreddingDomainEvent.TransferMade afterOne = transfer("t-9002");
 		assertTrue(afterOne.from().isShredded());
@@ -117,7 +117,7 @@ public class BoundedContextShreddingTest extends AbstractBoundedContextTest<Shre
 				"erasing one category must not touch another, or a per-category request could not be honoured");
 
 		// the whole-person erasure takes no category and reaches the one still holding a live key
-		SubjectErasureReport person = kernel().eraseAllCategories("customer", "alice-42", ErasureReason.of("GDPR art.17 request #4712"));
+		SubjectErasureReport person = kernel().erase("customer", "alice-42", ErasureReason.of("GDPR art.17 request #4712"));
 		assertEquals(1, person.keysShredded());
 		assertEquals(java.util.List.of("marketing"), person.categoriesErased());
 		assertFalse(person.isNoop());
@@ -126,7 +126,7 @@ public class BoundedContextShreddingTest extends AbstractBoundedContextTest<Shre
 		assertTrue(afterAll.to().isShredded(), "a request to be forgotten must reach every category");
 
 		// idempotent, like erase
-		assertTrue(kernel().eraseAllCategories("customer", "alice-42", ErasureReason.of("again")).isNoop());
+		assertTrue(kernel().erase("customer", "alice-42", ErasureReason.of("again")).isNoop());
 	}
 
 	private ShreddingDomainEvent.TransferMade transfer ( String transferId ) {
@@ -136,7 +136,7 @@ public class BoundedContextShreddingTest extends AbstractBoundedContextTest<Shre
 
 	@Test
 	void erasingASubjectThatHoldsNoKeysIsANoop ( ) {
-		ErasureReport report = kernel().erase(
+		ErasureReport report = kernel().eraseCategory(
 				DataSubject.of("customer", "nobody"), ErasureReason.of("art.17"));
 
 		assertTrue(report.isNoop());

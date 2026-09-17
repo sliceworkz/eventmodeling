@@ -552,8 +552,8 @@ processor:**
   defaults to reading the bookmark before *each* execution, and a projector in that mode follows a
   bookmark removed or rewound by hand: an absent bookmark resets its position to the start of the
   stream and the next run replays everything. `ProjectorProcessor.createProjector` sets the
-  frequency on both branches — `readBeforeFirstExecution()` for a processor on the shared bookmark,
-  `readOnManualTriggerOnly()` for a `SelfBookmarkingProjection` whose bookmark is written and never
+  frequency on both branches — `readBookmarkOnce()` for a processor on the shared bookmark,
+  `readBookmarkOnRequest()` for a `SelfBookmarkingProjection` whose bookmark is written and never
   read — because the processor owns the bookmark it writes: it resumes from it at start and re-seeds
   on promotion, and nothing else is meant to move it underneath a running processor. Left to the
   default, an operator removing a bookmark to rebuild a read model, or the framework dropping an
@@ -632,7 +632,7 @@ processor:**
   upserts the reference of its last event into a `<prefix>_projection_bookmark` table **inside the
   transaction that writes the rows**, so the state and the position become durable together and cannot
   disagree. Startup resumes from that table through `Projector.startingAfter(...)`, and the eventstore
-  bookmark is written but never read (`readOnManualTriggerOnly`) — it stays as the record an operator and
+  bookmark is written but never read (`readBookmarkOnRequest`) — it stays as the record an operator and
   the dashboard see, lagging the truth by at most one batch
 - **An absent row means replay from the beginning, and deliberately does not fall back** to the eventstore
   bookmark. That is what makes "drop the tables to rebuild" work with nothing else to reset, and what
@@ -1381,7 +1381,8 @@ The framework depends on the separate `sliceworkz-eventstore` library:
 
 **Key Concepts:**
 - `EventStorage`: SPI for persistence (PostgreSQL, in-memory)
-- `EventStore`: Main API created via `EventStoreFactory.get().eventStore(storage)`
+- `EventStore`: Main API, built on a storage with `EventStore.on(storage).build()` (`EventStoreFactory`
+  is the SPI behind it, and nothing application code needs to name)
 - `EventStream`: Typed event stream for bounded context
 - `EventQuery`: Query events with filters
 - `EventReference`: Pointer to specific event by ID
@@ -1389,7 +1390,7 @@ The framework depends on the separate `sliceworkz-eventstore` library:
 **Creating EventStore:**
 ```java
 EventStorage storage = InMemoryEventStorage.newBuilder().build();
-EventStore eventStore = EventStoreFactory.get().eventStore(storage);
+EventStore eventStore = EventStore.on(storage).build();
 ```
 
 **What the eventstore puts on the classpath, and what this project declares itself.** The eventstore
@@ -1458,8 +1459,7 @@ Payments payments = BoundedContext.newBuilder(Payments.class)
         .shredding(PostgresShreddingKeyStore.on(dataSource, "acme_"))   // that is the whole setup
         .build();
 
-payments.erase(DataSubject.of("customer", "alice-42"),
-               ErasureReason.of("GDPR art.17 request #4711"));
+payments.erase("customer", "alice-42", ErasureReason.of("GDPR art.17 request #4711"));
 ```
 
 - **`shredding(...)` is the only configuration.** The shipped AES-256-GCM codec is applied for you, so
@@ -1476,13 +1476,16 @@ payments.erase(DataSubject.of("customer", "alice-42"),
   `ShreddingCarriedByTheStorageTest` pins both halves
 - **With neither, a domain event declaring a `Shreddable` cannot be registered**, so the context fails
   at startup rather than storing personal data in the clear with no key to destroy.
-- **`erase(subject, reason)` erases one category; `eraseAllCategories(type, id, reason)` erases the
-  person.** A `DataSubject` always names a category (`DataSubject.of(type, id)` is the `default` one),
-  and `erase` destroys the keys of that category only — right for a request scoped to one category,
-  and wrong for a request to be forgotten, where a category left readable is an erasure reported as
-  done and not performed. `PrivacyCapability.eraseAllCategories` takes no category, so it cannot be
-  narrowed by accident, and answers a `SubjectErasureReport` with one `ErasureReport` per category
-  that held live keys. `BoundedContextShreddingTest.erasingAPersonReachesEveryCategoryWhereErasingASubjectReachesOne`
+- **`erase(type, id, reason)` erases the person; `eraseCategory(subject, reason)` erases one
+  category** — the same two shapes, under the same names, as the eventstore's `EventStore`, which the
+  context delegates to. The plain name is the whole-person erasure because that is what a request to
+  be forgotten asks for: it takes no category, so it cannot be narrowed by accident, and answers a
+  `SubjectErasureReport` with one `ErasureReport` per category that held live keys. A `DataSubject`
+  always names a category (`DataSubject.of(type, id)` is the `default` one), and `eraseCategory`
+  destroys the keys of that category only — right for a request scoped to one category, and wrong for
+  a request to be forgotten, where a category left readable is an erasure reported as done and not
+  performed, which is why that erasure carries the qualifier.
+  `BoundedContextShreddingTest.erasingAPersonReachesEveryCategoryWhereErasingASubjectReachesOne`
   pins the difference
 - **The framework is otherwise untouched.** Commands, projectors, automations, translators and
   dispatchers see a `Shreddable` as an ordinary payload value. There is nothing to configure per slice.

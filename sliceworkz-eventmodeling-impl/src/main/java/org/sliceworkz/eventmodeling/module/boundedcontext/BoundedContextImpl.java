@@ -339,25 +339,25 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 */
 
 	/**
-	 * Destroys the keys protecting a data subject's personal data, delegating to the store this context
-	 * built. Nothing in the event log is written; see {@link PrivacyCapability} for what that means for
-	 * read models, which keep their copies until they are rebuilt.
+	 * Destroys every key protecting a person's personal data, whatever the category, delegating to the
+	 * store this context built. Nothing in the event log is written; see {@link PrivacyCapability} for
+	 * what that means for read models, which keep their copies until they are rebuilt.
 	 */
 	@Override
-	public ErasureReport erase ( DataSubject subject, ErasureReason reason ) {
-		ErasureReport report = eventStore.erase(subject, reason);
+	public SubjectErasureReport erase ( String subjectType, String subjectId, ErasureReason reason ) {
+		SubjectErasureReport report = eventStore.erase(subjectType, subjectId, reason);
 		// Logged by the context as well as by the store: an erasure is irreversible, the events record
 		// nothing about it, and "which bounded context was asked" is the part the store cannot say.
-		LOGGER.info("bounded context '{}' erased data subject {}: {} key(s) shredded ({})",
-				name, subject, report.keysShredded(), reason);
+		LOGGER.info("bounded context '{}' erased data subject {}/{} across {}: {} key(s) shredded ({})",
+				name, subjectType, subjectId, report.categoriesErased(), report.keysShredded(), reason);
 		return report;
 	}
 
 	@Override
-	public SubjectErasureReport eraseAllCategories ( String subjectType, String subjectId, ErasureReason reason ) {
-		SubjectErasureReport report = eventStore.eraseAllCategories(subjectType, subjectId, reason);
-		LOGGER.info("bounded context '{}' erased data subject {}/{} across {}: {} key(s) shredded ({})",
-				name, subjectType, subjectId, report.categoriesErased(), report.keysShredded(), reason);
+	public ErasureReport eraseCategory ( DataSubject subject, ErasureReason reason ) {
+		ErasureReport report = eventStore.eraseCategory(subject, reason);
+		LOGGER.info("bounded context '{}' erased data subject {}: {} key(s) shredded ({})",
+				name, subject, report.keysShredded(), reason);
 		return report;
 	}
 

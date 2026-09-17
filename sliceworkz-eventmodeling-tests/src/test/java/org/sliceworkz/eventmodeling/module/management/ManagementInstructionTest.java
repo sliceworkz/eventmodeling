@@ -63,7 +63,6 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.module.management.OperatorTestComponents.RecordingAutomation;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
@@ -102,7 +101,7 @@ public class ManagementInstructionTest extends AbstractMockDomainTest {
 	void openTheManagementStore ( ) {
 		// the stream lives on the same storage as the domain here; in production it lives wherever the
 		// monitoring store does, which is what every instance and the operator's tooling can reach
-		managementStore = EventStoreFactory.get().eventStore(eventStorage());
+		managementStore = EventStore.on(eventStorage()).build();
 		operator = managementStore.getEventStream(ManagementInstruction.STREAM, ManagementInstruction.class);
 	}
 

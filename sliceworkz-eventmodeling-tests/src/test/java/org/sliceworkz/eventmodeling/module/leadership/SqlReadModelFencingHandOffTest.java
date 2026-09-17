@@ -37,7 +37,6 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.sql.SqlReadModelProjector;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
@@ -111,7 +110,7 @@ public class SqlReadModelFencingHandOffTest extends AbstractMockDomainTest {
 	}
 
 	private void appendDomainEvents ( String description ) {
-		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage());
+		EventStore eventStore = EventStore.on(eventStorage()).build();
 		EventStream<MockDomainEvent> domainEventStream = eventStore.getEventStream(
 				EventStreamId.forContext(CONTEXT_NAME).withPurpose(DOMAIN_PURPOSE), MockDomainEvent.class);
 

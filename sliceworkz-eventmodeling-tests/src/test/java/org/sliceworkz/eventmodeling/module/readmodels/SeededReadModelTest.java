@@ -42,7 +42,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelResult;
 import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -239,7 +238,7 @@ public class SeededReadModelTest extends AbstractMockDomainTest {
 	 */
 	private Counts projectedByHand ( ) {
 		Counts base = new Counts();
-		Projector.from(domainStream()).towards(base).build().run();
+		Projector.from(domainStream()).into(base).build().run();
 		return base;
 	}
 
@@ -252,7 +251,7 @@ public class SeededReadModelTest extends AbstractMockDomainTest {
 	}
 
 	private EventStream<MockDomainEvent> domainStream ( ) {
-		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage());
+		EventStore eventStore = EventStore.on(eventStorage()).build();
 		return eventStore.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose(DOMAIN_PURPOSE), MockDomainEvent.class);
 	}
 

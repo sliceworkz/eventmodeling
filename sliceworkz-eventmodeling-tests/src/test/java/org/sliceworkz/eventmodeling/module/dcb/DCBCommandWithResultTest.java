@@ -32,7 +32,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
@@ -61,7 +61,7 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 
 		Mock domain = buildBoundedContext(builder);
 
-		directStream = EventStoreFactory.get().eventStore(eventStorage())
+		directStream = EventStore.on(eventStorage()).build()
 				.getEventStream(
 						EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
 						MockDomainEvent.class);

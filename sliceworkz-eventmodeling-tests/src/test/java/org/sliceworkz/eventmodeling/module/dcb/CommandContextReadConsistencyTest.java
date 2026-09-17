@@ -32,7 +32,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
@@ -63,7 +63,7 @@ public class CommandContextReadConsistencyTest extends AbstractMockDomainTest {
 
 		Mock domain = buildBoundedContext(builder);
 
-		directStream = EventStoreFactory.get().eventStore(eventStorage())
+		directStream = EventStore.on(eventStorage()).build()
 				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"), MockDomainEvent.class);
 
 		return domain;

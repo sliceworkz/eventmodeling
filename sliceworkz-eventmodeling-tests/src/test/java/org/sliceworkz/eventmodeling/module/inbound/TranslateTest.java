@@ -36,7 +36,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent.SomeInboundEvent;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -101,12 +101,12 @@ public class TranslateTest extends AbstractMockDomainTest {
 	}
 
 	private EventStream<MockDomainEvent> domainStream ( ) {
-		return EventStoreFactory.get().eventStore(eventStorage())
+		return EventStore.on(eventStorage()).build()
 			.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"), MockDomainEvent.class);
 	}
 
 	private EventStream<MockInboundEvent> inboundStream ( ) {
-		return EventStoreFactory.get().eventStore(eventStorage())
+		return EventStore.on(eventStorage()).build()
 			.getEventStream(EventStreamId.anyContext().withPurpose("inbound"), MockInboundEvent.class);
 	}
 

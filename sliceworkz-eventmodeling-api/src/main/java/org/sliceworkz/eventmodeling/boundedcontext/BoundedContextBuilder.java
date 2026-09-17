@@ -130,7 +130,7 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 *
 	 * @param shreddingKeyStore where keys are minted, resolved and destroyed
 	 * @return this builder
-	 * @see PrivacyCapability#erase(org.sliceworkz.eventstore.shredding.DataSubject, org.sliceworkz.eventstore.shredding.ErasureReason)
+	 * @see PrivacyCapability#erase(String, String, org.sliceworkz.eventstore.shredding.ErasureReason)
 	 */
 	BoundedContextBuilder<C> shredding(ShreddingKeyStore shreddingKeyStore);
 

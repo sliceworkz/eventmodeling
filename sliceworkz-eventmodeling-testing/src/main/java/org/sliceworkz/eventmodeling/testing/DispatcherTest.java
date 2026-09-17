@@ -118,7 +118,7 @@ public abstract class DispatcherTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 	private Dispatcher<OUTBOUND_EVENT_TYPE> dispatcherUnderTest ( ) {
 		if ( dispatcherUnderTest == null ) {
 			dispatcherUnderTest = dispatcher();
-			dispatcherProjector = Projector.from(outboundStream()).towards(dispatcherUnderTest).build();
+			dispatcherProjector = Projector.from(outboundStream()).into(dispatcherUnderTest).build();
 		}
 		return dispatcherUnderTest;
 	}
@@ -169,7 +169,7 @@ public abstract class DispatcherTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 		 * tolerates it.
 		 */
 		public DispatchResult whenRedeliveredFromTheStart ( ) {
-			return new DispatchResult(this, Projector.from(outboundStream()).towards(dispatcherUnderTest()).build().run().eventsHandled());
+			return new DispatchResult(this, Projector.from(outboundStream()).into(dispatcherUnderTest()).build().run().eventsHandled());
 		}
 	}
 

@@ -49,7 +49,7 @@ import org.sliceworkz.eventmodeling.mock.sliced.SlicedCommand;
 import org.sliceworkz.eventmodeling.mock.sliced.SlicedFeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
@@ -332,7 +332,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 
 	@Test
 	void streamAppendingListenerPersistsLifecycleEventToStream() {
-		EventStream<BoundedContextEvent> kernelStream = EventStoreFactory.get().eventStore(eventStorage())
+		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
 				.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("kernel"), BoundedContextEvent.class);
 
 		buildDomain(new StreamAppendingBoundedContextListener(kernelStream));
@@ -362,7 +362,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 				"disabledFeatures":[]}""",
 				Tags.none(), null)));
 
-		EventStream<BoundedContextEvent> kernelStream = EventStoreFactory.get().eventStore(eventStorage())
+		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
 				.getEventStream(streamId, BoundedContextEvent.class);
 		List<BoundedContextEvent> persisted = kernelStream.query(EventQuery.matchAll()).stream()
 				.map(org.sliceworkz.eventstore.events.Event::data)
@@ -389,7 +389,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 				"disabledFeatures":[]}""",
 				Tags.none(), null)));
 
-		EventStream<BoundedContextEvent> kernelStream = EventStoreFactory.get().eventStore(eventStorage())
+		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
 				.getEventStream(streamId, BoundedContextEvent.class);
 		BoundedContextEvent.BoundedContextStarting starting = (BoundedContextEvent.BoundedContextStarting)
 				kernelStream.query(EventQuery.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();

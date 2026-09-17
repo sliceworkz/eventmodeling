@@ -44,7 +44,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent.SomeInboundEvent;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
@@ -169,7 +169,7 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 	}
 
 	private List<MockDomainEvent> translatedDomainEvents ( ) {
-		EventStream<MockDomainEvent> domainStream = EventStoreFactory.get().eventStore(eventStorage())
+		EventStream<MockDomainEvent> domainStream = EventStore.on(eventStorage()).build()
 				.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class);
 		return domainStream.query(EventQuery.matchAll()).stream().map(Event::data).toList();
 	}

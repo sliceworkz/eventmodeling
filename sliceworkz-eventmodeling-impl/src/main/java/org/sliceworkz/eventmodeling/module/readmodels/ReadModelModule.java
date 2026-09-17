@@ -72,7 +72,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private ProcessorThreadManager<DOMAIN_EVENT_TYPE> processorThreadManager;
 
 	private EventSource<DOMAIN_EVENT_TYPE> domainEventStream;
-	private EventSource<Object> allInStorageEventStream;
+	private EventSource<String> allInStorageEventStream;
 	private Map<Class<? extends ReadModel<DOMAIN_EVENT_TYPE>>, LiveModelInfo<DOMAIN_EVENT_TYPE>> liveModels = new HashMap<>();
 	private Collection<ReadModel<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels = new ArrayList<>();
 	private String boundedContext;
@@ -100,7 +100,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	public <LMSI extends LiveModelSpecificationAccessor> ReadModelModule (
 			String boundedContext,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
-			EventSource<Object> allInStorageEventStream,
+			EventSource<String> allInStorageEventStream,
 			List<LMSI> liveModelSpecs,
 			Collection<ReadModel<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels,
 			Instance instance,
@@ -372,7 +372,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			EventReference seededAt = lastEventReference;
 
 			// Replay events — starting after the base a seed or a snapshot supplied, if any
-			Projector projector = Projector.from(eventSource).towards(readModel).startingAfter(lastEventReference).build();
+			Projector projector = Projector.from(eventSource).into(readModel).startingAfter(lastEventReference).build();
 			ProjectorMetrics projectorMetrics = projector.run();
 
 			// Save snapshot if configured and threshold met

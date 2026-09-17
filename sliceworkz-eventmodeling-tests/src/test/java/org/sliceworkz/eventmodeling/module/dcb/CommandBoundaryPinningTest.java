@@ -39,7 +39,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.ThirdDomainEvent;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
@@ -90,7 +90,7 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 		super.setUp();
 		this.countingStorage = new InvocationCountingEventStorage(eventStorage());
 		// bypasses the counting storage on purpose, so seeding and injecting count as nothing
-		this.directStream = EventStoreFactory.get().eventStore(eventStorage())
+		this.directStream = EventStore.on(eventStorage()).build()
 				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"), MockDomainEvent.class);
 	}
 

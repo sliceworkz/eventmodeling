@@ -32,7 +32,6 @@ import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.testing.AbstractEventStoreTest;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.EventStoreFactory;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.LegacyEvent;
 import org.sliceworkz.eventstore.events.Tags;
@@ -72,7 +71,7 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 	void historicalEventsAreUpcastedAndVisibleThroughReadModel() {
 
 		// Step 1: Write events using the ORIGINAL event types (simulating legacy data)
-		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage());
+		EventStore eventStore = EventStore.on(eventStorage()).build();
 		EventStream<OriginalDomainEvent> originalStream = eventStore.getEventStream(
 				EventStreamId.forContext("test-historical").withPurpose("domain"),
 				OriginalDomainEvent.class);
@@ -109,7 +108,7 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 	void historicalEventsAreUpcastedAndVisibleThroughCommand() {
 
 		// Write an event using the ORIGINAL event types
-		EventStore eventStore = EventStoreFactory.get().eventStore(eventStorage());
+		EventStore eventStore = EventStore.on(eventStorage()).build();
 		EventStream<OriginalDomainEvent> originalStream = eventStore.getEventStream(
 				EventStreamId.forContext("test-historical").withPurpose("domain"),
 				OriginalDomainEvent.class);

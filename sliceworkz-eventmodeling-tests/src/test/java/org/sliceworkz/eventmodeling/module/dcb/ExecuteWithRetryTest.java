@@ -50,7 +50,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
-import org.sliceworkz.eventstore.EventStoreFactory;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -86,7 +86,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"))
 				.listener(event -> received.add(event.data()));
 		Mock domain = buildBoundedContext(builder);
-		domainStream = EventStoreFactory.get().eventStore(eventStorage())
+		domainStream = EventStore.on(eventStorage()).build()
 				.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class);
 		return domain;
 	}

@@ -17,8 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.outbound;
 
-import org.sliceworkz.eventstore.projection.ProjectionWithoutMetaData;
+import org.sliceworkz.eventstore.projection.Projection;
 
-public interface Dispatcher<OUTBOUND_EVENT_TYPE> extends ProjectionWithoutMetaData<OUTBOUND_EVENT_TYPE>{
+public interface Dispatcher<OUTBOUND_EVENT_TYPE> extends Projection<OUTBOUND_EVENT_TYPE> {
 	
 }

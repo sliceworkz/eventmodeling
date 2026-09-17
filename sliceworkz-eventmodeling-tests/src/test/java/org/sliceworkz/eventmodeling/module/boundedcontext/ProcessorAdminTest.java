@@ -50,6 +50,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventDeserializationException;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
@@ -218,11 +219,11 @@ public class ProcessorAdminTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void when ( MockDomainEvent event ) {
+		public void when ( Event<MockDomainEvent> event ) {
 			if ( poisonous ) {
-				throw new EventDeserializationException(EventType.of(event.getClass()), "this event cannot be read");
+				throw new EventDeserializationException(EventType.of(event.data().getClass()), "this event cannot be read");
 			}
-			applied.add(((FirstDomainEvent) event).value());
+			applied.add(((FirstDomainEvent) event.data()).value());
 		}
 
 		List<String> applied ( ) {
@@ -251,7 +252,7 @@ public class ProcessorAdminTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void when ( MockOutboundEvent event ) {
+		public void when ( Event<MockOutboundEvent> event ) {
 			// no-op for the test
 		}
 	}

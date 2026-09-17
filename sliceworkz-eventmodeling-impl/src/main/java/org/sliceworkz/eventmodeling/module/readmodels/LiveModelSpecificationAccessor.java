@@ -17,7 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.readmodels;
 
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 
 /**
@@ -25,7 +25,7 @@ import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
  */
 public interface LiveModelSpecificationAccessor {
 
-	Class<? extends ReadModelWithMetaData<?>> readModelClass ( );
+	Class<? extends ReadModel<?>> readModelClass ( );
 
 	SnapshotStorage<Object> snapshotStorage ( );
 

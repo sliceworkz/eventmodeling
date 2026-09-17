@@ -71,7 +71,7 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  * @param <STATE> the immutable state this read model folds its events into
  */
 public abstract class PublishingReadModel<DOMAIN_EVENT_TYPE, STATE>
-		implements ReadModelWithMetaData<DOMAIN_EVENT_TYPE>, BatchAwareProjection<DOMAIN_EVENT_TYPE> {
+		implements ReadModel<DOMAIN_EVENT_TYPE>, BatchAwareProjection<DOMAIN_EVENT_TYPE> {
 
 	// the only field a reader touches, and it is only ever replaced, never mutated
 	private volatile ReadModelResult<STATE> published;

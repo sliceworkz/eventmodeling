@@ -41,7 +41,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
@@ -175,9 +175,9 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 	}
 
 	Mock domainWithReadModels (
-			Collection<Class<? extends ReadModelWithMetaData<MockDomainEvent>>> liveModelClasses,
-			Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentSharedReadModels,
-			Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentLocalReadModels ) {
+			Collection<Class<? extends ReadModel<MockDomainEvent>>> liveModelClasses,
+			Collection<ReadModel<MockDomainEvent>> eventuallyConsistentSharedReadModels,
+			Collection<ReadModel<MockDomainEvent>> eventuallyConsistentLocalReadModels ) {
 
 		var builder =
 				BoundedContext.newBuilder(Mock.class)
@@ -186,34 +186,34 @@ public class EventDispatchingToReadModelsTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"));
 
 		liveModelClasses.stream().map(builder::readmodel).forEach(LiveModelSpecification::live);
-		// shared vs local is declared by the read models themselves (ReadModelWithMetaData.storage())
+		// shared vs local is declared by the read models themselves (ReadModel.storage())
 		eventuallyConsistentSharedReadModels.stream().map(builder::readmodel).forEach(EventuallyConsistentReadModelSpecification::eventuallyConsistent);
 		eventuallyConsistentLocalReadModels.stream().map(builder::readmodel).forEach(EventuallyConsistentReadModelSpecification::eventuallyConsistent);
 
 		return buildBoundedContext ( builder );
 	}
 
-	Collection<Class<? extends ReadModelWithMetaData<MockDomainEvent>>> liveModels ( ) {
+	Collection<Class<? extends ReadModel<MockDomainEvent>>> liveModels ( ) {
 		return Arrays.asList(MockReadModel.class);
 	}
 
-	Collection<Class<? extends ReadModelWithMetaData<MockDomainEvent>>> noLiveModels ( ) {
+	Collection<Class<? extends ReadModel<MockDomainEvent>>> noLiveModels ( ) {
 		return Collections.emptyList();
 	}
 
-	Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentSharedModels ( ) {
+	Collection<ReadModel<MockDomainEvent>> eventuallyConsistentSharedModels ( ) {
 		return Arrays.asList(eventuallyConsistentSharedModel, eventuallyConsistentSharedModelOnlyFirstEventType, eventuallyConsistentSharedModelOnlySecondEventType, eventuallyConsistentSharedModelOnlyThirdEventType);
 	}
 
-	Collection<ReadModelWithMetaData<MockDomainEvent>> eventuallyConsistentLocalModels ( ) {
+	Collection<ReadModel<MockDomainEvent>> eventuallyConsistentLocalModels ( ) {
 		return Arrays.asList(eventuallyConsistentLocalModel, eventuallyConsistentLocalModelOnlyFirstEventType, eventuallyConsistentLocalModelOnlySecondEventType, eventuallyConsistentLocalModelOnlyThirdEventType);
 	}
 
-	Collection<ReadModelWithMetaData<MockDomainEvent>> noEventuallyConsistentSharedModels ( ) {
+	Collection<ReadModel<MockDomainEvent>> noEventuallyConsistentSharedModels ( ) {
 		return Collections.emptyList();
 	}
 
-	Collection<ReadModelWithMetaData<MockDomainEvent>> noEventuallyConsistentLocalModels ( ) {
+	Collection<ReadModel<MockDomainEvent>> noEventuallyConsistentLocalModels ( ) {
 		return Collections.emptyList();
 	}
 

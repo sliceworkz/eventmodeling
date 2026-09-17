@@ -29,7 +29,7 @@ import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
-import org.sliceworkz.eventmodeling.readmodels.ReadModelWithMetaData;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.SelfBookmarkingProjection;
 import org.sliceworkz.eventmodeling.readmodels.StaleLeadershipException;
 import org.sliceworkz.eventstore.events.Event;
@@ -41,13 +41,13 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  *
  * <p>Handles the batch-aware projection lifecycle (connection management, transactions),
  * table creation, and event reference tracking. This class is registered with the
- * framework as a {@link ReadModelWithMetaData} and {@link BatchAwareProjection} so
+ * framework as a {@link ReadModel} and {@link BatchAwareProjection} so
  * events are delivered to it automatically.
  *
  * <p>Subclasses implement:
  * <ul>
  *   <li>{@link #createTables()} — DDL statements (use {@link #table(String)} for table names)</li>
- *   <li>{@link ReadModelWithMetaData#eventQuery()} — which events to subscribe to</li>
+ *   <li>{@link ReadModel#eventQuery()} — which events to subscribe to</li>
  *   <li>{@link #project(Event)} — event projection logic</li>
  * </ul>
  *
@@ -94,7 +94,7 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  *
  * @param <T> the domain event type
  */
-public abstract class SqlReadModelProjector<T> extends SqlReadModel implements ReadModelWithMetaData<T>, BatchAwareProjection<T>, SelfBookmarkingProjection {
+public abstract class SqlReadModelProjector<T> extends SqlReadModel implements ReadModel<T>, BatchAwareProjection<T>, SelfBookmarkingProjection {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(SqlReadModelProjector.class);
 

@@ -40,6 +40,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventDeserializationException;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
@@ -223,8 +224,8 @@ public class ReadModelProjectorLifecycleTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void when ( MockDomainEvent event ) {
-			throw new EventDeserializationException(EventType.of(event.getClass()), "this read model cannot read this event");
+		public void when ( Event<MockDomainEvent> event ) {
+			throw new EventDeserializationException(EventType.of(event.data().getClass()), "this read model cannot read this event");
 		}
 
 	}

@@ -21,8 +21,8 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 
 public interface ReadModelCapability<DOMAIN_EVENT_TYPE> {
 
-	<T> T read ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params );
+	<T> T read ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params );
 
-	<T> T read ( Class<? extends ReadModelWithMetaData<? extends DOMAIN_EVENT_TYPE>> readModelClass,  Object... params );
+	<T> T read ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass,  Object... params );
 
 }

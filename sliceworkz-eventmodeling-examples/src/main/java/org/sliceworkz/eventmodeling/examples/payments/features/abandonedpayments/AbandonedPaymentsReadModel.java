@@ -23,6 +23,7 @@ import java.util.List;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentAbandoned;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
@@ -46,8 +47,8 @@ public class AbandonedPaymentsReadModel implements ReadModel<PaymentsDomainEvent
 	}
 
 	@Override
-	public void when ( PaymentsDomainEvent event ) {
-		if ( event instanceof PaymentAbandoned a ) {
+	public void when ( Event<PaymentsDomainEvent> event ) {
+		if ( event.data() instanceof PaymentAbandoned a ) {
 			abandoned.add(new AbandonedPayment(a.paymentId().value(), a.reason(), a.attempts()));
 		}
 	}

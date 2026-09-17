@@ -40,6 +40,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 
@@ -207,7 +208,7 @@ class MeteredAggregate implements Aggregate<MockDomainEvent>, SnapshotCapable<Me
 	}
 
 	@Override
-	public void when ( MockDomainEvent event ) {
+	public void when ( Event<MockDomainEvent> event ) {
 		data.counter++;
 	}
 

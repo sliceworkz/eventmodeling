@@ -229,9 +229,9 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 		}
 
 		@Override
-		public void when(CurrentDomainEvent event) {
+		public void when ( Event<CurrentDomainEvent> event ) {
 			eventCount++;
-			switch (event) {
+			switch ( event.data() ) {
 				case CurrentDomainEvent.ItemAddedV2 added -> totalAdded += added.quantity();
 				case CurrentDomainEvent.ItemRemovedV2 ignored -> {}
 			}

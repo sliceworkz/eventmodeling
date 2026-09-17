@@ -34,6 +34,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
@@ -146,7 +147,7 @@ class MeteredLiveModel implements ReadModel<MockDomainEvent>, SnapshotCapable<Me
 	}
 
 	@Override
-	public void when ( MockDomainEvent event ) {
+	public void when ( Event<MockDomainEvent> event ) {
 		data.counter++;
 	}
 

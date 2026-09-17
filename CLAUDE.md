@@ -467,10 +467,23 @@ turn a forgotten verb into a read model that silently is not there, trading a mi
 time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins it.
 
 **ReadModels:**
-- Implement `ReadModel<DOMAIN_EVENT_TYPE>` which extends `EventHandler<DOMAIN_EVENT_TYPE>`
-- Define which events to handle via `when(EventType event)` methods
+- Implement `ReadModel<DOMAIN_EVENT_TYPE>`, which is the eventstore's `Projection` plus a name and a
+  storage class
+- Handle events in `when(Event<DOMAIN_EVENT_TYPE> event)`: the domain event is `event.data()`, the
+  tags, timestamp and reference sit beside it. **There is one `when`, and it takes the `Event`.** The
+  eventstore's `EventHandler` has one abstract method, and every component built on it here —
+  `ReadModel`, `TodoListReadModel`, `SeededReadModel`, `DecisionModel`, `Dispatcher`, `Aggregate` —
+  has the same one. The alternative — a payload-only `when(D)` beside it, with `ReadModel` hiding the
+  metadata and a `ReadModelWithMetaData` exposing it, a `DecisionModelWithoutMetaData` beside
+  `DecisionModel`, and the same pair on the eventstore's handler and projection — loses because two
+  methods of one name on one object, one to call and one to implement, is a split the compiler never
+  enforces, because a read model over `Object` (the dashboard's analytics model) then has
+  `when(Object)` and `when(Event<Object>)` where an `Event` *is* an `Object`, and because every
+  interface in the ladder had to exist twice for one `.data()` call. A payload-only convenience, if
+  ever wanted, gets a distinct method name, never an overload of `when`; the reasoning is on the
+  eventstore's `EventHandler`
 - Can be queried via `boundedContext.read(ReadModelClass.class, ...)`
-- A read model declares where it keeps its state via `ReadModelWithMetaData.storage()`, returning a `ReadModelStorage`:
+- A read model declares where it keeps its state via `ReadModel.storage()`, returning a `ReadModelStorage`:
   - `EPHEMERAL` (default): in-memory, gone with the process. Every instance projects its own copy and stale bookmarks are dropped at startup
   - `LOCAL`: durable but private to one instance. Every instance projects its own copy and resumes from its own bookmark
   - `SHARED`: durable storage the whole deployment reads and writes. A single elected leader projects

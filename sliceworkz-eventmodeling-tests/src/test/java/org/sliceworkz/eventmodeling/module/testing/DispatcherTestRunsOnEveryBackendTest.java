@@ -31,6 +31,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.testing.DispatcherTest;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
@@ -57,8 +58,8 @@ public class DispatcherTestRunsOnEveryBackendTest extends DispatcherTest<MockDom
 		}
 
 		@Override
-		public void when ( MockOutboundEvent event ) {
-			published.add(((SomeOutboundEvent) event).someValue());
+		public void when ( Event<MockOutboundEvent> event ) {
+			published.add(((SomeOutboundEvent) event.data()).someValue());
 		}
 	}
 

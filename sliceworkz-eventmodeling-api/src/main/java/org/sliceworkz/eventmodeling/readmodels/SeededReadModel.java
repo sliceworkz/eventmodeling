@@ -58,7 +58,7 @@ import org.sliceworkz.eventstore.events.EventReference;
  * @see PublishingReadModel for the in-memory base a seed reads from
  * @see org.sliceworkz.eventmodeling.readmodels.sql.SqlReadModelQuery#loadBaseAt for the SQL one
  */
-public interface SeededReadModel<DOMAIN_EVENT_TYPE> extends ReadModelWithMetaData<DOMAIN_EVENT_TYPE> {
+public interface SeededReadModel<DOMAIN_EVENT_TYPE> extends ReadModel<DOMAIN_EVENT_TYPE> {
 
 	/**
 	 * Loads this instance's base state and returns the reference that state reflects. Events after

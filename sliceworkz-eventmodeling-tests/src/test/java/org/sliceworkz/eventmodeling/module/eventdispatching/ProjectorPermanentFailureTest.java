@@ -44,8 +44,8 @@ public class ProjectorPermanentFailureTest {
 
 	@Test
 	void theCausesRetryingCannotHelpRetireTheProcessor ( ) {
-		assertTrue(ProjectorProcessor.isPermanentFailure(new EventDeserializationException(EventType.of("Unreadable"), "poison")));
-		assertTrue(ProjectorProcessor.isPermanentFailure(new EventSerializationException(EventType.of("Unwritable"), "unwritable", null)));
+		assertTrue(ProjectorProcessor.isPermanentFailure(new EventDeserializationException(EventType.named("Unreadable"), "poison")));
+		assertTrue(ProjectorProcessor.isPermanentFailure(new EventSerializationException(EventType.named("Unwritable"), "unwritable", null)));
 		assertTrue(ProjectorProcessor.isPermanentFailure(new EventStorageClosedException("closed")));
 		assertTrue(ProjectorProcessor.isPermanentFailure(new StaleLeadershipException("reader", 1, 2)));
 		// a batch mixing stored and new idempotency keys is refused whole, and refused identically on

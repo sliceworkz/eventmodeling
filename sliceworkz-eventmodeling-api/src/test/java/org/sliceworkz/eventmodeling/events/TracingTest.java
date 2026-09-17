@@ -177,7 +177,7 @@ public class TracingTest {
 		Event<String> legacy = Event.of(
 				EventStreamId.forContext("unittests"),
 				EventReference.create(1, 1),
-				EventType.ofType("String"), EventType.ofType("String"), "hello",
+				EventType.named("String"), EventType.named("String"), "hello",
 				Tags.of("x-actor", "alice"),
 				Instant.now());
 

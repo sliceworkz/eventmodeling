@@ -41,7 +41,7 @@ import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamEventuallyConsistentAppendListener;
+import org.sliceworkz.eventstore.stream.AppendListener;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
 public class BankingExample {
@@ -82,7 +82,7 @@ public class BankingExample {
 		 * Register a Subscriber on all event updates that justs prints out what has been added to the eventlog 
 		 */
 		eventStream.subscribe(
-				new EventStreamEventuallyConsistentAppendListener() {
+				new AppendListener() {
 					
 					private EventReference lastSeen;
 					

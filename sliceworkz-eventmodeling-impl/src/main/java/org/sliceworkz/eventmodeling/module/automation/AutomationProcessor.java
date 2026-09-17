@@ -39,14 +39,14 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamEventuallyConsistentBookmarkListener;
+import org.sliceworkz.eventstore.stream.BookmarkListener;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 
-public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements EventStreamEventuallyConsistentBookmarkListener, Processor {
+public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements BookmarkListener, Processor {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(AutomationProcessor.class);
 

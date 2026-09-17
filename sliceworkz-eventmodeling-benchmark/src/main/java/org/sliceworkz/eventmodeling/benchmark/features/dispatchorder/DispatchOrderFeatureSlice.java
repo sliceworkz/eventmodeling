@@ -32,7 +32,7 @@ public class DispatchOrderFeatureSlice implements Slice<OrderProcessing> {
 	@Override
 	public void configureAutomation(BoundedContextBuilder<OrderProcessing> builder) {
 		var ordersReadyToDispatch = new OrdersReadyToDispatch(builder.port(DataSource.class));
-		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.INITIALIZE ) {
+		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.RECREATE ) {
 			ordersReadyToDispatch.initialize();
 		}
 		builder.readmodel(ordersReadyToDispatch).eventuallyConsistent();

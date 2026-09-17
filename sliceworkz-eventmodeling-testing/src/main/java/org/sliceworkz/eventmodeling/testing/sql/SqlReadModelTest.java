@@ -213,8 +213,8 @@ public abstract class SqlReadModelTest<T> {
 				Event<T> event = Event.of(
 					EventStreamId.forContext("test"),
 					ref,
-					EventType.of(eventData),
-					EventType.of(eventData),
+					EventType.of(eventData.getClass()),
+					EventType.of(eventData.getClass()),
 					eventData,
 					Tags.none(),
 					Instant.now()

@@ -40,7 +40,7 @@ import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventstore.spi.EventStorageClosedException;
 import org.sliceworkz.eventstore.stream.EventSource;
-import org.sliceworkz.eventstore.stream.EventStreamEventuallyConsistentAppendListener;
+import org.sliceworkz.eventstore.stream.AppendListener;
 import org.sliceworkz.eventstore.stream.IdempotencyKeyConflictException;
 
 /**
@@ -50,7 +50,7 @@ import org.sliceworkz.eventstore.stream.IdempotencyKeyConflictException;
  * All projection mechanics (bookmarks, batching, BatchAwareProjection callbacks) are delegated
  * to the Projector from the eventstore library.
  */
-public class ProjectorProcessor<EVENT_TYPE> implements EventStreamEventuallyConsistentAppendListener, Processor {
+public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProjectorProcessor.class);
 

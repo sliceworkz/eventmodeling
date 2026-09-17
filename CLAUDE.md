@@ -1470,7 +1470,8 @@ payments.erase("customer", "alice-42", ErasureReason.of("GDPR art.17 request #47
 - **The codec travels with the storage, so a storage built with `.shredding(...)` needs nothing
   repeated on the context.** `EventStorage.shreddingCodec()` answers what a storage builder was given,
   and a context built without `shredding(...)` of its own takes it — `BoundedContextBuilderImpl`
-  passes its null codec to the eventstore factory, which reads null as "the storage's". A codec given
+  builds its store through `EventStore.on(storage)` and calls `.shredding(codec)` only when it was
+  given one, and a builder left without a codec uses the storage's. A codec given
   on the context wins, which is how a context reads a narrower view than the storage's codec unlocks
   (a restricted or withholding codec on a storage whose codec holds every key).
   `ShreddingCarriedByTheStorageTest` pins both halves

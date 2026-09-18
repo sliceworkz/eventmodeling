@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
@@ -58,7 +59,45 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 
 		void events ( @SuppressWarnings("unchecked") DOMAIN_EVENT_TYPE... events );
 
+		/**
+		 * Asserts the command failed and the <em>root cause</em> of the failure carries
+		 * {@code expectedMessage}. Says nothing about the type, so it cannot express the one
+		 * distinction WHERE-VALIDATIONS-GO.md asks a command to keep — a business rejection against a
+		 * bug. Prefer {@link #businessError(String)} for a rule, and {@link #error(Class, String)}
+		 * where another type is meant.
+		 */
 		void error ( String expectedMessage );
+
+		/**
+		 * Asserts the command failed with an exception of {@code expectedType} — the exception a
+		 * {@code catch} block in application code would see, not one buried in its cause chain.
+		 * <p>
+		 * That strictness is the point: a rule judged inside a decision model arrives wrapped by the
+		 * projector and is reported by the kernel as a failure rather than as a rejection, so an
+		 * assertion that accepted a wrapped {@code BusinessException} would pass for exactly the
+		 * shape the framework treats as misplaced. The failure message renders the whole cause
+		 * chain, so a wrapped exception is plain to see and can be asserted on by naming the wrapper.
+		 */
+		void error ( Class<? extends Throwable> expectedType );
+
+		/**
+		 * Asserts the command failed with an exception of {@code expectedType} carrying
+		 * {@code expectedMessage}. Both halves are about the same exception — the one that came out
+		 * of the execution — rather than the type of one and the message of another.
+		 */
+		void error ( Class<? extends Throwable> expectedType, String expectedMessage );
+
+		/**
+		 * Asserts the command rejected the request as a business rule violation:
+		 * {@code error(BusinessException.class)}. This is the assertion to reach for on a rule, since
+		 * it is the type the kernel reports as {@code CommandRejected} rather than as
+		 * {@code CommandFailed} — an {@code IllegalStateException} thrown by the same rule is a bug
+		 * by the framework's own taxonomy, and fails here.
+		 */
+		void businessError ( );
+
+		/** Asserts the command rejected the request with {@code expectedMessage} as the rule's reason. */
+		void businessError ( String expectedMessage );
 
 		void noEvents ( );
 
@@ -124,11 +163,11 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 	
 	public class TestResultImpl implements TestResult<DOMAIN_EVENT_TYPE> {
 		
-		private Exception exception;
+		private CaughtError error = CaughtError.of(null);
 		private List<Event<DOMAIN_EVENT_TYPE>> producedEvents = new ArrayList<>();
 		
 		public TestResultImpl ( Exception exception ) {
-			this.exception = exception;
+			this.error = CaughtError.of(exception);
 		}
 		
 		public TestResultImpl ( List<Event<DOMAIN_EVENT_TYPE>> producedEvents ) {
@@ -144,7 +183,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		@Override
 		public void event(DOMAIN_EVENT_TYPE event, Tags expectedTags) {
 			noException();
-			assertEquals(1, producedEvents.size(), "number of events not as expected");
+			assertEquals(1, producedEvents.size(), () -> "number of events not as expected, produced: " + listing(producedEvents));
 			Event<DOMAIN_EVENT_TYPE> actual = producedEvents.get(0);
 			assertCompareObjects(event, actual.data(), "event");
 			assertTrue(actual.tags().containsAll(expectedTags),
@@ -156,11 +195,8 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		public void events ( @SuppressWarnings("unchecked") DOMAIN_EVENT_TYPE... expectedEvents ) {
 			noException();
 			
-			if ( expectedEvents.length != producedEvents.size() ) {
-				System.out.println("PRODUCED EVENTS: ");
-				producedEvents.forEach(System.out::println);
-			}
-			assertEquals(expectedEvents.length, producedEvents.size(), "number of events not as expected");
+			assertEquals(expectedEvents.length, producedEvents.size(),
+				() -> "number of events not as expected, produced: " + listing(producedEvents));
 
 			for ( int i = 0; i < expectedEvents.length; i++ ) {
 				DOMAIN_EVENT_TYPE expected = expectedEvents[i];
@@ -173,37 +209,39 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		
 		@Override
 		public void error ( String expectedMessage ) {
-			if (exception==null) {
-				fail("exception expected with message '" + expectedMessage + "', got none");
-			} else if ( ! rootCause(exception).getMessage().equals(expectedMessage) ){
-				fail("exception message (%s) not as expected (%s)".formatted(exception.getMessage(), expectedMessage));
-			}
+			error.assertMessage(expectedMessage);
+		}
+
+		@Override
+		public void error ( Class<? extends Throwable> expectedType ) {
+			error.assertType(expectedType);
+		}
+
+		@Override
+		public void error ( Class<? extends Throwable> expectedType, String expectedMessage ) {
+			error.assertTypeAndMessage(expectedType, expectedMessage);
+		}
+
+		@Override
+		public void businessError ( ) {
+			error.assertType(BusinessException.class);
+		}
+
+		@Override
+		public void businessError ( String expectedMessage ) {
+			error.assertTypeAndMessage(BusinessException.class, expectedMessage);
 		}
 
 		@Override
 		public void noEvents() {
 			noException();
-			if ( producedEvents.size() > 0 ) {
-				// first print them, so we have an idea what was raised
-				producedEvents.forEach(System.out::println);
-			}
-			assertEquals(0, producedEvents.size(), "no events expected");
+			assertEquals(0, producedEvents.size(), () -> "no events expected, produced: " + listing(producedEvents));
 		}
 		
 		public void noException ( ) {
-			if (exception!=null) {
-				exception.printStackTrace();
-				fail("exception (%s) not expected (%s)".formatted(exception.getMessage(), exception));
-			}
+			error.assertNone("no failure expected");
 		}
 		
-		Throwable rootCause ( Throwable t ) {
-			if ( t.getCause() == null ) {
-				return t;
-			} else {
-				return rootCause ( t.getCause() );
-			}
-		}
 	}
 
 	public class TestResultWithResponseImpl<RESPONSE_TYPE> extends TestResultImpl implements TestResultWithResponse<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> {

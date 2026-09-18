@@ -483,6 +483,19 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
   ever wanted, gets a distinct method name, never an overload of `when`; the reasoning is on the
   eventstore's `EventHandler`
 - Can be queried via `boundedContext.read(ReadModelClass.class, ...)`
+- **A read is typed by the class it asks for.** `read` is declared
+  `<R extends ReadModel<? extends D>> R read(Class<R>, Object...)`, on `ReadModelCapability`,
+  `UnboundedReadModelCapability` and the command's `OutboundCommandContext` alike, so
+  `read(AccountDetails.class, id)` *is* an `AccountDetails`: assignable, chainable
+  (`read(X.class, id).details()`) and `var`-able without a cast, and assigned to an unrelated type a
+  compile error. The bound keeps the class argument constrained to the context's own read models, as it
+  was. The alternative — a free `<T> T` on the result, inferred from whatever the caller assigns it to —
+  loses because `String s = bc.read(AccountDetails.class, id)` then compiles and fails as a
+  `ClassCastException` at the call site, on a method whose argument said exactly what would come back;
+  the impl casts through `readModelClass.cast(...)` for the same reason. The constructor `params` stay
+  an unchecked `Object...`: which parameters a read model takes is a property of its constructors, and
+  the class argument alone does not say. `ReadModelCapabilityTypeParameterTest` in the api module pins
+  the acceptances and the rejections by running javac against probe snippets
 - A read model declares where it keeps its state via `ReadModel.storage()`, returning a `ReadModelStorage`:
   - `EPHEMERAL` (default): in-memory, gone with the process. Every instance projects its own copy and stale bookmarks are dropped at startup
   - `LOCAL`: durable but private to one instance. Every instance projects its own copy and resumes from its own bookmark

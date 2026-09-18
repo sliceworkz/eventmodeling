@@ -19,10 +19,27 @@ package org.sliceworkz.eventmodeling.readmodels;
 
 import org.sliceworkz.eventmodeling.events.Tracing;
 
+/**
+ * Reads a live read model of this bounded context: the read model is constructed with the parameters
+ * given, projected from the events its {@code eventQuery()} matches, and handed back.
+ * <p>
+ * <strong>The result is typed by the class it is asked for.</strong> {@code read(AccountDetails.class,
+ * id)} is an {@code AccountDetails}, so it is assigned, chained ({@code read(X.class, id).details()}) or
+ * held in a {@code var} without a cast, and assigning it to an unrelated type is a compile error. The
+ * alternative — a free type parameter on the result, inferred from whatever the caller assigns it to
+ * — loses because {@code String s = context.read(AccountDetails.class, id)} then compiles and fails as
+ * a {@code ClassCastException} at the call site, on a method whose argument said exactly what would come
+ * back. The type parameter is bounded by the read model type this context serves, so the class argument
+ * stays constrained to the read models of this context as it always was.
+ * <p>
+ * The {@code params} are the constructor arguments of the read model, matched by count and left
+ * unchecked: which parameters a read model takes is a property of its constructors, and the class
+ * argument alone does not say.
+ */
 public interface ReadModelCapability<DOMAIN_EVENT_TYPE> {
 
-	<T> T read ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params );
+	<READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params );
 
-	<T> T read ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass,  Object... params );
+	<READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params );
 
 }

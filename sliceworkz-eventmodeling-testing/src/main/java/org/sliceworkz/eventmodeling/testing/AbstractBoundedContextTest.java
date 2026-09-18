@@ -317,6 +317,21 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 		}
 	}
 
+	/**
+	 * Renders {@code items} one per line for an assertion message. The published test bases used to
+	 * print the events they had produced to {@code System.out} before asserting on their number, so
+	 * the evidence for a failure landed in the build log rather than in the failure — separated from
+	 * it by whatever else was running, and absent entirely from a report that only keeps assertions.
+	 */
+	protected static String listing ( List<?> items ) {
+		if ( items == null || items.isEmpty() ) {
+			return "(none)";
+		}
+		StringBuilder listing = new StringBuilder();
+		items.forEach(item -> listing.append("\n  ").append(item));
+		return listing.toString();
+	}
+
 	public void assertCompareObjects ( Object expected, Object actual, String objectDescription ) {
 		// Jackson 3.x: JsonMapper is immutable and configured via its builder; modules
 		// (incl. java.time) auto-register, so findAndRegisterModules() is gone.
@@ -358,10 +373,6 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 				j++;
 			}
 
-			if (! expectedToCompare.equals(actualToCompare)) {
-				System.out.println("EXPECTED : " + expectedToCompare);
-				System.out.println("ACTUAL   : " + actualToCompare);
-			}
 			assertEquals(expectedToCompare, actualToCompare);
 
 		} catch (JacksonException e) {

@@ -1464,6 +1464,38 @@ bases, all synchronous and deterministic:**
   in-memory only — which is precisely the failure that went unnoticed, since nothing about a green
   in-memory run says the other backends were never asked
 
+**A failure is asserted by type, and the evidence for one goes into the assertion:**
+- **`businessError(message)` is the assertion to reach for on a rule**, on `CommandTest`,
+  `AggregateTest` and `TranslatorTest` alike, with `error(Class)` and `error(Class, message)` beside
+  it for every other type. Without them the only assertion was `error(message)`, comparing message
+  text — so the one distinction WHERE-VALIDATIONS-GO.md asks a command to keep, a `BusinessException`
+  rejection against an `IllegalStateException` bug, was inexpressible through the harness: the
+  banking example had to drop out of it and call `kernel().execute` inside an `assertThrows` to hold
+  `WithdrawCommand` to its own rule. `error(message)` stays as it was, judging the **root cause**'s
+  message, which is what makes it useful across the wrapping the framework does on some paths
+- **A type assertion judges the throwable that came out of the execution**, exactly as a `catch`
+  block in application code would see it, and deliberately does not search the cause chain. A rule
+  judged inside a decision model arrives wrapped by the projector and is reported by the kernel as a
+  `CommandFailed` rather than a `CommandRejected` (see "A business rejection and a failure are two
+  events" above), so an assertion that accepted a wrapped `BusinessException` would pass for exactly
+  the shape the framework treats as misplaced. The alternative — matching anywhere in the chain —
+  loses for that reason, and buys little: the failure message renders the whole chain, so a wrapped
+  exception is plain to see and is asserted on by naming the wrapper
+- **Nothing is written to the console, and a null message is compared rather than dereferenced.**
+  Both are the kind of thing a test library gets wrong quietly. The message comparison went through
+  `rootCause(e).getMessage().equals(expected)`, so a root cause with no message — a bare
+  `NullPointerException` — made the harness fail with an NPE of its own where an assertion failure
+  was due; and the failure message printed the *thrown* exception's message while comparing the
+  *root cause*'s, so a mismatch named a string the assertion had never looked at. The produced
+  events and the unexpected throwable now travel in the assertion message and as the failure's
+  cause, rather than through `System.out` and `printStackTrace()`, where a report that keeps only
+  assertions loses them
+- **The three bases share one copy of it**, `CaughtError` in the testing module — they had three
+  verbatim copies of the same broken comparison, which is how all three came to be wrong in the same
+  three ways. `CommandTestErrorAssertionsTest` pins each of them, asserting on the
+  `AssertionFailedError` the harness raises rather than on a passing assertion, since a message that
+  names the wrong string is invisible to a test that only ever sees the assertion succeed
+
 ## EventStore Integration
 
 The framework depends on the separate `sliceworkz-eventstore` library:

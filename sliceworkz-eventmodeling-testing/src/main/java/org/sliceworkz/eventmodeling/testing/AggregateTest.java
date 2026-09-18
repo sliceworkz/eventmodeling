@@ -27,6 +27,7 @@ import java.util.function.Consumer;
 
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -98,9 +99,35 @@ public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBO
 		void events(@SuppressWarnings("unchecked") DOMAIN_EVENT_TYPE... events);
 
 		/**
-		 * Verifies that an error occurred with the expected message.
+		 * Verifies that an error occurred and the <em>root cause</em> of it carries the expected
+		 * message. Says nothing about the type — prefer {@link #businessError(String)} for a business
+		 * rule, and {@link #error(Class, String)} where another type is meant.
 		 */
 		void error(String expectedMessage);
+
+		/**
+		 * Verifies the action failed with an exception of {@code expectedType} — the exception a
+		 * {@code catch} block in application code would see, not one buried in its cause chain. The
+		 * failure message renders the whole chain, so a wrapped exception is plain to see and can be
+		 * asserted on by naming the wrapper.
+		 */
+		void error(Class<? extends Throwable> expectedType);
+
+		/**
+		 * Verifies the action failed with an exception of {@code expectedType} carrying
+		 * {@code expectedMessage} — both halves about the same exception.
+		 */
+		void error(Class<? extends Throwable> expectedType, String expectedMessage);
+
+		/**
+		 * Verifies the action rejected the request as a business rule violation:
+		 * {@code error(BusinessException.class)}. An {@code IllegalStateException} thrown by the same
+		 * rule is a bug by the framework's own taxonomy, and fails here.
+		 */
+		void businessError();
+
+		/** Verifies the action rejected the request with {@code expectedMessage} as the rule's reason. */
+		void businessError(String expectedMessage);
 
 		/**
 		 * Verifies that no events were raised.
@@ -190,11 +217,11 @@ public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBO
 	 */
 	public class TestResultImpl implements TestResult<DOMAIN_EVENT_TYPE> {
 
-		private Exception exception;
+		private CaughtError error = CaughtError.of(null);
 		private List<Event<DOMAIN_EVENT_TYPE>> producedEvents = new ArrayList<>();
 
 		public TestResultImpl(Exception exception) {
-			this.exception = exception;
+			this.error = CaughtError.of(exception);
 		}
 
 		public TestResultImpl(List<Event<DOMAIN_EVENT_TYPE>> producedEvents) {
@@ -211,11 +238,8 @@ public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBO
 		public void events(@SuppressWarnings("unchecked") DOMAIN_EVENT_TYPE... expectedEvents) {
 			noException();
 
-			if (expectedEvents.length != producedEvents.size()) {
-				System.out.println("PRODUCED EVENTS: ");
-				producedEvents.forEach(System.out::println);
-			}
-			assertEquals(expectedEvents.length, producedEvents.size(), "number of events not as expected");
+			assertEquals(expectedEvents.length, producedEvents.size(),
+					() -> "number of events not as expected, produced: " + listing(producedEvents));
 
 			for (int i = 0; i < expectedEvents.length; i++) {
 				DOMAIN_EVENT_TYPE expected = expectedEvents[i];
@@ -227,36 +251,38 @@ public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBO
 
 		@Override
 		public void error(String expectedMessage) {
-			if (exception == null) {
-				fail("exception expected with message '" + expectedMessage + "', got none");
-			} else if (!rootCause(exception).getMessage().equals(expectedMessage)) {
-				fail("exception message (%s) not as expected (%s)".formatted(exception.getMessage(), expectedMessage));
-			}
+			error.assertMessage(expectedMessage);
+		}
+
+		@Override
+		public void error(Class<? extends Throwable> expectedType) {
+			error.assertType(expectedType);
+		}
+
+		@Override
+		public void error(Class<? extends Throwable> expectedType, String expectedMessage) {
+			error.assertTypeAndMessage(expectedType, expectedMessage);
+		}
+
+		@Override
+		public void businessError() {
+			error.assertType(BusinessException.class);
+		}
+
+		@Override
+		public void businessError(String expectedMessage) {
+			error.assertTypeAndMessage(BusinessException.class, expectedMessage);
 		}
 
 		@Override
 		public void noEvents() {
 			noException();
-			if (producedEvents.size() > 0) {
-				// first print them, so we have an idea what was raised
-				producedEvents.forEach(System.out::println);
-			}
-			assertEquals(0, producedEvents.size(), "no events expected");
+			assertEquals(0, producedEvents.size(), () -> "no events expected, produced: " + listing(producedEvents));
 		}
 
 		public void noException() {
-			if (exception != null) {
-				exception.printStackTrace();
-				fail("exception (%s) not expected (%s)".formatted(exception.getMessage(), exception));
-			}
+			error.assertNone("no failure expected");
 		}
 
-		Throwable rootCause(Throwable t) {
-			if (t.getCause() == null) {
-				return t;
-			} else {
-				return rootCause(t.getCause());
-			}
-		}
 	}
 }

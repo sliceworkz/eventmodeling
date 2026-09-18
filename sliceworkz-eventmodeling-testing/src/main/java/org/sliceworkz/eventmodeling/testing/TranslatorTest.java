@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.inbound.NoTranslatorRegisteredException;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventstore.events.Event;
@@ -114,8 +115,36 @@ public abstract class TranslatorTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 		/** Asserts no registered translator matched the inbound event. */
 		void noTranslatorRegistered ( );
 
-		/** Asserts the translation failed, with {@code expectedMessage} as the root cause's message. */
+		/**
+		 * Asserts the translation failed, with {@code expectedMessage} as the root cause's message.
+		 * Says nothing about the type — prefer {@link #businessError(String)} for a business rule, and
+		 * {@link #error(Class, String)} where another type is meant.
+		 */
 		void error ( String expectedMessage );
+
+		/**
+		 * Asserts the translation failed with an exception of {@code expectedType} — the exception a
+		 * {@code catch} block in application code would see, not one buried in its cause chain. The
+		 * failure message renders the whole chain, so a wrapped exception is plain to see and can be
+		 * asserted on by naming the wrapper.
+		 */
+		void error ( Class<? extends Throwable> expectedType );
+
+		/**
+		 * Asserts the translation failed with an exception of {@code expectedType} carrying
+		 * {@code expectedMessage} — both halves about the same exception.
+		 */
+		void error ( Class<? extends Throwable> expectedType, String expectedMessage );
+
+		/**
+		 * Asserts the translation rejected the inbound event as a business rule violation:
+		 * {@code error(BusinessException.class)}. An {@code IllegalStateException} thrown by the same
+		 * rule is a bug by the framework's own taxonomy, and fails here.
+		 */
+		void businessError ( );
+
+		/** Asserts the translation rejected the inbound event with {@code expectedMessage} as the rule's reason. */
+		void businessError ( String expectedMessage );
 
 	}
 
@@ -216,22 +245,35 @@ public abstract class TranslatorTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 
 		@Override
 		public void error ( String expectedMessage ) {
-			if ( exception == null ) {
-				fail("exception expected with message '" + expectedMessage + "', got none");
-			} else if ( !rootCause(exception).getMessage().equals(expectedMessage) ) {
-				fail("exception message (%s) not as expected (%s)".formatted(exception.getMessage(), expectedMessage));
-			}
+			caught().assertMessage(expectedMessage);
+		}
+
+		@Override
+		public void error ( Class<? extends Throwable> expectedType ) {
+			caught().assertType(expectedType);
+		}
+
+		@Override
+		public void error ( Class<? extends Throwable> expectedType, String expectedMessage ) {
+			caught().assertTypeAndMessage(expectedType, expectedMessage);
+		}
+
+		@Override
+		public void businessError ( ) {
+			caught().assertType(BusinessException.class);
+		}
+
+		@Override
+		public void businessError ( String expectedMessage ) {
+			caught().assertTypeAndMessage(BusinessException.class, expectedMessage);
+		}
+
+		private CaughtError caught ( ) {
+			return CaughtError.of(exception);
 		}
 
 		private void noException ( ) {
-			if ( exception != null ) {
-				exception.printStackTrace();
-				fail("exception (%s) not expected (%s)".formatted(exception.getMessage(), exception));
-			}
-		}
-
-		private Throwable rootCause ( Throwable t ) {
-			return t.getCause() == null ? t : rootCause(t.getCause());
+			caught().assertNone("no failure expected");
 		}
 	}
 

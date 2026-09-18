@@ -17,9 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.withdraw;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -85,7 +82,7 @@ public class WithdrawCommandTest extends CommandTest<BankingEvent, BankingInboun
 			.event(new MoneyDeposited(ACCOUNT_1, JANUARY, new BigDecimal("100"), "salary"), periodTags(JANUARY))
 			.when(new WithdrawCommand(ACCOUNT_1, new BigDecimal("250"), "television"))
 			.then()
-			.error("Insufficient balance: 100 < 250");
+			.businessError("Insufficient balance: 100 < 250");
 	}
 
 	@Test
@@ -97,7 +94,7 @@ public class WithdrawCommandTest extends CommandTest<BankingEvent, BankingInboun
 				BigDecimal.ZERO, 1, LocalDate.of(2025, 2, 1)), periodTags(JANUARY))
 			.when(new WithdrawCommand(ACCOUNT_1, new BigDecimal("10"), "late"))
 			.then()
-			.error("Period 2025-01 is closed, cannot withdraw");
+			.businessError("Period 2025-01 is closed, cannot withdraw");
 	}
 
 	@Test
@@ -105,23 +102,22 @@ public class WithdrawCommandTest extends CommandTest<BankingEvent, BankingInboun
 		given()
 			.when(new WithdrawCommand(ACCOUNT_1, new BigDecimal("10"), "nothing to take it from"))
 			.then()
-			.error("Account does not exist");
+			.businessError("Account does not exist");
 	}
 
 	/**
 	 * A rule rejection is a {@code BusinessException} — never an {@code IllegalStateException},
-	 * which is what a bug throws. {@code error(message)} above compares the message only, so this
-	 * is the test that holds the command to the type.
+	 * which is what a bug throws — and {@code businessError(message)} is what holds the command to
+	 * both halves of that: every rejection above is asserted by type as well as by reason. The
+	 * message-only {@code error(message)} would pass for either, which is why it is not used here.
 	 */
 	@Test
 	void aRejectedRuleIsABusinessException ( ) {
 		given()
-			.event(accountOpened(), accountTags());
-
-		BusinessException rejection = assertThrows(BusinessException.class,
-			() -> kernel().execute(new WithdrawCommand(ACCOUNT_1, new BigDecimal("1"), "empty account")));
-
-		assertEquals("Insufficient balance: 0 < 1", rejection.getMessage());
+			.event(accountOpened(), accountTags())
+			.when(new WithdrawCommand(ACCOUNT_1, new BigDecimal("1"), "empty account"))
+			.then()
+			.error(BusinessException.class, "Insufficient balance: 0 < 1");
 	}
 
 	private static AccountOpened accountOpened ( ) {

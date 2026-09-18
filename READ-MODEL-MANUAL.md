@@ -125,6 +125,10 @@ Three things to internalise here, because everything later builds on them:
 - **Constructor parameters are the read's parameters.** `bc.read(X.class, a, b)` picks the
   constructor with a matching parameter count. This is what scopes the model to one entity — and
   what scopes its `eventQuery()`.
+- **The read is typed by the class it asks for.** `bc.read(AccountDetailsReadModel.class, accountId)`
+  is an `AccountDetailsReadModel`, so it chains (`bc.read(X.class, id).details()`) and fits a `var`
+  without a cast, and assigning it to anything else is a compile error rather than a
+  `ClassCastException` at the call site.
 - **Every event arrives with its metadata, and the domain event is `event.data()`.** There is one
   `when`, taking the `Event`: switch on `event.data()` for the domain event, and read the tags, the
   timestamp or the reference off the same argument when a projection needs them. There is no

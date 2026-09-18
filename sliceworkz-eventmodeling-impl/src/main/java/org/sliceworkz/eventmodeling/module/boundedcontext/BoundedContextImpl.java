@@ -366,22 +366,22 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 */
 
 	@Override
-	public <T> T read(Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params) {
+	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params ) {
 		return readmodelModule.liveModel(readModelClass, tracing.instance(instance), params);
 	}
 
 	@Override
-	public <T> T read(Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... params) {
+	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params ) {
 		return readmodelModule.liveModel(readModelClass, Tracing.init(instance), params);
 	}
 
 	@Override
-	public <T> T readUnbounded(Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Object... params) {
+	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL readUnbounded ( Class<READ_MODEL> readModelClass, Object... params ) {
 		return readmodelModule.liveModelUnbounded(readModelClass, Tracing.init(instance), params);
 	}
 
 	@Override
-	public <T> T readUnbounded(Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... params) {
+	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL readUnbounded ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params ) {
 		return readmodelModule.liveModelUnbounded(readModelClass, tracing.instance(instance), params);
 	}
 

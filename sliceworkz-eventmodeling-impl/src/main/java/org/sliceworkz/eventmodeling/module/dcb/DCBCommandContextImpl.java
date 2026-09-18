@@ -302,7 +302,7 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	}
 
 	@Override
-	public <T> T read(Class<? extends ReadModel<? extends CONSUMED_EVENT_TYPE>> readModelClass, Object... constructorParams) {
+	public <READ_MODEL extends ReadModel<? extends CONSUMED_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... constructorParams ) {
 		return readModelModule.liveModel(readModelClass, tracing, constructorParams);
 	}
 

@@ -303,8 +303,12 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		};
 	}
 
-	@SuppressWarnings("unchecked")
-	public <T> T liveModel ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
+	/**
+	 * Projects a live read model and answers it as the class it was asked for: {@code projectLiveModel}
+	 * instantiates that very class, so the cast is a checked one through the class itself, not an
+	 * unchecked one to whatever the caller assigns.
+	 */
+	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL liveModel ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... constructorParams ) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
 			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
@@ -313,7 +317,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
 
 			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				return (T) projectLiveModel(domainEventStream, readModelClass, info, tracing, constructorParams);
+				return readModelClass.cast(projectLiveModel(domainEventStream, readModelClass, info, tracing, constructorParams));
 			});
 
 		} else {
@@ -321,8 +325,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		}
 	}
 
-	@SuppressWarnings("unchecked")
-	public <T> T liveModelUnbounded ( Class<? extends ReadModel<? extends DOMAIN_EVENT_TYPE>> readModelClass, Tracing tracing, Object... constructorParams) {
+	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL liveModelUnbounded ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... constructorParams ) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
 			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
@@ -331,7 +334,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
 
 			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				return (T) projectLiveModel(allInStorageEventStream, readModelClass, info, tracing, constructorParams);
+				return readModelClass.cast(projectLiveModel(allInStorageEventStream, readModelClass, info, tracing, constructorParams));
 			});
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);

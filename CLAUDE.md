@@ -104,6 +104,15 @@ distinct delays it shows, which are easy to conflate: `PaymentAttemptFailed.next
 item** and is durable because it is an event, while `delayBeforeNextBatch` paces **the whole automation**
 and deliberately is not.
 
+`ExecutePaymentFeatureSlice` is also the reference for a slice that needs something from outside the
+context. The gateway is a port: the application binds an adapter on the builder,
+`.adapter(gateway).forPort(PaymentGateway.class)`, and the slice takes it with
+`builder.port(PaymentGateway.class)` from `configureAutomation`, wiring its own todo list and
+automation around it. The slice keeps its wiring, the application keeps the choice of infrastructure,
+and a deployed slice whose port has no adapter fails at `build()` naming the port. The alternative —
+the application constructing the automation and registering it beside the scanned slices — loses
+because the slice then carries metadata only, and every deployment repeats the wiring by hand.
+
 The same four paths are covered deterministically — no polling, no sleeps — by
 `ExecutePaymentAutomationTest` and `PaymentsToExecuteTodoListTest` in this module's `src/test`, built on
 the published `AutomationTest` base. Those two files are the reference for how to *test* an automation,

@@ -50,18 +50,8 @@ app.terminate();                                              // does not compil
 app.erase("customer", id, reason);                            // does not compile
 ```
 
-In a DI container, register the narrow types as the beans rather than the context:
-
-```java
-@Bean Banking banking ( EventStorage storage ) { /* build it here, and only here */ }
-
-@Bean ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> bankingApp ( Banking banking ) { return banking; }
-@Bean OperationsCapabilities bankingOps ( Banking banking ) { return banking; }
-```
-
-Now a controller asks for `ApplicationCapabilities<...>` and an admin endpoint for
-`OperationsCapabilities`, and neither can be handed the other's reach by an injection nobody looked
-at twice.
+Build the context in one place and hand out the narrow types from there, so a caller is given the
+reach its job needs and cannot be handed another's by a wiring change nobody looked at twice.
 
 ## An alias interface, for the same reason `Banking` exists
 
@@ -118,15 +108,6 @@ team using one of the two simply never registers the other.
 **The inbound edge is separate from the application surface.** `incoming` and `translate` feed the
 domain events from outside, which is a different job from deciding on behalf of a user. An adapter
 that genuinely does both holds both types; most hold one.
-
-### The alternative — a narrowing proxy
-
-`build()` returns a `java.lang.reflect.Proxy` over exactly the interface it was asked for, so a
-`bc.as(BankingApi.class)` returning a *fresh* proxy over only that interface would make the cast back
-impossible rather than merely visible. It loses on cost against benefit: it puts a second reflective
-hop on the command path, and what it defends against is code in the same process casting a reference
-it was handed — which is a code review finding either way, not an attacker. The reference type is the
-boundary Java offers everywhere else, and it is the one used here.
 
 ## Adding a capability
 

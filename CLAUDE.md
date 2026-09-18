@@ -202,7 +202,7 @@ Key concepts:
 extends `AllCapabilities<D,I,O>`, so one reference executes commands, reads read models, appends a
 domain event no command raised, translates inbound events, stops an automation, restarts a
 projector, erases a person, hands out a port and terminates itself. A web controller handed `Banking`
-— which is what a DI container does unless told otherwise — can call `erase()`, `stopAutomation()`
+— which is what it gets unless the wiring says otherwise — can call `erase()`, `stopAutomation()`
 and `event()`, and nothing at compile time objects. [WHO-MAY-DO-WHAT.md](WHO-MAY-DO-WHAT.md) is the
 user-facing version of this section; keep the two in step via the link rather than restating one in
 the other, and when advising on who holds what, name the audience.
@@ -217,19 +217,16 @@ the other, and when advising on who holds what, name the audience.
   only whatever called `build()` has a use for them
 - **Narrowing costs a reference type and nothing else.** A built context already *is* each audience,
   so `ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> app = banking;` is the whole
-  technique: no wrapper, no conversion, no builder setting. In a DI container, register the narrow
-  types as the beans rather than the context. An alias interface beside the context interface —
+  technique: no wrapper, no conversion, no builder setting. Build the context in one place and hand
+  out the narrow types from there. An alias interface beside the context interface —
   `interface BankingApi extends ApplicationCapabilities<...>`, with `Banking extends
   BoundedContext<...>, BankingApi` — drops the type arguments from every call site for the same
   reason `Banking` exists at all; the two paths to `ApplicationCapabilities` must agree on their
   arguments, which makes a mistyped alias a compile error rather than a second surface
 - **It is a boundary of discipline, not of security**, and the docs say so: the object behind a
-  narrowed reference is still the whole context and a cast reaches it. The alternative — `bc.as(
-  BankingApi.class)` returning a fresh proxy over that interface alone, which `build()`'s existing
-  `Proxy.newProxyInstance` over `contextType` makes trivial to offer — loses because it puts a second
-  reflective hop on the command path to defend against in-process code casting a reference it was
-  handed, which is a review finding either way. The reference type is the boundary Java offers
-  everywhere else
+  narrowed reference is still the whole context and a cast reaches it. The reference type is the
+  boundary Java offers everywhere else, and reaching past it has to be written down, so it shows up
+  in review
 - **`event()` is deliberately off the application surface.** It appends a domain event with no
   decision model read and no boundary checked, so no `OptimisticLockingException` is possible — for
   facts already settled before they reach the context (a CRUD front-end, an import, a migration), and

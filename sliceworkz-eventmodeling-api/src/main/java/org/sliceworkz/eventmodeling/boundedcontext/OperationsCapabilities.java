@@ -33,12 +33,10 @@ import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
  * exactly these methods on the instances an instruction names.
  *
  * <h2>Holding it</h2>
- * A built context already is one, because {@link AllCapabilities} extends this interface:
+ * A built context already is one, because {@link AllCapabilities} extends this interface, so
+ * narrowing costs a reference type and nothing more:
  * <pre>{@code
- * @Bean
- * OperationsCapabilities bankingOps ( Banking banking ) {
- *     return banking;
- * }
+ * OperationsCapabilities operations = banking;
  * }</pre>
  * <p>
  * {@link LifecycleCapability} is deliberately not here: stopping the whole context is the owner's,

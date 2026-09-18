@@ -35,10 +35,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
  * A built context already is one, because {@link AllCapabilities} extends this interface, so
  * narrowing costs a reference type and nothing more:
  * <pre>{@code
- * @Bean
- * ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> bankingApp ( Banking banking ) {
- *     return banking;
- * }
+ * ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> app = banking;
  * }</pre>
  * Declaring an interface of your own over it drops the type arguments from every call site, exactly
  * as the context interface does:

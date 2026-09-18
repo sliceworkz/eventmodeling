@@ -75,8 +75,7 @@ public class BankingExample {
 		 * narrower surface instead. It costs this one line: a built context already is a BankingApi,
 		 * and app.terminate() now does not compile.
 		 *
-		 * In an application this is where the DI container earns its keep -- register BankingApi as
-		 * the bean and build Banking in one place. See WHO-MAY-DO-WHAT.md for the other audiences.
+		 * See WHO-MAY-DO-WHAT.md for the other audiences.
 		 */
 		BankingApi app = bc;
 

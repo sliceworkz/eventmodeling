@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.examples.banking.features.closemonth;
 import java.time.LocalDate;
 import java.time.YearMonth;
 
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
@@ -46,7 +47,8 @@ import org.sliceworkz.eventstore.events.Tags;
  * and the MonthOpened event is tagged with the NEW month. Both are tagged with the
  * account identity so they show up when querying all events for an account.
  * Idempotency is ensured by the {@link ActivePeriodDecisionModel} — if the period
- * is already closed, the command rejects the operation.</p>
+ * is already closed, the command rejects the operation with a {@link BusinessException},
+ * as it does every other rule it enforces.</p>
  *
  * <p>This command can be invoked manually (user action) or by an automation
  * (scheduled month-end processing).</p>
@@ -69,18 +71,12 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 
 		// ── Validation ───────────────────────────────────────────────
 
-		if (!period.accountExists()) {
-			throw new IllegalStateException("Account does not exist");
-		}
-		if (period.isPeriodClosed()) {
-			throw new IllegalStateException(
-				"Period " + period.activeMonth() + " is already closed");
-		}
-		if (!period.activeMonth().equals(monthToClose)) {
-			throw new IllegalStateException(
-				"Requested to close " + monthToClose
-				+ " but active period is " + period.activeMonth());
-		}
+		BusinessException.when(!period.accountExists(), "Account does not exist");
+		BusinessException.when(period.isPeriodClosed(),
+			"Period " + period.activeMonth() + " is already closed");
+		BusinessException.when(!period.activeMonth().equals(monthToClose),
+			"Requested to close " + monthToClose
+			+ " but active period is " + period.activeMonth());
 
 		// ── Close the current month ──────────────────────────────────
 

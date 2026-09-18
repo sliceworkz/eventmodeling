@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.examples.banking.features.deposit;
 
 import java.math.BigDecimal;
 
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
@@ -40,6 +41,9 @@ import org.sliceworkz.eventstore.events.Tags;
  *
  * <p>The raised event is tagged with both account AND month, so it will be
  * filtered correctly when loading a specific period's events.</p>
+ *
+ * <p>A rule that fails is a {@link BusinessException}: history says no, which is an outcome of
+ * the command and not a bug.</p>
  */
 public class DepositCommand implements Command<BankingEvent> {
 
@@ -59,13 +63,9 @@ public class DepositCommand implements Command<BankingEvent> {
 		var period = new ActivePeriodDecisionModel(accountId);
 		var result = context.decisionModels(period);
 
-		if (!period.accountExists()) {
-			throw new IllegalStateException("Account does not exist");
-		}
-		if (period.isPeriodClosed()) {
-			throw new IllegalStateException(
-				"Period " + period.activeMonth() + " is closed, cannot deposit");
-		}
+		BusinessException.when(!period.accountExists(), "Account does not exist");
+		BusinessException.when(period.isPeriodClosed(),
+			"Period " + period.activeMonth() + " is closed, cannot deposit");
 
 		// Tag with both account identity AND period identity
 		result.raiseEvent(

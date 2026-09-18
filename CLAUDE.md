@@ -468,8 +468,10 @@ containment); that file is the *which*, and the same keep-in-step-via-links rule
 stances to hold in code review: a record carried inside an event payload keeps a lenient canonical
 constructor and validates in its static factory (never a throwing compact constructor — Jackson
 reconstructs payloads through the canonical constructor on every read of history), and business-rule
-rejections in commands throw `BusinessException`, keeping them distinguishable from bugs (the older
-examples still throw `IllegalStateException`; prefer `BusinessException` in new code).
+rejections in commands throw `BusinessException`, keeping them distinguishable from bugs — never
+`IllegalStateException`, which is what a bug throws. The banking example's `WithdrawCommand`,
+`DepositCommand` and `CloseMonthCommand` are the shape to copy: `BusinessException.when(condition,
+message)` per rule, straight after `decisionModels(...)`.
 
 **How a read model is projected has to be said out loud.** `builder.readmodel(X.class)` and
 `builder.readmodel(instance)` register, but `build()` rejects either unless `.live()` /

@@ -120,7 +120,9 @@ BoundedContext.newBuilder(MyContext.class)  // MyContext extends BoundedContext<
     .name("context-name")
     .eventStorage(eventStorage)
     .instance(instance)
-    .rootPackage(RootClass.class.getPackage())
+    .features()                                   // feature-slice discovery is its own sub-builder
+        .rootPackage(RootClass.class.getPackage())
+        .done()
     .build()
 ```
 
@@ -784,7 +786,9 @@ processor:**
   compiling; the type moved and the accessor is now `upTo()`
 
 **Automations:**
-- Implement `Automation<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE>`
+- Implement `Automation<TODO_ITEM_TYPE, DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>` — the item type
+  first, then the domain events it reads, then the outbound events it may publish. Note the todo list
+  it pairs with is declared the other way round, `TodoListReadModel<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE>`
 - Paired with `TodoListReadModel` to identify work
 - Process outstanding todo items by executing commands
 - **Delivery is at least once, and the todo list is the queue.** Nothing else records outstanding work:

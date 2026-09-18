@@ -45,7 +45,8 @@ import org.sliceworkz.eventstore.events.Tags;
  * <p>
  * A rejected rule is a {@link BusinessException}, and the last test pins the type rather than the
  * message: that is what keeps a rule saying no apart from a bug in a catch block and in the
- * {@code CommandFailed} event, and it is the one thing {@code error(message)} does not check.
+ * observability record (a {@code CommandRejected} rather than a {@code CommandFailed}), and it is
+ * the one thing {@code error(message)} does not check.
  */
 public class WithdrawCommandTest extends CommandTest<BankingEvent, BankingInboundEvent, BankingOutboundEvent> {
 

@@ -33,6 +33,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandExecuted;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandFailed;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandFailedOnOptimisticLocking;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandRejected;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
@@ -272,6 +273,14 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		assertEquals("name already taken", rejection.getMessage());
 		assertEquals(2, command.attempts.get(), "the rejection ends the retrying, well before the policy would");
 		assertEquals(0, stored(SecondDomainEvent.class), "the rejected command should have stored nothing");
+
+		// each attempt is observable under its own outcome: one conflict, then one rejection, and no failure
+		assertEquals(1, received.stream().filter(e -> e instanceof CommandFailedOnOptimisticLocking).count(), "got: " + received);
+		assertEquals(1, received.stream().filter(e -> e instanceof CommandRejected).count(), "got: " + received);
+		assertEquals("name already taken", received.stream()
+				.filter(e -> e instanceof CommandRejected).map(e -> ((CommandRejected) e).reason()).findFirst().orElseThrow());
+		assertTrue(received.stream().noneMatch(e -> e instanceof CommandFailed),
+				"a business rejection is never reported as a generic CommandFailed, got: " + received);
 	}
 
 	@Test

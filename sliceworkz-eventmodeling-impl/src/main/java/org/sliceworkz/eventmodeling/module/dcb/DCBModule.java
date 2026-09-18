@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
@@ -124,6 +125,9 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			} catch ( OptimisticLockingException ole ) {
 				emitCommandFailedOnOptimisticLocking(commandContext, commandName, commandClass, start, ole);
 				throw ole;
+			} catch ( BusinessException rejection ) {
+				emitCommandRejected(commandContext, commandName, commandClass, start, rejection);
+				throw rejection;
 			} catch ( RuntimeException e ) {
 				emitCommandFailed(commandContext, commandName, commandClass, start, e);
 				throw e;
@@ -151,6 +155,9 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			} catch ( OptimisticLockingException ole ) {
 				emitCommandFailedOnOptimisticLocking(commandContext, commandName, command.getClass(), start, ole);
 				throw ole;
+			} catch ( BusinessException rejection ) {
+				emitCommandRejected(commandContext, commandName, command.getClass(), start, rejection);
+				throw rejection;
 			} catch ( RuntimeException e ) {
 				emitCommandFailed(commandContext, commandName, command.getClass(), start, e);
 				throw e;
@@ -219,6 +226,20 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		EventReference expectedLastEvent = ole.getExpectedLastEventReference() != null ? ole.getExpectedLastEventReference().orElse(null) : null;
 		emitOutcome(commandContext, commandClass, start, (metrics, slice) ->
 			new BoundedContextEvent.CommandFailedOnOptimisticLocking(boundedContext, commandName, expectedLastEvent, metrics, slice));
+	}
+
+	/**
+	 * A business rejection is reported without a {@link BoundedContextEvent.Failure}: the reason is the
+	 * message, and a stack trace for an outcome the command was written to produce would only say
+	 * where in the command the rule sits. The three catch clauses above are ordered from the most
+	 * specific outcome to the catch-all, and a {@code BusinessException} is only recognised as the
+	 * exception the command threw — one wrapped by the projector (a rule thrown from a decision
+	 * model's {@code when}) falls through to {@link #emitCommandFailed}, deliberately.
+	 */
+	private void emitCommandRejected ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, BusinessException rejection ) {
+		String reason = rejection.getMessage();
+		emitOutcome(commandContext, commandClass, start, (metrics, slice) ->
+			new BoundedContextEvent.CommandRejected(boundedContext, commandName, reason, metrics, slice));
 	}
 
 	private void emitCommandFailed ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, Throwable failure ) {

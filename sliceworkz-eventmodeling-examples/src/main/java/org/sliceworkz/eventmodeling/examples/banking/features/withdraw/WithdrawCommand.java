@@ -39,8 +39,9 @@ import org.sliceworkz.eventstore.events.Tags;
  *   <li>Sufficient balance</li>
  * </ul>
  * A rule that fails is a {@link BusinessException}: history says no, which is an outcome of the
- * command and not a bug, and the type is what keeps the two apart for a caller and in the
- * {@code CommandFailed} event the kernel emits.
+ * command and not a bug, and the type is what keeps the two apart for a caller and for an
+ * observer, where the kernel reports it as a {@code CommandRejected} carrying the reason rather
+ * than a {@code CommandFailed} carrying a stack trace.
  */
 public class WithdrawCommand implements Command<BankingEvent> {
 

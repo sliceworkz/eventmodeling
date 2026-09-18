@@ -136,8 +136,9 @@ public sealed interface BoundedContextEvent {
 	/**
 	 * Emitted after a command has been executed successfully and its events persisted.
 	 * <p>
-	 * Failures are reported separately: an optimistic-locking conflict on append produces a
-	 * {@link CommandFailedOnOptimisticLocking}, any other exception a {@link CommandFailed}.
+	 * The other outcomes are reported separately, one event each: a business rule saying no produces a
+	 * {@link CommandRejected}, an optimistic-locking conflict on append a
+	 * {@link CommandFailedOnOptimisticLocking}, and any other exception a {@link CommandFailed}.
 	 * <p>
 	 * {@code slice} identifies the feature slice the command belongs to (resolved by package
 	 * convention) and is {@code null} when the command is not located within a known slice package.
@@ -160,12 +161,48 @@ public sealed interface BoundedContextEvent {
 	record CommandFailedOnOptimisticLocking ( String boundedContext, String command, EventReference expectedLastEvent, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
-	 * Emitted when a command execution failed with an exception other than an optimistic-locking
-	 * conflict (validation errors, infrastructure failures, bugs, ...). The exception is rethrown to
-	 * the caller after this event is emitted.
+	 * Emitted when a command was rejected by a business rule: the command threw a
+	 * {@link org.sliceworkz.eventmodeling.commands.BusinessException} after reading its decision
+	 * models, because history says no — insufficient balance, a closed period, a name already taken.
+	 * Nothing was stored, and the exception is rethrown to the caller after this event is emitted.
+	 * <p>
+	 * A rejection is an expected outcome of a command, not a defect, which is why it is reported
+	 * separately from {@link CommandFailed} and carries no {@link Failure}: {@code reason} is the
+	 * message the rule was rejected with, and that is the whole account of it. There is no exception
+	 * type and no stack trace, since the type is always the business exception and the trace would
+	 * only say where in the command the rule sits. The alternative — one {@code CommandFailed} for
+	 * the rejection and the bug alike — loses because a listener persisting the events then writes
+	 * a stack trace into the store for every customer with insufficient funds, and a dashboard
+	 * cannot alert on failures without alerting on rejections too. The exception type is what a
+	 * command author uses to tell the two apart in a catch block; this event is the same distinction
+	 * in the observability record. Chart rejections by {@code command} and {@code reason}; alert on
+	 * {@link CommandFailed}.
+	 * <p>
+	 * The rejection is recognised by the exception the command itself threw. A business exception
+	 * thrown from inside a decision model's {@code when} arrives wrapped by the projector and is
+	 * reported as a {@link CommandFailed}, which is right: a rule judged while history is read is a
+	 * rule in the wrong place (the read path accepts, the write path validates), and a failure with
+	 * a stack trace is what says so.
+	 * <p>
+	 * The decision-model reads that happened before the rejection are still reported as
+	 * {@link DecisionModelProjected} events, as they are for every other outcome.
+	 * <p>
+	 * {@code slice} identifies the feature slice the command belongs to (resolved by package
+	 * convention) and is {@code null} when the command is not located within a known slice package.
+	 */
+	record CommandRejected ( String boundedContext, String command, String reason, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a command execution failed with an exception other than a business rejection
+	 * ({@link CommandRejected}) or an optimistic-locking conflict
+	 * ({@link CommandFailedOnOptimisticLocking}): a malformed request, an infrastructure failure, a
+	 * bug. The exception is rethrown to the caller after this event is emitted.
 	 * <p>
 	 * {@code failure} captures the exception in a serialization-friendly form (type, message and
-	 * rendered stack trace) so a listener can persist or forward it.
+	 * rendered stack trace) so a listener can persist or forward it. This is the one command outcome
+	 * that carries a stack trace, because it is the one an operator has to look into; a listener
+	 * persisting it therefore stores a trace per failure, which is affordable exactly because
+	 * rejections and conflicts do not land here.
 	 * <p>
 	 * {@code slice} identifies the feature slice the command belongs to (resolved by package
 	 * convention) and is {@code null} when the command is not located within a known slice package.

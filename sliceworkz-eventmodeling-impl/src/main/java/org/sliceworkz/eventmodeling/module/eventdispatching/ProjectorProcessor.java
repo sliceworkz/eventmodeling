@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.events.Instance;
+import org.sliceworkz.eventmodeling.module.threading.Parking;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
@@ -87,6 +88,10 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 	// opens once this processor has caught up with the stream for the first time after start(), so
 	// callers can block until the projection it feeds is usable (see awaitInitialProjection)
 	private final CountDownLatch initialProjectionDone = new CountDownLatch(1);
+
+	// what the loop parks on between rounds and what every state change wakes -- a lock and condition
+	// rather than this object's monitor, so a parked virtual thread holds no carrier (see Parking)
+	private final Parking parking = new Parking();
 
 	// rebuilt on promotion (see reseedProjector); volatile so eventsAppended, on the storage's
 	// notification thread, always compares against the projector the loop is actually running
@@ -256,18 +261,14 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 	@Override
 	public void terminate ( ) {
 		this.terminating = true;
-		synchronized ( this ) {
-			this.notify();
-		}
+		parking.wake();
 	}
 
 	@Override
 	public void stop ( ) {
 		this.stoppedItself = false;
 		this.processorMode = ProcessorMode.STOPPED;
-		synchronized ( this ) {
-			this.notify();
-		}
+		parking.wake();
 	}
 
 	@Override
@@ -275,9 +276,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 		this.stoppedItself = false;
 		this.consecutiveFailedRuns = 0; // an explicit start deserves fresh attempts, whatever came before
 		this.processorMode = originalProcessorMode;
-		synchronized ( this ) {
-			this.notify();
-		}
+		parking.wake();
 		notifyListener("started", ProjectorListener::onStarted);
 	}
 
@@ -328,9 +327,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 		stoppedItself = true;
 		processorMode = ProcessorMode.STOPPED;
 		initialProjectionDone.countDown(); // no catch-up will happen while stopped, release anyone waiting for it
-		synchronized ( this ) {
-			this.notify();
-		}
+		parking.wake();
 		notifyListener("stopped", ProjectorListener::onStoppedByOperator);
 		return true;
 	}
@@ -382,9 +379,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 			// instances to roughly one hand-over per lease ttl
 			consecutiveFailedRuns = 0;
 		}
-		synchronized ( this ) {
-			this.notify();
-		}
+		parking.wake();
 	}
 
 	@Override
@@ -393,10 +388,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 		EventReference lastRef = projector.accumulatedMetrics().lastEventReference();
 		if ( lastRef == null || atLeastUntil.happenedAfter(lastRef) ) {
 			LOGGER.debug("might be new interesting events, querying them immediately!");
-			synchronized ( this ) {
-				potentiallyNewEventsAppended = true;
-				this.notify();
-			}
+			parking.wake(() -> potentiallyNewEventsAppended = true);
 			return atLeastUntil;
 		} else {
 			LOGGER.debug("nothing new to process based on this update, already at {}", lastRef);
@@ -459,19 +451,18 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 
 							initialProjectionDone.countDown(); // caught up at least once, projection is usable
 
-							// Caught up with the stream — wait for new events or timeout
-							synchronized ( this ) {
-								// The terminate() that set the flag notified us while we were in the run
-								// above, with nothing waiting to hear it. Re-check the flag before parking:
-								// otherwise that notification is lost, shutdown sits out this whole timeout,
-								// and the thread manager's grace period ends in an interrupt instead.
-								if ( ! potentiallyNewEventsAppended && !terminating ) {
-									LOGGER.debug("no new events pending, waiting for {} seconds", (WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS / 1000));
-									this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS);
-									LOGGER.debug("done waiting, or notified that new events could be present");
-								}
-								potentiallyNewEventsAppended = false;
-							}
+							// Caught up with the stream — wait for new events or timeout. The terminate() that
+							// set the flag woke us while we were in the run above, with nothing parked to hear
+							// it, and so did any append notification. Both are re-checked under the lock before
+							// parking: otherwise that wake is lost, shutdown sits out this whole timeout, and
+							// the thread manager's grace period ends in an interrupt instead. The pending flag
+							// is consumed under the same lock, so a notification landing meanwhile is not
+							// overwritten
+							LOGGER.debug("parking for up to {} seconds unless new events are already pending", (WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS / 1000));
+							parking.park(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS,
+									() -> potentiallyNewEventsAppended || terminating,
+									() -> potentiallyNewEventsAppended = false);
+							LOGGER.debug("done waiting, or notified that new events could be present");
 
 						} catch ( ProjectorException e ) {
 							Throwable cause = e.getCause();
@@ -525,24 +516,17 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 					} else {
 						// Standing by: parked, not spinning. Woken instantly by instanceMode(LEADER),
 						// stop() or terminate(); the timeout is only a safety net. Re-checks its reasons
-						// for parking under the monitor, so a promotion arriving just before the wait is
+						// for parking under the lock, so a promotion arriving just before the park is
 						// not lost.
 						LOGGER.debug("'{}' standing by, not the elected leader on this instance", processorIdentification);
-						synchronized ( this ) {
-							if ( !terminating && instanceMode == ProcessorInstanceMode.STANDBY && processorMode != ProcessorMode.STOPPED ) {
-								this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
-							}
-						}
+						parking.park(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS,
+								() -> terminating || instanceMode != ProcessorInstanceMode.STANDBY || processorMode == ProcessorMode.STOPPED);
 					}
 
 				} else {
 					LOGGER.debug("not running, waiting for further instructions, checking back in {} seconds", (WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS / 1000));
 					try {
-						synchronized ( this ) {
-							if ( !terminating ) { // same lost-notify race as above
-								this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
-							}
-						}
+						parking.park(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS, () -> terminating); // same lost-wake race as above
 						LOGGER.debug("done waiting or notified, checking new instructions");
 					} catch (InterruptedException e) {
 						LOGGER.debug("interrupted while waiting in stopped state");
@@ -567,11 +551,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 				// writes into (resumeFrom() throws raw, not as a ProjectorException). Looping straight
 				// round used to retry that at full thread speed; pace it like a poll instead.
 				try {
-					synchronized ( this ) {
-						if ( !terminating ) {
-							this.wait(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS);
-						}
-					}
+					parking.park(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS, () -> terminating);
 				} catch ( InterruptedException interrupted ) {
 					LOGGER.debug("interrupted while waiting after an unexpected throwable");
 				}
@@ -627,29 +607,21 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 	}
 
 	/**
-	 * Waits out {@code timeoutMs} whatever else happens on this monitor, cut short only by shutdown, a
-	 * stop, or a demotion — a standby has nothing to back off from, and should be parked in the standby
-	 * branch instead.
+	 * Waits out {@code timeoutMs} whatever else wakes this loop, cut short only by shutdown, a stop, or
+	 * a demotion — a standby has nothing to back off from, and should be parked in the standby branch
+	 * instead.
 	 * <p>
-	 * This cannot be the plain caught-up wait: append notifications arrive as a bare {@code notify()}
-	 * on this monitor, so a parked thread is woken by any of them however it came to be parked, and a
-	 * failing projection released by every append would retry at the pace of the traffic feeding its
-	 * stream instead of the backoff — a busy system hammering the very database that is down. The loop
-	 * to the deadline is what makes the backoff hold. (The same reasoning as the automation's
+	 * This cannot be the plain caught-up wait: append notifications arrive as a bare wake on the same
+	 * parking, so a parked thread is woken by any of them however it came to be parked, and a failing
+	 * projection released by every append would retry at the pace of the traffic feeding its stream
+	 * instead of the backoff — a busy system hammering the very database that is down. Parking to the
+	 * deadline is what makes the backoff hold. (The same reasoning as the automation's
 	 * {@code backOff}.)
 	 */
 	private void backOff ( long timeoutMs ) {
 		long deadline = System.currentTimeMillis() + timeoutMs;
 		try {
-			synchronized ( this ) {
-				while ( !terminating && processorMode != ProcessorMode.STOPPED && instanceMode == ProcessorInstanceMode.LEADER ) {
-					long remaining = deadline - System.currentTimeMillis();
-					if ( remaining <= 0 ) {
-						return;
-					}
-					this.wait(remaining);
-				}
-			}
+			parking.parkUntil(deadline, () -> !terminating && processorMode != ProcessorMode.STOPPED && instanceMode == ProcessorInstanceMode.LEADER);
 		} catch ( InterruptedException e ) {
 			// deliberately not restoring the flag: this loop parks again on its next pass, and a set
 			// flag would make that throw immediately and spin. An interrupt here comes from the thread

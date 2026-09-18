@@ -138,10 +138,23 @@ Key concepts:
   `start()` says so — `AutomationProcessor`'s constructor says as much, "don't run before start() or
   things might not have been initialized in the bounded context impl", which was a `volatile` flag
   holding live threads off a half-built context. Now the threads do not exist to be held off
-- **An idle processor is not free, which is what made this worth moving.** Both processor loops park in
-  `Object.wait()` inside a `synchronized` block, and on Java 21 a monitor wait pins the carrier, so every
-  parked virtual thread holds a platform thread. Measured before the change: 16 ephemeral read models
-  took a JVM from 8 platform threads to 26 at `build()`, with the context never started
+- **An idle processor is free, and the lock its loop parks on is what makes it so.** Both processor
+  loops, and the leader elector's heartbeat, park on `Parking` — a `ReentrantLock` with one `Condition`,
+  in `module.threading` — and never in `Object.wait()` inside a `synchronized` block. On Java 21
+  through 23 a monitor wait pins the carrier, so every parked virtual thread holds a platform thread,
+  and the scheduler compensates only up to `jdk.virtualThreadScheduler.maxPoolSize` (256 by default):
+  a deployment with more processors than that across its co-located contexts has processors that are
+  never scheduled at all, with nothing failing to say so. A `Condition` parks through `LockSupport`,
+  which unmounts the virtual thread. Measured on JDK 21: 64 virtual threads in a monitor wait grow a
+  JVM from 8 to 74 platform threads; the same 64 parked on a `Condition` grow it by one. The
+  alternatives — keeping the monitors and relying on JDK 24, where JEP 491 removes the pinning, or a
+  platform thread per processor — are weighed on `Parking`; the library is built for release 21, and a
+  virtual thread that costs nothing while parked leaves a platform thread nothing to buy. `Parking`
+  keeps the monitor's semantics (a wake with nobody parked is lost, so every waker sets a flag the
+  parker re-checks under the lock), with one deliberate difference: a zero timeout returns at once
+  where `Object.wait(0)` waits forever. `ParkingTest` pins the thread count both ways, the second as
+  the control that the measurement sees pinning at all; `IdleProcessorsHoldNoPlatformThreadsTest`
+  pins it through a started bounded context full of idle read models and automations
 - **The processors are started before their threads are submitted**, which is load bearing rather than
   incidental. `Processor.start()` signals a thread that may not be parked yet, and the stopped branch of
   each loop re-checks only its terminating flag before waiting — so a signal arriving first is lost and

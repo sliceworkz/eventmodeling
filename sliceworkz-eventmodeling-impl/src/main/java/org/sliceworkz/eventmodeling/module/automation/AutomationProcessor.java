@@ -31,6 +31,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
+import org.sliceworkz.eventmodeling.module.threading.Parking;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorInstanceMode;
@@ -75,6 +76,11 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private volatile ProcessorInstanceMode instanceMode = ProcessorInstanceMode.STANDBY;
 	private volatile boolean terminating;
 	private Instance instance;
+
+	// what the loop parks on between rounds and what every state change and bookmark move wakes -- a
+	// lock and condition rather than this object's monitor, so a parked virtual thread holds no
+	// carrier (see Parking)
+	private final Parking parking = new Parking();
 
 	private boolean monitoredBookmarkMissingWarned = false;
 
@@ -150,26 +156,20 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	@Override
 	public void terminate ( ) {
 		this.terminating = true;
-		synchronized ( this ) { // escape the wait state if needed
-			this.notify();
-		}
+		parking.wake(); // escape the parked state if needed
 	}
 
 	@Override
 	public void instanceMode ( ProcessorInstanceMode mode ) {
 		this.instanceMode = mode;
-		synchronized ( this ) { // wake a parked standby immediately on promotion, and a backOff on demotion
-			this.notify();
-		}
+		parking.wake(); // wake a parked standby immediately on promotion, and a backOff on demotion
 	}
 	
 	@Override
 	public void stop ( ) {
 		this.stoppedItself = false;
 		this.processorMode = ProcessorMode.STOPPED;
-		synchronized ( this ) { // escape the wait state if needed
-			this.notify();
-		}
+		parking.wake(); // escape the parked state if needed
 	}
 
 	@Override
@@ -185,9 +185,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private void start ( BoundedContextEvent.AutomationStartReason reason ) {
 		this.stoppedItself = false;
 		this.processorMode = originalProcessorMode;
-		synchronized ( this ) { // escape the wait state if needed
-			this.notify();
-		}
+		parking.wake(); // escape the parked state if needed
 		eventEmitter.emit(new BoundedContextEvent.AutomationStarted(boundedContext, processorIdentification.id(), reason, eventEmitter.sliceFor(automation.getClass())));
 	}
 
@@ -222,9 +220,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 			// it, and parking afterwards for the full timeout would sit out a todo list that has already
 			// changed. Cleared when we next read the todo list, so it only ever means "changed since then"
 			monitoredBookmarkMoved = true;
-			synchronized ( this ) {
-				this.notify();
-			}
+			parking.wake();
 		} else {
 			LOGGER.debug("reader {} moved bookmark to  {}, not of our concern", reader, processedUntil);
 		}
@@ -385,14 +381,11 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 					} else {
 						// Standing by: parked, not spinning. Woken instantly by instanceMode(LEADER),
 						// stop() or terminate(); the timeout is only a safety net. Bookmark
-						// notifications wake this park too (same monitor), which is harmless: the loop
+						// notifications wake this park too (same parking), which is harmless: the loop
 						// re-reads the mode and parks again.
 						LOGGER.debug("'{}' standing by, not the elected leader on this instance", processorIdentification);
-						synchronized ( this ) {
-							if ( !terminating && instanceMode == ProcessorInstanceMode.STANDBY && processorMode != ProcessorMode.STOPPED ) {
-								this.wait(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
-							}
-						}
+						parking.park(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS,
+								() -> terminating || instanceMode != ProcessorInstanceMode.STANDBY || processorMode == ProcessorMode.STOPPED);
 					}
 
 				} else {
@@ -448,8 +441,8 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * Waits for the todo list to be worth reading again, for at most {@code timeoutMs}.
 	 * <p>
 	 * Returns immediately when the projector filling that list has moved its bookmark since this round
-	 * read it. That is not an optimisation: the notification is a bare {@code notify()}, so one arriving
-	 * while a batch was running is lost, and parking on it afterwards means sitting out the full poll
+	 * read it. That is not an optimisation: the notification is a bare wake, so one arriving while a
+	 * batch was running is lost, and parking on it afterwards means sitting out the full poll
 	 * interval with changed work already waiting. It matters most exactly where the catch-up guard cannot
 	 * help — a batch whose appends were all de-duplicated by their idempotency key, or whose handler
 	 * raised nothing, bookmarks nothing and would otherwise crawl through a backlog one poll at a time.
@@ -470,25 +463,17 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * stopped or terminated.
 	 * <p>
 	 * This is what a failing batch waits on, and it cannot be {@link #waitForWork}: bookmark moves are
-	 * delivered as a plain {@code notify()} on this monitor, so a parked thread is woken by any of them
-	 * however it came to be parked. Skipping the {@code monitoredBookmarkMoved} check alone would not
-	 * hold a failing automation back — the very notification that sets that flag would release it — and
-	 * the retry rate would follow whatever traffic is feeding the todo list instead of the backoff.
+	 * delivered as a bare wake on the same parking, so a parked thread is woken by any of them however
+	 * it came to be parked. Skipping the {@code monitoredBookmarkMoved} check alone would not hold a
+	 * failing automation back — the very notification that sets that flag would release it — and the
+	 * retry rate would follow whatever traffic is feeding the todo list instead of the backoff.
 	 */
 	private void backOff ( long timeoutMs ) {
 		long deadline = System.currentTimeMillis() + timeoutMs;
 		try {
-			synchronized ( this ) {
-				// a demotion also cuts the backoff short: a standby has nothing to back off from,
-				// and should be parked in the standby branch instead
-				while ( !terminating && processorMode != ProcessorMode.STOPPED && instanceMode == ProcessorInstanceMode.LEADER ) {
-					long remaining = deadline - System.currentTimeMillis();
-					if ( remaining <= 0 ) {
-						return;
-					}
-					this.wait(remaining);
-				}
-			}
+			// a demotion also cuts the backoff short: a standby has nothing to back off from, and
+			// should be parked in the standby branch instead
+			parking.parkUntil(deadline, () -> !terminating && processorMode != ProcessorMode.STOPPED && instanceMode == ProcessorInstanceMode.LEADER);
 		} catch (InterruptedException e) {
 			LOGGER.debug("interrupted while backing off"); // see waitForWork for why the flag is not restored
 		}
@@ -497,19 +482,12 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	/**
 	 * Parks this thread for at most {@code timeoutMs}, waking early on a bookmark move or on a state
 	 * change. Re-checks for termination before parking: the {@code terminate()} that set TERMINATING may
-	 * have notified while nothing was waiting to hear it, and parking anyway makes shutdown sit out the
-	 * whole timeout.
+	 * have woken us while nothing was parked to hear it, and parking anyway makes shutdown sit out the
+	 * whole timeout. A zero or negative delay asks for no wait, and gets none.
 	 */
 	private void waitForWork ( long timeoutMs ) {
-		if ( timeoutMs <= 0 ) {
-			return; // Object.wait(0) waits forever, which is the opposite of what a zero delay asks for
-		}
 		try {
-			synchronized ( this ) {
-				if ( !terminating ) {
-					this.wait(timeoutMs);
-				}
-			}
+			parking.park(timeoutMs, () -> terminating);
 		} catch (InterruptedException e) {
 			// deliberately not restoring the flag: this loop parks again on its next pass, and a set
 			// flag would make that throw immediately and spin. An interrupt here comes from the thread
@@ -570,9 +548,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		LOGGER.info("stopping automation '{}' on an operator's instruction - it will not run again until it is restarted", processorIdentification);
 		stoppedItself = true;
 		processorMode = ProcessorMode.STOPPED;
-		synchronized ( this ) { // a batch in progress finishes its current item and parks; a parked loop parks on
-			this.notify();
-		}
+		parking.wake(); // a batch in progress finishes its current item and parks; a parked loop parks on
 		eventEmitter.emit(new BoundedContextEvent.AutomationStopped(boundedContext, processorIdentification.id(), null, eventEmitter.sliceFor(automation.getClass()), BoundedContextEvent.ProcessorStopReason.OPERATOR));
 		return true;
 	}

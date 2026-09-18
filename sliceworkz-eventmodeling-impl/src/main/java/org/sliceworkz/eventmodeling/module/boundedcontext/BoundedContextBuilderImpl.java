@@ -331,17 +331,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	@Override
 	public BoundedContextBuilder<C> translator ( Class<? extends Translator<?,?>> translatorClass ) {
-		try {
-			return translator(translatorClass.getDeclaredConstructor(new Class[0]).newInstance());
-		} catch (InvocationTargetException e) {
-			throw new RuntimeException(e);
-		} catch (NoSuchMethodException e) {
-			throw new RuntimeException(e);
-		} catch (InstantiationException e) {
-			throw new RuntimeException(e);
-		} catch (IllegalAccessException e) {
-			throw new RuntimeException(e);
-		}
+		return translator(instantiate(translatorClass, "Translator"));
 	}
 
 	@Override
@@ -353,16 +343,43 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	@Override
 	public BoundedContextBuilder<C> dispatcher ( Class<? extends Dispatcher<?>> dispatcherClass ) {
+		return dispatcher(instantiate(dispatcherClass, "Dispatcher"));
+	}
+
+	/**
+	 * The instance the {@code translator(Class)} / {@code dispatcher(Class)} overloads register, or an
+	 * {@link IllegalArgumentException} naming the class, the kind it was registered as, and what it
+	 * would take to make it instantiable.
+	 * <p>
+	 * Registering by class is registering a class this framework constructs, so every way that can fail
+	 * is a property of the declaration and belongs with the other registration rejections: a missing (or
+	 * non-public) no-argument constructor -- what an inner class that should have been {@code static}
+	 * produces -- an abstract class or an interface registered where an implementation was meant, and a
+	 * constructor that ran and threw. The alternative -- a bare {@code RuntimeException} around each
+	 * reflective exception -- loses because such a failure carries no message at all: a stack trace
+	 * naming neither the component nor the reason, with a constructor's own throwable a cause deeper
+	 * still than the reflective wrapper. The wording follows the eventstore's upcaster instantiation,
+	 * which is the same mistake one layer down.
+	 */
+	private static <T> T instantiate ( Class<? extends T> componentClass, String kind ) {
 		try {
-			return dispatcher(dispatcherClass.getDeclaredConstructor(new Class[0]).newInstance());
-		} catch (NoSuchMethodException e) {
-			throw new RuntimeException(e);
-		} catch (InstantiationException e) {
-			throw new RuntimeException(e);
+			return componentClass.getDeclaredConstructor().newInstance();
 		} catch (InvocationTargetException e) {
-			throw new RuntimeException(e);
-		} catch (IllegalAccessException e) {
-			throw new RuntimeException(e);
+			// the constructor ran and threw: report what it threw, not the reflective wrapper
+			throw new IllegalArgumentException(
+					"%s %s threw from its no-argument constructor: %s".formatted(
+							kind, componentClass.getName(), e.getTargetException()),
+					e.getTargetException());
+		} catch (ReflectiveOperationException e) {
+			// NoSuchMethod (no no-arg constructor -- an inner class needs to be static), Instantiation
+			// (abstract or an interface) or IllegalAccess (not public). All three are "the class
+			// registered here cannot be instantiated", and the remedy is the same sentence
+			throw new IllegalArgumentException(
+					("%s %s cannot be instantiated: %s. Registering by class needs a public no-argument "
+							+ "constructor on a concrete, non-inner (or static nested) class -- register an "
+							+ "instance instead where the component takes constructor arguments.")
+							.formatted(kind, componentClass.getName(), e),
+					e);
 		}
 	}
 

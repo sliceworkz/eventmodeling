@@ -553,6 +553,34 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
   an unchecked `Object...`: which parameters a read model takes is a property of its constructors, and
   the class argument alone does not say. `ReadModelCapabilityTypeParameterTest` in the api module pins
   the acceptances and the rejections by running javac against probe snippets
+- **A live read model is constructed by the parameter *types* a read passed, not by their count.**
+  `LiveModelConstructors.select` takes the constructors this framework can reach, keeps the ones every
+  argument fits, and where several fit picks the most specific — Java's own overload resolution, with an
+  exact match on an argument's runtime type beating a widening one so `(int)` does not tie with `(long)`
+  for a `5`. The alternative — the first declared constructor of the right arity — loses because
+  `getDeclaredConstructors()` promises no order, so a read model with two constructors of one arity is
+  projected through whichever the JVM listed first, a choice that can differ between recompiles and that
+  no test pins, since a passing suite has only ever seen the order it got. `MockReadModel` in the test
+  module is that shape already: `(String, List)` beside `(String, ReadModelStorage)`. What is left over
+  is refused rather than decided by array order, and every refusal names the read model, the argument
+  types as passed and the constructors that were weighed — an argument the chosen constructor cannot
+  take used to arrive as `newInstance`'s bare `argument type mismatch`, naming none of the three.
+  Accessibility is part of the match rather than an afterthought: a constructor the framework cannot
+  call is excluded and named in the failure, instead of being selected and failing inside `newInstance`
+  with an `IllegalAccessException` that says neither which constructor nor why. Nothing is made
+  accessible — the framework is the only thing that constructs a live read model, so one it is meant to
+  use is one it can see
+- **Ambiguity is refused at the read; being uninstantiable is refused at `build()`.** Which of two
+  constructors fits is a property of the arguments — `MockReadModel`'s two two-argument constructors take
+  unrelated types, so no read of it is ambiguous — so a build-time rejection of same-arity constructors
+  would refuse read models that can never be read ambiguously. What does not depend on the arguments is
+  refused where the registration is: `rejectLiveReadModelsThatCannotBeInstantiated` names a live read
+  model class that is abstract (an interface or a base class registered where an implementation was
+  meant) or declares no constructor the framework can reach, every offender at once, as
+  `rejectReadModelsWithoutAChosenMode` does for a mode nobody chose. Both are dead on arrival — every
+  read of such a class fails — so the build is where they belong. `LiveModelConstructorSelectionTest`
+  pins the resolution and `LiveModelConstructionThroughAReadTest` that a read really is constructed
+  through it and that the build-time rejection fires
 - A read model declares where it keeps its state via `ReadModel.storage()`, returning a `ReadModelStorage`:
   - `EPHEMERAL` (default): in-memory, gone with the process. Every instance projects its own copy and stale bookmarks are dropped at startup
   - `LOCAL`: durable but private to one instance. Every instance projects its own copy and resumes from its own bookmark

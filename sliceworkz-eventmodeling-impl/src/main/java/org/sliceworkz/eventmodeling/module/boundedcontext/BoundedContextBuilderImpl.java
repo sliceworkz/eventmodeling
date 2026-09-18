@@ -63,6 +63,7 @@ import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
 import org.sliceworkz.eventmodeling.module.inbound.InboundModule;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
+import org.sliceworkz.eventmodeling.module.readmodels.LiveModelConstructors;
 import org.sliceworkz.eventmodeling.module.readmodels.LiveModelSpecificationAccessor;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.module.snapshots.LiveModelSnapshotSpecificationImpl;
@@ -474,6 +475,43 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	/**
+	 * Rejects a live read model class no read of it could ever instantiate.
+	 * <p>
+	 * A live read model is constructed per read, so the class is registered here and the parameters
+	 * arrive later — which means most of what can go wrong between the two is a property of the read and
+	 * belongs there ({@link org.sliceworkz.eventmodeling.module.readmodels.LiveModelConstructors#select}
+	 * weighs the parameter types and names what it refused). Two things are not: a class that is abstract
+	 * — an interface or a base class registered where an implementation was meant — and one declaring no
+	 * constructor the framework can reach. Neither depends on what a read passes, so every read of such a
+	 * class fails, and catching that at build time is the same trade as
+	 * {@link #rejectReadModelsWithoutAChosenMode}: a mistake named where it was made rather than one
+	 * surfacing as a failing read, possibly on a path nothing exercises until production.
+	 * <p>
+	 * What is deliberately <i>not</i> checked here is ambiguity between two constructors of one arity.
+	 * Whether two constructors are ambiguous depends on the arguments — this repository's own
+	 * {@code MockReadModel} declares {@code (String, List)} beside {@code (String, ReadModelStorage)},
+	 * which no read can confuse — so a build-time rejection of same-arity constructors would refuse read
+	 * models that are perfectly resolvable. The tie is refused at the read, where the arguments are
+	 * known and the message can name them.
+	 * <p>
+	 * Eventually consistent read models are registered as instances, so they are already constructed and
+	 * have nothing to check.
+	 */
+	private void rejectLiveReadModelsThatCannotBeInstantiated ( ) {
+		List<String> offenders = new ArrayList<>();
+		for ( LiveModelSpecificationImpl spec : liveModelSpecs ) {
+			String reason = LiveModelConstructors.uninstantiableReason(spec.readModelClass());
+			if ( reason != null ) {
+				offenders.add("%s (%s)".formatted(spec.readModelClass().getSimpleName(), reason));
+			}
+		}
+		if ( !offenders.isEmpty() ) {
+			throw new IllegalArgumentException(
+					"live readmodel registered that no read could construct: " + String.join(", ", offenders));
+		}
+	}
+
+	/**
 	 * Rejects an automation whose todo list nobody in this process will project.
 	 * <p>
 	 * An automation handles nothing until the projector filling its todo list has bookmarked past the
@@ -542,6 +580,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 
 		rejectReadModelsWithoutAChosenMode();
+		rejectLiveReadModelsThatCannotBeInstantiated();
 		rejectAutomationsWhoseTodoListIsNotProjectedHere();
 
 		logEventTypes("DOMAIN", domainEventRootType);

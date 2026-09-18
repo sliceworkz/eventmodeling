@@ -17,7 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.module.readmodels;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -345,7 +344,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private ReadModel<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams ) {
 		long start = System.currentTimeMillis();
 		try {
-			ReadModel<DOMAIN_EVENT_TYPE> readModel = (ReadModel<DOMAIN_EVENT_TYPE>) selectConstructor(readModelClass, constructorParams).newInstance(constructorParams);
+			ReadModel<DOMAIN_EVENT_TYPE> readModel = (ReadModel<DOMAIN_EVENT_TYPE>) LiveModelConstructors.select(readModelClass, constructorParams).newInstance(constructorParams);
 
 			EventReference lastEventReference = null;
 
@@ -389,8 +388,16 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			}
 
 			return readModel;
-		} catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-			throw new RuntimeException(e);
+		} catch (InvocationTargetException e) {
+			// the read model's own constructor threw: report that, not the reflective wrapper around it,
+			// which puts one type on every live read model that has ever refused its parameters
+			throw new RuntimeException("the constructor of live read model %s threw".formatted(readModelClass.getName()),
+					e.getCause() == null ? e : e.getCause());
+		} catch (InstantiationException | IllegalAccessException e) {
+			// LiveModelConstructors weighs accessibility and the builder refuses an abstract live read
+			// model, so what is left here is the class itself being out of reach -- named, rather than
+			// handed over as a bare reflective exception
+			throw new RuntimeException("live read model %s could not be instantiated".formatted(readModelClass.getName()), e);
 		}
 	}
 
@@ -403,15 +410,6 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			String key = snapshotCapable.key(readModel.readmodelName(), constructorParams);
 			info.snapshotMeters().save(snapshotStorageForWrite, key, snapshotCapable.version(), ((SnapshotCapable<Object>) snapshotCapable).takeSnapshot(), projectorMetrics.lastEventReference());
 		}
-	}
-
-	private Constructor<?> selectConstructor ( Class<?> readModelClass, Object[] constructorParams ) {
-		for ( Constructor<?> ctr : readModelClass.getDeclaredConstructors() ) {
-			if ( ctr.getParameterCount() == constructorParams.length ) {
-				return ctr;
-			}
-		}
-		throw new IllegalArgumentException("no public constructor found on " + readModelClass + " for parameters " + constructorParams);
 	}
 
 	/**

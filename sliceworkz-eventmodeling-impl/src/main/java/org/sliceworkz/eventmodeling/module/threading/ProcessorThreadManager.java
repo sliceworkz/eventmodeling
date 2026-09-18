@@ -38,10 +38,11 @@ import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
  * never constructs. Nothing was gained by it either, since every processor starts out
  * {@code STOPPED} and does no work until {@code start()} says so.
  * <p>
- * The threads are not free while they idle, which is what made this worth moving rather than merely
- * tidying: both processor loops park in {@code Object.wait()} inside a {@code synchronized} block, and
- * on Java 21 a monitor wait pins the carrier — so a parked virtual thread holds a platform thread for
- * as long as it waits.
+ * The threads are virtual, and an idle processor costs nothing because of how its loop parks: on a
+ * {@link Parking}, whose {@code Condition} unmounts the virtual thread, never in {@code Object.wait()}
+ * inside a {@code synchronized} block, which on Java 21 through 23 pins the carrier and puts a ceiling
+ * on how many processors a JVM can park at all — see {@link Parking} for that ceiling and the
+ * alternatives it rules out.
  */
 public class ProcessorThreadManager<EVENT_TYPE> implements LifecycleCapability {
 

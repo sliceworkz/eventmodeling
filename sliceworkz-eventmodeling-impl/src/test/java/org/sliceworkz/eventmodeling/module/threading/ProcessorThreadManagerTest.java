@@ -133,6 +133,7 @@ public class ProcessorThreadManagerTest {
 		final AtomicBoolean startedBeforeRun = new AtomicBoolean();
 
 		private final CountDownLatch running = new CountDownLatch(1);
+		private final Parking parking = new Parking();
 		private volatile boolean terminating;
 
 		boolean ran ( long timeoutMs ) throws InterruptedException {
@@ -144,14 +145,12 @@ public class ProcessorThreadManagerTest {
 			startedBeforeRun.set(starts.get() > 0);
 			runs.incrementAndGet();
 			running.countDown();
-			while ( !terminating ) {           // stands in for the real processors' wait loop
-				synchronized ( this ) {
-					try {
-						wait(100);
-					} catch ( InterruptedException interrupted ) {
-						Thread.currentThread().interrupt();
-						return;
-					}
+			while ( !terminating ) {           // stands in for the real processors' loop, parked as they park
+				try {
+					parking.park(100, () -> terminating);
+				} catch ( InterruptedException interrupted ) {
+					Thread.currentThread().interrupt();
+					return;
 				}
 			}
 		}
@@ -169,9 +168,7 @@ public class ProcessorThreadManagerTest {
 		public void terminate ( ) {
 			terminates.incrementAndGet();
 			terminating = true;
-			synchronized ( this ) {
-				notify();
-			}
+			parking.wake();
 		}
 	}
 

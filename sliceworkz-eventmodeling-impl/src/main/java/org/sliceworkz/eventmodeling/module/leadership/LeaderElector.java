@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.LeadershipReleaseReason;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
+import org.sliceworkz.eventmodeling.module.threading.Parking;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorInstanceMode;
@@ -87,7 +88,9 @@ public class LeaderElector implements Runnable {
 	private final List<LeaseState> leases;
 	private final BoundedContextEventEmitter eventEmitter;
 
-	private final Object sleeper = new Object();
+	// what the heartbeat thread parks on between rounds -- a lock and condition rather than a monitor,
+	// so the parked virtual thread holds no carrier (see Parking)
+	private final Parking sleeper = new Parking();
 	private volatile boolean terminating;
 	private volatile boolean paused;
 	private volatile boolean leasesUnsupported;
@@ -162,9 +165,7 @@ public class LeaderElector implements Runnable {
 	 */
 	public void terminate ( ) {
 		terminating = true;
-		synchronized ( sleeper ) {
-			sleeper.notify();
-		}
+		sleeper.wake();
 		synchronized ( this ) {
 			releaseEverything(null);
 		}
@@ -174,16 +175,11 @@ public class LeaderElector implements Runnable {
 	public void run ( ) {
 		LOGGER.debug("leader elector of '{}' running, {} lease(s), heartbeat {}, ttl {}", boundedContext, leases.size(), heartbeatInterval, ttl);
 		while ( !terminating && !leasesUnsupported ) {
-			synchronized ( sleeper ) {
-				if ( terminating ) {
-					break;
-				}
-				try {
-					sleeper.wait(heartbeatInterval.toMillis());
-				} catch ( InterruptedException e ) {
-					Thread.currentThread().interrupt();
-					break;
-				}
+			try {
+				sleeper.park(heartbeatInterval.toMillis(), () -> terminating);
+			} catch ( InterruptedException e ) {
+				Thread.currentThread().interrupt();
+				break;
 			}
 			if ( !terminating && !paused ) {
 				synchronized ( this ) {

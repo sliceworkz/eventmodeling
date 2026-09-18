@@ -26,11 +26,16 @@ import org.sliceworkz.eventmodeling.events.Tracing;
  * Application developers should use {@link ReadModelCapability#read} instead,
  * which scopes queries to the bounded context's own domain event stream.
  * <p>
- * To use this capability, define a custom bounded context interface that explicitly
- * extends this interface:
+ * It is deliberately not part of {@link org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities},
+ * so an ordinary bounded context does not carry it. To use it, declare a context interface that
+ * names it alongside {@link org.sliceworkz.eventmodeling.boundedcontext.BoundedContext} — the handle
+ * {@code build()} returns is a proxy over exactly the interface it was asked for, so what that
+ * interface names is what the caller gets:
  * <pre>{@code
- * interface DashboardContext extends CQRSCapabilities<MyEvent>, UnboundedReadModelCapability<MyEvent> {}
+ * interface Dashboard extends BoundedContext<MyEvent, MyInbound, MyOutbound>,
+ *                             UnboundedReadModelCapability<MyEvent> { }
  * }</pre>
+ * The same mechanism narrows in the other direction; see {@code WHO-MAY-DO-WHAT.md}.
  */
 public interface UnboundedReadModelCapability<DOMAIN_EVENT_TYPE> {
 

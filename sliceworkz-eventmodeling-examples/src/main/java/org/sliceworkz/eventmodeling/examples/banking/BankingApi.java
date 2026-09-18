@@ -17,16 +17,24 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking;
 
-import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.ApplicationCapabilities;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingInboundEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingOutboundEvent;
 
 /**
- * The banking bounded context, as its owner holds it: everything the framework offers.
+ * What application code may do with the banking context: execute commands and read read models.
  * <p>
- * It also extends {@link BankingApi}, the narrower surface application code is handed. Both paths to
- * {@code ApplicationCapabilities} carry the same event types, which is what keeps the alias honest.
+ * This is what a controller, a scheduled job or any adapter driving the domain should be handed —
+ * not {@link Banking}, which also erases people, stops automations, appends domain events no command
+ * raised, and terminates the context. Narrowing costs exactly this declaration plus a reference type
+ * at the call site: {@link Banking} extends it, so a built context already is one.
+ * <p>
+ * The interface exists only to drop the type arguments from every call site, exactly as {@code
+ * Banking} does for {@code BoundedContext} — {@code ApplicationCapabilities<BankingDomainEvent,
+ * BankingOutboundEvent>} would do just as well and needs no declaration at all.
+ * <p>
+ * See {@code WHO-MAY-DO-WHAT.md} for the other audiences and the reasoning.
  */
-public interface Banking extends BoundedContext<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent>, BankingApi {
+public interface BankingApi extends ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> {
+
 }

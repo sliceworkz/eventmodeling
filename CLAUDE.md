@@ -196,6 +196,67 @@ Key concepts:
   `start()` able to put terminated processors back on threads. `FailedBuildReleasesWhatItBuiltTest` pins
   the cleanup, by counting what the failed build subscribed to the storage against what it gave back
 
+### The capability surface is filed by audience, and a caller holds its own
+
+**A built context can do everything, and almost no caller needs all of it.** `BoundedContext<D,I,O>`
+extends `AllCapabilities<D,I,O>`, so one reference executes commands, reads read models, appends a
+domain event no command raised, translates inbound events, stops an automation, restarts a
+projector, erases a person, hands out a port and terminates itself. A web controller handed `Banking`
+— which is what it gets unless the wiring says otherwise — can call `erase()`, `stopAutomation()`
+and `event()`, and nothing at compile time objects. [WHO-MAY-DO-WHAT.md](WHO-MAY-DO-WHAT.md) is the
+user-facing version of this section; keep the two in step via the link rather than restating one in
+the other, and when advising on who holds what, name the audience.
+
+- **`AllCapabilities` is a composition of audiences and declares nothing itself.** Six interfaces
+  narrower than the context, each the surface of one caller: `ApplicationCapabilities<D,O>`
+  (`execute`, `executeWithRetry`, `read`, `aggregate`) for code driving the domain,
+  `TranslationCapability<I>` for the inbound edge, `OperationsCapabilities` (the two admin
+  capabilities) for an operator's tooling, `PrivacyCapability` for an erasure request,
+  `ProvidedEventCapability<D>` for the escape hatch, and the owner's own — `LifecycleCapability`,
+  `PortsCapability`, `FeatureSliceCapabilities` — which stay leaves on `AllCapabilities` because
+  only whatever called `build()` has a use for them
+- **Narrowing costs a reference type and nothing else.** A built context already *is* each audience,
+  so `ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> app = banking;` is the whole
+  technique: no wrapper, no conversion, no builder setting. Build the context in one place and hand
+  out the narrow types from there. An alias interface beside the context interface —
+  `interface BankingApi extends ApplicationCapabilities<...>`, with `Banking extends
+  BoundedContext<...>, BankingApi` — drops the type arguments from every call site for the same
+  reason `Banking` exists at all; the two paths to `ApplicationCapabilities` must agree on their
+  arguments, which makes a mistyped alias a compile error rather than a second surface
+- **It is a boundary of discipline, not of security**, and the docs say so: the object behind a
+  narrowed reference is still the whole context and a cast reaches it. The reference type is the
+  boundary Java offers everywhere else, and reaching past it has to be written down, so it shows up
+  in review
+- **`event()` is deliberately off the application surface.** It appends a domain event with no
+  decision model read and no boundary checked, so no `OptimisticLockingException` is possible — for
+  facts already settled before they reach the context (a CRUD front-end, an import, a migration), and
+  for automations and translators through their own context. Left on the application surface it is
+  the one capability whose misuse is silent: the append succeeds, and the invariant the command path
+  would have checked is simply never checked. Opting into it by naming `ProvidedEventCapability` is
+  what makes reaching for it visible
+- **`aggregate` rides with `execute`, `incoming` does not.** Both write paths on
+  `ApplicationCapabilities` go through a boundary — a command pins one at the stream head, an
+  `Aggregate` raises within its identity — where `event()` goes through none; a team using one of the
+  two write styles never registers the other, so bundling costs it nothing. `incoming`/`translate`
+  stay separate because feeding the domain external events is a different job from deciding on a
+  user's behalf, and an adapter doing both holds both types
+- **The groupings are by audience, never by style.** The alternative — a `CQRSCapabilities` and a
+  `DCBCapabilities` naming the two ways to drive this framework — loses because a style is not a
+  caller: both would carry `read`, both would need `LifecycleCapability` to be usable as the one type
+  a CQRS-style or DCB-style application holds, and the result is that the nearest thing to an
+  application surface hands out `terminate()` while no declarable type means "execute commands and
+  read read models". Which write path a team uses is a property of what it registers, not of who
+  holds the reference
+- **A capability added later has to be filed.** `CapabilitySurfaceTest` fails a method reachable on a
+  bounded context and on no narrower reference — including one declared straight on `AllCapabilities`
+  — and pins the direct superinterfaces of `AllCapabilities`, `ApplicationCapabilities` and
+  `OperationsCapabilities`. This is the half no compile probe reaches, and it is silent otherwise: a
+  capability that widens only the wide surface breaks no test, because the extra method is never
+  called through a narrow type. `CapabilityAudienceTest` pins the other half by running javac against
+  probes — each audience accepts its own methods and refuses the others', a built context still
+  carries everything, it narrows to every audience without a cast, and the alias-interface
+  declaration compiles while one contradicting the context's own event types does not
+
 ### Feature Slice Pattern
 
 Features are organized as vertical slices:

@@ -119,9 +119,11 @@ out of this step, and they want different responses:
 
 All three reach the caller; the kernel additionally emits `CommandFailed` (or
 `CommandFailedOnOptimisticLocking`) for observers, so a rejected command is visible without being
-anybody else's failure. The examples predate `BusinessException` and throw `IllegalStateException` —
-the API ships `BusinessException` (with the `when(condition, message)` helper) precisely so a rule
-rejection is distinguishable from a bug in a catch block and in the observability record; prefer it.
+anybody else's failure. A rule rejection is a `BusinessException`, never an `IllegalStateException`:
+the API ships it (with the `when(condition, message)` helper) precisely so a rule rejection is
+distinguishable from a bug in a catch block and in the observability record, where `CommandFailed`
+carries the exception type. The banking example's `WithdrawCommand`, `DepositCommand` and
+`CloseMonthCommand` are written this way.
 
 **A rule that needs no history needs no decision model** — but say so: a command must call
 `decisionModels(...)` or `noDecisionModels()`, and `build()`-style silence is not an option

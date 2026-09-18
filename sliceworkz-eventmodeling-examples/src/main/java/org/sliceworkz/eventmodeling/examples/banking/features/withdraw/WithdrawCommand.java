@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.examples.banking.features.withdraw;
 
 import java.math.BigDecimal;
 
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
@@ -37,6 +38,9 @@ import org.sliceworkz.eventstore.events.Tags;
  *   <li>Current period must be open (discovered via initQuery)</li>
  *   <li>Sufficient balance</li>
  * </ul>
+ * A rule that fails is a {@link BusinessException}: history says no, which is an outcome of the
+ * command and not a bug, and the type is what keeps the two apart for a caller and in the
+ * {@code CommandFailed} event the kernel emits.
  */
 public class WithdrawCommand implements Command<BankingEvent> {
 
@@ -56,17 +60,11 @@ public class WithdrawCommand implements Command<BankingEvent> {
 		var period = new ActivePeriodDecisionModel(accountId);
 		var result = context.decisionModels(period);
 
-		if (!period.accountExists()) {
-			throw new IllegalStateException("Account does not exist");
-		}
-		if (period.isPeriodClosed()) {
-			throw new IllegalStateException(
-				"Period " + period.activeMonth() + " is closed, cannot withdraw");
-		}
-		if (period.balance().compareTo(amount) < 0) {
-			throw new IllegalStateException(
-				"Insufficient balance: " + period.balance() + " < " + amount);
-		}
+		BusinessException.when(!period.accountExists(), "Account does not exist");
+		BusinessException.when(period.isPeriodClosed(),
+			"Period " + period.activeMonth() + " is closed, cannot withdraw");
+		BusinessException.when(period.balance().compareTo(amount) < 0,
+			"Insufficient balance: " + period.balance() + " < " + amount);
 
 		result.raiseEvent(
 			new MoneyWithdrawn(accountId, period.activeMonth(), amount, description),

@@ -17,17 +17,53 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
-import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
-import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
+import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
+import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
 
+/**
+ * Everything a bounded context can do, which is what its owner holds.
+ * <p>
+ * {@link BoundedContext} extends this, so the handle {@code build()} returns carries the whole
+ * surface — and only the code that built it has a use for all of it. Every other caller should hold
+ * one of the narrower interfaces this one composes, so that what a reference may do says who is
+ * holding it:
+ *
+ * <table border="1">
+ * <caption>The audiences</caption>
+ * <tr><th>audience</th><th>interface</th><th>what it carries</th></tr>
+ * <tr><td>application — a controller, a job, an adapter driving the domain</td>
+ *     <td>{@link ApplicationCapabilities}</td><td>{@code execute}, {@code executeWithRetry},
+ *     {@code read}, {@code aggregate}</td></tr>
+ * <tr><td>inbound edge — a webhook, a consumer feeding the domain</td>
+ *     <td>{@link TranslationCapability}</td><td>{@code incoming}, {@code translate}</td></tr>
+ * <tr><td>operator — an admin endpoint, a dashboard</td>
+ *     <td>{@link OperationsCapabilities}</td><td>{@code automations}, {@code processors} and their
+ *     {@code restart}/{@code stop}</td></tr>
+ * <tr><td>erasure requests</td><td>{@link PrivacyCapability}</td>
+ *     <td>{@code erase}, {@code eraseCategory}</td></tr>
+ * <tr><td>the escape hatch</td><td>{@link ProvidedEventCapability}</td>
+ *     <td>{@code event} — a domain event no command raised</td></tr>
+ * <tr><td>owner — whatever built the context</td><td>this interface</td>
+ *     <td>the above, plus {@link LifecycleCapability}, {@link PortsCapability} and
+ *     {@link FeatureSliceCapabilities}</td></tr>
+ * </table>
+ * <p>
+ * Narrowing costs a reference type and nothing else — a built context already is each of these — and
+ * it is a boundary of discipline rather than of security, since the object behind the reference is
+ * still the whole context. {@code WHO-MAY-DO-WHAT.md} carries the reasoning and the worked shapes.
+ *
+ * @param <DOMAIN_EVENT_TYPE> the bounded context's domain event type
+ * @param <INBOUND_EVENT_TYPE> the bounded context's inbound event type
+ * @param <OUTBOUND_EVENT_TYPE> the bounded context's outbound event type
+ */
 public interface AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends
-	CQRSCapabilities<DOMAIN_EVENT_TYPE>,
-	DCBCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
-	AggregateCapability<DOMAIN_EVENT_TYPE>,
-	FeatureSliceCapabilities,
-	AutomationAdminCapability,
-	ProcessorAdminCapability,
+	ApplicationCapabilities<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
+	TranslationCapability<INBOUND_EVENT_TYPE>,
+	OperationsCapabilities,
+	ProvidedEventCapability<DOMAIN_EVENT_TYPE>,
+	PrivacyCapability,
+	LifecycleCapability,
 	PortsCapability,
-	PrivacyCapability {
+	FeatureSliceCapabilities {
 
 }

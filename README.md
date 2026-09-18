@@ -33,6 +33,10 @@ Step-by-step introduction with the [quickstart guide](https://sliceworkz.github.
 - [Where a validation goes](WHERE-VALIDATIONS-GO.md) — the places a validation can run (value
   objects, command input checks, decision models and DCB, uniqueness, the edges), what each can
   guard, and the one rule that sorts them: a validation runs before events exist, or never.
+- [Who may do what](WHO-MAY-DO-WHAT.md) — a built bounded context can execute commands, erase a
+  person's data, stop an automation and terminate itself, and almost no caller needs all of that.
+  The audiences each capability is filed under, and how a controller, an inbound adapter or an
+  admin endpoint holds only its own — at the cost of a reference type.
 
 
 # Other

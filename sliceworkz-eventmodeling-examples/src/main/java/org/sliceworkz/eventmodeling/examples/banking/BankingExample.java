@@ -68,6 +68,18 @@ public class BankingExample {
 
 		bc.start();
 
+		/*
+		 * Everything from here on is application code: it decides and it reads, and it has no business
+		 * erasing a person, stopping an automation or terminating the context -- all of which a
+		 * Banking reference can do, because whatever built the context needs to. So hand that code the
+		 * narrower surface instead. It costs this one line: a built context already is a BankingApi,
+		 * and app.terminate() now does not compile.
+		 *
+		 * In an application this is where the DI container earns its keep -- register BankingApi as
+		 * the bean and build Banking in one place. See WHO-MAY-DO-WHAT.md for the other audiences.
+		 */
+		BankingApi app = bc;
+
 		EventStream<BankingDomainEvent> eventStream = eventStore.getEventStream(EventStreamId.forContext("banking").withPurpose("domain"), BankingDomainEvent.class);
 
 		/*
@@ -100,7 +112,7 @@ public class BankingExample {
 
 		
 		// Open an Account
-		Optional<EventReference> ref = bc.execute(new OpenAccountCommand(BankingDomain.CUSTOMER.newId()));
+		Optional<EventReference> ref = app.execute(new OpenAccountCommand(BankingDomain.CUSTOMER.newId()));
 		
 		// Go fetch the AccountOpened Event that should have been raised by the OpenAccountCommmand
 		AccountOpened ao = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none())).stream()
@@ -111,7 +123,7 @@ public class BankingExample {
 			.get();
 		
 		// Render a live model with the details of the Account
-		AccountDetailsReadModel rm = bc.read(AccountDetailsReadModel.class, ao.accountId());
+		AccountDetailsReadModel rm = app.read(AccountDetailsReadModel.class, ao.accountId());
 		System.out.println(rm.getAccountDetails());
 		
 		/*
@@ -130,12 +142,12 @@ public class BankingExample {
 		 * is returned directly, no need to query the event stream.
 		 */
 		CommandExecutionResult<AccountId> openResult =
-				bc.execute(new OpenAccountWithResultCommand(BankingDomain.CUSTOMER.newId()));
+				app.execute(new OpenAccountWithResultCommand(BankingDomain.CUSTOMER.newId()));
 
 		AccountId accountId = openResult.response();
 		System.out.println("Account opened with ID: " + accountId);
 
-		AccountDetailsReadModel rm2 = bc.read(AccountDetailsReadModel.class, accountId);
+		AccountDetailsReadModel rm2 = app.read(AccountDetailsReadModel.class, accountId);
 		System.out.println(rm2.getAccountDetails());
 
 		try {

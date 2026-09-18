@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.examples.payments.features.executepayment;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,6 +33,7 @@ public class SimulatedPaymentGateway implements PaymentGateway {
 	private final AtomicBoolean available = new AtomicBoolean(true);
 	private final Map<String,AtomicInteger> declinesLeft = new ConcurrentHashMap<>();
 	private final Map<String,String> executed = new ConcurrentHashMap<>();
+	private final Set<String> executedIbans = ConcurrentHashMap.newKeySet();
 	private final AtomicInteger calls = new AtomicInteger();
 
 	/** Take the gateway down, or bring it back up. */
@@ -46,6 +48,11 @@ public class SimulatedPaymentGateway implements PaymentGateway {
 
 	public int calls ( ) {
 		return calls.get();
+	}
+
+	/** Whether the money for this IBAN has moved — what the example watches, since the gateway is the one thing it holds. */
+	public boolean executed ( String iban ) {
+		return executedIbans.contains(iban);
 	}
 
 	@Override
@@ -74,6 +81,7 @@ public class SimulatedPaymentGateway implements PaymentGateway {
 
 		String reference = "GW-" + Integer.toHexString(idempotencyKey.hashCode());
 		executed.put(idempotencyKey, reference);
+		executedIbans.add(iban);
 		return reference;
 	}
 

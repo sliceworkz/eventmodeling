@@ -131,7 +131,7 @@ public class PaymentsToExecuteTodoList implements TodoListReadModel<PaymentsDoma
 		return Optional.ofNullable(lastEventReference);
 	}
 
-	/** How much work is outstanding, due or not — for the example's output. */
+	/** How much work is outstanding, due or not. */
 	public int outstandingCount ( ) {
 		return outstanding.size();
 	}

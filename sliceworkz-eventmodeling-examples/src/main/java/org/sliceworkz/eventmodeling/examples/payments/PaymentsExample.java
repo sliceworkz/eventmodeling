@@ -28,7 +28,7 @@ import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDom
 import org.sliceworkz.eventmodeling.examples.payments.features.abandonedpayments.AbandonedPaymentsReadModel;
 import org.sliceworkz.eventmodeling.examples.payments.features.abandonedpayments.AbandonedPaymentsReadModel.AbandonedPayment;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.ExecutePaymentAutomation;
-import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentsToExecuteTodoList;
+import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentGateway;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.SimulatedPaymentGateway;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -48,6 +48,10 @@ import org.sliceworkz.eventstore.spi.EventStorage;
  *   <li>the gateway going down entirely — the automation keeps its work and backs off instead of
  *       hammering it, and picks everything up when it comes back</li>
  * </ol>
+ * The gateway is the one thing the application constructs: it is bound to the {@link PaymentGateway}
+ * port on the builder, and {@code ExecutePaymentFeatureSlice} takes it from there when it wires the
+ * automation. The scenario watches the same gateway to see the money move, and the live
+ * {@link AbandonedPaymentsReadModel} to see a payment given up on.
  */
 public class PaymentsExample {
 
@@ -55,22 +59,17 @@ public class PaymentsExample {
 
 		EventStorage eventStorage = InMemoryEventStorage.newBuilder().build();
 
+		// The adapter onto the outside world is the application's to choose; the feature slice asks
+		// for it through the port, and wires its own todo list and automation around it.
 		SimulatedPaymentGateway gateway = new SimulatedPaymentGateway();
-		PaymentsToExecuteTodoList todoList = new PaymentsToExecuteTodoList();
 
-		var builder = BoundedContext.newBuilder(Payments.class)
+		Payments payments = BoundedContext.newBuilder(Payments.class)
 				.name("payments")
 				.eventStorage(eventStorage)
-				.instance(InstanceFactory.determine("payments-app"));
-		builder.features().rootPackage(PaymentsExample.class.getPackage()).done();
-
-		// The two lines the feature slice cannot write for itself: the todo list is registered as an
-		// eventually consistent read model, and the automation is handed it together with the adapter
-		// onto the outside world.
-		builder.readmodel(todoList).eventuallyConsistent();
-		builder.automation(new ExecutePaymentAutomation(todoList, gateway));
-
-		Payments payments = (Payments) builder.build();
+				.instance(InstanceFactory.determine("payments-app"))
+				.adapter(gateway).forPort(PaymentGateway.class)
+				.features().rootPackage(PaymentsExample.class.getPackage()).done()
+				.build();
 		payments.start();
 
 		try {
@@ -78,8 +77,8 @@ public class PaymentsExample {
 			gateway.declineNextAttempts("BE68539007547034", 2); // used by step 3, set up front
 
 			request(payments, "p-1", "BE00000000000001", 12_500);
-			await(() -> todoList.outstandingCount() == 0, "the first payment to go through");
-			System.out.println("1. executed, todo list is empty again");
+			await(() -> gateway.executed("BE00000000000001"), "the first payment to go through");
+			System.out.println("1. executed");
 
 			// ---------------------------------------------------------------- 2. rejected for good
 			request(payments, "p-2", "XX99999999999999", 5_000);
@@ -91,10 +90,10 @@ public class PaymentsExample {
 			// automation answers a decline with CONTINUE_AND_RETRY_ITEM_LATER
 			request(payments, "p-3", "BE68539007547034", 80_000);
 			request(payments, "p-4", "BE00000000000002", 1_000);
-			await(() -> todoList.outstandingCount() == 1, "the payment behind the declined one to be handled");
-			System.out.println("3. p-4 went through while p-3 waits for its next attempt");
+			await(() -> gateway.executed("BE00000000000002"), "the payment behind the declined one to be handled");
+			System.out.println("3. p-4 went through while p-3 " + (gateway.executed("BE68539007547034") ? "was already accepted" : "waits for its next attempt"));
 
-			await(() -> todoList.outstandingCount() == 0, "the declined payment to be accepted on a later attempt");
+			await(() -> gateway.executed("BE68539007547034"), "the declined payment to be accepted on a later attempt");
 			System.out.println("3. p-3 executed after its retries");
 
 			// ---------------------------------------------------------------- 4. the gateway falls over
@@ -104,7 +103,7 @@ public class PaymentsExample {
 
 			Thread.sleep(6_000);
 			System.out.println("4. gateway down: " + (gateway.calls() - callsBeforeOutage)
-					+ " attempts in 6s (backing off, not hammering), still outstanding: " + todoList.outstandingCount());
+					+ " attempts in 6s (backing off, not hammering), p-5 executed: " + gateway.executed("BE00000000000003"));
 
 			AutomationStatus status = payments.automations().get(0);
 			System.out.println("4. status: running=" + status.running()
@@ -112,7 +111,7 @@ public class PaymentsExample {
 					+ " lastFailure=" + (status.lastFailure() == null ? "none" : status.lastFailure().message()));
 
 			gateway.available(true);
-			await(() -> todoList.outstandingCount() == 0, "the automation to catch up once the gateway is back");
+			await(() -> gateway.executed("BE00000000000003"), "the automation to catch up once the gateway is back");
 			System.out.println("4. gateway back: everything caught up without anyone restarting anything");
 
 		} finally {

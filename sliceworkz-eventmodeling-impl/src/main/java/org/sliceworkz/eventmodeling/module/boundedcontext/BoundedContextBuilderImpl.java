@@ -40,6 +40,7 @@ import org.sliceworkz.eventmodeling.EventTypes; // retained for javadoc/logging
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
+import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
 import org.sliceworkz.eventmodeling.commands.AbstractCommand;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.boundedcontext.AdapterBinding;
@@ -69,6 +70,7 @@ import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
 import org.sliceworkz.eventmodeling.snapshots.LiveModelSnapshotSpecification;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
@@ -471,6 +473,63 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 	}
 
+	/**
+	 * Rejects an automation whose todo list nobody in this process will project.
+	 * <p>
+	 * An automation handles nothing until the projector filling its todo list has bookmarked past the
+	 * last event the automation produced, and that projector exists only where the todo list is
+	 * registered: {@code builder.readmodel(todoList).eventuallyConsistent()}. Registering the automation
+	 * alone leaves it waiting on a bookmark nobody writes -- no exception, no bounded-context event, one
+	 * WARN line that a cold start produces too -- which is the silent shape this catches at build time,
+	 * as {@link #rejectReadModelsWithoutAChosenMode} catches a read model whose mode was never chosen.
+	 * <p>
+	 * The check is by {@code readmodelName()} and storage class, since that is what identifies the
+	 * bookmark the automation waits on (see {@code AutomationModule.createAutomationProcessors}): the
+	 * todo list registered need not be the instance the automation holds, and a registration under the
+	 * same name with another storage class names a different bookmark and is as much a miss.
+	 * <p>
+	 * Only an {@link ReadModelStorage#EPHEMERAL} or {@link ReadModelStorage#LOCAL} todo list is checked.
+	 * Their bookmark id carries this instance's location, so nothing outside this process can ever write
+	 * it and a missing registration here is a proof. A {@link ReadModelStorage#SHARED} todo list's
+	 * bookmark is deployment-wide and its projector holds a lease of its own, so an instance may
+	 * legitimately run the automation while another projects the list it reads; for those the
+	 * automation's runtime warning stays the signal. The alternative -- requiring the registration for
+	 * every storage class, on the rule that an automation deploys together with its todo list -- loses
+	 * because that rule cannot be imposed on a deployment, and a check that rejects a legitimate one is
+	 * worse than none.
+	 */
+	private void rejectAutomationsWhoseTodoListIsNotProjectedHere ( ) {
+		List<String> unprojected = new ArrayList<>();
+		for ( Automation<?,?,?> automation : automations ) {
+			String automationName = automation.getClass().getSimpleName();
+			TodoListReadModel<?,?> todoList = automation.getTodoList();
+			if ( todoList == null ) {
+				unprojected.add("%s (getTodoList() returned null)".formatted(automationName));
+				continue;
+			}
+			ReadModelStorage storage = todoList.storage();
+			if ( !storage.projectedOnEveryInstance() ) {
+				continue;
+			}
+			String name = todoList.readmodelName();
+			ReadModel<?> registered = eventuallyConsistentReadModelSpecs.stream()
+					.map(EventuallyConsistentReadModelSpecificationImpl::readModel)
+					.filter(rm -> name.equals(rm.readmodelName()))
+					.findFirst().orElse(null);
+			if ( registered == null ) {
+				unprojected.add("%s (its todo list '%s' is %s and not registered: add builder.readmodel(todoList).eventuallyConsistent())"
+						.formatted(automationName, name, storage.label()));
+			} else if ( registered.storage() != storage ) {
+				unprojected.add("%s (its todo list '%s' is %s, but the read model registered under that name is %s: they bookmark under different ids)"
+						.formatted(automationName, name, storage.label(), registered.storage().label()));
+			}
+		}
+		if ( !unprojected.isEmpty() ) {
+			throw new IllegalArgumentException(
+					"automation registered without a projector for its todo list on this instance: " + String.join(", ", unprojected));
+		}
+	}
+
 	@Override
 	public C build ( ) {
 		Class<?> returnType = contextType != null ? contextType : BoundedContext.class;
@@ -483,6 +542,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 
 		rejectReadModelsWithoutAChosenMode();
+		rejectAutomationsWhoseTodoListIsNotProjectedHere();
 
 		logEventTypes("DOMAIN", domainEventRootType);
 		logEventTypes("INBOUND", inboundEventRootType);

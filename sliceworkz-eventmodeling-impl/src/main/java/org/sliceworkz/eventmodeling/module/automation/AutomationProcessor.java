@@ -361,12 +361,14 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 								// No bookmark at all for the read model we follow. Two likely causes:
 								//  - The monitored projector has never persisted a position yet (cold start, no
 								//    events to process).
-								//  - Our monitoredProcessorIdentification doesn't match the id the projector
-								//    actually writes (e.g. a storage-class mismatch between SHARED/EPHEMERAL/LOCAL).
+								//  - Nobody projects the todo list under this id. For an ephemeral or local list
+								//    build() has already refused that (the id is scoped to this instance); for a
+								//    shared list the projector may run on another instance, or under a different
+								//    id (a storage-class mismatch), and this is the only place it shows.
 								// We warn once so the second case is loud at boot; the flag is reset as soon as
 								// a bookmark appears so a genuine "no events yet" stays quiet.
 								if ( !monitoredBookmarkMissingWarned ) {
-									LOGGER.warn("no bookmark found for monitored read-model processor '{}' — if the read model has events to project, check that its registered processor id matches (e.g. storage class shared vs ephemeral vs local)", monitoredProcessorIdentification);
+									LOGGER.warn("no bookmark found for monitored read-model processor '{}' — if the read model has events to project, check that an instance of the deployment registers it (builder.readmodel(todoList).eventuallyConsistent()) and that its storage class matches (shared vs ephemeral vs local)", monitoredProcessorIdentification);
 									monitoredBookmarkMissingWarned = true;
 								} else {
 									LOGGER.debug("monitoredBookmark still absent for {}, waiting", monitoredProcessorIdentification);

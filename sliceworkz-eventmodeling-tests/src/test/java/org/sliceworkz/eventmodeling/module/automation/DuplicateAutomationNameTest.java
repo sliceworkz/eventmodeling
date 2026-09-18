@@ -48,10 +48,7 @@ public class DuplicateAutomationNameTest extends AbstractMockDomainTest {
 	@Test
 	void duplicateAutomationClassRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
-			baseBuilder()
-				.automation(new MockAutomation("todo-a"))
-				.automation(new MockAutomation("todo-b"))
-				.build();
+			with(with(baseBuilder(), new MockAutomation("todo-a")), new MockAutomation("todo-b")).build();
 		});
 		assertEquals("duplicate automation name 'MockAutomation' - bookmarks would collide", e.getMessage());
 	}
@@ -66,7 +63,7 @@ public class DuplicateAutomationNameTest extends AbstractMockDomainTest {
 	@Test
 	void anonymousAutomationRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
-			baseBuilder().automation(new MockAutomation("todo-anon") { }).build();
+			with(baseBuilder(), new MockAutomation("todo-anon") { }).build();
 		});
 		assertTrue(e.getMessage().contains("must be a named class"), e.getMessage());
 		assertTrue(e.getMessage().contains("bookmark"), "the message should say why a name is needed: " + e.getMessage());
@@ -104,9 +101,18 @@ public class DuplicateAutomationNameTest extends AbstractMockDomainTest {
 	@Test
 	void singleAutomationBuildsSuccessfully ( ) {
 		Mock ctx = buildBoundedContext(
-			baseBuilder().automation(new MockAutomation("solo-todo"))
+			with(baseBuilder(), new MockAutomation("solo-todo"))
 		);
 		assertNotNull(ctx);
+	}
+
+	/**
+	 * Registers the automation together with its todo list, as a slice does: an automation whose todo
+	 * list nobody projects is rejected by build() before the name check this test is about gets to run.
+	 */
+	private static BoundedContextBuilder<Mock> with ( BoundedContextBuilder<Mock> builder, MockAutomation automation ) {
+		builder.readmodel(automation.getTodoList()).eventuallyConsistent();
+		return builder.automation(automation);
 	}
 
 	private BoundedContextBuilder<Mock> baseBuilder ( ) {

@@ -973,6 +973,23 @@ processor:**
   is not the identity for a read model whose `readmodelName()` carries a `/` or a `[`, and such an
   automation would have compared unequal to its own todo list and waited out every poll interval instead of
   waking on it. `AutomationForeignBookmarkTest` pins both halves
+- **An automation whose todo list nobody on this instance projects is rejected at `build()`.** The
+  automation waits on the bookmark of the projector filling its todo list, and that projector exists
+  only where the list is registered `builder.readmodel(todoList).eventuallyConsistent()`. Registered
+  alone, the automation waits on a bookmark nobody writes: no exception, no bounded-context event, one
+  WARN line a cold start produces too. So `build()` checks each automation's `getTodoList()` against
+  the eventually-consistent registrations, by `readmodelName()` and storage class — the two things
+  that identify the bookmark — and fails naming every offending automation and the registration it
+  lacks, as `rejectReadModelsWithoutAChosenMode` does for a read model without a mode. By name, not
+  identity: a slice may construct the list it registers and the one it hands the automation
+  separately. Only an `EPHEMERAL` or `LOCAL` todo list is checked: its bookmark id carries this
+  instance's location, so nothing outside the process can write it and a missing registration is a
+  proof. A `SHARED` todo list's bookmark is deployment-wide and its projector holds a lease of its
+  own, so the instance running the automation need not be the one projecting the list, and for those
+  the processor's runtime WARN stays the signal. The alternative — checking every storage class, on
+  the rule that an automation deploys together with its todo list — loses because that rule cannot be
+  imposed on a deployment. `AutomationTodoListRegistrationTest` pins the rejections, the name-based
+  match and the shared exemption
 - **An automation must be a named class, and its name must be unique** — as must a read model's, a
   translator's and a dispatcher's. See "Component names are bookmark keys" below for the shared rule; for
   an automation the same name additionally keys the metric tags and the `AutomationAdminCapability` id

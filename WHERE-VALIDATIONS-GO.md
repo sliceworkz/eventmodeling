@@ -117,13 +117,15 @@ out of this step, and they want different responses:
 | `BusinessException` | the command, after projecting | history says no | never — the answer *is* no |
 | `OptimisticLockingException` | the append | new relevant facts since the decision | yes — re-execute, which re-projects and re-decides (`executeWithRetry` is that loop, with bounded attempts) |
 
-All three reach the caller; the kernel additionally emits `CommandFailed` (or
-`CommandFailedOnOptimisticLocking`) for observers, so a rejected command is visible without being
-anybody else's failure. A rule rejection is a `BusinessException`, never an `IllegalStateException`:
-the API ships it (with the `when(condition, message)` helper) precisely so a rule rejection is
-distinguishable from a bug in a catch block and in the observability record, where `CommandFailed`
-carries the exception type. The banking example's `WithdrawCommand`, `DepositCommand` and
-`CloseMonthCommand` are written this way.
+All three reach the caller; the kernel additionally emits one event per outcome for observers —
+`CommandRejected` (the reason, nothing else), `CommandFailedOnOptimisticLocking`, and `CommandFailed`
+(type, message and stack trace) — so a rejected command is visible without being anybody else's
+failure, and a dashboard can alert on failures and chart rejections. A rule rejection is a
+`BusinessException`, never an `IllegalStateException`: the API ships it (with the
+`when(condition, message)` helper) precisely so a rule rejection is distinguishable from a bug in a
+catch block and in the observability record, where an `IllegalStateException` is reported as a
+`CommandFailed` with a stack trace, since the kernel cannot tell it from a bug. The banking example's
+`WithdrawCommand`, `DepositCommand` and `CloseMonthCommand` are written this way.
 
 **A rule that needs no history needs no decision model** — but say so: a command must call
 `decisionModels(...)` or `noDecisionModels()`, and `build()`-style silence is not an option
@@ -251,7 +253,7 @@ promises will happen.
 |---|---|---|---|---|
 | Value object factory | at construction | data that cannot be said | exception at the edge | no — fix the input |
 | Input check (command) | before any read | a malformed request | `IllegalArgumentException` | no |
-| Decision model check | after projecting history | a rule history rejects | `BusinessException` + `CommandFailed` | no — the answer is no |
+| Decision model check | after projecting history | a rule history rejects | `BusinessException` + `CommandRejected` | no — the answer is no |
 | DCB append check | inside the append | facts newer than the decision | `OptimisticLockingException` | yes — re-execute (`executeWithRetry`, bounded attempts) |
 | Empty boundary (uniqueness) | inside the append | a concurrent duplicate claim | `OptimisticLockingException` | re-execute; then rejected by the check — under `executeWithRetry` the re-decide's `BusinessException` propagates as the outcome |
 | Idempotency key | inside the append | the same request twice | empty result, silently | no — already done |

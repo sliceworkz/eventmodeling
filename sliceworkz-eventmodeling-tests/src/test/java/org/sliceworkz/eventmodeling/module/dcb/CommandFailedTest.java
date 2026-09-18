@@ -32,28 +32,37 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandExecuted;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandFailed;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandFailedOnOptimisticLocking;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandRejected;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.DecisionModelProjected;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextListener;
+import org.sliceworkz.eventmodeling.boundedcontext.StreamAppendingBoundedContextListener;
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
+import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
+import org.sliceworkz.eventstore.stream.EventStream;
+import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 /**
- * Tests that a failing command execution is reported through a dedicated bounded-context event and
- * the exception is rethrown to the caller: a {@link CommandFailedOnOptimisticLocking} for an
- * optimistic-locking conflict on append, a {@link CommandFailed} for any other exception. In both
- * cases no {@link CommandExecuted} is emitted, while the decision-model reads that did happen before
- * the failure are still reported as {@link DecisionModelProjected} events.
+ * Tests that a command execution that does not succeed is reported through a dedicated
+ * bounded-context event and the exception is rethrown to the caller: a
+ * {@link CommandFailedOnOptimisticLocking} for an optimistic-locking conflict on append, a
+ * {@link CommandRejected} for a {@link BusinessException} — the reason alone, no stack trace — and a
+ * {@link CommandFailed} for any other exception. In every case no {@link CommandExecuted} is emitted,
+ * while the decision-model reads that did happen before the outcome are still reported as
+ * {@link DecisionModelProjected} events.
  */
 public class CommandFailedTest extends AbstractMockDomainTest {
 
@@ -106,6 +115,50 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 			var result = context.decisionModels(new FirstDecisionModel());
 			injectConflict.run();
 			result.raiseEvent(new FirstDomainEvent("raised"), Tags.none());
+		}
+	}
+
+	/**
+	 * The shape of every business rule in WHERE-VALIDATIONS-GO.md: read a decision model, check,
+	 * and say no with a {@link BusinessException}.
+	 */
+	static class RejectingCommand implements Command<MockDomainEvent> {
+		@Override
+		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			context.decisionModels(new FirstDecisionModel());
+			BusinessException.because("insufficient balance");
+		}
+	}
+
+	static class RejectingCommandWithResult implements CommandWithResult<MockDomainEvent, String> {
+		@Override
+		public String execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			context.noDecisionModels();
+			throw new BusinessException("period is closed");
+		}
+	}
+
+	/**
+	 * A rule judged while history is read — the wrong place for one — which the projector wraps
+	 * before the module sees it.
+	 */
+	static class JudgingDecisionModel implements DecisionModel<MockDomainEvent> {
+		@Override
+		public EventQuery eventQuery() {
+			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+		}
+
+		@Override
+		public void when(Event<MockDomainEvent> event) {
+			throw new BusinessException("judged while reading");
+		}
+	}
+
+	static class CommandOverAJudgingModel implements Command<MockDomainEvent> {
+		@Override
+		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			var result = context.decisionModels(new JudgingDecisionModel());
+			result.raiseEvent(new FirstDomainEvent("never raised"), Tags.none());
 		}
 	}
 
@@ -171,6 +224,99 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 				"an optimistic-locking conflict should not be reported as a generic CommandFailed, got: " + received);
 		assertTrue(received.stream().noneMatch(e -> e instanceof CommandExecuted),
 				"no CommandExecuted should be emitted for a conflicting command, got: " + received);
+	}
+
+	@Test
+	void aBusinessRejectionEmitsCommandRejectedWithTheReasonAndRethrows() {
+		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
+		Mock domain = buildDomain(event -> received.add(event.data()));
+
+		RejectingCommand command = new RejectingCommand();
+		BusinessException thrown = assertThrows(BusinessException.class, () -> domain.execute(command),
+				"the business exception should reach the caller unchanged");
+		assertEquals("insufficient balance", thrown.getMessage());
+
+		CommandRejected rejected = received.stream()
+				.filter(e -> e instanceof CommandRejected)
+				.map(e -> (CommandRejected) e)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected a CommandRejected event, got: " + received));
+
+		assertEquals(CONTEXT_NAME, rejected.boundedContext());
+		assertEquals(command.commandName(), rejected.command());
+		assertEquals("insufficient balance", rejected.reason());
+		assertNotNull(rejected.metrics());
+
+		assertTrue(received.stream().anyMatch(e -> e instanceof DecisionModelProjected),
+				"the decision-model read the rule was decided on should still be reported, got: " + received);
+		assertTrue(received.stream().noneMatch(e -> e instanceof CommandFailed),
+				"a business rejection is not a failure and must not be reported with a stack trace, got: " + received);
+		assertTrue(received.stream().noneMatch(e -> e instanceof CommandExecuted),
+				"no CommandExecuted should be emitted for a rejected command, got: " + received);
+	}
+
+	@Test
+	void aCommandWithResultIsRejectedTheSameWay() {
+		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
+		Mock domain = buildDomain(event -> received.add(event.data()));
+
+		RejectingCommandWithResult command = new RejectingCommandWithResult();
+		assertThrows(BusinessException.class, () -> domain.execute(command));
+
+		CommandRejected rejected = received.stream()
+				.filter(e -> e instanceof CommandRejected)
+				.map(e -> (CommandRejected) e)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected a CommandRejected event, got: " + received));
+		assertEquals(command.commandName(), rejected.command());
+		assertEquals("period is closed", rejected.reason());
+		assertTrue(received.stream().noneMatch(e -> e instanceof CommandFailed),
+				"a business rejection is not a failure, got: " + received);
+	}
+
+	/**
+	 * The point of the separate event: a listener persisting the kernel events stores a rejection as
+	 * its reason and nothing else, where a {@link CommandFailed} stores a rendered stack trace.
+	 */
+	@Test
+	void aRejectionIsPersistedWithoutAStackTrace() {
+		EventStore eventStore = EventStore.on(eventStorage()).build();
+		EventStreamId kernelStreamId = EventStreamId.forContext(CONTEXT_NAME).withPurpose("kernel");
+		EventStream<BoundedContextEvent> kernelStream = eventStore.getEventStream(kernelStreamId, BoundedContextEvent.class);
+		Mock domain = buildDomain(new StreamAppendingBoundedContextListener(kernelStream));
+
+		assertThrows(BusinessException.class, () -> domain.execute(new RejectingCommand()));
+
+		EventQuery outcomes = EventQuery.forEvents(EventTypesFilter.of(CommandRejected.class, CommandFailed.class), Tags.none());
+		List<Event<BoundedContextEvent>> persisted = kernelStream.query(outcomes);
+		assertEquals(1, persisted.size(), "expected exactly the rejection to be persisted, got: " + persisted);
+		CommandRejected rejected = (CommandRejected) persisted.get(0).data();
+		assertEquals("insufficient balance", rejected.reason());
+
+		// the stored document is the reason and nothing rendered from the exception: read it as stored
+		String document = eventStore.getRawEventStream(kernelStreamId).query(outcomes).get(0).data();
+		assertTrue(document.contains("insufficient balance"), "expected the reason in the stored document: " + document);
+		assertTrue(!document.contains("stackTrace") && !document.contains(RejectingCommand.class.getName()),
+				"a persisted rejection must not carry a stack trace, got: " + document);
+	}
+
+	/**
+	 * A {@link BusinessException} is recognised as the exception the command itself threw. One thrown
+	 * from inside a decision model arrives wrapped by the projector and is reported as a failure — a
+	 * rule judged on the read path is a rule in the wrong place, and the stack trace is what says so.
+	 */
+	@Test
+	void aRuleThrownFromInsideADecisionModelIsReportedAsAFailure() {
+		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
+		Mock domain = buildDomain(event -> received.add(event.data()));
+		domain.event(new FirstDomainEvent("seed"));
+
+		assertThrows(RuntimeException.class, () -> domain.execute(new CommandOverAJudgingModel()));
+
+		assertTrue(received.stream().anyMatch(e -> e instanceof CommandFailed),
+				"a rule thrown while projecting is a failure, got: " + received);
+		assertTrue(received.stream().noneMatch(e -> e instanceof CommandRejected),
+				"a wrapped business exception is not the command's own rejection, got: " + received);
 	}
 
 }

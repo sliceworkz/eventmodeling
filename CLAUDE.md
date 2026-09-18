@@ -457,6 +457,37 @@ are read:**
   `AutomationExecuteWithRetryTest` pins the in-handle use end to end; `RetryPolicyTest` pins the
   validation
 
+**A business rejection and a failure are two events in the observability record, because they want
+opposite responses:**
+- `DCBModule` reports every outcome of a command execution as its own `BoundedContextEvent`:
+  `CommandExecuted`, `CommandFailedOnOptimisticLocking` for the conflict, `CommandRejected` for a
+  `BusinessException`, and `CommandFailed` for everything else. The catch clauses are ordered from the
+  most specific outcome to the catch-all, on both execution paths (`Command`/`OutboundCommand` and
+  `CommandWithResult`), and the exception is rethrown unchanged in every case
+- **`CommandRejected` carries the reason and no `Failure`.** The rule's message is the whole account
+  of a rejection: the exception type is always the business exception, and a stack trace would only
+  say where in the command the rule sits. The alternative — one `CommandFailed` for the rejection and
+  the bug alike, which is what a catch-all on `RuntimeException` produces — loses because
+  `StreamAppendingBoundedContextListener` then writes a rendered stack trace into the store for every
+  customer with insufficient funds, and a dashboard cannot alert on failures without alerting on
+  rejections too. `BusinessException` is what lets a caller tell the two apart in a catch block; the
+  event is the same distinction for an observer. Alert on `CommandFailed`, chart `CommandRejected` by
+  command and reason
+- **The rejection is recognised by the exception the command itself threw.** A `BusinessException`
+  thrown from inside a decision model's `when` arrives wrapped by the projector and is reported as a
+  `CommandFailed`, deliberately: a rule judged while history is read is a rule in the wrong place
+  (the read path accepts, the write path validates — WHERE-VALIDATIONS-GO.md), and a failure with a
+  stack trace is what says so. A rule thrown as an `IllegalStateException` is reported as a failure
+  for the same reason: the kernel cannot tell it from a bug, which is why the examples throw
+  `BusinessException`
+- **Nothing is retried differently.** `executeWithRetry` catches only the conflict, so a retry that
+  ends in a rejection reports one `CommandFailedOnOptimisticLocking` per conflicted attempt and then
+  one `CommandRejected` — each attempt observable under its own outcome, as before. The command meters
+  are unchanged: `command.execute` counts attempts whatever their outcome
+- `CommandFailedTest` pins the rejection for both command shapes, that the stored document carries
+  the reason and no stack trace, and that a rule thrown from inside a decision model is a failure;
+  `ExecuteWithRetryTest.aBusinessRejectionByTheReDecidePropagatesAsTheOutcome` pins the retry's record
+
 **Which read model to reach for is written down for users, and it is the same order to advise in.**
 [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md) carries the ladder — decision model, live model,
 bound the replay, eventually consistent in memory, eventually consistent durable, seeded read,

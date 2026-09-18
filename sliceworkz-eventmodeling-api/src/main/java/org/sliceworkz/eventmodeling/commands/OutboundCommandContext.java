@@ -48,7 +48,7 @@ public interface OutboundCommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE
 	 * {@link OutboundCommand}, whose append no decision model can guard anyway, correctness comes from
 	 * the idempotency key.
 	 * <p>
-	 * The result is typed by the class it is asked for, as {@link ReadModelCapability#read} is.
+	 * The result is typed by the class it is asked for, as {@link org.sliceworkz.eventmodeling.readmodels.ReadModelCapability#read(Class, Object...)} is.
 	 */
 	<READ_MODEL extends ReadModel<? extends CONSUMED_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... constructorParams );
 

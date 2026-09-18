@@ -275,10 +275,32 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
 	BoundedContextBuilder<C> translator(Translator<?,?> translator);
 
+	/**
+	 * Registers a translator this builder constructs, for one that needs nothing passed to it.
+	 *
+	 * @param translatorClass a concrete class with a public no-argument constructor
+	 * @return this builder
+	 * @throws IllegalArgumentException if the class cannot be instantiated -- it is abstract or an
+	 *         interface, has no public no-argument constructor (what a non-static inner class produces),
+	 *         or its constructor threw. The message names the class and the remedy, and a constructor's
+	 *         own throwable is the cause. Register an instance instead where the translator takes
+	 *         constructor arguments
+	 */
 	BoundedContextBuilder<C> translator(Class<? extends Translator<?,?>> translatorClass);
 
 	BoundedContextBuilder<C> dispatcher(Dispatcher<?> dispatcher);
 
+	/**
+	 * Registers a dispatcher this builder constructs, for one that needs nothing passed to it.
+	 *
+	 * @param dispatcherClass a concrete class with a public no-argument constructor
+	 * @return this builder
+	 * @throws IllegalArgumentException if the class cannot be instantiated -- it is abstract or an
+	 *         interface, has no public no-argument constructor (what a non-static inner class produces),
+	 *         or its constructor threw. The message names the class and the remedy, and a constructor's
+	 *         own throwable is the cause. Register an instance instead where the dispatcher takes
+	 *         constructor arguments
+	 */
 	BoundedContextBuilder<C> dispatcher(Class<? extends Dispatcher<?>> dispatcherClass);
 
 	/**

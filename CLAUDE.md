@@ -1314,6 +1314,21 @@ dispatchers nor translators had the shape check — an anonymous one failed deep
 four registries down; they are plain `@Test`s, since this is framework behaviour rather than storage
 behaviour.
 
+### Registering by class names the class that could not be constructed
+
+`translator(Class)` and `dispatcher(Class)` construct the component themselves, so every way that can
+fail is a property of the class registered: no no-argument constructor (the ordinary shape of a
+component that has to be registered as an *instance*), one the framework cannot reach, an abstract
+class or an interface registered where an implementation was meant, and a constructor that ran and
+threw. All four are `IllegalArgumentException` now, like every other registration rejection on this
+builder, naming the class, the kind it was registered as and the remedy — and a throwing constructor's
+own exception is the cause, not the `InvocationTargetException` reflection wrapped it in. The
+alternative — a bare `RuntimeException` around each reflective exception type — loses because such a
+failure carries no message at all: a stack trace naming neither the component nor the reason, with
+what the constructor threw buried a cause deeper still than the reflective wrapper. The wording follows the
+eventstore's upcaster instantiation, which is the same mistake one layer down.
+`RegisteringByClassTest` pins the four, as a plain `@Test`.
+
 ### Correlation ids — one flow, one id, reused at every step
 
 **Every event the framework appends carries an `x-correlation-id` tag naming the flow it belongs to**,

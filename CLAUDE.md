@@ -137,7 +137,13 @@ BoundedContext.newBuilder(MyContext.class)  // MyContext extends BoundedContext<
 
 Key concepts:
 - **BoundedContext**: Main entry point providing `execute()` and `read()` capabilities. Context interfaces extend `BoundedContext<D,I,O>` directly (e.g., `Banking extends BoundedContext<BankingEvent, BankingInboundEvent, BankingOutboundEvent>`)
-- **ServiceLoader pattern**: Implementation discovery uses Java ServiceLoader (see `BoundedContext.newBuilder()`)
+- **ServiceLoader pattern**: Implementation discovery uses Java ServiceLoader (see `BoundedContext.newBuilder()`).
+  With no implementation on the classpath the lookup finds nothing, and `newBuilder` fails with an
+  `IllegalStateException` naming the dependency to add and the service file it registers — the one
+  failure every consumer who forgot `sliceworkz-eventmodeling-impl` hits, where a bare
+  `NoSuchElementException` from `Optional.get()` names neither the framework nor the remedy.
+  `BoundedContextNewBuilderTest` pins it, and it lives in the api module because that is the one place
+  the implementation is by construction absent from the test classpath
 - **Three event types**: Domain events (internal), Inbound events (received), Outbound events (published)
 - **Instance**: Deployment/tenant identifier created via `InstanceFactory.determine()`
 

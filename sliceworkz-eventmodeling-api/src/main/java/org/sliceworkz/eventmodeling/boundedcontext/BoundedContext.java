@@ -44,6 +44,8 @@ public interface BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_
 	 * @param <C> the bounded context type
 	 * @param contextType the class extending {@link BoundedContext}
 	 * @return a new builder
+	 * @throws IllegalArgumentException if the event types cannot be resolved from {@code contextType}
+	 * @throws IllegalStateException if no framework implementation is on the classpath
 	 */
 	@SuppressWarnings("unchecked")
 	public static <C extends BoundedContext<?,?,?>> BoundedContextBuilder<C> newBuilder(Class<C> contextType) {
@@ -53,7 +55,14 @@ public interface BoundedContext<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_
 				"Cannot resolve EventTypes<D,I,O> type arguments from " + contextType.getName() +
 				". Ensure it extends EventTypes with concrete type arguments.");
 		}
-		BoundedContextBuilder<C> result = ServiceLoader.load(BoundedContextBuilder.class).findFirst().get();
+		BoundedContextBuilder<C> result = ServiceLoader.load(BoundedContextBuilder.class).findFirst()
+			.orElseThrow(() -> new IllegalStateException(
+				"No BoundedContextBuilder implementation found on the classpath. The framework"
+				+ " implementation is discovered with the ServiceLoader: add a runtime dependency on"
+				+ " org.sliceworkz:sliceworkz-eventmodeling-impl, which registers"
+				+ " " + BoundedContextBuilder.class.getName() + " in META-INF/services. If it is"
+				+ " present, check that the thread context class loader can see it (a shaded or"
+				+ " repackaged jar must keep the META-INF/services entry)."));
 		result.contextType(contextType);
 		result.eventTypes((Class<?>) typeArgs[0], (Class<?>) typeArgs[1], (Class<?>) typeArgs[2]);
 		return result;

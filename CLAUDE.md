@@ -434,9 +434,9 @@ together:**
 are read:**
 - `DCBCommandContextImpl` takes `queryEventStream.head()` first, bounds every decision-model read at
   it (`Projector.runUntil`), and presents it as the expected reference of the append. The lock
-  filter stays the union of the models' `eventQuery()`s as they were actually read (a savepoint
-  model only learns its query after its `initQuery` ran, so the union is built after the reads).
-  A command with no decision models pins nothing: its filter is match-none, so the reference is moot
+  filter is the union of every query the models were read with — see the section below for what goes
+  into it. A command with no decision models pins nothing: its filter is match-none, so the reference
+  is moot
 - **Why pin, and why first.** The plain models' queries are merged into one physical read, but a
   savepoint model keeps its own projector, so a command can read more than once and nothing makes
   the group atomic. Pinned first and shared by every read, the boundary makes an event landing
@@ -475,6 +475,52 @@ are read:**
   conflicts whatever sits at the head and an unrelated one does not, an empty stream is an empty
   boundary, the criteria reference is the head rather than the model's newest event, every model
   read is bounded at it, one head lookup per command and none without decision models
+
+**The lock filter is the union of *every* query a decision model was read with — its `eventQuery`
+and, for a savepoint model, its `initQuery` — each stripped of its own `until`:**
+- **The eventQueries are collected after the reads**, because a savepoint model only learns its query
+  once its `initQuery` has run — the `Projector` calls `eventQuery()` after handing it those events —
+  so a union taken up front would describe a query that was never executed. Where such a model starts
+  out match-none, that union is match-none, which is precisely `AppendCriteria.none()`: the command
+  would decide on facts it never locked and append with no consistency check at all
+- **The initQueries are in it because a savepoint model decides on two reads and both are facts.**
+  "The newest savepoint is X" is as load-bearing as "these are the movements after it": a command
+  stamps what the savepoint told it — the active period, the carry-forward balance — into the events
+  it raises. Locked on the `eventQuery` alone, an event of a savepoint type landing after the
+  boundary matches nothing in the criteria, the append is admitted, and that stale answer is written
+  *after* the event that changed it, with nothing raised. The hole is systematic rather than
+  occasional: the savepoint pattern asks for the two queries to name **disjoint** event types, or the
+  savepoint is double-processed — so the types most able to invalidate the decision are exactly the
+  ones the `eventQuery` does not name. The alternative — leaving it to each model to widen its own
+  `eventQuery` with the savepoint types — loses twice: it is silent when forgotten, which is the
+  property that made this a hole in the first place, and it only holds for the canonical
+  `backwards().limit(1)` savepoint, since a narrower init filter then really does double-process
+- **Direction and limit play no part**, which is what lets a `backwards().limit(1)` query join the
+  union at all: an `EventFilter` carries neither, and `EventFilter.or` is the union. The fact locked
+  on is "no event of these types, for these tags, after the boundary", not "the newest one is still
+  the newest" — the same fact, checked against the pinned head
+- **It is locked whether or not the model found a savepoint.** A model that found none replayed from
+  the beginning, and a savepoint appearing after the boundary makes that answer just as stale. The
+  cost of being conservative here is a false conflict for a model whose `initQuery` seeds something
+  the command does not decide on, which `executeWithRetry` clears; the cost of the other way round is
+  silent. There is deliberately no `lockFilter()` override to opt out — it would be a second,
+  greppable way to turn the check off, for a case nobody has hit
+- **A model's own `until` never reaches the criteria.** A filter carrying one deems no event after it
+  a new relevant fact, so as an `AppendCriteria` it admits every append and raises no
+  `OptimisticLockingException` — the check off rather than narrowed, and silently, since the append
+  reports success (the eventstore documents this on `EventFilter.until`). Stripping it costs the
+  model nothing: its *read* keeps the bound it asked for, what the command decided on is bounded by
+  the pinned head, and the filter says only which events are relevant. It is also what makes the
+  union well-formed, since `EventFilter.or` refuses two members that do not share an `until` — which
+  an unbounded `initQuery` united with a bounded `eventQuery` would otherwise hit
+- **What it costs on Postgres** is one more OR-group per savepoint model in the DCB probe. The
+  reference is the head, so the probe walks only what landed during the command — nothing like the
+  or-groups cost the eventstore's notes measure on a stale cursor
+- `CommandLockFilterTest` pins it per backend: a savepoint landing after the read conflicts, and does
+  so for a model that found none, another entity's savepoint does not, the filter covers both queries
+  with each keeping its own tags, and a model's own `until` neither reaches the criteria nor stops a
+  matching event after the head from conflicting. `DCBDecisionModelTest`'s
+  `optimisticLocking_*_conflictOnSavepointEventType` pair covers the same through the classic models
 
 **`executeWithRetry` — the DCB retry loop, written once so it cannot be hand-rolled wrong:**
 - An `OptimisticLockingException` is the routine DCB outcome under contention, and the documented

@@ -33,6 +33,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
 
@@ -98,10 +99,16 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		// merge below) and are projected together through a single composite read per merged query.
 		List<DecisionModel<CONSUMED_EVENT_TYPE>> savepointModels = new ArrayList<>();
 		List<DecisionModel<CONSUMED_EVENT_TYPE>> plainModels = new ArrayList<>();
+		// The savepoint queries as they are about to be read, kept for the lock filter below. Captured
+		// here rather than asked for again after the reads, deliberately the opposite of eventQuery():
+		// this is the query the Projector is handed, so the filter that is locked on is the filter the
+		// savepoint was actually found with.
+		List<EventFilter> savepointFilters = new ArrayList<>();
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
 			EventQuery initQuery = p.initQuery();
 			if ( initQuery != null && !initQuery.filter().isMatchNone() ) {
 				savepointModels.add(p);
+				savepointFilters.add(initQuery.filter());
 			} else {
 				plainModels.add(p);
 			}
@@ -164,33 +171,60 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 		projectorMetrics = accumulatedMetrics;
 
-		// The optimistic-lock filter: the union of the eventQueries the models were ACTUALLY read with,
-		// which is why it is built here and not before the reads. A savepoint model only learns its query
-		// once its initQuery has run — the Projector calls eventQuery() after handing it those events — so
-		// a union taken up front would describe a query that was never executed. Where such a model starts
-		// out matchNone, that union is matchNone, which is precisely AppendCriteria.none(): the command
-		// would decide on facts it never locked and append with no consistency check at all.
-		// Every event matching this filter up to the boundary was read, by the same query under the same
+		// The optimistic-lock filter: the union of EVERY query the models were actually read with — each
+		// model's eventQuery, and the initQuery of a savepoint model.
+		// The eventQueries are collected here and not before the reads because a savepoint model only
+		// learns its query once its initQuery has run — the Projector calls eventQuery() after handing it
+		// those events — so a union taken up front would describe a query that was never executed. Where
+		// such a model starts out matchNone, that union is matchNone, which is precisely
+		// AppendCriteria.none(): the command would decide on facts it never locked and append with no
+		// consistency check at all.
+		// The initQueries are in it because a savepoint model decides on two reads and both are facts it
+		// relied on: "the newest savepoint is X" is as much a decision as "these are the movements after
+		// it". Locked on the eventQuery alone, an event of a savepoint type landing after the boundary
+		// matches nothing in the criteria and the append is admitted — a command that stamped what the
+		// savepoint told it (the active period, the carry-forward balance) then writes that stale answer
+		// after the event that changed it, with nothing raised. The hole is systematic rather than
+		// occasional, because the savepoint pattern asks for the two queries to name disjoint event types
+		// (otherwise the savepoint is double-processed), so the types most able to invalidate the decision
+		// are exactly the ones the eventQuery does not name. It is locked whether or not the model found a
+		// savepoint: a model that found none replayed from the beginning, and a savepoint appearing after
+		// the boundary makes that answer just as stale.
+		// Direction and limit play no part — a filter carries neither — which is what lets a
+		// backwards().limit(1) savepoint query join the union at all: the fact locked on is "no event of
+		// these types, for these tags, after the boundary", not "the newest one is still the newest".
+		// Every event matching this filter up to the boundary was read, by the same queries under the same
 		// boundary, so "nothing matching appeared after the reference" is exactly the right check.
-		List<EventQuery> readQueries = new ArrayList<>();
+		List<EventFilter> readFilters = new ArrayList<>();
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
-			readQueries.add(p.eventQuery());
+			readFilters.add(p.eventQuery().filter());
 		}
-		EventQuery lockQuery = union(readQueries);
+		readFilters.addAll(savepointFilters);
+		EventFilter lockFilter = union(readFilters);
 
-		commandResult = new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, lockQuery.filter(), lastEventReference);
+		commandResult = new CommandResultImpl<>(boundedContext, targetEventStream.id(), tracing, lockFilter, lastEventReference);
 		return commandResult;
 	}
 
 	/**
-	 * The union of the given queries, or match-none when there are none to combine.
+	 * The union of the given filters, or match-none when there are none to combine.
+	 * <p>
+	 * Each member is stripped of its {@code until} first. A filter carrying one deems no event after it a
+	 * new relevant fact, so as an {@code AppendCriteria} it admits every append and raises no
+	 * {@code OptimisticLockingException} — the check off rather than narrowed, and silently, since the
+	 * append reports success. A model is free to bound its own read that way; what this command decided on
+	 * is bounded by the pinned head, which the criteria presents as its expected reference, and the filter
+	 * says only which events are relevant. Stripping is also what makes the union well-formed:
+	 * {@link EventFilter#or} refuses two members that do not share an {@code until}, which an unbounded
+	 * initQuery united with a bounded eventQuery would otherwise hit.
 	 */
-	private static EventQuery union ( List<EventQuery> queries ) {
-		EventQuery combined = null;
-		for ( EventQuery query: queries ) {
-			combined = ( combined == null ) ? query : combined.or(query);
+	private static EventFilter union ( List<EventFilter> filters ) {
+		EventFilter combined = null;
+		for ( EventFilter filter: filters ) {
+			EventFilter unbounded = filter.until(null);
+			combined = ( combined == null ) ? unbounded : combined.or(unbounded);
 		}
-		return ( combined == null ) ? EventQuery.matchNone() : combined;
+		return ( combined == null ) ? EventFilter.matchNone() : combined;
 	}
 
 	/**

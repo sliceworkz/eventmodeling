@@ -58,7 +58,9 @@ Two ways, both cheaper than anything below:
   forward, so a statement replays one month rather than an account's lifetime.
 
   Note that `initQuery()` applies to a live model only: a bookmarked projection has to see every event,
-  so it is ignored (with a warning at build time) for the eventually consistent read models below.
+  so it is ignored (with a warning at build time) for the eventually consistent read models below. In
+  a `DecisionModel` it is part of the consistency boundary: the command locks on the union of both
+  queries, so a savepoint appearing between the read and the append is a conflict.
 
 This is a domain solution and it keeps you at step 1. It is routinely skipped in favour of caching,
 which is the more expensive answer to the same problem.

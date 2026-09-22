@@ -1251,6 +1251,34 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   and todo lists) rather than ever running twice. `start()` runs one synchronous election round before
   the processors' first pass; `stop()`/`terminate()` release the held leases so a standby takes over
   promptly instead of waiting out the ttl
+- **That deadline owes the storage nothing, because a call that never answers is exactly the failure it
+  exists for.** Demoting is local — a flag and a `volatile` field on the processor — so nothing about it
+  may wait on a lease call, and three things keep it that way:
+  - **The deadline is judged before each lease's request, not only after one failed.** Judged in the
+    failure handler alone it inherits the storage's own pace: against an unreachable database every
+    request blocks for the pool's connection timeout, typically tens of seconds and well past the ttl,
+    and one hanging on a silently dead socket never fails at all — so the leadership is held on past the
+    moment a challenger may take the lease, by the very failure the rule is for
+  - **Every storage call is bounded, and a round as a whole.** The calls run on virtual threads of the
+    elector's own, waited on for at most half a heartbeat per round, and rounds are spaced from the
+    *start* of the previous one — so a round ends within a heartbeat whatever the storage does, and the
+    next one re-judges every deadline at the granularity the rule already assumes. Unbounded, the
+    requests are made one lease at a time on the elector's thread, so lease 2's deadline is judged only
+    after lease 1 has timed out: N leases, N connection timeouts, and a demotion arbitrarily far past
+    the takeover. It also keeps `terminate()` — which runs from a JVM shutdown hook — from waiting out a
+    storage that has stopped answering
+  - **A request that outlives its budget stays in flight rather than being re-issued**, so a stalled
+    storage costs one outstanding call per lease rather than one per heartbeat. An answer is dated from
+    when its request was *issued*, never from when it came back — the storage stamped the heartbeat
+    somewhere in between and only the earlier bound is safe to call a confirmation — and one arriving
+    after the local deadline is dropped, since the lease it reports may since have expired and been taken
+  - The alternative — leaving the bound to the storage, by asking a deployment to configure its pool's
+    connection and socket timeouts below the ttl — loses because the ttl is this builder's setting and
+    the timeouts are the application's, with nothing keeping the two in step, and because a read on a
+    dead connection is bounded by neither.
+    `LeaderElectionTest.testALeaderWhoseLeaseRequestsStallGivesUpItsLeadershipAnyway` and
+    `testAStalledLeaseDoesNotPostponeTheDemotionOfTheOnesBehindIt` pin both halves against a storage
+    whose `requestLease` never returns, and fail by timeout without them
 - **A processor that stops itself hands its lease back.** A projector retired by a permanent projection
   failure and an automation stopped through `STOP_AUTOMATION` set themselves `STOPPED` while their context — and
   its elector — keep running, and the elector used to renew their leases unconditionally: the stopped

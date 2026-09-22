@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.mock.boundedcontext;
 
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
@@ -36,8 +37,8 @@ public class MockOutboundCommand implements OutboundCommand<MockDomainEvent, Moc
 	}
 
 	@Override
-	public void execute ( OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context ) {
-		context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none());
+	public CommandResult<MockDomainEvent, MockOutboundEvent> execute ( OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context ) {
+		return context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none());
 	}
 
 }

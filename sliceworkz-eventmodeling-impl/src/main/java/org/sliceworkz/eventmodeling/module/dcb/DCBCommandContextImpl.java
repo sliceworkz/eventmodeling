@@ -275,6 +275,12 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	 * {@code context.noDecisionModels()} when it decides on nothing — and a command that does neither
 	 * never produces one. That is a mistake in the command rather than a state to carry on from: there
 	 * is no consistency boundary to append under and nothing to append.
+	 * <p>
+	 * This is the backstop, not the guard. {@code Command.execute} and {@code OutboundCommand.execute}
+	 * return the {@code CommandResult}, which is obtainable only from those two calls, so for those two
+	 * shapes the choice is made at compile time and the only way here is a body that returns
+	 * {@code null}. What is genuinely caught here is a {@code CommandWithResult}, whose return slot is
+	 * taken by the caller's response and whose choice the compiler therefore cannot demand.
 	 */
 	public CommandResultImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> getCommandResult ( ) {
 		if ( commandResult == null ) {

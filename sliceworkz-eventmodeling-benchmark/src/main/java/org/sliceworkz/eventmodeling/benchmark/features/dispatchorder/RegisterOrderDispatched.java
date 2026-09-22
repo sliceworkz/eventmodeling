@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.benchmark.features.dispatchorder;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent.OrderProcessed;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
 import org.sliceworkz.eventstore.events.Tags;
@@ -33,10 +34,10 @@ public class RegisterOrderDispatched implements OutboundCommand<OrderProcessingD
 	}
 
 	@Override
-	public void execute(
+	public CommandResult<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> execute(
 			OutboundCommandContext<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> context) {
 		// the idempotency key comes from the caller — publishAndRecord derives it from the todo item
-		context.noDecisionModels()
+		return context.noDecisionModels()
 				.requireIdempotencyKey()
 				.raiseEvent(new OrderProcessed(orderId), Tags.none());
 	}

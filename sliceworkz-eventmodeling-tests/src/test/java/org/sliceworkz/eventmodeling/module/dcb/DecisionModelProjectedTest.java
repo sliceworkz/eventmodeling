@@ -33,6 +33,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.DecisionM
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextListener;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -91,17 +92,17 @@ public class DecisionModelProjectedTest extends AbstractMockDomainTest {
 
 	static class TwoModelsCommand implements Command<MockDomainEvent> {
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.decisionModels(new CountingFirstDecisionModel(), new CountingSecondDecisionModel());
-			result.raiseEvent(new FirstDomainEvent("raised"), Tags.none());
+			return result.raiseEvent(new FirstDomainEvent("raised"), Tags.none());
 		}
 	}
 
 	static class NoModelsCommand implements Command<MockDomainEvent> {
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.noDecisionModels();
-			result.raiseEvent(new FirstDomainEvent("raised"), Tags.none());
+			return result.raiseEvent(new FirstDomainEvent("raised"), Tags.none());
 		}
 	}
 

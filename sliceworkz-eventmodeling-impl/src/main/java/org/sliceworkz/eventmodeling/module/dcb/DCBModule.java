@@ -106,6 +106,13 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	 * {@code OutboundCommandContext}), there is no common {@code execute} left on
 	 * {@code AbstractCommand} to call — {@code DCBCommandContextImpl} implements both, so a method
 	 * reference to either shape's {@code execute} fits here.
+	 * <p>
+	 * A {@code Consumer} although both shapes return a {@code CommandResult}: the result is taken
+	 * from the context, which is the one object that pinned the boundary and holds the append
+	 * criteria, and which all three command shapes ({@code CommandWithResult} included) are read
+	 * from identically. A command that decided and raised its events but returned something else
+	 * has still done its job, so the return value's work is done at compile time — it is what makes
+	 * choosing the decision models impossible to forget (see {@code Command#execute}).
 	 */
 	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeAbstractCommand ( String commandName, Class<?> commandClass, Consumer<DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>> commandBody, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, boolean outboundTarget, String idempotencyKey ) {
 		return timed(commandName, () -> {

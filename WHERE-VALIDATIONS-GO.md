@@ -86,7 +86,7 @@ If the check needs a value object anyway, step 1 already did the work — a cons
 
 ```java
 @Override
-public void execute ( CommandContext<BankingEvent, BankingEvent> context ) {
+public CommandResult<BankingEvent, BankingEvent> execute ( CommandContext<BankingEvent, BankingEvent> context ) {
 
     var period = new ActivePeriodDecisionModel(accountId);
     var result = context.decisionModels(period);          // projects the model AND pins the boundary
@@ -95,7 +95,7 @@ public void execute ( CommandContext<BankingEvent, BankingEvent> context ) {
     BusinessException.when(period.isPeriodClosed(),                 "Period " + period.activeMonth() + " is closed");
     BusinessException.when(period.balance().compareTo(amount) < 0,  "Insufficient balance");
 
-    result.raiseEvent(new MoneyWithdrawn(accountId, period.activeMonth(), amount, description), tags);
+    return result.raiseEvent(new MoneyWithdrawn(accountId, period.activeMonth(), amount, description), tags);
 }
 ```
 
@@ -128,9 +128,12 @@ catch block and in the observability record, where an `IllegalStateException` is
 `WithdrawCommand`, `DepositCommand` and `CloseMonthCommand` are written this way.
 
 **A rule that needs no history needs no decision model** — but say so: a command must call
-`decisionModels(...)` or `noDecisionModels()`, and `build()`-style silence is not an option
-(`getCommandResult()` rejects a command that called neither). `noDecisionModels()` is the greppable
-declaration that this command's append needs no guard. An `OutboundCommand` is not even offered
+`decisionModels(...)` or `noDecisionModels()`, and silence is not an option. The compiler holds you
+to it: `execute` returns the `CommandResult`, and those two calls are the only source of one, so a
+`Command` or `OutboundCommand` that chose neither does not compile. (A `CommandWithResult` returns the
+caller's response instead, so it cannot be held to this and is told on its first execution, by
+`getCommandResult()`.) `noDecisionModels()` is the greppable declaration that this command's append
+needs no guard. An `OutboundCommand` is not even offered
 decision models — they cannot guard an append to the outbound stream, and a boundary that guards
 nothing, silently, is worse than none; its correctness comes from idempotency keys (step 5).
 
@@ -156,7 +159,7 @@ class EmailNotTakenDecisionModel implements DecisionModel<CrmEvent> {
 var claim = new EmailNotTakenDecisionModel(email);
 var result = context.decisionModels(claim);
 BusinessException.when(claim.taken(), "email already registered: " + email.value());
-result.raiseEvent(new CustomerRegistered(customerId, email), Tags.of("email", email.value()));
+return result.raiseEvent(new CustomerRegistered(customerId, email), Tags.of("email", email.value()));
 ```
 
 "No two customers with this email" is a rule about a *set*, not an entity, and the reflex is to check

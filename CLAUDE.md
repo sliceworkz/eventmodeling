@@ -300,7 +300,7 @@ public interface BankingDomain {
 }
 
 AccountId accountId = ACCOUNT.newId();                                  // mint
-result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
+return result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
         Tags.of(ACCOUNT.tag(accountId), CUSTOMER.tag(customerId)));     // tag
 EventQuery.forEvents(EventTypesFilter.any(), ACCOUNT.tags(accountId));  // query
 ACCOUNT.idIn(event.tags());                                             // read back, Optional<AccountId>
@@ -357,13 +357,40 @@ ACCOUNT.idsIn(transfer.tags());                                         // an ev
 
 **Commands:**
 - Implement `Command<DOMAIN_EVENT_TYPE>`
-- Return `CommandResult` containing raised events
+- `execute` returns the `CommandResult` the events were raised on — see "Choosing what a command
+  decides on is structural" below for why the return type is the contract
 - Access bounded context capabilities via constructor injection
 - Unlike every other component, a command is not wired into the bounded context: it is instantiated by
   the caller, executed ad hoc, and attributed to its feature slice by package convention. A slice can
   still declare its commands from `configureCommand` with `builder.command(PlaceOrderCommand.class)`,
   which is purely declarative — it only adds them to the slice's `members` on `BoundedContextStarting`,
   so an observer (the dashboard) shows them from startup instead of after their first execution
+
+**Choosing what a command decides on is structural — `execute` returns the `CommandResult`:**
+- A command has to say what it decides on, `context.decisionModels(...)` or
+  `context.noDecisionModels()`, because that call is what pins the consistency boundary and produces
+  the `CommandResult` its events are raised on. A command that does neither has nothing to append and
+  no boundary to append under — and under a `void execute` that is a mistake which builds, deploys and
+  is found by the first execution, as `getCommandResult()`'s `IllegalStateException`
+- **`Command.execute` and `OutboundCommand.execute` therefore return `CommandResult`**, and that
+  return type is the whole mechanism: a `CommandResult` is obtainable only from those two calls (and
+  from the chaining that follows one), so a command that compiles has chosen. Idiomatically the last
+  line becomes `return result.raiseEvent(...)`, or `return result;` where the raises sit in a loop
+- **The framework still takes the result from the context, not from the return value.** All three
+  command shapes are read the same way there, `DCBCommandContextImpl` is the one object that pinned
+  the boundary and holds the append criteria, and a command that decided and raised its events but
+  returned something else has still done its job. So the return value's work is done at compile time.
+  The alternative — appending what `execute` handed back — loses on exactly that case, and buys
+  nothing, since every chaining method returns the context's own result anyway
+- **`CommandWithResult` is deliberately not held to this**, and is the reason the runtime check stays:
+  its return slot carries the caller's response value, and a command returning both would be returning
+  a pair whose halves answer to different readers. The other way in is a `Command` body that returns
+  `null`, which no signature can prevent
+- `CommandResultIsStructuralTest` in the api module pins the compile-time half by running javac
+  against probes — a void `execute` is refused whether or not the body chose, both command shapes
+  behave the same way, and the `CommandWithResult` gap is pinned as accepted;
+  `CommandWithoutDecisionModelsTest` pins the runtime backstop for the two shapes that can still
+  reach it
 
 **A command appends to exactly one stream — no command raises a domain event and an outbound event
 together:**

@@ -39,6 +39,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.StreamAppendingBoundedContext
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -81,7 +82,7 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 
 	static class FailingCommand implements Command<MockDomainEvent> {
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			context.noDecisionModels();
 			throw new IllegalStateException("boom");
 		}
@@ -111,10 +112,10 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.decisionModels(new FirstDecisionModel());
 			injectConflict.run();
-			result.raiseEvent(new FirstDomainEvent("raised"), Tags.none());
+			return result.raiseEvent(new FirstDomainEvent("raised"), Tags.none());
 		}
 	}
 
@@ -124,9 +125,10 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 	 */
 	static class RejectingCommand implements Command<MockDomainEvent> {
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
-			context.decisionModels(new FirstDecisionModel());
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			var result = context.decisionModels(new FirstDecisionModel());
 			BusinessException.because("insufficient balance");
+			return result;
 		}
 	}
 
@@ -156,9 +158,9 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 
 	static class CommandOverAJudgingModel implements Command<MockDomainEvent> {
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.decisionModels(new JudgingDecisionModel());
-			result.raiseEvent(new FirstDomainEvent("never raised"), Tags.none());
+			return result.raiseEvent(new FirstDomainEvent("never raised"), Tags.none());
 		}
 	}
 

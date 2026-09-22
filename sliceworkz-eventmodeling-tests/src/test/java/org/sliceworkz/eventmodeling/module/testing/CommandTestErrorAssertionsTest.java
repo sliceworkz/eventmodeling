@@ -31,6 +31,7 @@ import org.opentest4j.AssertionFailedError;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockCommand;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
@@ -69,7 +70,7 @@ public class CommandTestErrorAssertionsTest extends CommandTest<MockDomainEvent,
 	record ThrowingCommand ( RuntimeException failure ) implements Command<MockDomainEvent> {
 
 		@Override
-		public void execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
+		public CommandResult<MockDomainEvent,MockDomainEvent> execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
 			context.noDecisionModels();
 			throw failure;
 		}

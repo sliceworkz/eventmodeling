@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -105,10 +106,10 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.noDecisionModels();
-			result.raiseEvent(new FirstDomainEvent(value), Tags.none());
+			return result.raiseEvent(new FirstDomainEvent(value), Tags.none());
 		}
 	}
 
@@ -125,12 +126,13 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.noDecisionModels();
 			for ( int i = 1; i <= count; i++ ) {
 				result.raiseEvent(new FirstDomainEvent("event-" + i), Tags.none());
 			}
+			return result;
 		}
 	}
 
@@ -138,20 +140,20 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	static class PartlyKeyedMultiEventCommand implements Command<MockDomainEvent> {
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.noDecisionModels();
 			result.raiseEvent(new FirstDomainEvent("own"), Tags.none(), "own-key");
-			result.raiseEvent(new FirstDomainEvent("derived"), Tags.none());
+			return result.raiseEvent(new FirstDomainEvent("derived"), Tags.none());
 		}
 	}
 
 	static class NoEventCommand implements Command<MockDomainEvent> {
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
-			context.noDecisionModels();
+			return context.noDecisionModels();
 		}
 	}
 
@@ -167,9 +169,9 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
-			context.noDecisionModels()
+			return context.noDecisionModels()
 					.fallbackIdempotencyKey(key)
 					.raiseEvent(new FirstDomainEvent(value), Tags.none());
 		}
@@ -179,9 +181,9 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	static class RequireExternalKeyCommand implements Command<MockDomainEvent> {
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
-			context.noDecisionModels()
+			return context.noDecisionModels()
 					.requireIdempotencyKey()
 					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
 		}
@@ -197,9 +199,9 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
-			context.noDecisionModels()
+			return context.noDecisionModels()
 					.exclusiveIdempotencyKey(key)
 					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
 		}
@@ -215,9 +217,9 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
-			context.noDecisionModels()
+			return context.noDecisionModels()
 					.idempotencyKey(key)
 					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
 		}
@@ -227,9 +229,9 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	static class ForbidExternalKeyCommand implements Command<MockDomainEvent> {
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
-			context.noDecisionModels()
+			return context.noDecisionModels()
 					.forbidIdempotencyKey()
 					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
 		}
@@ -344,10 +346,10 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 
 		Command<MockDomainEvent> cmd = new Command<>() {
 			@Override
-			public void execute(
+			public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 					CommandContext<MockDomainEvent, MockDomainEvent> context) {
 				var result = context.noDecisionModels();
-				result.raiseEvent(new FirstDomainEvent("test"), Tags.none(), "event-level-key");
+				return result.raiseEvent(new FirstDomainEvent("test"), Tags.none(), "event-level-key");
 			}
 		};
 

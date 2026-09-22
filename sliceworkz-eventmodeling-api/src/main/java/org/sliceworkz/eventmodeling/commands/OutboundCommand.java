@@ -45,9 +45,20 @@ package org.sliceworkz.eventmodeling.commands;
  * before anything is stored, unless every raised event carries a key or the command opted out with
  * {@link CommandResult#forbidIdempotencyKey()}. Derive the key from the work item, never from the
  * attempt — or let {@code AutomationContext.publishAndRecord(...)} derive it for you.
+ * <p>
+ * <strong>{@link #execute} returns the {@link CommandResult}</strong>, for the reason given on
+ * {@link Command#execute}: the result is only obtainable from {@code noDecisionModels()}, so a command
+ * that compiles has said what it decides on rather than finding out at its first execution.
  */
 public non-sealed interface OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends AbstractCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 
-	void execute ( OutboundCommandContext<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> context );
+	/**
+	 * Decides, and raises the outbound events it decided on.
+	 *
+	 * @param context the execution context, without decision models
+	 * @return the result the command raised its events through — {@code context.noDecisionModels()},
+	 *         after whatever was chained onto it
+	 */
+	CommandResult<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> execute ( OutboundCommandContext<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> context );
 
 }

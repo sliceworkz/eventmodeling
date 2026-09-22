@@ -23,6 +23,7 @@ import java.time.YearMonth;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
@@ -64,7 +65,7 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 	}
 
 	@Override
-	public void execute(CommandContext<BankingEvent, BankingEvent> context) {
+	public CommandResult<BankingEvent, BankingEvent> execute(CommandContext<BankingEvent, BankingEvent> context) {
 
 		var period = new ActivePeriodDecisionModel(accountId);
 		var result = context.decisionModels(period);
@@ -108,7 +109,7 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 			BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(nextMonth))
 		);
 
-		result.raiseEvent(
+		return result.raiseEvent(
 			new MonthOpened(
 				accountId,
 				nextMonth,

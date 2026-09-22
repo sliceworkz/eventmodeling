@@ -30,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -127,10 +128,10 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 	private static Command<MockDomainEvent> decideOnFirsts ( Runnable between ) {
 		return new Command<>() {
 			@Override
-			public void execute ( CommandContext<MockDomainEvent, MockDomainEvent> context ) {
+			public CommandResult<MockDomainEvent, MockDomainEvent> execute ( CommandContext<MockDomainEvent, MockDomainEvent> context ) {
 				var result = context.decisionModels(new Firsts());
 				between.run();
-				result.raiseEvent(new ThirdDomainEvent("decided"), Tags.none());
+				return result.raiseEvent(new ThirdDomainEvent("decided"), Tags.none());
 			}
 		};
 	}
@@ -139,8 +140,8 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 	private static Command<MockDomainEvent> decideOnFirstsAndSeconds ( ) {
 		return new Command<>() {
 			@Override
-			public void execute ( CommandContext<MockDomainEvent, MockDomainEvent> context ) {
-				context.decisionModels(new Firsts(), new SecondsSinceSavepoint())
+			public CommandResult<MockDomainEvent, MockDomainEvent> execute ( CommandContext<MockDomainEvent, MockDomainEvent> context ) {
+				return context.decisionModels(new Firsts(), new SecondsSinceSavepoint())
 						.raiseEvent(new ThirdDomainEvent("decided"), Tags.none());
 			}
 		};
@@ -149,8 +150,8 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 	private static Command<MockDomainEvent> decideOnNothing ( ) {
 		return new Command<>() {
 			@Override
-			public void execute ( CommandContext<MockDomainEvent, MockDomainEvent> context ) {
-				context.noDecisionModels().raiseEvent(new ThirdDomainEvent("decided"), Tags.none());
+			public CommandResult<MockDomainEvent, MockDomainEvent> execute ( CommandContext<MockDomainEvent, MockDomainEvent> context ) {
+				return context.noDecisionModels().raiseEvent(new ThirdDomainEvent("decided"), Tags.none());
 			}
 		};
 	}

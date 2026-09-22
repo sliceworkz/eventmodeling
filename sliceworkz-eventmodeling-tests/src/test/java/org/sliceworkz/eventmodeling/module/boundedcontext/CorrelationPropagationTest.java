@@ -40,6 +40,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.inbound.Translator;
@@ -210,8 +211,8 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
-			context.noDecisionModels()
+		public CommandResult<MockDomainEvent,MockDomainEvent> execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
+			return context.noDecisionModels()
 					.raiseEvent(new FirstDomainEvent(one), Tags.none())
 					.raiseEvent(new FirstDomainEvent(two), Tags.none());
 		}

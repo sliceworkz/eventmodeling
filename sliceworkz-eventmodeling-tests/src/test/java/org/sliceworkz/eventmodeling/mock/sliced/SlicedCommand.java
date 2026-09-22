@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.mock.sliced;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventstore.events.Tags;
@@ -30,8 +31,8 @@ import org.sliceworkz.eventstore.events.Tags;
 public class SlicedCommand implements Command<MockDomainEvent> {
 
 	@Override
-	public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
-		context.noDecisionModels().raiseEvent(new FirstDomainEvent("sliced"), Tags.none());
+	public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		return context.noDecisionModels().raiseEvent(new FirstDomainEvent("sliced"), Tags.none());
 	}
 
 }

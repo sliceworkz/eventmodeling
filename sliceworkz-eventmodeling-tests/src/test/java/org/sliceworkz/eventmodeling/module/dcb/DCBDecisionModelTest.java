@@ -25,6 +25,7 @@ import java.util.Collections;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -264,7 +265,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			model = new CountingDecisionModel();
 			var result = context.decisionModels(model);
@@ -273,7 +274,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 				throw new IllegalStateException("Max " + maxAllowed + " events allowed, have " + model.count());
 			}
 
-			result.raiseEvent(new FirstDomainEvent("event-" + (model.count() + 1)), Tags.none());
+			return result.raiseEvent(new FirstDomainEvent("event-" + (model.count() + 1)), Tags.none());
 		}
 
 		public CountingDecisionModel model() { return model; }
@@ -287,11 +288,11 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		SavepointDecisionModel model;
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			model = new SavepointDecisionModel();
 			var result = context.decisionModels(model);
-			result.raiseEvent(new SecondDomainEvent("movement-" + (model.count() + 1)), Tags.none());
+			return result.raiseEvent(new SecondDomainEvent("movement-" + (model.count() + 1)), Tags.none());
 		}
 
 		public SavepointDecisionModel model() { return model; }
@@ -315,7 +316,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			firstModel = new CountingDecisionModel();
 			secondModel = new SecondCountingDecisionModel();
@@ -324,7 +325,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 			// Simulate concurrent modification: inject event after reading state
 			afterDecisionModels.run();
 
-			result.raiseEvent(
+			return result.raiseEvent(
 					new FirstDomainEvent("dual-" + firstModel.count() + "-" + secondModel.count()),
 					Tags.none()
 			);
@@ -352,7 +353,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			countingModel = new CountingDecisionModel();
 			savepointModel = new SavepointDecisionModel();
@@ -361,7 +362,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 			// Simulate concurrent modification: inject event after reading state
 			afterDecisionModels.run();
 
-			result.raiseEvent(
+			return result.raiseEvent(
 					new FirstDomainEvent("multi-" + countingModel.count() + "-" + savepointModel.count()),
 					Tags.none()
 			);
@@ -386,7 +387,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			model = new ParameterizingDecisionModel();
 			var result = context.decisionModels(model);
@@ -395,7 +396,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 			afterDecisionModels.run();
 
 			// raises an event of a type this model does not watch, so only the injected event can conflict
-			result.raiseEvent(new SecondDomainEvent("param-" + model.count()), Tags.none());
+			return result.raiseEvent(new SecondDomainEvent("param-" + model.count()), Tags.none());
 		}
 
 		public ParameterizingDecisionModel model() { return model; }
@@ -411,13 +412,13 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		private SecondCountingDecisionModel plainModel;
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			parameterizingModel = new ParameterizingDecisionModel();
 			plainModel = new SecondCountingDecisionModel();
 			var result = context.decisionModels(parameterizingModel, plainModel);
 
-			result.raiseEvent(new ThirdDomainEvent("done"), Tags.none());
+			return result.raiseEvent(new ThirdDomainEvent("done"), Tags.none());
 		}
 
 		public ParameterizingDecisionModel parameterizingModel() { return parameterizingModel; }
@@ -439,11 +440,11 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.noDecisionModels();
 			afterNoDecisionModels.run();
-			result.raiseEvent(new FirstDomainEvent("no-dm"), Tags.none());
+			return result.raiseEvent(new FirstDomainEvent("no-dm"), Tags.none());
 		}
 	}
 
@@ -613,13 +614,13 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		assertOptimisticLockingException(() ->
 				domain.execute(new SingleModelCommand(10) {
 					@Override
-					public void execute(
+					public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 							CommandContext<MockDomainEvent, MockDomainEvent> context) {
 						var m = new CountingDecisionModel();
 						var result = context.decisionModels(m);
 						// Simulate concurrent modification
 						appendDirectly(new FirstDomainEvent("concurrent-event"));
-						result.raiseEvent(new FirstDomainEvent("my-event"), Tags.none());
+						return result.raiseEvent(new FirstDomainEvent("my-event"), Tags.none());
 					}
 				})
 		);
@@ -633,12 +634,12 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		// Inject SecondDomainEvent — not in CountingDecisionModel's eventQuery filter
 		var cmd = new SingleModelCommand(10) {
 			@Override
-			public void execute(
+			public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 					CommandContext<MockDomainEvent, MockDomainEvent> context) {
 				model = new CountingDecisionModel();
 				var result = context.decisionModels(model);
 				appendDirectly(new SecondDomainEvent("unrelated"));
-				result.raiseEvent(new FirstDomainEvent("my-event"), Tags.none());
+				return result.raiseEvent(new FirstDomainEvent("my-event"), Tags.none());
 			}
 		};
 		domain.execute(cmd);
@@ -655,12 +656,12 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		assertOptimisticLockingException(() ->
 				domain.execute(new SavepointModelCommand() {
 					@Override
-					public void execute(
+					public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 							CommandContext<MockDomainEvent, MockDomainEvent> context) {
 						model = new SavepointDecisionModel();
 						var result = context.decisionModels(model);
 						appendDirectly(new SecondDomainEvent("concurrent-movement"));
-						result.raiseEvent(new SecondDomainEvent("my-movement"), Tags.none());
+						return result.raiseEvent(new SecondDomainEvent("my-movement"), Tags.none());
 					}
 				})
 		);
@@ -675,12 +676,12 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		// Inject a ThirdDomainEvent (savepoint type in initQuery, NOT in eventQuery)
 		var cmd = new SavepointModelCommand() {
 			@Override
-			public void execute(
+			public CommandResult<MockDomainEvent, MockDomainEvent> execute(
 					CommandContext<MockDomainEvent, MockDomainEvent> context) {
 				model = new SavepointDecisionModel();
 				var result = context.decisionModels(model);
 				appendDirectly(new ThirdDomainEvent("99"));
-				result.raiseEvent(new SecondDomainEvent("my-movement"), Tags.none());
+				return result.raiseEvent(new SecondDomainEvent("my-movement"), Tags.none());
 			}
 		};
 		// Should succeed — ThirdDomainEvent is only in initQuery, not in optimistic lock filter
@@ -769,11 +770,11 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		assertOptimisticLockingException(() ->
 				domain.execute(new Command<MockDomainEvent>() {
 					@Override
-					public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+					public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 						var plain = new InjectingFirstDecisionModel(injectBetweenReads);
 						var savepoint = new SavepointDecisionModel();
 						var result = context.decisionModels(plain, savepoint);
-						result.raiseEvent(new FirstDomainEvent("my-event"), Tags.none());
+						return result.raiseEvent(new FirstDomainEvent("my-event"), Tags.none());
 					}
 				})
 		);

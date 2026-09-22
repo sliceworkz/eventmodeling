@@ -39,6 +39,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandFailedOnOptimisticLocking;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.commands.RetryPolicy;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -124,13 +125,13 @@ public class AutomationExecuteWithRetryTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			commandAttempts.incrementAndGet();
 			var result = context.decisionModels(new ThirdEventDecisionModel());
 			if (conflictsToInject.getAndDecrement() > 0) {
 				boundedContext.event(new ThirdDomainEvent("conflict"));
 			}
-			result.raiseEvent(new SecondDomainEvent(item), Tags.none());
+			return result.raiseEvent(new SecondDomainEvent(item), Tags.none());
 		}
 	}
 

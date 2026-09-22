@@ -38,6 +38,7 @@ import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
@@ -135,13 +136,13 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			attempts.incrementAndGet();
 			var result = context.decisionModels(new CountingDecisionModel());
 			if (conflictsToInject.getAndDecrement() > 0) {
 				injectConflict.run();
 			}
-			result.raiseEvent(new SecondDomainEvent("raised"), Tags.none());
+			return result.raiseEvent(new SecondDomainEvent("raised"), Tags.none());
 		}
 	}
 
@@ -160,7 +161,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			attempts.incrementAndGet();
 			var model = new CountingDecisionModel();
 			var result = context.decisionModels(model);
@@ -168,7 +169,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 			if (conflictsToInject.getAndDecrement() > 0) {
 				injectConflict.run();
 			}
-			result.raiseEvent(new SecondDomainEvent("raised"), Tags.none());
+			return result.raiseEvent(new SecondDomainEvent("raised"), Tags.none());
 		}
 	}
 
@@ -176,7 +177,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		final AtomicInteger attempts = new AtomicInteger();
 
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			attempts.incrementAndGet();
 			context.noDecisionModels();
 			throw new IllegalStateException("boom");
@@ -209,9 +210,9 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		final AtomicInteger attempts = new AtomicInteger();
 
 		@Override
-		public void execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
+		public CommandResult<MockDomainEvent, MockOutboundEvent> execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
 			attempts.incrementAndGet();
-			context.noDecisionModels().raiseEvent(new SomeOutboundEvent("v1"), Tags.none());
+			return context.noDecisionModels().raiseEvent(new SomeOutboundEvent("v1"), Tags.none());
 		}
 	}
 

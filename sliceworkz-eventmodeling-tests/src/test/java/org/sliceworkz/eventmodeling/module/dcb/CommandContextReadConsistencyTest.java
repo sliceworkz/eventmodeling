@@ -23,6 +23,7 @@ import java.util.List;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -99,7 +100,7 @@ public class CommandContextReadConsistencyTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute ( CommandContext<MockDomainEvent, MockDomainEvent> context ) {
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute ( CommandContext<MockDomainEvent, MockDomainEvent> context ) {
 			MockReadModel model = context.read(MockReadModel.class, "readForDecision", List.<Class<?>>of(FirstDomainEvent.class), ReadModelStorage.EPHEMERAL);
 			countSeen = model.eventCount();
 
@@ -109,7 +110,7 @@ public class CommandContextReadConsistencyTest extends AbstractMockDomainTest {
 			var result = withUnrelatedDecisionModel
 					? context.decisionModels(new SecondCountingDecisionModel())
 					: context.noDecisionModels();
-			result.raiseEvent(new SecondDomainEvent("decided on a count of " + countSeen), Tags.none());
+			return result.raiseEvent(new SecondDomainEvent("decided on a count of " + countSeen), Tags.none());
 		}
 	}
 
@@ -140,7 +141,7 @@ public class CommandContextReadConsistencyTest extends AbstractMockDomainTest {
 				() -> domain.execute((Command<MockDomainEvent>) context -> {
 					var result = context.decisionModels(new FirstCountingDecisionModel());
 					appendDirectly(new FirstDomainEvent("concurrent"));
-					result.raiseEvent(new SecondDomainEvent("decided"), Tags.none());
+					return result.raiseEvent(new SecondDomainEvent("decided"), Tags.none());
 				}));
 	}
 

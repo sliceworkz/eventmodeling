@@ -28,6 +28,15 @@ package org.sliceworkz.eventmodeling.commands;
  * <p>
  * The command should use the {@link CommandContext} to set up decision models and raise
  * events as usual, and return the response value from the {@code execute} method.
+ * <p>
+ * <strong>This is the one command shape whose choice of decision models cannot be enforced by the
+ * compiler.</strong> {@link Command#execute} and {@link OutboundCommand#execute} return the
+ * {@link CommandResult}, which is obtainable only from {@code decisionModels(...)} or
+ * {@code noDecisionModels()} — so those two cannot be written without choosing. Here the return slot
+ * is taken by the caller's response value, and a command returning both would be returning a pair
+ * whose halves answer to different readers. So a {@code CommandWithResult} that chooses neither is
+ * still found out on its first execution, with an {@link IllegalStateException} naming the command and
+ * the call missing from it. Choose, then compute the response.
  *
  * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context
  * @param <RESPONSE_TYPE> the type of the response value returned to the caller
@@ -38,6 +47,17 @@ public interface CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> {
 		return AbstractCommand.commandNameOf(this.getClass());
 	}
 
+	/**
+	 * Decides, raises what it decided on, and computes the response.
+	 * <p>
+	 * The decision is made through the context as in any other command —
+	 * {@code context.decisionModels(...)} or {@code context.noDecisionModels()} — and a command that
+	 * does neither fails at execution rather than at compile time, since this method's return value is
+	 * the response rather than the {@link CommandResult}.
+	 *
+	 * @param context the execution context
+	 * @return the response value, delivered to the caller after the raised events are persisted
+	 */
 	RESPONSE_TYPE execute ( CommandContext<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> context );
 
 }

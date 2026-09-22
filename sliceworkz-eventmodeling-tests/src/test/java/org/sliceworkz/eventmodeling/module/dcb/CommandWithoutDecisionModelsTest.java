@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -31,30 +32,27 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 
 /**
- * A command that never selects its decision models is told so.
+ * The runtime backstop for a command that never selects its decision models.
  * <p>
  * Choosing what a command decides on — {@code decisionModels(...)}, or {@code noDecisionModels()} when
  * it decides on nothing — is what produces the {@code CommandResult} its events are raised on, so a
- * command that does neither has no consistency boundary to append under and nothing to append. The
- * failure has to name the command at fault and the line missing from it.
+ * command that does neither has no consistency boundary to append under and nothing to append.
+ * <p>
+ * For a {@code Command} and an {@code OutboundCommand} that choice is structural: {@code execute}
+ * returns the {@code CommandResult}, which those two calls are the only source of, so the ones below
+ * reach this failure only by deliberately returning {@code null}. What the compiler cannot demand is
+ * the same choice from a {@code CommandWithResult}, whose return slot carries the caller's response —
+ * that shape is what this backstop really exists for, and
+ * {@code CommandResultIsStructuralTest} in the api module pins the compile-time half.
+ * <p>
+ * Either way the failure has to name the command at fault and the line missing from it.
  * <p>
  * Plain {@code @Test}: nothing here reaches storage.
  */
 public class CommandWithoutDecisionModelsTest extends AbstractMockDomainTest {
 
 	@Test
-	void aCommandThatNeverSelectsItsDecisionModelsIsNamedInTheFailure ( ) {
-		Mock domain = domain();
-
-		IllegalStateException thrown = assertThrows(IllegalStateException.class,
-				() -> domain.execute(new ForgetfulCommand()));
-
-		assertTrue(thrown.getMessage().contains("Forgetful"), "should name the command: " + thrown.getMessage());
-		assertTrue(thrown.getMessage().contains("noDecisionModels"), "should name the way out: " + thrown.getMessage());
-	}
-
-	@Test
-	void theSameHoldsForACommandWithAResult ( ) {
+	void aCommandWithAResultThatNeverSelectsItsDecisionModelsIsNamedInTheFailure ( ) {
 		Mock domain = domain();
 
 		IllegalStateException thrown = assertThrows(IllegalStateException.class,
@@ -62,6 +60,19 @@ public class CommandWithoutDecisionModelsTest extends AbstractMockDomainTest {
 
 		// the suffix is only stripped when it is a suffix, so this one keeps its whole simple name
 		assertTrue(thrown.getMessage().contains("ForgetfulCommandWithResult"), "should name the command: " + thrown.getMessage());
+		assertTrue(thrown.getMessage().contains("noDecisionModels"), "should name the way out: " + thrown.getMessage());
+	}
+
+	/** The one way a {@code Command} still gets here: it returns the result it never produced. */
+	@Test
+	void aCommandReturningNullInsteadOfAResultIsNamedInTheFailure ( ) {
+		Mock domain = domain();
+
+		IllegalStateException thrown = assertThrows(IllegalStateException.class,
+				() -> domain.execute(new ForgetfulCommand()));
+
+		assertTrue(thrown.getMessage().contains("Forgetful"), "should name the command: " + thrown.getMessage());
+		assertTrue(thrown.getMessage().contains("noDecisionModels"), "should name the way out: " + thrown.getMessage());
 	}
 
 	/** Deciding on nothing is legitimate — it just has to be said. */
@@ -82,8 +93,9 @@ public class CommandWithoutDecisionModelsTest extends AbstractMockDomainTest {
 
 	static class ForgetfulCommand implements Command<MockDomainEvent> {
 		@Override
-		public void execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
-			// forgets to select any decision models
+		public CommandResult<MockDomainEvent,MockDomainEvent> execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
+			// the return type demands a result; producing one is what this forgets to do
+			return null;
 		}
 	}
 
@@ -96,8 +108,8 @@ public class CommandWithoutDecisionModelsTest extends AbstractMockDomainTest {
 
 	static class DecidesOnNothingCommand implements Command<MockDomainEvent> {
 		@Override
-		public void execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
-			context.noDecisionModels();
+		public CommandResult<MockDomainEvent,MockDomainEvent> execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
+			return context.noDecisionModels();
 		}
 	}
 

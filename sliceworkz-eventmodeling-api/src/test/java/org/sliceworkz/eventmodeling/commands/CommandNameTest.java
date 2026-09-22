@@ -67,7 +67,8 @@ public class CommandNameTest {
 	void anonymousCommandFallsBackToWhereItWasDeclared() {
 		Command<Object> anonymous = new Command<>() {
 			@Override
-			public void execute(CommandContext<Object, Object> context) {
+			public CommandResult<Object, Object> execute(CommandContext<Object, Object> context) {
+				return context.noDecisionModels();
 			}
 		};
 		// an anonymous class has no simple name, so the name must come from the binary name instead
@@ -80,31 +81,36 @@ public class CommandNameTest {
 
 	static class OpenAccountCommand implements Command<Object> {
 		@Override
-		public void execute(CommandContext<Object, Object> context) {
+		public CommandResult<Object, Object> execute(CommandContext<Object, Object> context) {
+			return context.noDecisionModels();
 		}
 	}
 
 	static class OpenAccount implements Command<Object> {
 		@Override
-		public void execute(CommandContext<Object, Object> context) {
+		public CommandResult<Object, Object> execute(CommandContext<Object, Object> context) {
+			return context.noDecisionModels();
 		}
 	}
 
 	static class DoStuffCommandCommand implements Command<Object> {
 		@Override
-		public void execute(CommandContext<Object, Object> context) {
+		public CommandResult<Object, Object> execute(CommandContext<Object, Object> context) {
+			return context.noDecisionModels();
 		}
 	}
 
 	static class PublishOutboundCommand implements OutboundCommand<Object, Object> {
 		@Override
-		public void execute(OutboundCommandContext<Object, Object> context) {
+		public CommandResult<Object, Object> execute(OutboundCommandContext<Object, Object> context) {
+			return context.noDecisionModels();
 		}
 	}
 
 	static class PublishOutbound implements OutboundCommand<Object, Object> {
 		@Override
-		public void execute(OutboundCommandContext<Object, Object> context) {
+		public CommandResult<Object, Object> execute(OutboundCommandContext<Object, Object> context) {
+			return context.noDecisionModels();
 		}
 	}
 
@@ -129,7 +135,8 @@ public class CommandNameTest {
 		}
 
 		@Override
-		public void execute(CommandContext<Object, Object> context) {
+		public CommandResult<Object, Object> execute(CommandContext<Object, Object> context) {
+			return context.noDecisionModels();
 		}
 	}
 

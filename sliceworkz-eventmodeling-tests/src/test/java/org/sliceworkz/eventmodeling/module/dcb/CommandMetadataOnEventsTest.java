@@ -29,6 +29,7 @@ import org.sliceworkz.eventmodeling.aggregates.AggregateContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
@@ -196,8 +197,8 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
-			context.noDecisionModels().raiseEvent(new FirstDomainEvent(value), Tags.none());
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			return context.noDecisionModels().raiseEvent(new FirstDomainEvent(value), Tags.none());
 		}
 	}
 
@@ -225,8 +226,8 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
-			context.noDecisionModels().raiseEvent(new FirstDomainEvent(value), Tags.none());
+		public CommandResult<MockDomainEvent, MockDomainEvent> execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
+			return context.noDecisionModels().raiseEvent(new FirstDomainEvent(value), Tags.none());
 		}
 	}
 
@@ -239,9 +240,9 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
+		public CommandResult<MockDomainEvent, MockOutboundEvent> execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
 			// keyed per event: an outbound event without an idempotency key is rejected
-			context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none(), "meta/" + value);
+			return context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none(), "meta/" + value);
 		}
 	}
 

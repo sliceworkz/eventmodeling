@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
@@ -58,7 +59,7 @@ public class DepositCommand implements Command<BankingEvent> {
 	}
 
 	@Override
-	public void execute(CommandContext<BankingEvent, BankingEvent> context) {
+	public CommandResult<BankingEvent, BankingEvent> execute(CommandContext<BankingEvent, BankingEvent> context) {
 
 		var period = new ActivePeriodDecisionModel(accountId);
 		var result = context.decisionModels(period);
@@ -68,7 +69,7 @@ public class DepositCommand implements Command<BankingEvent> {
 			"Period " + period.activeMonth() + " is closed, cannot deposit");
 
 		// Tag with both account identity AND period identity
-		result.raiseEvent(
+		return result.raiseEvent(
 			new MoneyDeposited(accountId, period.activeMonth(), amount, description),
 			Tags.of(
 				BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),

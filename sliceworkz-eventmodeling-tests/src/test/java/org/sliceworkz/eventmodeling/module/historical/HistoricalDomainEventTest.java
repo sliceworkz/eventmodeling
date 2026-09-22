@@ -26,6 +26,7 @@ import org.sliceworkz.eventmodeling.Untyped;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
@@ -199,10 +200,10 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 		}
 
 		@Override
-		public void execute(
+		public CommandResult<CurrentDomainEvent, CurrentDomainEvent> execute(
 				CommandContext<CurrentDomainEvent, CurrentDomainEvent> context) {
 			var result = context.noDecisionModels();
-			result.raiseEvent(new CurrentDomainEvent.ItemAddedV2(name, quantity, category), Tags.none());
+			return result.raiseEvent(new CurrentDomainEvent.ItemAddedV2(name, quantity, category), Tags.none());
 		}
 	}
 

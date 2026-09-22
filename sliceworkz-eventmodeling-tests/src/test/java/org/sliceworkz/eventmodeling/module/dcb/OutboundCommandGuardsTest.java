@@ -27,6 +27,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -213,8 +214,8 @@ public class OutboundCommandGuardsTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
-			context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none());
+		public CommandResult<MockDomainEvent, MockOutboundEvent> execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
+			return context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none());
 		}
 	}
 
@@ -228,8 +229,8 @@ public class OutboundCommandGuardsTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
-			context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none(), "self/" + value);
+		public CommandResult<MockDomainEvent, MockOutboundEvent> execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
+			return context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none(), "self/" + value);
 		}
 	}
 
@@ -243,8 +244,8 @@ public class OutboundCommandGuardsTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
-			context.noDecisionModels()
+		public CommandResult<MockDomainEvent, MockOutboundEvent> execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
+			return context.noDecisionModels()
 					.forbidIdempotencyKey()
 					.raiseEvent(new SomeOutboundEvent(value), Tags.none());
 		}

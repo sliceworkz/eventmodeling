@@ -52,6 +52,10 @@ public sealed interface AbstractCommand<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE
 
 	// execute(...) lives on the permits rather than here, because the two shapes are handed different
 	// contexts: a Command gets the full CommandContext, an OutboundCommand the narrower
-	// OutboundCommandContext without decisionModels(...) — see there for why.
+	// OutboundCommandContext without decisionModels(...) — see there for why. Both return the
+	// CommandResult, which is what makes choosing the decision models structural: the result is
+	// obtainable only from decisionModels(...) or noDecisionModels(), so a command that compiles has
+	// chosen. A common execute(...) declared here would have to name one of the two contexts, so the
+	// narrowing and the return type both live on the permits.
 
 }

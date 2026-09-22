@@ -37,11 +37,17 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Build with Maven
-        run: mvn -B -DskipTests clean install -Pgpg-ci
+      # Tests run here, against the exact tree being published. The tag is cut by
+      # create-release-tag-and-bump, which commits a version change of its own, so the
+      # commit this builds is not one any CI run has necessarily seen -- skipping tests
+      # here meant nothing ever tested what went to Maven Central.
+      - name: Build and test with Maven
+        run: mvn -B clean install -Pgpg-ci
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
+      # Tests are skipped in THIS step only: 'deploy' re-runs the lifecycle over the
+      # same workspace, and the step above already ran the suite against this tree.
       - name: Deploy to Maven Central
         run: mvn -B -DskipTests deploy -Pgpg-ci
         env:

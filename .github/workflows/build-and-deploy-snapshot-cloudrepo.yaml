@@ -59,5 +59,7 @@ jobs:
             exit 1
           fi
 
+      # No -DskipTests: the SNAPSHOTs published here are what the downstream projects
+      # resolve and build against, so they are tested before they are pushed.
       - name: Build and deploy to cloudrepo
-        run: mvn -B -Pcloudrepo -DskipTests clean deploy
+        run: mvn -B -Pcloudrepo clean deploy

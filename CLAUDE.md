@@ -1345,6 +1345,53 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   `DispatcherTest` base deliberately drives a dispatcher without registering it, so without this test the
   wiring from `builder.dispatcher(...)` to `when()` could break with every suite still green
 
+### Registration is wildcard-typed, and `build()` is where the event types are checked
+
+**Every registration on `BoundedContextBuilder` takes a wildcard** — `readmodel(Class<? extends
+ReadModel<?>>)`, `readmodel(ReadModel<?>)`, `aggregate(Class<? extends Aggregate<?>>)`,
+`automation(Automation<?,?,?>)`, `translator(Translator<?,?>)`, `dispatcher(Dispatcher<?>)` — so the
+compiler admits a payments read model on the banking context. The builder knows the three event types
+(`newBuilder` resolves them off the context interface and calls `eventTypes(...)`), but only at
+runtime: it is typed `BoundedContextBuilder<C>`, and Java offers no way to project `D`, `I` and `O`
+back out of `C extends BoundedContext<D,I,O>`.
+
+- **The failure it prevents is silent, which is why it is checked at all.** The framework hands a
+  component its events through an erased `Projection`, so nothing casts and nothing throws; the
+  component's own `eventQuery()` names stored types that never occur on this context's stream, so the
+  query matches nothing and the read model, dispatcher or todo list simply stays empty, for good —
+  no exception, no `BoundedContextEvent`, no log line. Same shape as an automation whose todo list
+  nobody projects, and caught in the same place for the same reason
+- **`rejectComponentsOfAnotherContextsEventTypes` runs first among `build()`'s rejections**, naming
+  every offender at once with the component, the event type it was declared over and this context's —
+  both fully qualified, since the mistake this catches is two contexts whose event roots often differ
+  by package alone. It runs first because a component of the wrong context usually trips the later
+  checks too, on facts that are beside the point
+- **Only *unrelated* types are refused.** A component over a **supertype** of this context's root is
+  legitimate — the dashboard's analytics `ReadModel<Object>` projects whatever it is handed — and so is
+  one over a **branch** of the sealed hierarchy, whose `eventQuery()` is what keeps the other branches
+  away from it. Neither can be told from a mistake from here, and a check that rejects a legitimate
+  registration is worse than none (the rule `rejectAutomationsWhoseTodoListIsNotProjectedHere` already
+  states). A declaration that fixes no event class at all — a generic read model registered as an
+  instance, whose class implements `ReadModel<E>` — is not evidence of the wrong one either, and passes
+- **The alternative — `BoundedContextBuilder<C,D,I,O>`, which would put this in the compiler — loses
+  on what it costs every slice.** Java can infer the quartet at `newBuilder(Class<C>)`, but not at a
+  *use* of the builder type, so `Slice<C>`'s four `configure...` methods, `FeaturesSpecification`,
+  `AggregateSpecification`, both read model specifications and `AdapterBinding` would all carry it, and
+  every slice a user writes would declare `void configureQuery ( BoundedContextBuilder<Banking,
+  BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> builder )` where it now names one
+  type. That is the same trade the `BankingApi` alias exists to avoid, paid at every slice, for a check
+  the builder can make itself from what it already resolved
+- **What this does not reach is the slice scan.** `AnnotationBasedDiscoveryAndConfiguration`
+  instantiates every `@FeatureSlice` class under the root package and casts it to `Slice<C>` unchecked,
+  so two contexts sharing a root package each discover the other's slices — which is how the two
+  banking examples are wired. Any *typed* component such a slice registers is now named by this check;
+  a slice that only declares commands or carries metadata still lands in both inventories
+- `EventTypeArguments` resolves the argument through the generic superclass or superinterface it is
+  bound on, so a read model extending `PublishingReadModel<BankingEvent,...>` answers the same as one
+  implementing `ReadModel<BankingEvent>` directly. `ForeignEventTypeRegistrationTest` pins the six
+  registrations, both of an automation's and a translator's two event types, every offender being named
+  at once, and the three shapes that are deliberately accepted
+
 ### Component names are bookmark keys
 
 **A read model, an automation, a translator and a dispatcher are each identified by a name**, which

@@ -22,5 +22,11 @@ jobs:
         java-version: '21'
         distribution: 'temurin'
         cache: maven
+    # 'verify', not 'package': the javadoc and source jars are bound to the verify
+    # phase in sliceworkz-eventmodeling-parent-pom, and doclint is on by default, so a
+    # broken @param or an @link to a type that no longer exists fails the build there.
+    # Stopping at 'package' left those two plugins unrun on every branch and every PR,
+    # so the first thing to execute them was a release workflow -- which is the worst
+    # place to discover a javadoc error, since the tag has been cut and pushed by then.
     - name: Build with Maven
-      run: mvn -B package --file pom.xml
+      run: mvn -B verify --file pom.xml

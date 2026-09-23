@@ -107,8 +107,12 @@ scoped by tags to the entity, `when(...)` folding state, accessors for the check
 
 What makes this more than a lookup: `context.decisionModels(...)` puts the events the model was
 projected from **inside the command's consistency boundary**. The optimistic-lock filter is the union
-of the queries the models were *actually read with*, and it travels with the append — so the DCB
-check at append time re-asks exactly the question the command decided on. Three distinct failures come
+of *every* query the models were actually read with — each `eventQuery()`, and the `initQuery()` of a
+savepoint model, since "the newest savepoint is X" is as much a fact the command decided on as the
+movements after it — and it travels with the append, so the DCB check at append time re-asks exactly
+the question the command decided on. You do not widen a model's `eventQuery()` to get that: the
+framework locks both queries, and the savepoint pattern's rule that the two name disjoint event types
+stands. Three distinct failures come
 out of this step, and they want different responses:
 
 | | thrown by | means | retry? |
@@ -135,7 +139,10 @@ decision models — they cannot guard an append to the outbound stream, and a bo
 nothing, silently, is worse than none; its correctness comes from idempotency keys (step 5).
 
 *Costs:* one projection per execution, bounded the same way a live read model is — by tags and a
-savepoint (`initQuery()`), per the read-model ladder's step 2.
+savepoint (`initQuery()`), per the read-model ladder's step 2. Bound the *replay* that way, never the
+boundary: an `until` on a model's own `eventQuery()` bounds its read only — the framework strips it
+from the lock filter, because a criteria filter carrying one deems nothing after it a new relevant
+fact and so admits every append without ever raising.
 
 ## 4. Uniqueness — the boundary you expect to be empty
 

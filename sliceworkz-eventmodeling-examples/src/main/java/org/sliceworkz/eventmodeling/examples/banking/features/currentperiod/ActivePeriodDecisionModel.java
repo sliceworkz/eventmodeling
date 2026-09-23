@@ -51,8 +51,13 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
  * processes movement events (deposits, withdrawals, month closings) after
  * that savepoint — never the full account history.</p>
  *
- * <p>The {@link #eventQuery()} filter is used for DCB optimistic locking,
- * ensuring concurrent changes within the period are detected.</p>
+ * <p>Both queries are used for DCB optimistic locking: the command locks on their union, so a
+ * movement landing within the period conflicts, and so does a period rolling over underneath the
+ * decision. That second half matters here because {@code DepositCommand} and {@code WithdrawCommand}
+ * stamp {@link #activeMonth()} into the events they raise — locked on {@link #eventQuery()} alone, a
+ * {@code MonthOpened} arriving before the append would leave that stamp naming a period that had
+ * already closed. Note that the savepoint types stay out of {@link #eventQuery()} regardless: the
+ * framework widens the lock filter, not the replay.</p>
  */
 public class ActivePeriodDecisionModel implements DecisionModel<BankingEvent> {
 

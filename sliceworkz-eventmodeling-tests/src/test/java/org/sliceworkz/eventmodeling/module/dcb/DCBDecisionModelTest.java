@@ -210,9 +210,9 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 	 * ThirdDomainEvent names the event type this model watches. The Projector calls {@code eventQuery()}
 	 * only after the initQuery events have reached {@code when()}, so this is a supported shape — but
 	 * until that read has happened the model cannot say what it is interested in, and its eventQuery is
-	 * matchNone. That makes the optimistic-lock filter observable: a matchNone filter is exactly
-	 * {@code AppendCriteria.none()}, so a lock built from the query as it looked before the read is no
-	 * lock at all.
+	 * matchNone. That makes the optimistic-lock filter observable: an eventQuery contributing matchNone
+	 * contributes nothing to the union, so a lock built from the query as it looked before the read
+	 * covers the initQuery's types and nothing this model actually decided on.
 	 */
 	static class ParameterizingDecisionModel implements DecisionModel<MockDomainEvent> {
 
@@ -600,9 +600,11 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 	// TESTS: Optimistic locking — concurrent modification simulation
 	// ════════════════════════════════════════════════════════════════════
 
-	// In DCB, optimistic locking triggers when events matching the combined
-	// eventQuery filter appear between the projector read and the final append.
-	// We simulate this by injecting events during command execution via a Runnable.
+	// In DCB, optimistic locking triggers when events matching the combined filter appear between the
+	// projector read and the final append. The filter is the union of EVERY query the models were read
+	// with -- each eventQuery, and the initQuery of a savepoint model, since "the newest savepoint is X"
+	// is as much a fact the command decided on as the movements after it. We simulate a concurrent
+	// writer by injecting events during command execution via a Runnable.
 
 	@ForEachBackend
 	void optimisticLocking_singleModelNoInitQuery_conflictOnMatchingEventType() {
@@ -666,25 +668,31 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		);
 	}
 
+	/**
+	 * The savepoint type is in the lock filter too, though it appears in no eventQuery: the model
+	 * decided the newest savepoint was the one its initQuery found, and a newer one arriving before
+	 * the append makes that decision stale. Admitted, the command would write what the old savepoint
+	 * told it after the event that superseded it, with nothing raised.
+	 */
 	@ForEachBackend
-	void optimisticLocking_singleModelWithInitQuery_noConflictOnSavepointEventType() {
+	void optimisticLocking_singleModelWithInitQuery_conflictOnSavepointEventType() {
 		Mock domain = buildDomain();
 		domain.event(new ThirdDomainEvent("0"));
 		domain.event(new SecondDomainEvent("existing"));
 
-		// Inject a ThirdDomainEvent (savepoint type in initQuery, NOT in eventQuery)
-		var cmd = new SavepointModelCommand() {
-			@Override
-			public void execute(
-					CommandContext<MockDomainEvent, MockDomainEvent> context) {
-				model = new SavepointDecisionModel();
-				var result = context.decisionModels(model);
-				appendDirectly(new ThirdDomainEvent("99"));
-				result.raiseEvent(new SecondDomainEvent("my-movement"), Tags.none());
-			}
-		};
-		// Should succeed — ThirdDomainEvent is only in initQuery, not in optimistic lock filter
-		domain.execute(cmd);
+		// Inject a ThirdDomainEvent (savepoint type in initQuery, not in eventQuery)
+		assertOptimisticLockingException(() ->
+				domain.execute(new SavepointModelCommand() {
+					@Override
+					public void execute(
+							CommandContext<MockDomainEvent, MockDomainEvent> context) {
+						model = new SavepointDecisionModel();
+						var result = context.decisionModels(model);
+						appendDirectly(new ThirdDomainEvent("99"));
+						result.raiseEvent(new SecondDomainEvent("my-movement"), Tags.none());
+					}
+				})
+		);
 	}
 
 	@ForEachBackend
@@ -779,15 +787,17 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		);
 	}
 
+	/** The same, with the savepoint model beside a plain one: the union covers the initQuery of each. */
 	@ForEachBackend
-	void optimisticLocking_mixedModels_noConflictOnSavepointEventType() {
+	void optimisticLocking_mixedModels_conflictOnSavepointEventType() {
 		Mock domain = buildDomain();
 
-		// ThirdDomainEvent is only in initQuery, not in any eventQuery
-		var cmd = new MultiModelCommand(
-				() -> appendDirectly(new ThirdDomainEvent("99"))
+		// ThirdDomainEvent is in no eventQuery, but it is the savepoint model's initQuery type
+		assertOptimisticLockingException(() ->
+				domain.execute(new MultiModelCommand(
+						() -> appendDirectly(new ThirdDomainEvent("99"))
+				))
 		);
-		domain.execute(cmd);
 	}
 
 	@ForEachBackend
@@ -824,8 +834,9 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		domain.event(new ThirdDomainEvent("first"));
 
 		// A FirstDomainEvent appended after the model was read is a new relevant fact. The model only
-		// says so once its initQuery has run, so a lock filter taken before that read is matchNone —
-		// which is AppendCriteria.none(), and the append would silently succeed unlocked.
+		// says so once its initQuery has run, so a lock filter taken before that read contributes
+		// matchNone for this model — the savepoint types in the union do not match a FirstDomainEvent,
+		// and the append would silently succeed against the very fact the model decided on.
 		var cmd = new ParameterizingModelCommand(() -> appendDirectly(new FirstDomainEvent("concurrent")));
 		assertOptimisticLockingException(() -> domain.execute(cmd));
 	}

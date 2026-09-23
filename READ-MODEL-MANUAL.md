@@ -211,7 +211,10 @@ the model gracefully replays from the beginning. Rules that keep it healthy:
 
 - **Query disjoint event types from the two methods.** The savepoint types belong to `initQuery()`
   only — otherwise they are double-processed, and a buggy savepoint cannot be recovered from by
-  ignoring it.
+  ignoring it. This holds for a `DecisionModel` too, and needs no exception for the consistency
+  boundary: the framework locks on the union of **both** queries, so a savepoint landing between the
+  read and the append raises `OptimisticLockingException` without the savepoint types appearing in
+  `eventQuery()`.
 - **`initQuery()` is a live-model device.** A bookmarked background projection must see every event,
   so eventually consistent read models ignore it (with a build-time warning).
 - The savepoint is written by the domain — a `CloseMonthCommand` deciding the books are closed — not

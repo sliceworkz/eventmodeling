@@ -17,54 +17,57 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
+import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
- * A command that never selects its decision models is told so.
+ * A command that never selects its decision models has decided on nothing.
  * <p>
- * Choosing what a command decides on — {@code decisionModels(...)}, or {@code noDecisionModels()} when
- * it decides on nothing — is what produces the {@code CommandResult} its events are raised on, so a
- * command that does neither has no consistency boundary to append under and nothing to append. The
- * failure has to name the command at fault and the line missing from it.
+ * The {@code CommandResult} events are raised on is handed out by {@code decisionModels(...)} and
+ * {@code noDecisionModels()} alone, so a command that called neither raised nothing: its execution
+ * succeeds, appends nothing, and behaves exactly as if it had called {@code noDecisionModels()}.
  * <p>
- * Plain {@code @Test}: nothing here reaches storage.
+ * Plain {@code @Test}: this is framework behaviour, not storage behaviour.
  */
 public class CommandWithoutDecisionModelsTest extends AbstractMockDomainTest {
 
 	@Test
-	void aCommandThatNeverSelectsItsDecisionModelsIsNamedInTheFailure ( ) {
+	void aCommandThatNeverSelectsItsDecisionModelsDecidesOnNothing ( ) {
 		Mock domain = domain();
 
-		IllegalStateException thrown = assertThrows(IllegalStateException.class,
-				() -> domain.execute(new ForgetfulCommand()));
+		Optional<EventReference> reference = domain.execute(new SilentCommand());
 
-		assertTrue(thrown.getMessage().contains("Forgetful"), "should name the command: " + thrown.getMessage());
-		assertTrue(thrown.getMessage().contains("noDecisionModels"), "should name the way out: " + thrown.getMessage());
+		assertTrue(reference.isEmpty(), "nothing was raised, so nothing was appended");
+		assertTrue(eventStore().getRawEventStream(EventStreamId.anyContext())
+				.query(EventQuery.matchAll()).isEmpty(), "the store stays empty");
 	}
 
 	@Test
 	void theSameHoldsForACommandWithAResult ( ) {
 		Mock domain = domain();
 
-		IllegalStateException thrown = assertThrows(IllegalStateException.class,
-				() -> domain.execute(new ForgetfulCommandWithResult()));
+		CommandExecutionResult<String> result = domain.execute(new SilentCommandWithResult());
 
-		// the suffix is only stripped when it is a suffix, so this one keeps its whole simple name
-		assertTrue(thrown.getMessage().contains("ForgetfulCommandWithResult"), "should name the command: " + thrown.getMessage());
+		assertEquals("answered, but nothing was decided on", result.response());
+		assertTrue(result.eventReference().isEmpty());
 	}
 
-	/** Deciding on nothing is legitimate — it just has to be said. */
 	@Test
 	void aCommandThatDecidesOnNothingSaysSoAndIsFine ( ) {
 		Mock domain = domain();
@@ -80,14 +83,14 @@ public class CommandWithoutDecisionModelsTest extends AbstractMockDomainTest {
 					.instance(InstanceFactory.determine("unittests")));
 	}
 
-	static class ForgetfulCommand implements Command<MockDomainEvent> {
+	static class SilentCommand implements Command<MockDomainEvent> {
 		@Override
 		public void execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
-			// forgets to select any decision models
+			// selects no decision models: nothing to decide on, nothing to raise
 		}
 	}
 
-	static class ForgetfulCommandWithResult implements CommandWithResult<MockDomainEvent,String> {
+	static class SilentCommandWithResult implements CommandWithResult<MockDomainEvent,String> {
 		@Override
 		public String execute ( CommandContext<MockDomainEvent,MockDomainEvent> context ) {
 			return "answered, but nothing was decided on";

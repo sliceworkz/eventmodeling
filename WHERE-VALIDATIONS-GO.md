@@ -131,10 +131,11 @@ catch block and in the observability record, where an `IllegalStateException` is
 `CommandFailed` with a stack trace, since the kernel cannot tell it from a bug. The banking example's
 `WithdrawCommand`, `DepositCommand` and `CloseMonthCommand` are written this way.
 
-**A rule that needs no history needs no decision model** — but say so: a command must call
-`decisionModels(...)` or `noDecisionModels()`, and `build()`-style silence is not an option
-(`getCommandResult()` rejects a command that called neither). `noDecisionModels()` is the greppable
-declaration that this command's append needs no guard. An `OutboundCommand` is not even offered
+**A rule that needs no history needs no decision model.** `noDecisionModels()` is the greppable
+declaration that this command's append needs no guard, and it is what hands the command the
+`CommandResult` to raise its events on. A command that calls neither `decisionModels(...)` nor
+`noDecisionModels()` is taken to have decided on nothing — it has no result to raise events on, so it
+raised none, and its execution appends nothing (a command that reads, finds nothing to do and returns). An `OutboundCommand` is not even offered
 decision models — they cannot guard an append to the outbound stream, and a boundary that guards
 nothing, silently, is worse than none; its correctness comes from idempotency keys (step 5).
 

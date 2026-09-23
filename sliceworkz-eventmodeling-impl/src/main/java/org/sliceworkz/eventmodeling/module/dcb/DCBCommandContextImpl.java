@@ -305,16 +305,19 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	/**
 	 * The result of the command that ran against this context.
 	 * <p>
-	 * A command builds it by choosing what it decides on — {@code context.decisionModels(...)}, or
-	 * {@code context.noDecisionModels()} when it decides on nothing — and a command that does neither
-	 * never produces one. That is a mistake in the command rather than a state to carry on from: there
-	 * is no consistency boundary to append under and nothing to append.
+	 * A command that selected neither {@code decisionModels(...)} nor {@code noDecisionModels()} is
+	 * taken to have decided on nothing, exactly as if it had called {@code noDecisionModels()}. That is
+	 * the only thing its silence can mean: the {@code CommandResult} events are raised on is handed out
+	 * by those two calls alone, so a command that made neither raised nothing, and there is nothing to
+	 * guard. The result is match-none with no reference, no head is taken and nothing is read, so such
+	 * an execution appends nothing and reports {@code CommandExecuted} with no events — the natural
+	 * outcome of a command that reads, finds nothing to do and returns, or that rejects before deciding.
+	 * The alternative — rejecting the silence as a mistake — loses because it fails an execution whose
+	 * outcome is already fully determined, for a call that would change nothing about it.
 	 */
 	public CommandResultImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> getCommandResult ( ) {
 		if ( commandResult == null ) {
-			throw new IllegalStateException(
-					"command '%s' did not select its decision models: call context.decisionModels(...) with what it decides on, or context.noDecisionModels() when it decides on nothing - a command has to do one of the two, since that is what produces the CommandResult its events are raised on"
-						.formatted(tracing.command()));
+			noDecisionModels();
 		}
 		return commandResult;
 	}

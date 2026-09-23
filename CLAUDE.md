@@ -400,6 +400,14 @@ together:**
   `noDecisionModels()` only — while `CommandContext` extends it adding `decisionModels(...)` for the
   domain command, whose boundary genuinely guards its stream. (Making the models real instead would
   need a cross-stream conditional append the storage SPI does not have)
+- **A command that calls neither `decisionModels(...)` nor `noDecisionModels()` has decided on
+  nothing.** Those two calls are the only way to obtain the `CommandResult` events are raised on, so
+  silence can only mean nothing was raised; `DCBCommandContextImpl.getCommandResult()` then does what
+  `noDecisionModels()` would — match-none, no head taken, nothing read, nothing appended — and the
+  execution reports `CommandExecuted` with no events. The alternative — rejecting the silence with an
+  `IllegalStateException` — loses because it fails an execution whose outcome is already fully
+  determined (a command that reads, finds nothing to do and returns early), for a call that would
+  change nothing about it. `CommandWithoutDecisionModelsTest` pins it for both command shapes
 - **Every outbound event must carry an idempotency key, and an append without one is rejected** —
   `IllegalStateException` from `execute`, before anything is stored. The check runs in `DCBModule`
   after key resolution, so a key from any source satisfies it: per event

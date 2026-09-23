@@ -586,6 +586,45 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	/**
+	 * Whether a scanned {@code @FeatureSlice} class is a slice of <em>this</em> bounded context.
+	 * <p>
+	 * A slice declares the context it belongs to — {@code class OpenAccountFeatureSlice implements
+	 * Slice<Banking>} — and the scan hands back a bare {@code Class}, so the cast to {@code Slice<C>}
+	 * is unchecked and nothing at compile time or at runtime held a slice to the context it named. Two
+	 * bounded contexts whose slices share a root package therefore each discovered the other's: the
+	 * foreign slices' {@code configure...} methods ran against this builder, registering the other
+	 * context's read models, automations and commands here, and its {@code start...} methods were
+	 * handed a context of a type they do not accept.
+	 * <p>
+	 * <b>A slice that is not this context's is dropped, not rejected.</b> One package holding several
+	 * contexts' slices is an ordinary layout — the banking examples are exactly that — so "not mine" is
+	 * a filter, not a mistake. It keeps them out of both inventories as well: a slice of another
+	 * context is not an undeployed slice of this one, it is none of this context's business. What a
+	 * mistyped slice costs is therefore silence, which is why the skip is logged (at DEBUG, since a
+	 * package deliberately shared between contexts would otherwise log every other context's slices on
+	 * every build).
+	 * <p>
+	 * The test is assignability rather than equality, and in that direction: a slice is handed this
+	 * context through {@code startCommand(C)} and friends, so it qualifies exactly when the type it
+	 * declared can accept one — a slice declared over a supertype of this context serves it, one
+	 * declared over a sibling or a subtype cannot. A declaration that fixes no context at all (a raw
+	 * {@code Slice}) is not evidence that it belongs elsewhere, and is kept, as is every slice when
+	 * nothing said what this context's type is.
+	 */
+	private boolean isSliceOfThisContext ( Class<?> sliceClass ) {
+		if ( contextType == null ) {
+			return true;
+		}
+		Class<?> declared = TypeArguments.of(sliceClass, Slice.class, 0);
+		if ( declared == null || declared.isAssignableFrom(contextType) ) {
+			return true;
+		}
+		LOGGER.debug("feature slice {} declares Slice<{}>, which cannot accept this context's {} -- not deployed here",
+				sliceClass.getSimpleName(), declared.getSimpleName(), contextType.getSimpleName());
+		return false;
+	}
+
+	/**
 	 * Rejects a component registered over another bounded context's event types.
 	 * <p>
 	 * Every registration on this builder is wildcard-typed — {@code readmodel(Class<? extends
@@ -668,7 +707,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		if ( contextRootType == null ) {
 			return;
 		}
-		Class<?> declared = EventTypeArguments.of(componentClass, declaringInterface, index);
+		Class<?> declared = TypeArguments.of(componentClass, declaringInterface, index);
 		if ( declared == null
 				|| declared.isAssignableFrom(contextRootType)
 				|| contextRootType.isAssignableFrom(declared) ) {
@@ -688,11 +727,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		if (  name == null ) {
 			throw new IllegalArgumentException("name not set");
 		}
-
-		rejectComponentsOfAnotherContextsEventTypes();
-		rejectReadModelsWithoutAChosenMode();
-		rejectLiveReadModelsThatCannotBeInstantiated();
-		rejectAutomationsWhoseTodoListIsNotProjectedHere();
 
 		logEventTypes("DOMAIN", domainEventRootType);
 		logEventTypes("INBOUND", inboundEventRootType);
@@ -777,6 +811,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			AnnotationBasedDiscoveryAndConfiguration.<Slice<C>>instantiateAndConfigure(
 					FeatureSlice.class,
 					featuresSpecification.rootPackage(),
+					this::isSliceOfThisContext,
 					featuresSpecification.filter(),
 					slice -> {
 							// Everything registered while this is set is attributed to this slice and to the
@@ -805,11 +840,23 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			AnnotationBasedDiscoveryAndConfiguration.<Slice<C>>instantiateAndConfigure(
 					FeatureSlice.class,
 					featuresSpecification.rootPackage(),
+					this::isSliceOfThisContext,
 					featuresSpecification.filter().negate(),
 					fs->{});
 		} else {
 			LOGGER.warn("no features rootPackage");
 		}
+
+		// Every registration has now happened -- the ones made directly on the builder and the ones the
+		// feature slices just made -- and no module exists yet. That is the one point at which these
+		// checks see everything they are about and cost nothing but the reading: run before the scan
+		// they would miss whatever a slice registers, which is how components are normally registered
+		// at all, and run from inside a module each would fail on its own kind, so a deployment with
+		// three mistakes would learn about them one build at a time.
+		rejectComponentsOfAnotherContextsEventTypes();
+		rejectReadModelsWithoutAChosenMode();
+		rejectLiveReadModelsThatCannotBeInstantiated();
+		rejectAutomationsWhoseTodoListIsNotProjectedHere();
 
 		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices, sliceMembers), name, meterRegistry);
 

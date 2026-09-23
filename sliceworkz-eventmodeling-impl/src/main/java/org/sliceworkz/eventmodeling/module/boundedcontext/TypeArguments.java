@@ -24,37 +24,39 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Reads the event type a component was declared over, so that a component registered on the wrong
- * bounded context can be named at {@code build()}.
+ * Resolves the actual type argument a class binds at a given position of an interface it implements,
+ * substituting the type variables bound along the way.
  * <p>
- * Every registration on {@link org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder} is
- * wildcard-typed — {@code readmodel(Class<? extends ReadModel<?>>)},
- * {@code automation(Automation<?,?,?>)} and the rest — so the compiler admits a component of another
- * context's event types. It cannot do otherwise: the builder is typed by the context alone
- * ({@code BoundedContextBuilder<C>}), Java has no way to project {@code D}, {@code I} and {@code O}
- * back out of {@code C extends BoundedContext<D,I,O>}, and the alternative — carrying all four as
- * type parameters, {@code BoundedContextBuilder<C,D,I,O>} — loses because that quartet then has to be
- * spelled out in every {@code Slice} signature a user writes, for a check the builder can make itself
- * from what {@code newBuilder} already resolved reflectively.
- * <p>
- * What it resolves is the actual type argument at {@code index} of {@code declaringInterface}, as the
- * component's own class implements it, substituting the type variables bound along the way — so a
- * read model extending {@code PublishingReadModel<BankingEvent,...>} answers {@code BankingEvent}
- * just as one implementing {@code ReadModel<BankingEvent>} directly does.
+ * Two registration checks need it, and both exist because a registration is wildcard-typed where the
+ * compiler cannot be given the constraint:
+ * <ul>
+ *   <li>the event type a component was declared over ({@code ReadModel<?>}, {@code Automation<?,?,?>}
+ *       and the rest on {@link org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder}),
+ *       against this context's own — the builder is typed by the context alone, and Java has no way
+ *       to project {@code D}, {@code I} and {@code O} back out of
+ *       {@code C extends BoundedContext<D,I,O>};</li>
+ *   <li>the bounded context a feature slice was declared for ({@code Slice<C>}), against the context
+ *       being built — package scanning hands back a {@code Class} and the cast to {@code Slice<C>} is
+ *       unchecked, so two contexts sharing a root package each discover the other's slices.</li>
+ * </ul>
+ * Because it walks the generic superclass and superinterfaces, a read model extending
+ * {@code PublishingReadModel<BankingEvent,...>} answers the same as one implementing
+ * {@code ReadModel<BankingEvent>} directly.
  */
-final class EventTypeArguments {
+final class TypeArguments {
 
-	private EventTypeArguments ( ) {
+	private TypeArguments ( ) {
 	}
 
 	/**
-	 * The event class a component's declaration fixes, or {@code null} where it fixes none — a raw
-	 * implementation, a type variable no declaration on the path binds, or a wildcard. Nothing is
-	 * rejected on a null: a declaration that does not name an event type is not evidence of the wrong
-	 * one.
+	 * The class the declaration fixes at {@code index} of {@code declaringInterface}, or {@code null}
+	 * where it fixes none — a raw implementation, a type variable no declaration on the path binds, or
+	 * a wildcard. Both callers read a null as "says nothing" rather than as evidence: a component whose
+	 * declaration names no event type is not evidence of the wrong one, and a slice whose declaration
+	 * names no context is not evidence that it belongs to another.
 	 */
-	static Class<?> of ( Class<?> componentClass, Class<?> declaringInterface, int index ) {
-		Type argument = argument(componentClass, declaringInterface, index, Map.of());
+	static Class<?> of ( Class<?> type, Class<?> declaringInterface, int index ) {
+		Type argument = argument(type, declaringInterface, index, Map.of());
 		return argument instanceof Class<?> clazz ? clazz : null;
 	}
 

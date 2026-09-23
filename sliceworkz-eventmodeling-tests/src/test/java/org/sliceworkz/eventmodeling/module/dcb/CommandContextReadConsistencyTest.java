@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
@@ -40,7 +41,6 @@ import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -64,7 +64,7 @@ public class CommandContextReadConsistencyTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(builder);
 
 		directStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"), MockDomainEvent.class);
+				.getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"), MockDomainEvent.class);
 
 		return domain;
 	}

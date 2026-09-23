@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.Untyped;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
@@ -41,7 +42,6 @@ import org.sliceworkz.eventstore.shredding.DataSubject;
 import org.sliceworkz.eventstore.shredding.ErasureReason;
 import org.sliceworkz.eventstore.shredding.Shreddable;
 import org.sliceworkz.eventstore.spi.EventStorage;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * The codec travels with the storage: a storage built with {@code .shredding(...)} carries it
@@ -118,7 +118,7 @@ public class ShreddingCarriedByTheStorageTest {
 
 	private static ShreddingDomainEvent.TransferMade transfer ( EventStore reader ) {
 		return (ShreddingDomainEvent.TransferMade) reader
-				.getEventStream(EventStreamId.forContext("ShreddingFromStorage").withPurpose("domain"), ShreddingDomainEvent.class)
+				.getEventStream(BoundedContextStreams.domain("ShreddingFromStorage"), ShreddingDomainEvent.class)
 				.query(EventQuery.matchAll()).stream().findFirst().orElseThrow().data();
 	}
 }

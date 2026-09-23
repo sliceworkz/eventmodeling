@@ -69,9 +69,12 @@ mvn compile exec:java -Dexec.mainClass="org.sliceworkz.eventmodeling.examples.ba
 
 The example demonstrates:
 - Creating a bounded context with in-memory event storage
-- Executing commands (OpenAccountCommand)
-- Querying read models (AccountDetailsReadModel, AccountOverviewReadModel)
-- Event stream subscriptions
+- Executing commands (OpenAccountCommand), and a `CommandWithResult` (OpenAccountWithResultCommand) for
+  when the caller needs what the command decided
+- Querying read models (AccountDetailsReadModel, AccountOverviewReadModel), and telling from
+  `published()` whether an eventually consistent read already includes the caller's own write
+- Narrowing the context to the application's surface (`BankingApi`) — and that application code never
+  opens the event stream itself
 
 **Closing The Books Example — bounded periods, and a read that is current without replaying (main method):**
 ```bash
@@ -1722,9 +1725,8 @@ bases, all synchronous and deterministic:**
 - Each base has its own `...RunsOnEveryBackendTest` in `sliceworkz-eventmodeling-tests`
   (`AutomationTestRunsOnEveryBackendTest`, `TranslatorTestRunsOnEveryBackendTest`,
   `DispatcherTestRunsOnEveryBackendTest`), same rationale as the command/live-model ones below — and they
-  also pin the `"inbound"`/`"outbound"` purpose literals behind the new
-  `inboundEventStreamId()`/`outboundEventStreamId()` helpers, which duplicate the builder
-  implementation's private constants
+  also pin that the streams behind `inboundEventStreamId()`/`outboundEventStreamId()` are the ones the
+  context writes to. Those helpers derive the ids from `BoundedContextStreams`, as the builder does
 
 **The published base classes run the same matrix, and that is the point of them being the same mechanism:**
 - `sliceworkz-eventmodeling-testing`'s `AbstractBoundedContextTest` — the base of `CommandTest`,
@@ -1816,10 +1818,32 @@ storage's clock), as are `Bookmark.updatedAt` and the timestamps of `StoredEvent
 **EventStream Usage:**
 ```java
 EventStream<DomainEvent> stream = eventStore.getEventStream(
-    EventStreamId.forContext("context-name").withPurpose("domain"),
+    BoundedContextStreams.domain("context-name"),
     DomainEvent.class
 );
 ```
+
+**Where a bounded context keeps its events is published, and application code does not go there.**
+A context runs on one stream per kind of event under its own name — `BoundedContextStreams.domain(name)`,
+`.inbound(name)`, `.outbound(name)`, with the purposes as constants beside them — and
+`BoundedContextBuilderImpl` builds its streams from the same helper, so the layout is written once.
+It is public because it is wire format with readers outside the context: the dashboard, the
+benchmark's progress tracking, and tests asserting on what a command appended. None of them holds a
+built context, and tooling usually runs in another process, so the layout is a function of the
+context's *name* rather than something to ask a live context. `BoundedContextStreamsTest` in the api
+module is the one place the literals are written out in a test; everything else derives them.
+- **There is deliberately no stream access on the bounded context.** Every reason application code
+  has to reach its events is served by something that carries a bookmark, a lease, retry and the
+  lifecycle events that say it is working: commands and aggregates to decide, read models to read
+  (with `published()`/`ReadModelResult.upTo()` to prove one includes the caller's own write), a todo
+  list and an automation to react, a translator for what comes in, a dispatcher for what goes out.
+  The alternative — a capability handing out a read handle on the context's streams — loses because
+  it invites the hand-rolled version of each: a subscription on a raw stream misses whatever is
+  appended while the process is down (the store replays no notification), runs on every instance, and
+  is not retried when it throws. And a caller that needs something a command decided, such as a
+  minted id, gets it from a `CommandWithResult` rather than by reading the event back out of the
+  stream by the reference a plain command returns — the examples' `OpenAccountWithResultCommand` and
+  `OpenBankAccountCommand` are that shape
 
 **Shutdown — who closes what:**
 

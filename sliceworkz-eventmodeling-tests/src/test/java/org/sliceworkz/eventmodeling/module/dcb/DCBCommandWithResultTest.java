@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
@@ -38,7 +39,6 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -63,7 +63,7 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 
 		directStream = EventStore.on(eventStorage()).build()
 				.getEventStream(
-						EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
+						BoundedContextStreams.domain("UnitTestBoundedContext"),
 						MockDomainEvent.class);
 
 		return domain;

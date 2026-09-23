@@ -26,6 +26,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.inbound.NoTranslatorRegisteredException;
 import org.sliceworkz.eventmodeling.inbound.Translator;
@@ -102,12 +103,12 @@ public class TranslateTest extends AbstractMockDomainTest {
 
 	private EventStream<MockDomainEvent> domainStream ( ) {
 		return EventStore.on(eventStorage()).build()
-			.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"), MockDomainEvent.class);
+			.getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"), MockDomainEvent.class);
 	}
 
 	private EventStream<MockInboundEvent> inboundStream ( ) {
 		return EventStore.on(eventStorage()).build()
-			.getEventStream(EventStreamId.anyContext().withPurpose("inbound"), MockInboundEvent.class);
+			.getEventStream(EventStreamId.anyContext().withPurpose(BoundedContextStreams.INBOUND), MockInboundEvent.class);
 	}
 
 	private BoundedContextBuilder<Mock> baseBuilder ( ) {

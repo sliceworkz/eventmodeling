@@ -24,6 +24,7 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.sliceworkz.eventmodeling.Untyped;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 
@@ -39,7 +40,6 @@ import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -72,7 +72,7 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 		// Step 1: Write events using the ORIGINAL event types (simulating legacy data)
 		EventStore eventStore = EventStore.on(eventStorage()).build();
 		EventStream<OriginalDomainEvent> originalStream = eventStore.getEventStream(
-				EventStreamId.forContext("test-historical").withPurpose("domain"),
+				BoundedContextStreams.domain("test-historical"),
 				OriginalDomainEvent.class);
 
 		originalStream.append(AppendCriteria.none(),
@@ -109,7 +109,7 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 		// Write an event using the ORIGINAL event types
 		EventStore eventStore = EventStore.on(eventStorage()).build();
 		EventStream<OriginalDomainEvent> originalStream = eventStore.getEventStream(
-				EventStreamId.forContext("test-historical").withPurpose("domain"),
+				BoundedContextStreams.domain("test-historical"),
 				OriginalDomainEvent.class);
 
 		originalStream.append(AppendCriteria.none(),

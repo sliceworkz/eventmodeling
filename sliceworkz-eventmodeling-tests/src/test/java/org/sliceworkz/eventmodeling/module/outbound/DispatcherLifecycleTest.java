@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -50,7 +51,6 @@ import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * A dispatcher's processor now reports its lifecycle the way a read model's projector does —
@@ -171,7 +171,7 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 	 */
 	private void appendOutbound ( MockOutboundEvent event ) {
 		EventStream<MockOutboundEvent> outboundStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("outbound"), MockOutboundEvent.class);
+				.getEventStream(BoundedContextStreams.outbound(CONTEXT_NAME), MockOutboundEvent.class);
 		outboundStream.append(AppendCriteria.none(), Event.of(event, Tags.none()));
 	}
 

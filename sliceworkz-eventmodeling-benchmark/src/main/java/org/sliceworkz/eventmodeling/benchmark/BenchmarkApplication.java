@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent.OrderRegistered;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
@@ -41,7 +42,6 @@ import org.sliceworkz.eventstore.infra.postgres.PostgresEventStorage;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventSource;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 
 public class BenchmarkApplication {
@@ -92,7 +92,7 @@ public class BenchmarkApplication {
 		// a second store on the same storage, for the progress queries below -- named so it can be
 		// closed at the end, since the bounded context only closes the store it built itself
 		EventStore progressEventStore = EventStore.on(eventStorage).build();
-		EventSource<String> domainStream = progressEventStore.getRawEventStream(EventStreamId.forContext(BOUNDED_CONTEXT_NAME).withPurpose("domain"));
+		EventSource<String> domainStream = progressEventStore.getRawEventStream(BoundedContextStreams.domain(BOUNDED_CONTEXT_NAME));
 
 
 		ExecutorService executor = Executors.newFixedThreadPool(PARALLEL_PRODUCERS);

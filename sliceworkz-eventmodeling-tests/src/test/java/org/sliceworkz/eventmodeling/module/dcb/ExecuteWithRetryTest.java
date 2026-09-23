@@ -34,6 +34,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandEx
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandFailed;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandFailedOnOptimisticLocking;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandRejected;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
@@ -58,7 +59,6 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 /**
@@ -88,7 +88,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 				.listener(event -> received.add(event.data()));
 		Mock domain = buildBoundedContext(builder);
 		domainStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class);
+				.getEventStream(BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class);
 		return domain;
 	}
 

@@ -48,6 +48,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextListener;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -99,10 +100,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(BoundedContextBuilderImpl.class);
-
-	private static final String PURPOSE_DOMAIN = "domain";
-	private static final String PURPOSE_INBOUND = "inbound";
-	private static final String PURPOSE_OUTBOUND = "outbound";
 
 	private Class<C> contextType;
 	private String name;
@@ -797,14 +794,14 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		EventStream outboundEventStream;
 
 		domainEventStream = historicalDomainEventRootType != null
-			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_DOMAIN), domainEventRootType, historicalDomainEventRootType)
-			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_DOMAIN), domainEventRootType);
+			? eventStore.getEventStream(BoundedContextStreams.domain(name), domainEventRootType, historicalDomainEventRootType)
+			: eventStore.getEventStream(BoundedContextStreams.domain(name), domainEventRootType);
 		inboundEventStream = historicalInboundEventRootType != null
-			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_INBOUND), inboundEventRootType, historicalInboundEventRootType)
-			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_INBOUND), inboundEventRootType);
+			? eventStore.getEventStream(BoundedContextStreams.inbound(name), inboundEventRootType, historicalInboundEventRootType)
+			: eventStore.getEventStream(BoundedContextStreams.inbound(name), inboundEventRootType);
 		outboundEventStream = historicalOutboundEventRootType != null
-			? eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OUTBOUND), outboundEventRootType, historicalOutboundEventRootType)
-			: eventStore.getEventStream(EventStreamId.forContext(name).withPurpose(PURPOSE_OUTBOUND), outboundEventRootType);
+			? eventStore.getEventStream(BoundedContextStreams.outbound(name), outboundEventRootType, historicalOutboundEventRootType)
+			: eventStore.getEventStream(BoundedContextStreams.outbound(name), outboundEventRootType);
 		readAllInStoreEventStream = eventStore.getRawEventStream(EventStreamId.anyContext().anyPurpose());
 
 		List<Slice<C>> deployedFeatureSlices = Collections.emptyList();

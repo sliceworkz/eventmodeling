@@ -25,6 +25,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.InvocationCountingEventStorage;
@@ -54,7 +55,7 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 
 	@ForEachBackend
 	void testInboundEventWithoutIdempotency ( ) {
-		EventStream<MockInboundEvent> inboundEvents = EventStore.on(countingStorage).build().getEventStream(EventStreamId.anyContext().withPurpose("inbound"), MockInboundEvent.class);
+		EventStream<MockInboundEvent> inboundEvents = EventStore.on(countingStorage).build().getEventStream(EventStreamId.anyContext().withPurpose(BoundedContextStreams.INBOUND), MockInboundEvent.class);
 		int eventsBefore = inboundEvents.query(EventQuery.matchAll()).size();
 		
 		var inboundEvent = new SomeInboundEvent("test");
@@ -68,7 +69,7 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 
 	@ForEachBackend
 	void testInboundEventWithIdempotency ( ) {
-		EventStream<MockInboundEvent> inboundEvents = EventStore.on(countingStorage).build().getEventStream(EventStreamId.anyContext().withPurpose("inbound"), MockInboundEvent.class);
+		EventStream<MockInboundEvent> inboundEvents = EventStore.on(countingStorage).build().getEventStream(EventStreamId.anyContext().withPurpose(BoundedContextStreams.INBOUND), MockInboundEvent.class);
 		int eventsBefore = inboundEvents.query(EventQuery.matchAll()).size();
 		
 		var inboundEvent = new SomeInboundEvent("test");
@@ -93,7 +94,7 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 	
 	@ForEachBackend
 	void testInboundEventWithIdempotencyOnHash ( ) {
-		EventStream<MockInboundEvent> inboundEvents = EventStore.on(countingStorage).build().getEventStream(EventStreamId.anyContext().withPurpose("inbound"), MockInboundEvent.class);
+		EventStream<MockInboundEvent> inboundEvents = EventStore.on(countingStorage).build().getEventStream(EventStreamId.anyContext().withPurpose(BoundedContextStreams.INBOUND), MockInboundEvent.class);
 		int eventsBefore = inboundEvents.query(EventQuery.matchAll()).size();
 		
 		var e1 = new SomeInboundEvent("test");
@@ -132,7 +133,7 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 	 */
 	@ForEachBackend
 	void testAnInboundEventThatCannotBeAppendedIsReportedToTheCaller ( ) {
-		EventStream<MockInboundEvent> inboundEvents = EventStore.on(eventStorage()).build().getEventStream(EventStreamId.anyContext().withPurpose("inbound"), MockInboundEvent.class);
+		EventStream<MockInboundEvent> inboundEvents = EventStore.on(eventStorage()).build().getEventStream(EventStreamId.anyContext().withPurpose(BoundedContextStreams.INBOUND), MockInboundEvent.class);
 		int eventsBefore = inboundEvents.query(EventQuery.matchAll()).size();
 
 		countingStorage.failAppendsWith(new OptimisticLockingException(EventFilter.matchAll(), Optional.empty()));

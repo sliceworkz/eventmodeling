@@ -35,6 +35,7 @@ import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -51,7 +52,6 @@ import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -67,7 +67,7 @@ public class ProvidedEventIdempotencyTest extends AbstractMockDomainTest {
 	@BeforeEach
 	void openDomainStream ( ) {
 		domainStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
+				.getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"),
 						MockDomainEvent.class);
 	}
 

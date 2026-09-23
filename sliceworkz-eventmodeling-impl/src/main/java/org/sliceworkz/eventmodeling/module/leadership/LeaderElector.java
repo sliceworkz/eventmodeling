@@ -19,6 +19,15 @@ package org.sliceworkz.eventmodeling.module.leadership;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +69,38 @@ import org.sliceworkz.eventstore.spi.EventStorage.LeaseResponse;
  * no earlier than {@code ttl}. Demote-before-takeover, so two leaders do not overlap — except for a
  * process paused beyond its ttl, which no lease can prevent and the fencing token exists to expose.
  *
+ * <h3>Which is why the deadline owes the storage nothing</h3>
+ * Demoting is a local act — a flag and a {@code volatile} field on the processor — so it must not
+ * depend on a storage call answering, and here it does not:
+ * <ul>
+ *   <li><b>The deadline is judged before each lease's storage call, never only after one came back.</b>
+ *       Judging it in the failure handler alone ties the demotion to how long the storage takes to say
+ *       no: against an unreachable database every request blocks for the connection pool's timeout
+ *       (tens of seconds, typically far beyond the ttl), and one that hangs on a dead socket never
+ *       says no at all — so the leadership would be held on, past the moment a challenger may take the
+ *       lease, by exactly the failure the rule exists for.</li>
+ *   <li><b>Every storage call is bounded, and a round is bounded as a whole.</b> The calls run on
+ *       virtual threads of the elector's own and are waited on for at most {@link #roundBudgetMs()}
+ *       per round — half a heartbeat — so the round always ends well within a heartbeat and the next
+ *       one re-judges every deadline. Without that bound the calls are made one lease at a time on
+ *       the elector's own thread, and a storage that stalls makes the deadline of the second lease be
+ *       judged only after the first has timed out: N leases, N connection timeouts, and a demotion
+ *       arbitrarily far past the takeover. A round therefore stays a heartbeat apart from the next
+ *       one whatever the storage does, which is the granularity the rule above already assumes.</li>
+ *   <li><b>A request that outlives its budget stays in flight and is picked up by a later round</b>,
+ *       and no second request is issued for that lease meanwhile — so a stalled storage costs one
+ *       outstanding call per lease, exactly as the unbounded loop did, rather than one per heartbeat.
+ *       An answer is dated from when its request was <em>issued</em>, never from when it came back:
+ *       the storage stamped the heartbeat somewhere in between, and only the earlier of the two is
+ *       safe to call the last confirmation. An answer that arrives after the local deadline has
+ *       passed proves nothing — the lease it reports may since have expired and been taken — and is
+ *       dropped rather than acted on.</li>
+ * </ul>
+ * The alternative — leaving the bound to the storage, by asking deployments to configure the pool's
+ * connection and socket timeouts below the ttl — loses because the ttl is this builder's setting and
+ * the timeouts are the application's, with nothing keeping the two in step, and because a read on a
+ * silently dead connection is bounded by neither.
+ *
  * <h2>Step-down (fail-back)</h2>
  * A renewal answered {@code LEADER_STEP_DOWN_REQUESTED} demotes the processor at once — it finishes
  * its current batch and parks — and releases the lease one heartbeat later, giving the batch a full
@@ -91,6 +132,11 @@ public class LeaderElector implements Runnable {
 	// what the heartbeat thread parks on between rounds -- a lock and condition rather than a monitor,
 	// so the parked virtual thread holds no carrier (see Parking)
 	private final Parking sleeper = new Parking();
+	// where the storage calls run, so that a slow or hanging one parks a thread of its own and never
+	// the elector's -- which is what keeps the local deadline judgeable while the storage is silent.
+	// A virtual thread per call: nothing is held while no call is outstanding, and a call abandoned at
+	// the round's budget ends its own thread when the storage finally answers or times out.
+	private final ExecutorService storageCalls;
 	private volatile boolean terminating;
 	private volatile boolean paused;
 	private volatile boolean leasesUnsupported;
@@ -105,6 +151,10 @@ public class LeaderElector implements Runnable {
 		// out of that election until this deadline, so another instance gets the lease first, and
 		// re-contends afterwards if nobody did
 		long contendAgainAtMs;
+		// a request the storage has not answered within a round's budget: it is waited on again by the
+		// later rounds instead of being re-issued, and dated from when it was issued
+		Future<LeaseResponse> inFlight;
+		long requestedAtMs;
 
 		LeaseState ( Electable electable ) {
 			this.electable = electable;
@@ -125,19 +175,22 @@ public class LeaderElector implements Runnable {
 		// both leaders, exactly what the lease exists to prevent. The random suffix costs nothing: a
 		// fresh contender identity per elector is wanted anyway, since fail-back rides on priority and
 		// never on owner identity, and a terminated elector's leases are released or expire.
-		this.owner = ownerBase + "-" + Long.toHexString(java.util.concurrent.ThreadLocalRandom.current().nextLong() | Long.MIN_VALUE);
+		this.owner = ownerBase + "-" + Long.toHexString(ThreadLocalRandom.current().nextLong() | Long.MIN_VALUE);
 		this.priority = priority;
 		this.heartbeatInterval = heartbeatInterval;
 		this.ttl = ttl;
 		this.leases = electables.stream().map(LeaseState::new).toList();
 		this.eventEmitter = eventEmitter;
+		this.storageCalls = Executors.newThreadPerTaskExecutor(
+				Thread.ofVirtual().name("leader-elector-storage/" + boundedContext + "/", 0).factory());
 	}
 
 	/**
 	 * Runs one synchronous election round and starts the heartbeat thread (once). Called from the
 	 * bounded context's own {@code start()}, so a single instance — or the preferred one on a quiet
 	 * deployment — is already leader before its processors take their first loop pass, instead of a
-	 * heartbeat interval later.
+	 * heartbeat interval later. The round is bounded like any other, so a storage that is not
+	 * answering delays the start by half a heartbeat rather than by a connection timeout per lease.
 	 */
 	public synchronized void start ( ) {
 		paused = false;
@@ -169,18 +222,26 @@ public class LeaderElector implements Runnable {
 		synchronized ( this ) {
 			releaseEverything(null);
 		}
+		// interrupts whatever calls are still outstanding rather than waiting them out: this runs from
+		// a JVM shutdown hook too, where a storage that has stopped answering must not hold up the exit
+		storageCalls.shutdownNow();
 	}
 
 	@Override
 	public void run ( ) {
 		LOGGER.debug("leader elector of '{}' running, {} lease(s), heartbeat {}, ttl {}", boundedContext, leases.size(), heartbeatInterval, ttl);
+		// rounds are kept a heartbeat apart measured from the START of the previous one, so a round
+		// that spent its budget waiting on a slow storage does not push the next one — and with it
+		// every local deadline it judges — a further heartbeat out
+		long roundStartedAtMs = System.currentTimeMillis();
 		while ( !terminating && !leasesUnsupported ) {
 			try {
-				sleeper.park(heartbeatInterval.toMillis(), () -> terminating);
+				sleeper.park(roundStartedAtMs + heartbeatInterval.toMillis() - System.currentTimeMillis(), () -> terminating);
 			} catch ( InterruptedException e ) {
 				Thread.currentThread().interrupt();
 				break;
 			}
+			roundStartedAtMs = System.currentTimeMillis();
 			if ( !terminating && !paused ) {
 				synchronized ( this ) {
 					electOnce();
@@ -191,21 +252,27 @@ public class LeaderElector implements Runnable {
 	}
 
 	/**
-	 * One election round: request (or release) every lease and apply the outcome to its processor.
-	 * Guarded by {@code synchronized(this)} at every caller, so a round from the heartbeat thread and
-	 * one from {@code start()}/{@code stop()} never interleave.
+	 * One election round: judge every local deadline, then request (or release) every lease and apply
+	 * the outcome to its processor. Guarded by {@code synchronized(this)} at every caller, so a round
+	 * from the heartbeat thread and one from {@code start()}/{@code stop()} never interleave.
 	 */
 	private void electOnce ( ) {
 		if ( leasesUnsupported ) {
 			return;
 		}
+		long budgetEndsAtMs = System.currentTimeMillis() + roundBudgetMs();
 		for ( LeaseState state : leases ) {
 			try {
+				// The safety rule, judged BEFORE this lease's storage call rather than after it failed:
+				// a leadership nothing has re-confirmed within the local deadline is given up here,
+				// whether the storage is answering with an error, slowly, or not at all.
+				demoteIfUnconfirmed(state, null);
+
 				if ( state.releaseNextRound ) {
 					// second half of a step-down: the demoted processor has had a full heartbeat
 					// interval to finish its batch; hand the lease over now
 					state.releaseNextRound = false;
-					eventStorage.releaseLease(state.leaseName(), owner);
+					releaseLease(state, budgetEndsAtMs);
 					LOGGER.info("'{}' handed its lease over after stepping down", state.leaseName());
 					continue;
 				}
@@ -224,7 +291,7 @@ public class LeaderElector implements Runnable {
 						demote(state, LeadershipReleaseReason.PROCESSOR_STOPPED);
 						// a throw here lands in the catch below and is retried next heartbeat; state.leader
 						// is already false by then, so worst case the lease expires on the storage's ttl
-						eventStorage.releaseLease(state.leaseName(), owner);
+						releaseLease(state, budgetEndsAtMs);
 					}
 					continue;
 				}
@@ -243,7 +310,7 @@ public class LeaderElector implements Runnable {
 					state.contendAgainAtMs = System.currentTimeMillis() + ttl.toMillis();
 					// a throw here lands in the catch below; state.leader is already false, so worst
 					// case the lease expires on the storage's ttl instead of being handed over promptly
-					eventStorage.releaseLease(state.leaseName(), owner);
+					releaseLease(state, budgetEndsAtMs);
 					continue;
 				}
 
@@ -253,16 +320,24 @@ public class LeaderElector implements Runnable {
 					continue;
 				}
 
-				LeaseResponse response = eventStorage.requestLease(new LeaseRequest(state.leaseName(), owner, priority, ttl));
+				LeaseResponse response = requestLease(state, budgetEndsAtMs);
+				if ( response == null ) {
+					// the storage has not answered within this round's budget, so this round confirms
+					// nothing: the request stays in flight for a later round to pick up, and the deadline
+					// -- re-judged here, since the wait may have consumed the whole budget -- is all that
+					// decides this leadership meanwhile
+					demoteIfUnconfirmed(state, "the storage has not answered the lease request yet");
+					continue;
+				}
 				switch ( response.status() ) {
 					case LEADER -> {
-						state.lastConfirmedMs = System.currentTimeMillis();
+						state.lastConfirmedMs = state.requestedAtMs;
 						if ( !state.leader ) {
 							promote(state, response.fencingToken());
 						}
 					}
 					case LEADER_STEP_DOWN_REQUESTED -> {
-						state.lastConfirmedMs = System.currentTimeMillis();
+						state.lastConfirmedMs = state.requestedAtMs;
 						if ( state.leader ) {
 							LOGGER.info("a higher-priority contender is waiting for '{}', stepping down", state.leaseName());
 							demote(state, LeadershipReleaseReason.STEPPED_DOWN);
@@ -270,7 +345,7 @@ public class LeaderElector implements Runnable {
 						} else {
 							// asked to step down from a lease we never told the processor about
 							// (promotion and step-down in between rounds): nothing ran, release at once
-							eventStorage.releaseLease(state.leaseName(), owner);
+							releaseLease(state, budgetEndsAtMs);
 						}
 					}
 					case STANDBY -> {
@@ -285,20 +360,112 @@ public class LeaderElector implements Runnable {
 				fallBackToAlwaysLeader();
 				return;
 			} catch ( RuntimeException e ) {
-				// A failed round confirms nothing. The safety rule: give up a leadership that cannot be
-				// re-confirmed before the storage's ttl can hand the lease elsewhere -- one heartbeat
-				// early, since a challenger acquires no sooner than ttl on the storage clock.
-				long unconfirmedForMs = System.currentTimeMillis() - state.lastConfirmedMs;
-				long localDeadlineMs = Math.max(heartbeatInterval.toMillis(), ttl.toMillis() - heartbeatInterval.toMillis());
-				if ( state.leader && unconfirmedForMs >= localDeadlineMs ) {
-					LOGGER.warn("could not renew the lease of '{}' for {} ms, demoting rather than assume a leadership that cannot be proven: {}",
-							state.leaseName(), unconfirmedForMs, e.getMessage());
-					demote(state, LeadershipReleaseReason.RENEWAL_FAILED);
-				} else {
+				// A failed round confirms nothing either, and the deadline is judged the same way it is
+				// for one that never answered.
+				if ( !demoteIfUnconfirmed(state, e.getMessage()) ) {
 					LOGGER.warn("lease request for '{}' failed, retrying on the next heartbeat: {}", state.leaseName(), e.getMessage());
 				}
 			}
 		}
+	}
+
+	/**
+	 * Gives up a leadership that has not been re-confirmed within the local deadline — one heartbeat
+	 * before the storage's ttl could hand the lease elsewhere, since a challenger acquires no sooner
+	 * than that on the storage clock. Answers whether it demoted, so a caller reporting a failure can
+	 * tell a round that merely failed from one that cost the leadership.
+	 */
+	private boolean demoteIfUnconfirmed ( LeaseState state, String because ) {
+		if ( !state.leader ) {
+			return false;
+		}
+		long unconfirmedForMs = System.currentTimeMillis() - state.lastConfirmedMs;
+		if ( unconfirmedForMs < localDeadlineMs() ) {
+			return false;
+		}
+		LOGGER.warn("the lease of '{}' has not been confirmed for {} ms, demoting rather than assume a leadership that cannot be proven{}",
+				state.leaseName(), unconfirmedForMs, because == null ? "" : ": " + because);
+		demote(state, LeadershipReleaseReason.RENEWAL_FAILED);
+		return true;
+	}
+
+	/**
+	 * Requests (or renews) this lease, waiting no longer than what is left of the round's budget.
+	 * Answers {@code null} when the storage has not answered within it — the request stays in flight
+	 * and a later round waits on it again, so a stalled storage costs one outstanding call per lease
+	 * rather than one per heartbeat. An answer that arrives after the local deadline has passed is
+	 * dropped: the lease it reports may since have expired and been taken by a challenger, and acting
+	 * on it would be the takeover overlap this elector exists to prevent.
+	 */
+	private LeaseResponse requestLease ( LeaseState state, long budgetEndsAtMs ) {
+		if ( state.inFlight == null ) {
+			LeaseRequest request = new LeaseRequest(state.leaseName(), owner, priority, ttl);
+			state.requestedAtMs = System.currentTimeMillis();
+			state.inFlight = call(() -> eventStorage.requestLease(request));
+		}
+		try {
+			LeaseResponse response = state.inFlight.get(remaining(budgetEndsAtMs), TimeUnit.MILLISECONDS);
+			state.inFlight = null;
+			if ( System.currentTimeMillis() - state.requestedAtMs >= localDeadlineMs() ) {
+				LOGGER.warn("the lease request for '{}' was answered after {} ms, too late to prove anything: discarding it",
+						state.leaseName(), System.currentTimeMillis() - state.requestedAtMs);
+				return null;
+			}
+			return response;
+		} catch ( TimeoutException stillRunning ) {
+			return null;
+		} catch ( InterruptedException e ) {
+			Thread.currentThread().interrupt();
+			return null;
+		} catch ( ExecutionException e ) {
+			state.inFlight = null;
+			throw e.getCause() instanceof RuntimeException failure ? failure : new IllegalStateException(e.getCause());
+		}
+	}
+
+	/**
+	 * Releases this lease, waiting no longer than what is left of the round's budget. A release the
+	 * storage does not acknowledge in time is left to run on its own: it is best effort either way,
+	 * since an unreleased lease expires on its ttl, and waiting it out would spend the budget the
+	 * remaining leases' deadlines need.
+	 */
+	private void releaseLease ( LeaseState state, long budgetEndsAtMs ) {
+		Future<Void> release = call(() -> {
+			eventStorage.releaseLease(state.leaseName(), owner);
+			return null;
+		});
+		try {
+			release.get(remaining(budgetEndsAtMs), TimeUnit.MILLISECONDS);
+		} catch ( TimeoutException stillRunning ) {
+			LOGGER.debug("the release of lease '{}' has not been acknowledged yet, leaving it to run", state.leaseName());
+		} catch ( InterruptedException e ) {
+			Thread.currentThread().interrupt();
+		} catch ( ExecutionException e ) {
+			throw e.getCause() instanceof RuntimeException failure ? failure : new IllegalStateException(e.getCause());
+		}
+	}
+
+	private <T> Future<T> call ( Supplier<T> storageCall ) {
+		return CompletableFuture.supplyAsync(storageCall, storageCalls);
+	}
+
+	private static long remaining ( long budgetEndsAtMs ) {
+		return Math.max(0, budgetEndsAtMs - System.currentTimeMillis());
+	}
+
+	/**
+	 * How long one round may spend waiting on the storage, all its leases together: half a heartbeat,
+	 * so a round always ends well within the heartbeat that separates it from the next — which is the
+	 * granularity at which the local deadlines are judged — while still leaving the elector parked
+	 * rather than spinning when every request is already in flight.
+	 */
+	private long roundBudgetMs ( ) {
+		return Math.max(1, heartbeatInterval.toMillis() / 2);
+	}
+
+	/** One heartbeat before the storage's ttl, which is the earliest a challenger may acquire. */
+	private long localDeadlineMs ( ) {
+		return Math.max(heartbeatInterval.toMillis(), ttl.toMillis() - heartbeatInterval.toMillis());
 	}
 
 	private void promote ( LeaseState state, long fencingToken ) {
@@ -344,6 +511,7 @@ public class LeaderElector implements Runnable {
 		if ( leasesUnsupported ) {
 			return;
 		}
+		long budgetEndsAtMs = System.currentTimeMillis() + roundBudgetMs();
 		for ( LeaseState state : leases ) {
 			state.releaseNextRound = false;
 			if ( state.leader ) {
@@ -354,7 +522,7 @@ public class LeaderElector implements Runnable {
 							state.electable.identification().type(), state.electable.identification().id(), reason));
 				}
 				try {
-					eventStorage.releaseLease(state.leaseName(), owner);
+					releaseLease(state, budgetEndsAtMs);
 				} catch ( RuntimeException e ) {
 					// best effort: an unreleased lease simply expires after its ttl
 					LOGGER.debug("could not release lease '{}', it will expire on its own: {}", state.leaseName(), e.getMessage());

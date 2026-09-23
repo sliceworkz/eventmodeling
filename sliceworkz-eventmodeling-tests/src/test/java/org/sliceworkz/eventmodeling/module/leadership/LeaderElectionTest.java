@@ -396,13 +396,143 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	}
 
 	/**
+	 * A leader whose lease requests <em>stall</em> — the shape of an unreachable database, where every
+	 * request blocks for the connection pool's timeout and one on a dead socket never returns at all —
+	 * must still give its leadership up on its own clock, so the standby that acquires the expired
+	 * lease is not a second leader. Judged only in the failure handler the demotion would wait for the
+	 * request to fail, which here it never does: the elector's own thread is the one blocked in it.
+	 * Fails by timeout without the bounded call and the deadline judged before it.
+	 */
+	@Test
+	public void testALeaderWhoseLeaseRequestsStallGivesUpItsLeadershipAnyway ( ) {
+		StallingLeaseStorage stalling = new StallingLeaseStorage(eventStorage());
+		RecordingAutomation onA = new RecordingAutomation("node-a");
+		RecordingAutomation onB = new RecordingAutomation("node-b");
+
+		BoundedContextBuilder<Mock> builderA = newInstanceBuilder("node-a", 0).eventStorage(stalling);
+		builderA.readmodel(onA.todoList()).eventuallyConsistent();
+		builderA.automation(onA);
+		Mock nodeA = startInstance(builderA);
+		// started alone, so its synchronous start round made it leader before B even exists
+		assertTrue(leaderFlagOf(nodeA), "the first-started instance must lead");
+
+		BoundedContextBuilder<Mock> builderB = newInstanceBuilder("node-b", 0);
+		builderB.readmodel(onB.todoList()).eventuallyConsistent();
+		builderB.automation(onB);
+		Mock nodeB = startInstance(builderB);
+
+		stalling.stallLeaseRequests();
+		try {
+			await().atMost(Duration.ofSeconds(15)).untilAsserted(
+					() -> assertTrue(!leaderFlagOf(nodeA), "a leadership that cannot be re-confirmed must be given up"));
+
+			// only now is there work: the hand-over is what is under test, not what the still-leading
+			// instance managed to handle before its deadline passed
+			appendWork(nodeB, "while-a-is-blind-1", "while-a-is-blind-2");
+			await().atMost(Duration.ofSeconds(15)).untilAsserted(
+					() -> assertTrue(onB.handled().containsAll(List.of("while-a-is-blind-1", "while-a-is-blind-2")),
+							"the instance whose storage answers must take the work over, but handled only: " + onB.handled()));
+			assertEquals(List.of(), onA.handled(), "the demoted instance must handle nothing while it cannot prove it leads");
+		} finally {
+			stalling.answerLeaseRequestsAgain();
+		}
+	}
+
+	/**
+	 * And one stalled lease must not postpone the next one's demotion. The requests are made per
+	 * lease, so made one at a time on the elector's own thread they queue behind each other: with a
+	 * storage that never answers, the second processor's deadline would never even be judged, and an
+	 * instance carrying N leader-only processors would hold N leaderships it cannot prove. Fails by
+	 * timeout for the read model's projector without the bounded call.
+	 */
+	@Test
+	public void testAStalledLeaseDoesNotPostponeTheDemotionOfTheOnesBehindIt ( ) {
+		StallingLeaseStorage stalling = new StallingLeaseStorage(eventStorage());
+		RecordingAutomation automation = new RecordingAutomation("node-a");
+
+		BoundedContextBuilder<Mock> builder = newInstanceBuilder("node-a", 0).eventStorage(stalling);
+		builder.readmodel(automation.todoList()).eventuallyConsistent();
+		builder.automation(automation);
+		builder.readmodel(new SharedApplyLog()).eventuallyConsistent();
+		Mock nodeA = startInstance(builder);
+		assertTrue(leaderFlagOf(nodeA), "the only instance must lead its automation");
+		assertTrue(sharedProjectorLeads(nodeA), "the only instance must lead its shared read model's projector");
+
+		stalling.stallLeaseRequests();
+		try {
+			await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+				assertTrue(!leaderFlagOf(nodeA), "the automation's leadership must be given up");
+				assertTrue(!sharedProjectorLeads(nodeA), "the read model projector's leadership must be given up too");
+			});
+		} finally {
+			stalling.answerLeaseRequestsAgain();
+		}
+	}
+
+	private static boolean sharedProjectorLeads ( Mock context ) {
+		return context.processors().stream()
+				.filter(processor -> SharedApplyLog.class.getSimpleName().equals(processor.name()))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("no processor for the shared read model"))
+				.leader();
+	}
+
+	/**
+	 * A delegating storage whose {@code requestLease} can be made to block indefinitely, which is what
+	 * an unreachable database looks like from the elector: not an exception, but a call that does not
+	 * come back. Everything else — appends, queries, bookmarks, the release — keeps working, so the
+	 * scenario is about the election alone.
+	 */
+	static class StallingLeaseStorage extends LeaselessStorage {
+
+		private final java.util.concurrent.CountDownLatch answerAgain = new java.util.concurrent.CountDownLatch(1);
+		private volatile boolean stalling;
+
+		StallingLeaseStorage ( org.sliceworkz.eventstore.spi.EventStorage delegate ) {
+			super(delegate);
+		}
+
+		void stallLeaseRequests ( ) {
+			stalling = true;
+		}
+
+		void answerLeaseRequestsAgain ( ) {
+			stalling = false;
+			answerAgain.countDown();
+		}
+
+		@Override
+		public LeaseResponse requestLease ( LeaseRequest request ) {
+			if ( stalling ) {
+				try {
+					answerAgain.await();
+				} catch ( InterruptedException e ) {
+					Thread.currentThread().interrupt();
+					throw new IllegalStateException(e);
+				}
+			}
+			return delegate.requestLease(request);
+		}
+
+		@Override
+		public void releaseLease ( String leaseName, String owner ) {
+			delegate.releaseLease(leaseName, owner);
+		}
+
+		@Override
+		public List<org.sliceworkz.eventstore.events.Lease> getLeases ( ) {
+			return delegate.getLeases();
+		}
+	}
+
+	/**
 	 * A delegating storage that does not override the lease operations, so they hit the SPI defaults
 	 * and throw {@code UnsupportedOperationException} — exactly what an {@code EventStorage}
 	 * implementation written before leases existed looks like.
 	 */
 	static class LeaselessStorage implements org.sliceworkz.eventstore.spi.EventStorage {
 
-		private final org.sliceworkz.eventstore.spi.EventStorage delegate;
+		final org.sliceworkz.eventstore.spi.EventStorage delegate;
 
 		LeaselessStorage ( org.sliceworkz.eventstore.spi.EventStorage delegate ) {
 			this.delegate = delegate;

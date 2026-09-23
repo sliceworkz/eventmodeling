@@ -15,20 +15,17 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.examples.banking.features.monthstatement;
+package org.sliceworkz.eventmodeling.mock.multicontext;
 
-import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
- * Read model for viewing a specific month's bank statement.
- * <p>
- * For closed months, this projection is effectively immutable and
- * very fast to load — only the events tagged with that specific
- * month are replayed (thanks to the month tag filter).
+ * A slice declared over a supertype of every bounded context, which can therefore accept any of them
+ * and is deployed by all of them.
  */
-@FeatureSlice(type = Type.STATE_READ, context = "banking", chapter = "Closing The Books")
-public class MonthStatementFeatureSlice implements Slice<ClosingTheBooks> {
+@FeatureSlice(type = Type.UNDEFINED, context = "any")
+public class AnyContextFeatureSlice implements Slice<BoundedContext<?,?,?>> {
 }

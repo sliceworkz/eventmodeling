@@ -15,20 +15,22 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.examples.banking.features.monthstatement;
+package org.sliceworkz.eventmodeling.mock.multicontext;
 
-import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
-import org.sliceworkz.eventmodeling.slices.Slice;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventQuery;
 
-/**
- * Read model for viewing a specific month's bank statement.
- * <p>
- * For closed months, this projection is effectively immutable and
- * very fast to load — only the events tagged with that specific
- * month are replayed (thanks to the month tag filter).
- */
-@FeatureSlice(type = Type.STATE_READ, context = "banking", chapter = "Closing The Books")
-public class MonthStatementFeatureSlice implements Slice<ClosingTheBooks> {
+/** A read model of {@link OtherContext}, over event types the Mock context never holds. */
+public class OtherContextReadModel implements ReadModel<OtherDomainEvent> {
+
+	@Override
+	public EventQuery eventQuery ( ) {
+		return EventQuery.matchAll();
+	}
+
+	@Override
+	public void when ( Event<OtherDomainEvent> event ) {
+	}
+
 }

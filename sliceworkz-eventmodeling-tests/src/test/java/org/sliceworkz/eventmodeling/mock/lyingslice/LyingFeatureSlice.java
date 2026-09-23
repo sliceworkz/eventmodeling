@@ -15,35 +15,26 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.examples.banking.features.closemonth;
+package org.sliceworkz.eventmodeling.mock.lyingslice;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
-import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
+import org.sliceworkz.eventmodeling.mock.multicontext.OtherContextReadModel;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
- * Feature slice for the "Closing The Books" pattern.
- * <p>
- * This is both a STATE_CHANGE (the CloseMonthCommand) and an AUTOMATION
- * (the MonthEndClosingAutomation). Using OTHER here since the feature
- * combines multiple pattern types.
- * <p>
- * Components:
- * <ul>
- *   <li>{@link CloseMonthCommand} — closes current month, opens next</li>
- *   <li>{@link AccountsToCloseTodoList} — identifies accounts needing closing</li>
- *   <li>{@link MonthEndClosingAutomation} — processes the todo list</li>
- * </ul>
+ * A slice of the Mock context that registers another context's read model — the mistake the
+ * context-type filter on the scan cannot catch, since this slice really is a {@code Slice<Mock>}.
+ * What catches it is the registration check, which is why that has to run after the scan.
  */
-@FeatureSlice(type = Type.AUTOMATION, context = "banking", chapter = "Closing The Books",
-	tags = {"closing-the-books", "month-end"})
-public class CloseMonthFeatureSlice implements Slice<ClosingTheBooks> {
+@FeatureSlice(type = Type.STATE_READ, context = "mock")
+public class LyingFeatureSlice implements Slice<Mock> {
 
 	@Override
-	public void configureCommand(BoundedContextBuilder<ClosingTheBooks> builder) {
-		builder.command(CloseMonthCommand.class);
+	public void configureQuery ( BoundedContextBuilder<Mock> builder ) {
+		builder.readmodel(OtherContextReadModel.class).live();
 	}
 
 }

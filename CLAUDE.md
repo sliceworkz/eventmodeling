@@ -262,13 +262,13 @@ the other, and when advising on who holds what, name the audience.
 Features are organized as vertical slices:
 
 1. **@FeatureSlice annotation**: Classes annotated with `@FeatureSlice` are discovered via package scanning
-2. **Slice interface**: Feature slices implement `Slice<C>` where `C` is the bounded context type (e.g., `Slice<Banking>`)
+2. **Slice interface**: Feature slices implement `Slice<C>` where `C` is the bounded context type (e.g., `Slice<Banking>`). That declaration is what decides which context deploys the slice when several share a root package — see "A feature slice is scanned for the bounded context it declares" below
 3. **Types of feature slices**:
    - `STATE_CHANGE`: Commands that change state
    - `STATE_READ`: Read models that project state
    - `AUTOMATION`: Process managers/sagas
    - `TRANSLATION`: Inbound event handlers
-   - `OTHER`: Utility features
+   - `UNDEFINED`: anything the four patterns do not name
 
 **Feature Slice Structure:**
 ```
@@ -1426,6 +1426,102 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   only test that does: the other dispatcher tests assert registration-time validation, and the published
   `DispatcherTest` base deliberately drives a dispatcher without registering it, so without this test the
   wiring from `builder.dispatcher(...)` to `when()` could break with every suite still green
+
+### Registration is wildcard-typed, and `build()` is where the event types are checked
+
+**Every registration on `BoundedContextBuilder` takes a wildcard** — `readmodel(Class<? extends
+ReadModel<?>>)`, `readmodel(ReadModel<?>)`, `aggregate(Class<? extends Aggregate<?>>)`,
+`automation(Automation<?,?,?>)`, `translator(Translator<?,?>)`, `dispatcher(Dispatcher<?>)` — so the
+compiler admits a payments read model on the banking context. The builder knows the three event types
+(`newBuilder` resolves them off the context interface and calls `eventTypes(...)`), but only at
+runtime: it is typed `BoundedContextBuilder<C>`, and Java offers no way to project `D`, `I` and `O`
+back out of `C extends BoundedContext<D,I,O>`.
+
+- **The failure it prevents is silent, which is why it is checked at all.** The framework hands a
+  component its events through an erased `Projection`, so nothing casts and nothing throws; the
+  component's own `eventQuery()` names stored types that never occur on this context's stream, so the
+  query matches nothing and the read model, dispatcher or todo list simply stays empty, for good —
+  no exception, no `BoundedContextEvent`, no log line. Same shape as an automation whose todo list
+  nobody projects, and caught in the same place for the same reason
+- **`rejectComponentsOfAnotherContextsEventTypes` runs first among `build()`'s rejections**, naming
+  every offender at once with the component, the event type it was declared over and this context's —
+  both fully qualified, since the mistake this catches is two contexts whose event roots often differ
+  by package alone. It runs first because a component of the wrong context usually trips the later
+  checks too, on facts that are beside the point
+- **Only *unrelated* types are refused.** A component over a **supertype** of this context's root is
+  legitimate — the dashboard's analytics `ReadModel<Object>` projects whatever it is handed — and so is
+  one over a **branch** of the sealed hierarchy, whose `eventQuery()` is what keeps the other branches
+  away from it. Neither can be told from a mistake from here, and a check that rejects a legitimate
+  registration is worse than none (the rule `rejectAutomationsWhoseTodoListIsNotProjectedHere` already
+  states). A declaration that fixes no event class at all — a generic read model registered as an
+  instance, whose class implements `ReadModel<E>` — is not evidence of the wrong one either, and passes
+- **The alternative — `BoundedContextBuilder<C,D,I,O>`, which would put this in the compiler — loses
+  on what it costs every slice.** Java can infer the quartet at `newBuilder(Class<C>)`, but not at a
+  *use* of the builder type, so `Slice<C>`'s four `configure...` methods, `FeaturesSpecification`,
+  `AggregateSpecification`, both read model specifications and `AdapterBinding` would all carry it, and
+  every slice a user writes would declare `void configureQuery ( BoundedContextBuilder<Banking,
+  BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> builder )` where it now names one
+  type. That is the same trade the `BankingApi` alias exists to avoid, paid at every slice, for a check
+  the builder can make itself from what it already resolved
+- **All four of `build()`'s rejections run after the feature slices have been configured**, which is
+  the only point at which they see everything they are about: a slice registers from
+  `configureCommand`/`configureQuery`/`configureAutomation`/`configureProjection`, and those run
+  *inside* `build()`. Placed before the scan — where they used to be — they saw only what was
+  registered directly on the builder, so a read model without a mode, a live model nothing can
+  construct, an automation whose todo list is not projected here and a component of another context
+  all went unchecked for the way components are normally registered at all. They still run before any
+  module is constructed, so a declaration error costs no processor, no subscription and no projector's
+  bookmark round trip
+- **They stay one phase on the builder rather than moving into the modules**, which is where each kind
+  is otherwise handled. A module is constructed after the streams are open and would fail on its own
+  kind only, so a deployment with a foreign translator and three foreign read models would learn about
+  them one build at a time, and a pure declaration error would open a store and four streams before
+  saying so. `ProcessorNames` is the same call made for the same reason: one validator the four
+  registries share, not one rule per module
+- `TypeArguments` resolves the argument through the generic superclass or superinterface it is bound
+  on, so a read model extending `PublishingReadModel<BankingEvent,...>` answers the same as one
+  implementing `ReadModel<BankingEvent>` directly. `ForeignEventTypeRegistrationTest` pins the six
+  registrations, both of an automation's and a translator's two event types, every offender being named
+  at once, and the three shapes that are deliberately accepted;
+  `FeatureSliceScanIsPerContextTest.aComponentASliceRegistersIsCheckedToo` pins that a slice's
+  registrations are checked too, and fails with nothing thrown if the checks move back before the scan
+
+### A feature slice is scanned for the bounded context it declares
+
+**A slice says which context it belongs to — `class OpenAccountFeatureSlice implements Slice<Banking>`
+— and package scanning hands back a bare `Class`, so the cast to `Slice<C>` is unchecked.** Nothing
+held a slice to the context it named: two bounded contexts whose slices share a root package each
+discovered *all* of them, ran the other's `configure...` methods against their own builder, and counted
+the other's slices in their own inventory. The banking examples are that layout — `Banking` and
+`ClosingTheBooks` both scan `...examples.banking` — so this is the ordinary case, not a corner.
+
+- **A slice that is not this context's is dropped, not rejected.** One package holding several
+  contexts' slices is a legitimate layout, so "not mine" is a filter and not a mistake. It is kept out
+  of *both* inventories: a slice of another context is not an undeployed slice of this one — which is
+  what `disabledFeatures` means — it is none of this context's business
+- **The test is assignability, in the direction the slice is used.** A slice is handed this context
+  through `startCommand(C)` and a `BoundedContextBuilder<C>` through `configureCommand`, so it
+  qualifies exactly when the type it declared can accept the one being built: a slice over a
+  *supertype* (`Slice<BoundedContext<?,?,?>>`, deployed by every context) serves it, one over a sibling
+  or a subtype cannot. A raw `Slice` fixes no context and is kept, on the same rule as a component
+  whose declaration fixes no event type
+- **The filter runs on the class, before the slice is instantiated.** A scanned package may hold
+  classes that are none of this caller's business, and `instantiateAndConfigure` turns a throw from a
+  constructor into the caller's build failure — so another context's slice must not be constructed
+  here at all. That is what the `Predicate<Class<?>>` overload of
+  `AnnotationBasedDiscoveryAndConfiguration.instantiateAndConfigure` is for, and it is the one thing
+  that separates it from the instance predicate a `filter(...)` supplies: that one says "not here",
+  this one says "not mine"
+- **What a mistyped slice now costs is silence** — it is simply not deployed, where before it was
+  deployed by the wrong context. The skip is logged at DEBUG rather than INFO, since a package
+  deliberately shared between contexts would otherwise log every other context's slices on every build;
+  a slice that does not turn up is diagnosed by turning that logger up. The registration check above is
+  the backstop for the other half of the mistake — a slice that declares the right context and
+  registers another one's components, which no filter on the declaration can see
+- `FeatureSliceScanIsPerContextTest` pins it over a package holding two contexts' slices plus one
+  declared over a supertype: each context deploys its own and the shared one, the foreign slice is
+  neither configured nor counted in either inventory, and the same package scanned by the other context
+  yields the mirror image
 
 ### Component names are bookmark keys
 

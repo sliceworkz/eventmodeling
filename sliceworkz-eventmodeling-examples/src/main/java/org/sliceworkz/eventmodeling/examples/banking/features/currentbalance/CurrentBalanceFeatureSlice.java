@@ -17,7 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.currentbalance;
 
-import org.sliceworkz.eventmodeling.examples.banking.Banking;
+import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
@@ -31,5 +31,5 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * {@link CurrentBalanceReadModel}.
  */
 @FeatureSlice(type = Type.STATE_READ, context = "banking", chapter = "Closing The Books")
-public class CurrentBalanceFeatureSlice implements Slice<Banking> {
+public class CurrentBalanceFeatureSlice implements Slice<ClosingTheBooks> {
 }

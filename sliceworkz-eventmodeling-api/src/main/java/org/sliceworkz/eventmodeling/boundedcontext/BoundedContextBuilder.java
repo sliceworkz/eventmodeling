@@ -42,6 +42,35 @@ import org.sliceworkz.eventstore.stream.EventStream;
 
 import io.micrometer.core.instrument.MeterRegistry;
 
+/**
+ * Configures a bounded context and, from {@link #build()}, produces it.
+ *
+ * <p><b>Every registration on this builder is wildcard-typed</b> — {@link #readmodel(Class)},
+ * {@link #automation(Automation)}, {@link #translator(Translator)} and the rest take
+ * {@code ReadModel<?>}, {@code Automation<?,?,?>}, {@code Translator<?,?>} — so the compiler admits a
+ * component declared over another bounded context's event types. It cannot do otherwise: a builder is
+ * typed by its context alone, and Java offers no way to project {@code D}, {@code I} and {@code O}
+ * back out of {@code C extends BoundedContext<D,I,O>}. The alternative — carrying all four as type
+ * parameters, {@code BoundedContextBuilder<C,D,I,O>} — would hand the check to the compiler, and loses
+ * because that quartet then has to be spelled out in every {@link org.sliceworkz.eventmodeling.slices.Slice}
+ * signature a user writes, where a single context type reads as what it is.
+ *
+ * <p>So {@code build()} makes the check itself, from the event types
+ * {@link BoundedContext#newBuilder(Class)} resolved off the context interface, and rejects a component
+ * whose declared event type is <em>unrelated</em> to this context's — naming every offender at once,
+ * as it does for a read model whose mode nobody chose. Nothing further down would: the framework hands
+ * a component its events through an erased projection, and the component's own {@code eventQuery()}
+ * names types that never occur on this context's stream, so it would simply stay empty for good, with
+ * no exception, no {@link BoundedContextEvent} and no log line.
+ *
+ * <p>A component declared over a <em>supertype</em> of this context's root is accepted — a read model
+ * over {@code Object} projects whatever it is handed, which is what an analytics model across contexts
+ * does — and so is one over a branch of the hierarchy, whose {@code eventQuery()} is what keeps the
+ * other branches away from it. Neither can be told from a mistake, and a check that rejects a
+ * legitimate registration is worse than none.
+ *
+ * @param <C> the bounded context type this builder produces
+ */
 public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
 	BoundedContextBuilder<C> name(String name);
@@ -265,14 +294,47 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 */
 	BoundedContextBuilder<C> command(Class<?>... commandClasses);
 
+	/**
+	 * Registers an aggregate, which decides within the identity its events are tagged with.
+	 *
+	 * @throws IllegalArgumentException from {@link #build()} when its declared domain event type is
+	 *         unrelated to this context's — see the note on wildcard-typed registration above
+	 */
 	AggregateSpecification<C> aggregate(Class<? extends Aggregate<?>> aggregateClass);
 
+	/**
+	 * Registers a read model built afresh for each read, from that read's parameters. Say how it is
+	 * projected with {@link LiveModelSpecification#live()}.
+	 *
+	 * @throws IllegalArgumentException from {@link #build()} when its declared domain event type is
+	 *         unrelated to this context's — see the note on wildcard-typed registration above
+	 */
 	LiveModelSpecification<C> readmodel(Class<? extends ReadModel<?>> readModelClass);
 
+	/**
+	 * Registers a read model as the one long-lived instance a processor of its own projects in the
+	 * background. Say so with {@link EventuallyConsistentReadModelSpecification#eventuallyConsistent()}.
+	 *
+	 * @throws IllegalArgumentException from {@link #build()} when its declared domain event type is
+	 *         unrelated to this context's — see the note on wildcard-typed registration above
+	 */
 	EventuallyConsistentReadModelSpecification<C> readmodel(ReadModel<?> readModel);
 
+	/**
+	 * Registers an automation, which works through the items its todo list projects. The todo list
+	 * itself is registered separately, {@code readmodel(todoList).eventuallyConsistent()}.
+	 *
+	 * @throws IllegalArgumentException from {@link #build()} when its declared domain or outbound event type is
+	 *         unrelated to this context's — see the note on wildcard-typed registration above
+	 */
 	BoundedContextBuilder<C> automation(Automation<?,?,?> automation);
 
+	/**
+	 * Registers a translator, which turns the inbound events matching its query into domain events.
+	 *
+	 * @throws IllegalArgumentException from {@link #build()} when its declared inbound or domain event type is
+	 *         unrelated to this context's — see the note on wildcard-typed registration above
+	 */
 	BoundedContextBuilder<C> translator(Translator<?,?> translator);
 
 	/**
@@ -285,9 +347,17 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 *         or its constructor threw. The message names the class and the remedy, and a constructor's
 	 *         own throwable is the cause. Register an instance instead where the translator takes
 	 *         constructor arguments
+	 * @throws IllegalArgumentException from {@link #build()} when its declared inbound or domain event type is
+	 *         unrelated to this context's — see the note on wildcard-typed registration above
 	 */
 	BoundedContextBuilder<C> translator(Class<? extends Translator<?,?>> translatorClass);
 
+	/**
+	 * Registers a dispatcher, the outbound stream's reader and the only thing publishing it onward.
+	 *
+	 * @throws IllegalArgumentException from {@link #build()} when its declared outbound event type is
+	 *         unrelated to this context's — see the note on wildcard-typed registration above
+	 */
 	BoundedContextBuilder<C> dispatcher(Dispatcher<?> dispatcher);
 
 	/**
@@ -300,6 +370,8 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 *         or its constructor threw. The message names the class and the remedy, and a constructor's
 	 *         own throwable is the cause. Register an instance instead where the dispatcher takes
 	 *         constructor arguments
+	 * @throws IllegalArgumentException from {@link #build()} when its declared outbound event type is
+	 *         unrelated to this context's — see the note on wildcard-typed registration above
 	 */
 	BoundedContextBuilder<C> dispatcher(Class<? extends Dispatcher<?>> dispatcherClass);
 

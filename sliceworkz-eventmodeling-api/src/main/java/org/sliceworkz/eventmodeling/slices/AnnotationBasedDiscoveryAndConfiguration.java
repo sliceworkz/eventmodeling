@@ -39,11 +39,33 @@ public class AnnotationBasedDiscoveryAndConfiguration {
     private static final Logger LOGGER = LoggerFactory.getLogger(AnnotationBasedDiscoveryAndConfiguration.class);
 
     public static <T> List<T> instantiateAndConfigure(Class<? extends java.lang.annotation.Annotation> annotationClass, Package basePackage, Predicate<T> predicate, Consumer<T> consumer ) {
+        return instantiateAndConfigure(annotationClass, basePackage, clazz -> true, predicate, consumer);
+    }
+
+    /**
+     * As {@link #instantiateAndConfigure(Class, Package, Predicate, Consumer)}, with a filter applied to
+     * the <b>class</b> before it is instantiated.
+     * <p>
+     * Two things separate it from {@code predicate}, which judges the instance. It keeps a class that is
+     * none of this caller's business from being constructed at all — a scanned package may hold classes
+     * meant for somebody else, and constructing one costs its constructor's work and turns a throw in it
+     * into this caller's failure. And what it rejects is dropped entirely rather than reported as found
+     * and not wanted: {@code predicate} says "not here", this says "not mine".
+     *
+     * @param classFilter judged on the annotated class; a class it rejects is neither instantiated,
+     *        configured nor returned, and is logged at DEBUG so that one excluded by mistake can still
+     *        be found
+     */
+    public static <T> List<T> instantiateAndConfigure(Class<? extends java.lang.annotation.Annotation> annotationClass, Package basePackage, Predicate<Class<?>> classFilter, Predicate<T> predicate, Consumer<T> consumer ) {
         List<Class<?>> classesWithAnnotationInPackage = findAnnotatedClasses(basePackage.getName(), annotationClass);
 
         List<T> result = new ArrayList<>();
         
         for (Class<?> classToBeInstantiated : classesWithAnnotationInPackage) {
+            if ( !classFilter.test(classToBeInstantiated) ) {
+                LOGGER.debug("skipping annotated class {}: not for this caller", classToBeInstantiated.getCanonicalName());
+                continue;
+            }
             try {
                 LOGGER.info("found annotated class {}", classToBeInstantiated.getCanonicalName());
                 @SuppressWarnings("unchecked")

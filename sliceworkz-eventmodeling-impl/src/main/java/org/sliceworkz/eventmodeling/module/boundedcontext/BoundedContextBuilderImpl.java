@@ -585,6 +585,138 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 	}
 
+	/**
+	 * Whether a scanned {@code @FeatureSlice} class is a slice of <em>this</em> bounded context.
+	 * <p>
+	 * A slice declares the context it belongs to — {@code class OpenAccountFeatureSlice implements
+	 * Slice<Banking>} — and the scan hands back a bare {@code Class}, so the cast to {@code Slice<C>}
+	 * is unchecked and nothing at compile time or at runtime held a slice to the context it named. Two
+	 * bounded contexts whose slices share a root package therefore each discovered the other's: the
+	 * foreign slices' {@code configure...} methods ran against this builder, registering the other
+	 * context's read models, automations and commands here, and its {@code start...} methods were
+	 * handed a context of a type they do not accept.
+	 * <p>
+	 * <b>A slice that is not this context's is dropped, not rejected.</b> One package holding several
+	 * contexts' slices is an ordinary layout — the banking examples are exactly that — so "not mine" is
+	 * a filter, not a mistake. It keeps them out of both inventories as well: a slice of another
+	 * context is not an undeployed slice of this one, it is none of this context's business. What a
+	 * mistyped slice costs is therefore silence, which is why the skip is logged (at DEBUG, since a
+	 * package deliberately shared between contexts would otherwise log every other context's slices on
+	 * every build).
+	 * <p>
+	 * The test is assignability rather than equality, and in that direction: a slice is handed this
+	 * context through {@code startCommand(C)} and friends, so it qualifies exactly when the type it
+	 * declared can accept one — a slice declared over a supertype of this context serves it, one
+	 * declared over a sibling or a subtype cannot. A declaration that fixes no context at all (a raw
+	 * {@code Slice}) is not evidence that it belongs elsewhere, and is kept, as is every slice when
+	 * nothing said what this context's type is.
+	 */
+	private boolean isSliceOfThisContext ( Class<?> sliceClass ) {
+		if ( contextType == null ) {
+			return true;
+		}
+		Class<?> declared = TypeArguments.of(sliceClass, Slice.class, 0);
+		if ( declared == null || declared.isAssignableFrom(contextType) ) {
+			return true;
+		}
+		LOGGER.debug("feature slice {} declares Slice<{}>, which cannot accept this context's {} -- not deployed here",
+				sliceClass.getSimpleName(), declared.getSimpleName(), contextType.getSimpleName());
+		return false;
+	}
+
+	/**
+	 * Rejects a component registered over another bounded context's event types.
+	 * <p>
+	 * Every registration on this builder is wildcard-typed — {@code readmodel(Class<? extends
+	 * ReadModel<?>>)}, {@code automation(Automation<?,?,?>)}, {@code translator(Translator<?,?>)} and
+	 * the rest — so the compiler admits a read model of the payments context on the banking one. It
+	 * cannot do otherwise: the builder is typed by the context alone, and Java offers no way to project
+	 * {@code D}, {@code I} and {@code O} back out of {@code C extends BoundedContext<D,I,O>}. The
+	 * alternative — carrying all four as type parameters, {@code BoundedContextBuilder<C,D,I,O>} —
+	 * would put the check in the compiler, and loses because that quartet then has to be spelled out in
+	 * every {@code Slice} signature a user writes, where a single context type reads as what it is.
+	 * <p>
+	 * So the builder checks it itself, from the root types {@code newBuilder} already resolved off the
+	 * context interface. Nothing further down does: the framework hands the component its events through
+	 * an erased {@code Projection}, and the component's own {@code eventQuery()} names types that never
+	 * occur on this context's stream — so the query matches nothing and the read model, dispatcher or
+	 * todo list simply stays empty, for good, with no exception, no bounded-context event and no log
+	 * line. That is the same silent shape {@link #rejectAutomationsWhoseTodoListIsNotProjectedHere}
+	 * catches, and it is caught here for the same reason.
+	 * <p>
+	 * <b>Only unrelated types are refused.</b> A component declared over a supertype of this context's
+	 * root is legitimate — a read model over {@code Object} projects whatever it is handed, which is what
+	 * an analytics model across contexts does — and so is one declared over a branch of the hierarchy,
+	 * whose {@code eventQuery()} is what keeps the other branches away from it. Neither can be told from
+	 * a mistake here, and a check that rejects a legitimate registration is worse than none. What no
+	 * declaration and no query can make sensible is a component whose event type and this context's have
+	 * nothing to do with each other, which is exactly the registration this names.
+	 * <p>
+	 * A declaration that fixes no event class at all — a raw implementation, a type variable left open —
+	 * is not evidence of the wrong one and passes, as does a check whose root type was never set.
+	 */
+	private void rejectComponentsOfAnotherContextsEventTypes ( ) {
+		List<String> foreign = new ArrayList<>();
+		for ( LiveModelSpecificationImpl spec : liveModelSpecs ) {
+			Class<?> readModelClass = spec.readModelClass();
+			checkEventType(foreign, "readmodel", readModelClass.getSimpleName(),
+					readModelClass, ReadModel.class, 0, "domain", domainEventRootType);
+		}
+		for ( EventuallyConsistentReadModelSpecificationImpl spec : eventuallyConsistentReadModelSpecs ) {
+			ReadModel<?> readModel = spec.readModel();
+			checkEventType(foreign, "readmodel", readModel.readmodelName(),
+					readModel.getClass(), ReadModel.class, 0, "domain", domainEventRootType);
+		}
+		for ( AggregateSpecificationImpl spec : aggregateSpecifications ) {
+			Class<?> aggregateClass = spec.aggregateClass();
+			checkEventType(foreign, "aggregate", aggregateClass.getSimpleName(),
+					aggregateClass, Aggregate.class, 0, "domain", domainEventRootType);
+		}
+		for ( Automation<?,?,?> automation : automations ) {
+			String name = automation.getClass().getSimpleName();
+			checkEventType(foreign, "automation", name,
+					automation.getClass(), Automation.class, 1, "domain", domainEventRootType);
+			checkEventType(foreign, "automation", name,
+					automation.getClass(), Automation.class, 2, "outbound", outboundEventRootType);
+		}
+		for ( Translator<?,?> translator : translatorSpecs ) {
+			String name = translator.getClass().getSimpleName();
+			checkEventType(foreign, "translator", name,
+					translator.getClass(), Translator.class, 0, "inbound", inboundEventRootType);
+			checkEventType(foreign, "translator", name,
+					translator.getClass(), Translator.class, 1, "domain", domainEventRootType);
+		}
+		for ( Dispatcher<?> dispatcher : dispatcherSpecs ) {
+			checkEventType(foreign, "dispatcher", dispatcher.getClass().getSimpleName(),
+					dispatcher.getClass(), Dispatcher.class, 0, "outbound", outboundEventRootType);
+		}
+		if ( !foreign.isEmpty() ) {
+			throw new IllegalArgumentException(
+					"component registered over another bounded context's event types: " + String.join(", ", foreign));
+		}
+	}
+
+	/**
+	 * Adds an offender for a component whose declared event type at {@code index} of
+	 * {@code declaringInterface} is unrelated to this context's {@code contextRootType}. The type
+	 * arguments are named in full, since the mistake this catches is two contexts whose event roots
+	 * often differ by package alone.
+	 */
+	private void checkEventType ( List<String> offenders, String kind, String name, Class<?> componentClass,
+			Class<?> declaringInterface, int index, String role, Class<?> contextRootType ) {
+		if ( contextRootType == null ) {
+			return;
+		}
+		Class<?> declared = TypeArguments.of(componentClass, declaringInterface, index);
+		if ( declared == null
+				|| declared.isAssignableFrom(contextRootType)
+				|| contextRootType.isAssignableFrom(declared) ) {
+			return;
+		}
+		offenders.add("%s %s (its %s event type is %s, where this context's is %s)"
+				.formatted(kind, name, role, declared.getName(), contextRootType.getName()));
+	}
+
 	@Override
 	public C build ( ) {
 		Class<?> returnType = contextType != null ? contextType : BoundedContext.class;
@@ -595,10 +727,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		if (  name == null ) {
 			throw new IllegalArgumentException("name not set");
 		}
-
-		rejectReadModelsWithoutAChosenMode();
-		rejectLiveReadModelsThatCannotBeInstantiated();
-		rejectAutomationsWhoseTodoListIsNotProjectedHere();
 
 		logEventTypes("DOMAIN", domainEventRootType);
 		logEventTypes("INBOUND", inboundEventRootType);
@@ -683,6 +811,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			AnnotationBasedDiscoveryAndConfiguration.<Slice<C>>instantiateAndConfigure(
 					FeatureSlice.class,
 					featuresSpecification.rootPackage(),
+					this::isSliceOfThisContext,
 					featuresSpecification.filter(),
 					slice -> {
 							// Everything registered while this is set is attributed to this slice and to the
@@ -711,11 +840,23 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			AnnotationBasedDiscoveryAndConfiguration.<Slice<C>>instantiateAndConfigure(
 					FeatureSlice.class,
 					featuresSpecification.rootPackage(),
+					this::isSliceOfThisContext,
 					featuresSpecification.filter().negate(),
 					fs->{});
 		} else {
 			LOGGER.warn("no features rootPackage");
 		}
+
+		// Every registration has now happened -- the ones made directly on the builder and the ones the
+		// feature slices just made -- and no module exists yet. That is the one point at which these
+		// checks see everything they are about and cost nothing but the reading: run before the scan
+		// they would miss whatever a slice registers, which is how components are normally registered
+		// at all, and run from inside a module each would fail on its own kind, so a deployment with
+		// three mistakes would learn about them one build at a time.
+		rejectComponentsOfAnotherContextsEventTypes();
+		rejectReadModelsWithoutAChosenMode();
+		rejectLiveReadModelsThatCannotBeInstantiated();
+		rejectAutomationsWhoseTodoListIsNotProjectedHere();
 
 		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices, sliceMembers), name, meterRegistry);
 

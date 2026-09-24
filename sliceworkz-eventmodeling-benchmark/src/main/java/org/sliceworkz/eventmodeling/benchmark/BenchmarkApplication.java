@@ -43,9 +43,6 @@ import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
-import io.javalin.Javalin;
-import io.micrometer.prometheusmetrics.PrometheusConfig;
-import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 
 public class BenchmarkApplication {
 	
@@ -73,24 +70,6 @@ public class BenchmarkApplication {
 		
 		DatabaseInitMode databaseInitMode = finalInitializeDatabase?DatabaseInitMode.RECREATE:DatabaseInitMode.VALIDATE;
 		
-		/**
-		 * Starting PrometheusRegistry and Javalin REST API to expose metrics 
-		 */
-		PrometheusMeterRegistry prometheusMeterRegistry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT); 
-		
-		// Javalin framework for REST
-		var javalin = Javalin.create(config -> {
-			config.concurrency.useVirtualThreads = true; // Enables virtual threads for all request handling
-			if ( prometheusMeterRegistry != null ) {
-				// Expose metrics endpoint for Prometheus to scrape
-				config.routes.get("/metrics", ctx -> {
-					ctx.contentType("text/plain; version=0.0.4")
-						.result(prometheusMeterRegistry.scrape());
-				});
-			}
-		});
-		javalin.start(7072);
-		
 		LOGGER.info("starting ...");
 		
 //		EventStorage eventStorage = InMemoryEventStorage.newBuilder().build();
@@ -98,7 +77,6 @@ public class BenchmarkApplication {
 		EventStorage eventStorage = PostgresEventStorage.newBuilder().dataSource(dataSource).prefix("benchmark_").databaseInitMode(databaseInitMode).build();
 
 		OrderProcessing bc = BoundedContext.newBuilder(OrderProcessing.class)
-				.meterRegistry(prometheusMeterRegistry)
 				.name(BOUNDED_CONTEXT_NAME)
 				.instance(InstanceFactory.determine(BOUNDED_CONTEXT_NAME))
 				.eventStorage(eventStorage)
@@ -121,8 +99,8 @@ public class BenchmarkApplication {
 
 		Instant start = Instant.now();
 		
-		// silently de-duplicated ingests are visible on the sliceworkz.eventstore.append.deduplicated
-		// counter (purpose=inbound for this loop); a clean run scrapes 0 there
+		// silently de-duplicated ingests are visible to an EventStoreObserver as appends answering
+		// Outcome.Duplicated (purpose=inbound for this loop); a clean run reports none
 
 		AtomicInteger orderNumbering = new AtomicInteger();
 		
@@ -190,7 +168,6 @@ public class BenchmarkApplication {
 		} catch (IOException e) {
 		}
 
-		javalin.stop();
 
 		// Release in ownership order: the bounded context first (it closes the store it built over this
 		// storage), then the store this method built itself, then the storage -- which shuts down its

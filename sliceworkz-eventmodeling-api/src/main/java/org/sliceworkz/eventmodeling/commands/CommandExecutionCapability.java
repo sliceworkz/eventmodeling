@@ -80,7 +80,7 @@ public interface CommandExecutionCapability<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TY
 	//   key, the retried append de-duplicates and returns Optional.empty() -- for an at-least-once
 	//   caller that is success, the work was already done.
 	// - Every attempt is observable on its own: each conflict emits CommandFailedOnOptimisticLocking
-	//   and increments the command meters exactly as a plain execute() does, so a consumer counts
+	//   and is an observed CommandExecution exactly as a plain execute() is, so a consumer counts
 	//   attempts rather than needing a dedicated exhaustion event.
 	//
 	// Inside an automation's handle() this is the "failure worth retrying in milliseconds" retry

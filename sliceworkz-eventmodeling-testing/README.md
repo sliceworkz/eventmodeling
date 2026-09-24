@@ -261,6 +261,27 @@ builder**; the end-to-end delivery path through a registered dispatcher is the f
 into, not the event storage — and it has always covered both H2 and PostgreSQL through a `@Nested`
 class per database. `postgresDataSource(String image)` picks the server version where that matters.
 
+## Asserting on what a context reports
+
+`RecordingBoundedContextObserver` is a `BoundedContextObserver` that keeps everything it is told, for
+a test that wants to assert on what a metrics or tracing binding would see — a command's outcome, a
+snapshot miss and its reason, what an automation run handled:
+
+```java
+RecordingBoundedContextObserver observer = new RecordingBoundedContextObserver();
+Banking banking = BoundedContext.newBuilder(Banking.class) /* ... */ .observer(observer).build();
+
+banking.execute(new WithdrawCommand(accountId, amount));
+
+Recording execution = observer.last(Observation.CommandExecution.class);
+assertEquals("insufficient funds", execution.outcome(Outcome.Rejected.class).reason());
+assertEquals(List.of(), observer.violations());   // every scope answered once and closed in order
+```
+
+Each recording keeps its parent, so a test can check that a snapshot load nests under the aggregate
+load it belongs to. It is the counterpart of the eventstore's `RecordingObserver`, for the framework's
+own observations.
+
 ## What a test gets
 
 Beyond the fluent `given/when/then` of each base class, `AbstractBoundedContextTest` exposes:

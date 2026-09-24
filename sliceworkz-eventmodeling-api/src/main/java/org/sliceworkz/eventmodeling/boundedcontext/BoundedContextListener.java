@@ -35,8 +35,9 @@ import org.sliceworkz.eventstore.events.EphemeralEvent;
  * operation. Implementations must be fast and thread-safe, or buffer/offload work asynchronously.
  * <p>
  * <strong>A failure here never fails the operation being observed.</strong> An exception escaping
- * {@link #on(EphemeralEvent)} is contained by the kernel, logged at ERROR and counted on the
- * {@code sliceworkz.eventmodeling.listener.failure} meter; the command, automation batch or
+ * {@link #on(EphemeralEvent)} is contained by the kernel, logged at ERROR and reported to the
+ * context's {@link org.sliceworkz.eventmodeling.observability.BoundedContextObserver#listenerFailed
+ * observer}; the command, automation batch or
  * projection that produced the event carries on exactly as if no listener were registered. This
  * matters most where the event is emitted <em>after</em> the work is already durable — a
  * {@link BoundedContextEvent.CommandExecuted} whose delivery threw would otherwise report a

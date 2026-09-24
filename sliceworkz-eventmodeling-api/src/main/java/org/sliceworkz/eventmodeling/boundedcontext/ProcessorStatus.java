@@ -27,7 +27,7 @@ package org.sliceworkz.eventmodeling.boundedcontext;
  * @param kind what kind of processor this is; with {@code name} the address
  *        {@link ProcessorAdminCapability#restartProcessor} takes
  * @param name the processor's name — a read model's {@code readmodelName()}, a translator's or
- *        dispatcher's class simple name — the same string its bookmark, metric tags and the
+ *        dispatcher's class simple name — the same string its bookmark, its observations and the
  *        bounded-context events use
  * @param componentClass the simple name of the implementing class
  * @param storage where the component keeps its state: {@code ephemeral}, {@code local} or

@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
@@ -37,6 +36,9 @@ import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAdmin;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
@@ -54,10 +56,6 @@ import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
-
 public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
 
 	private EventStream<INBOUND_EVENT_TYPE> inboundEventStream;
@@ -71,17 +69,15 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	private ProcessorThreadManager<INBOUND_EVENT_TYPE> processorThreadManager;
 	private Instance instance;
 
-	private MeterRegistry meterRegistry;
+	private BoundedContextObserver observer;
 	private BoundedContextEventEmitter eventEmitter;
 	private ProjectorProcessorAdmin admin;
-	private ConcurrentHashMap<String, Counter> translatorCounters = new ConcurrentHashMap<>();
-	private ConcurrentHashMap<String, Timer> translatorTimers = new ConcurrentHashMap<>();
 
-	public InboundModule ( String boundedContext, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> eventuallyConsistentTranslators, Instance instance, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
+	public InboundModule ( String boundedContext, EventStream<INBOUND_EVENT_TYPE> inboundEventStream, Collection<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> eventuallyConsistentTranslators, Instance instance, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.inboundEventStream = inboundEventStream;
 		this.instance = instance;
-		this.meterRegistry = meterRegistry;
+		this.observer = observer;
 		this.eventEmitter = eventEmitter;
 		this.admin = new ProjectorProcessorAdmin(ProcessorKind.TRANSLATOR, boundedContext);
 		this.translators = new ArrayList<>(eventuallyConsistentTranslators);
@@ -119,7 +115,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 							.shared()
 							.build(),
 					inboundEventStream,
-					new TranslatorAdapter(t, ()->context, Tracing.actorAndChannel(t.getClass().getSimpleName(), "translation").instance(instance)),
+					new TranslatorAdapter(t, ()->context),
 					ProcessorMode.RUNNING_ON_SINGLE_LEADER,
 					instance,
 					translatorListener(t));
@@ -202,21 +198,16 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 		private Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator;
 		private Supplier<TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> context;
-		private Tracing tracing;
 		private String translatorName;
 
-		public TranslatorAdapter(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator, Supplier<TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> context, Tracing tracing) {
+		public TranslatorAdapter(Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator, Supplier<TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> context) {
 			this.translator = translator;
 			this.context = context;
-			this.tracing = tracing;
 			this.translatorName = translator.getClass().getSimpleName();
 		}
 
 		@Override
 		public void when(Event<INBOUND_EVENT_TYPE> eventWithMeta) {
-			String eventName = EventType.of(eventWithMeta.data().getClass()).name();
-			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-
 			// one translation is one step of one flow: the tracing is derived per inbound event, and the
 			// correlation id is the inbound event's when it carries one - the translation continues that
 			// flow - or freshly minted when it does not (a legacy event's translation starts its own)
@@ -227,8 +218,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 			}
 			TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> tracedContext = new TracingTranslatorContext<>(context.get(), eventTracing);
 
-			countTranslation(translatorName, eventName, channel);
-			translationTimer(translatorName, eventName, channel).record(() -> translator.translate(eventWithMeta.data(), tracedContext));
+			invoke(translator, translatorName, eventWithMeta.type(), eventTracing, () -> translator.translate(eventWithMeta.data(), tracedContext));
 		}
 
 		@Override
@@ -237,19 +227,17 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		}
 	}
 
-	private void countTranslation ( String translatorName, String eventName, String channel ) {
-		String cacheKey = translatorName + ":" + eventName + ":" + channel;
-		Counter counter = translatorCounters.computeIfAbsent(cacheKey, key ->
-			meterRegistry.counter("sliceworkz.eventmodeling.translator.translate",
-				io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName, "channel", channel)));
-		counter.increment();
-	}
-
-	private Timer translationTimer ( String translatorName, String eventName, String channel ) {
-		String cacheKey = translatorName + ":" + eventName + ":" + channel;
-		return translatorTimers.computeIfAbsent(cacheKey, key ->
-			meterRegistry.timer("sliceworkz.eventmodeling.translator.duration",
-				io.micrometer.core.instrument.Tags.of("context", boundedContext, "translator", translatorName, "event", eventName, "channel", channel)));
+	/** Runs one translator on one inbound event, as an observed {@link Observation.TranslatorInvocation}. */
+	private void invoke ( Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator, String translatorName, EventType eventType, Tracing tracing, Runnable translation ) {
+		try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.TranslatorInvocation(boundedContext, translatorName, eventType, tracing)) ) {
+			try {
+				translation.run();
+				scope.completed(Outcome.Done.INSTANCE);
+			} catch ( RuntimeException | Error e ) {
+				scope.failed(e);
+				throw e;
+			}
+		}
 	}
 
 	/**
@@ -275,8 +263,8 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	 * @throws NoTranslatorRegisteredException if no registered translator matches the event
 	 */
 	public List<EventReference> translate ( INBOUND_EVENT_TYPE event, Tracing tracing ) {
-		String eventName = EventType.of(event.getClass()).name();
-		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
+		EventType eventType = EventType.of(event.getClass());
+		String eventName = eventType.name();
 
 		List<Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE>> matching = translators.stream()
 			.filter(t -> matches(t, event))
@@ -294,8 +282,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 		for ( Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator : matching ) {
 			String translatorName = translator.getClass().getSimpleName();
-			countTranslation(translatorName, eventName, channel);
-			translationTimer(translatorName, eventName, channel).record(() -> translator.translate(event, capturingContext));
+			invoke(translator, translatorName, eventType, tracing, () -> translator.translate(event, capturingContext));
 		}
 
 		return capturingContext.references();

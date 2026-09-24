@@ -22,7 +22,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,16 +31,15 @@ import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
-import org.sliceworkz.eventmodeling.module.snapshots.SnapshotMeters;
+import org.sliceworkz.eventmodeling.module.snapshots.ObservedSnapshots;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.EventStream;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 
 public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<DOMAIN_EVENT_TYPE> {
 	
@@ -50,35 +49,22 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 	private String boundedContext;
 	private Instance instance;
-	private MeterRegistry meterRegistry;
-	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
+	private BoundedContextObserver observer;
 	private BoundedContextEventEmitter eventEmitter;
 
-	public AggregateModule ( String boundedContext, Instance instance, List<? extends AggregateSpecificationImpl<?>> aggregateSpecifications, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
+	public AggregateModule ( String boundedContext, Instance instance, List<? extends AggregateSpecificationImpl<?>> aggregateSpecifications, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.domainEventStream = domainEventStream;
-		this.meterRegistry = meterRegistry;
+		this.observer = observer;
 		this.eventEmitter = eventEmitter;
-		
-		io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
-				.of("context", boundedContext);
 
 		aggregateSpecifications.forEach(spec->{
 			if ( aggregateInfoByClass.containsKey(spec.aggregateClass()) ) {
 				throw new IllegalArgumentException("duplicate aggregate registration for '%s'".formatted(spec.aggregateClass()));
 			}
 			try {
-				
-				var aggregateTags = tags.and(io.micrometer.core.instrument.Tags.of("aggregate", spec.aggregateClass().getSimpleName()));
-
-				// no load counter here: it is registered per channel in aggregate(...), and a second
-				// registration of the same name under a different tag key set is not merely redundant --
-				// Prometheus requires one tag key set per meter name, so registering both throws there.
-				// The snapshot counters live in SnapshotMeters and are registered lazily for the same
-				// reason: they carry a version tag, and the version is an instance method on the aggregate
-				SnapshotMeters snapshotMeters = new SnapshotMeters(meterRegistry, "sliceworkz.eventmodeling.aggregate.snapshot", aggregateTags);
-				Timer timer = meterRegistry.timer("sliceworkz.eventmodeling.aggregate.load.duration", aggregateTags);
+				ObservedSnapshots snapshots = new ObservedSnapshots(observer, boundedContext, Observation.SnapshotOwner.AGGREGATE, spec.aggregateClass().getSimpleName());
 
 				Class<? extends Aggregate<DOMAIN_EVENT_TYPE>> aggregateClass = (Class<? extends Aggregate<DOMAIN_EVENT_TYPE>>) (Class<?>) spec.aggregateClass();
 				AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo =
@@ -89,8 +75,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 								spec.readSnapshots(),
 								spec.writeSnapshots(),
 								spec.snapshotEventCountThreshold(),
-								snapshotMeters,
-								timer);
+								snapshots);
 
 				aggregateInfoByClass.put(aggregateClass, aggregateInfo);
 			} catch (NoSuchMethodException | SecurityException e) {
@@ -120,16 +105,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 
 			AggregateInfo<DOMAIN_EVENT_TYPE> aggregateInfo = aggregateInfoByClass.get(aggregateClass);
 
-			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-			String cacheKey = aggregateInfo.name() + ":" + channel;
-
-			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
-				meterRegistry.counter("sliceworkz.eventmodeling.aggregate.load.count",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "aggregate", aggregateInfo.name(), "channel", channel)));
-			counter.increment();
-
-			final Tracing finalTracing = tracing;
-			return aggregateInfo.timer().record(()->{
+			try ( Observation.Scope<Outcome.AggregateLoaded> scope = observer.start(new Observation.AggregateLoad(boundedContext, aggregateInfo.name(), identity, tracing)) ) {
 				T result;
 				try {
 					result = (T) aggregateInfo.constructor().newInstance(new Object[] {});
@@ -139,7 +115,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 					if ( aggregateInfo.readSnapshots() && result instanceof SnapshotCapable snapshotCapable ) {
 						String key = snapshotCapable.key(aggregateInfo.name(), identity);
 						String version = snapshotCapable.version();
-						var loadedSnapshot = aggregateInfo.snapshotMeters().load(aggregateInfo.snapshotStorage(), key, version);
+						var loadedSnapshot = aggregateInfo.snapshots().load(aggregateInfo.snapshotStorage(), key, version);
 						if ( loadedSnapshot.isPresent() ) {
 							snapshotCapable.fromSnapshot(loadedSnapshot.get().snapshot());
 							lastEventReference = loadedSnapshot.get().lastEventReference();
@@ -156,21 +132,27 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 							lastEventReference,
 							aggregateInfo.snapshotStorageForWrite(),
 							aggregateInfo.snapshotEventCountThreshold(),
-							aggregateInfo.snapshotMeters(),
-							meterRegistry,
-							domainEventCounters,
-							finalTracing,
+							aggregateInfo.snapshots(),
+							observer,
+							tracing,
 							eventEmitter);
 					result.setContext(aci);
 					aci.updateFromStream();
 
+					EventReference until = aci.lastUpdate().lastEventReference() != null ? aci.lastUpdate().lastEventReference() : lastEventReference;
+					scope.completed(new Outcome.AggregateLoaded(aci.lastUpdate().eventsStreamed(), Optional.ofNullable(lastEventReference), Optional.ofNullable(until)));
 				} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
 						| InvocationTargetException | SecurityException e) {
 					LOGGER.error(e.getMessage(), e);
-					throw new RuntimeException(e);
+					RuntimeException failure = new RuntimeException(e);
+					scope.failed(failure);
+					throw failure;
+				} catch ( RuntimeException e ) {
+					scope.failed(e);
+					throw e;
 				}
 				return result;
-			});
+			}
 
 		} else {
 			throw new IllegalArgumentException("aggregate class '%s' not registered in bounded context '%s'".formatted(aggregateClass, boundedContext));
@@ -184,8 +166,7 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 				boolean readSnapshots,
 				boolean writeSnapshots,
 				int snapshotEventCountThreshold,
-				SnapshotMeters snapshotMeters,
-				Timer timer
+				ObservedSnapshots snapshots
 			) {
 		
 		public SnapshotStorage<Object> snapshotStorageForWrite ( ) {

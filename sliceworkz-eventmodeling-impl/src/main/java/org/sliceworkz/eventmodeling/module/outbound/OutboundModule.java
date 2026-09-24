@@ -20,21 +20,19 @@ package org.sliceworkz.eventmodeling.module.outbound;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.events.Instance;
-import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAdmin;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
@@ -42,7 +40,6 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -56,17 +53,15 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 	private ProcessorThreadManager<OUTBOUND_EVENT_TYPE> processorThreadManager;
 	private Instance instance;
 
-	private MeterRegistry meterRegistry;
+	private BoundedContextObserver observer;
 	private BoundedContextEventEmitter eventEmitter;
 	private ProjectorProcessorAdmin admin;
-	private ConcurrentHashMap<String, Counter> dispatcherCounters = new ConcurrentHashMap<>();
-	private ConcurrentHashMap<String, Timer> dispatcherTimers = new ConcurrentHashMap<>();
 
-	public OutboundModule ( String boundedContext, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers, Instance instance, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
+	public OutboundModule ( String boundedContext, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, Collection<Dispatcher<OUTBOUND_EVENT_TYPE>> dispatchers, Instance instance, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.outboundEventStream = outboundEventStream;
 		this.instance = instance;
-		this.meterRegistry = meterRegistry;
+		this.observer = observer;
 		this.eventEmitter = eventEmitter;
 		this.admin = new ProjectorProcessorAdmin(ProcessorKind.DISPATCHER, boundedContext);
 
@@ -100,7 +95,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 							.shared()
 							.build(),
 					(EventStream<OUTBOUND_EVENT_TYPE>)outboundEventStream,
-					new DispatcherAdapter(t, Tracing.actorAndChannel(t.getClass().getSimpleName(), "dispatch").instance(instance)),
+					new DispatcherAdapter(t),
 					ProcessorMode.RUNNING_ON_SINGLE_LEADER,
 					instance,
 					dispatcherListener(t));
@@ -184,30 +179,23 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 
 		private Dispatcher<OUTBOUND_EVENT_TYPE> dispatcher;
 		private String dispatcherName;
-		private Tracing tracing;
 
-		public DispatcherAdapter(Dispatcher<OUTBOUND_EVENT_TYPE> dispatcher, Tracing tracing) {
+		public DispatcherAdapter(Dispatcher<OUTBOUND_EVENT_TYPE> dispatcher) {
 			this.dispatcher = dispatcher;
 			this.dispatcherName = dispatcher.getClass().getSimpleName();
-			this.tracing = tracing;
 		}
 
 		@Override
 		public void when(Event<OUTBOUND_EVENT_TYPE> eventWithMeta) {
-			String eventName = EventType.of(eventWithMeta.data().getClass()).name();
-			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-			String cacheKey = dispatcherName + ":" + eventName + ":" + channel;
-
-			Counter counter = dispatcherCounters.computeIfAbsent(cacheKey, key ->
-				meterRegistry.counter("sliceworkz.eventmodeling.dispatcher.dispatch",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "dispatcher", dispatcherName, "event", eventName, "channel", channel)));
-			counter.increment();
-
-			Timer timer = dispatcherTimers.computeIfAbsent(cacheKey, key ->
-				meterRegistry.timer("sliceworkz.eventmodeling.dispatcher.duration",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "dispatcher", dispatcherName, "event", eventName, "channel", channel)));
-
-			timer.record(() -> dispatcher.when(eventWithMeta));
+			try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.Dispatch(boundedContext, dispatcherName, eventWithMeta)) ) {
+				try {
+					dispatcher.when(eventWithMeta);
+					scope.completed(Outcome.Done.INSTANCE);
+				} catch ( RuntimeException | Error e ) {
+					scope.failed(e);
+					throw e;
+				}
+			}
 		}
 
 		@Override

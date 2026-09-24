@@ -29,13 +29,13 @@ import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.stream.EventStream;
 
-import io.micrometer.core.instrument.MeterRegistry;
 
 public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
 
@@ -47,14 +47,14 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 	private final List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationProcessors;
 
 	private Instance instance;
-	private MeterRegistry meterRegistry;
+	private BoundedContextObserver observer;
 	private BoundedContextEventEmitter eventEmitter;
 
-	public AutomationModule ( String boundedContext, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations, Instance instance, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
+	public AutomationModule ( String boundedContext, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations, Instance instance, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.domainEventStream = domainEventStream;
 		this.instance = instance;
-		this.meterRegistry = meterRegistry;
+		this.observer = observer;
 		this.eventEmitter = eventEmitter;
 
 		this.automationProcessors = createAutomationProcessors(automations);
@@ -136,7 +136,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 					.name(a.getTodoList().readmodelName())
 					.storage(a.getTodoList().storage())
 				.build(),
-				domainEventStream, this::createAutomationContext, a, ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance, boundedContext, meterRegistry, eventEmitter))
+				domainEventStream, this::createAutomationContext, a, ProcessorMode.RUNNING_ON_SINGLE_LEADER, instance, boundedContext, observer, eventEmitter))
 		);
 		return result;
 	}

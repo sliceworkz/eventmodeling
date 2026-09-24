@@ -559,8 +559,8 @@ and, for a savepoint model, its `initQuery` — each stripped of its own `until`
   `catch ( OptimisticLockingException )` code keeps working, and `getSuppressed().length` says how
   many attempts it took. No wrapper type, matching the eventstore's refusal of a common root
 - **No new observability event.** Every attempt runs through `DCBModule` as an ordinary execution, so
-  each conflict emits its own `CommandFailedOnOptimisticLocking` and its own meter increments — a
-  consumer counts attempts. An exhaustion event would have forced the loop into the impl for a fact
+  each conflict emits its own `CommandFailedOnOptimisticLocking` and is its own observed
+  `CommandExecution` answering `Conflicted` — a consumer counts attempts. An exhaustion event would have forced the loop into the impl for a fact
   that is derivable
 - **The same command instance is re-executed**, so a command holding mutable state across `execute()`
   calls, or building its decision models in its constructor, is not safely re-executable — idiomatic
@@ -603,8 +603,8 @@ opposite responses:**
   `BusinessException`
 - **Nothing is retried differently.** `executeWithRetry` catches only the conflict, so a retry that
   ends in a rejection reports one `CommandFailedOnOptimisticLocking` per conflicted attempt and then
-  one `CommandRejected` — each attempt observable under its own outcome, as before. The command meters
-  are unchanged: `command.execute` counts attempts whatever their outcome
+  one `CommandRejected` — each attempt observable under its own outcome, as before. The observer sees
+  the same: one `CommandExecution` per attempt, whatever its outcome
 - `CommandFailedTest` pins the rejection for both command shapes, that the stored document carries
   the reason and no stack trace, and that a rule thrown from inside a decision model is a failure;
   `ExecuteWithRetryTest.aBusinessRejectionByTheReDecidePropagatesAsTheOutcome` pins the retry's record
@@ -1164,7 +1164,7 @@ processor:**
   `gotNowhere()` — was extracted out of `AutomationProcessor`'s private methods so that
   `sliceworkz-eventmodeling-testing`'s `AutomationTest` runs literally the same code a deployment runs,
   instead of a re-implementation that would drift. What stays in the processor is everything around the
-  loop: meters, bookmark read/placement, the catch-up guard, backoff, leadership, the bounded-context
+  loop: the `AutomationRun` observation, bookmark read/placement, the catch-up guard, backoff, leadership, the bounded-context
   events. `AutomationBatchTest` pins the loop directly; the processor end to end stays pinned by
   `AutomationFailureRecoveryTest`
 - **The catch-up guard compares the total `(tx, position, index)` order**, through
@@ -1209,10 +1209,10 @@ processor:**
   symmetric at shutdown: an automation going down with its context raises no `AutomationStopped`, because
   `BoundedContextStopping` already says so for all of them at once, which leaves `AutomationStopped`
   meaning the one state worth alerting on — down while its context is up
-- **`AutomationStatus.itemsFailed` is counted separately from the meter of the same name**, deliberately.
-  The default registry is an empty `Metrics.globalRegistry` composite whose counters are no-ops reading 0
-  forever, so serving an operator's view from the meter would have made it depend on whether anyone wired
-  up monitoring. `AutomationAdminTest` catches that (it asserts the count against an unconfigured registry)
+- **`AutomationStatus.itemsFailed` is counted by the processor itself**, deliberately, and not derived
+  from what the observer is told: the default observer is `NOOP`, so serving an operator's view from
+  observations would have made it depend on whether anyone wired up monitoring. `AutomationAdminTest`
+  catches that (it asserts the count with no observer configured)
 - **A second instance no longer duplicates every item: automations run on the single elected leader.**
   See "Leader election" below for the mechanism, its configuration, and its honest limits
 - **One automation is sequential end to end, and parallelism is realized across automations**: partition
@@ -1610,8 +1610,8 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   produces. `StreamAppendingBoundedContextListener` appends them to a stream, which means the listener
   does I/O on the caller's thread and can fail exactly like any other event-store call
 - **A listener failure is never the caller's failure, and never silent.** `BoundedContextEventEmitter`
-  contains every delivery: the exception is caught, counted on
-  `sliceworkz.eventmodeling.listener.failure` (tagged `context` and `event`) and logged at ERROR, and
+  contains every delivery: the exception is caught, reported to the context's observer through
+  `BoundedContextObserver.listenerFailed(context, event, failure)` and logged at ERROR, and
   the operation carries on as if no listener were registered. Unguarded, the throw was not merely noise
   at three call sites:
   - `CommandExecuted` is emitted **after** the command's domain events are durably appended, so a
@@ -1632,17 +1632,17 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
 - **Nothing replays what a failing listener missed.** The event is dropped and the next one is delivered
   normally, so the stream a listener writes is a best-effort record. A listener that must not lose
   events buffers and retries inside its own implementation
-- **The log is throttled, the meter never is.** This sits on the hot path of every command, so a
+- **The log is throttled, the observer never is.** This sits on the hot path of every command, so a
   listener broken by a storage outage fails once per command and a stack trace each would bury the cause
   under its own symptoms. The first failure of a run logs in full; identical repeats are counted and
   summarised at most once a minute carrying the suppressed count; a different exception type reports
-  immediately; recovery logs a WARN naming how many events were lost. Alert on the meter, which keeps
-  the exact rate
+  immediately; recovery logs a WARN naming how many events were lost. Alert on what the observer is
+  told, which keeps the exact rate
 - **A listener that always throws does not stop the context coming up.** Failing the boot would turn a
   transient blip in whatever the listener writes to into an outage of the application it only observes
 - `BoundedContextListenerFailureTest` pins all of this down: a command whose `CommandExecuted` delivery
   throws still appends and still returns its reference, is never reported as `CommandFailed`, the
-  delivery after a failing one still arrives, every failure is counted, and the projector and automation
+  delivery after a failing one still arrives, every failure reaches the observer, and the projector and automation
   both keep making progress
 
 ## Event Modeling Core Templates
@@ -1669,7 +1669,7 @@ The framework supports the 4 Event Modeling patterns:
 - Typically defined as sealed interfaces with record implementations
 - The stored type name is the record's simple name unless the record declares an eventstore
   `@EventName`, which is the way out of a rename or of two contexts sharing a simple name in one
-  store. Everywhere the framework names an event — the `event` tag on its meters, the monitoring
+  store. Everywhere the framework names an event — the event types its observations carry, the monitoring
   events, its log lines — it resolves the name through `EventType.of(eventClass)`, never through
   `getSimpleName()`, so what a dashboard shows for a command's raised events is the name the store
   holds them under
@@ -1803,7 +1803,7 @@ EventStore eventStore = EventStore.on(storage).build();
 ```
 
 **What the eventstore puts on the classpath, and what this project declares itself.** The eventstore
-api carries Micrometer and SLF4J and no Jackson proper: its serde is Jackson 3 (`tools.jackson.*`),
+api carries SLF4J and no metrics library and no Jackson proper: its serde is Jackson 3 (`tools.jackson.*`),
 which arrives with its impl and backends, and the one Jackson 2 artifact its api names —
 `jackson-annotations`, shared by Jackson 2 and Jackson 3 — is optional there. So a module here that
 imports Jackson declares it: the api declares `jackson-annotations` (optional, for the
@@ -1915,14 +1915,67 @@ backend's own under `@ForEachBackend`) into both the context and the store behin
 domain event carrying personal data works with no setup and a test can assert on an erasure through
 `shreddingKeyStore()`. `BoundedContextShreddingTest` is the worked example.
 
-**`meterOptions(...)` reaches the event store's meter tagging**, which the builder previously fixed at
-the defaults. It matters mainly for one thing: the store tags every meter with the stream `purpose`, and
-caps that tag at 1000 distinct values by default, pooling the rest under `_other`. Nothing evicts a
-meter, so an uncapped high-cardinality purpose grows the process for as long as it runs with nothing
-failing to say so. A context whose purpose is an entity id should turn the breakdown off outright —
-`.meterOptions(MeterOptions.withoutPurposeBreakdown())` — and one with a wide but genuinely bounded set
-can raise the cap with `MeterOptions.withMaxPurposeTagValues(n)`. Null restores the defaults, as
-`meterRegistry(...)` does, so nothing that already builds a context changes.
+### Observability — `BoundedContextObserver`, and no metrics library
+
+**The framework reports what it does to a `BoundedContextObserver`, in its own terms, and names no
+metrics or tracing library** — the same move the eventstore made with `EventStoreObserver`, one layer
+up and shaped the same way. `.observer(o)` on the builder; `BoundedContextObserver.NOOP` is the default,
+so observation is opt-in. An application that wants meters or spans binds the library it uses by
+providing an observer (a Micrometer binding belongs outside this repository, beside the eventstore's).
+An enforcer rule in the root pom fails the build if Micrometer reaches any module, in any scope. The
+alternative — keeping `meterRegistry(...)` — loses for the reason the eventstore's CLAUDE.md gives: a
+meter API can only express meters, where a tracer needs to know where an operation starts and ends and
+what it answered, which is what an observation is.
+
+- **An operation is a scope**, exactly as in the eventstore: `start(Observation)` on the caller's thread
+  before the operation does anything, then exactly one of `completed(Outcome)`/`failed(Throwable)`, then
+  `close()` in a `finally`, all on that thread — so a span made current in `start` has the event store's
+  own observations (and the framework's nested ones) beneath it with nothing propagated. The durations
+  are the observer's to measure; no outcome carries one
+- **The operations** (`Observation` is sealed): `CommandExecution` (with its `Target`, DOMAIN or
+  OUTBOUND, and the caller's `Tracing`), `ProvidedEvent`, `IncomingEvent`, `Translation` (the
+  interactive `translate`) with a `TranslatorInvocation` per translator nested inside, the async
+  `TranslatorInvocation` on the processor thread, `Dispatch`, `ReadModelBatch` with a `ReadModelUpdate`
+  per event nested inside, `LiveModelRead`, `AggregateLoad`, `AggregateAppend`, `SnapshotLoad`/
+  `SnapshotSave` (nested in the load or read they belong to) and `AutomationRun` (whose handlings'
+  commands and provided events nest inside it). Each replaces meters the framework used to register:
+  the command counter and timer and the per-event `domain.event` counters, the `provided`/`inbound`/
+  `translate` event counters, the translator and dispatcher counters and timers, the read model
+  `ec.*` meters, the live model render meters, the aggregate load meters, the snapshot meters and the
+  automation batch meters
+- **A completion is an answer, not only a success** — the same split the `BoundedContextEvent`s make. A
+  command answers `Executed` (raised per type, and what was appended — empty for a swallowed idempotent
+  repeat), `Conflicted` (the DCB outcome) or `Rejected` (a `BusinessException`); an aggregate append
+  answers `Appended` or `Conflicted`; a read model batch `Projected` or `Cancelled`; a snapshot load
+  `SnapshotFound` or `SnapshotMissed` with the `MissReason` — the version-mismatch visibility the miss
+  meter used to give. `failed` is for an operation that could not answer, with the throwable the caller
+  receives
+- **Where an operation runs per stored event on a processor's thread** (`ReadModelUpdate`, `Dispatch`)
+  the observation carries the `Event`, and `Tracing.readFrom(event)` gives its flow; where it runs for a
+  caller, it carries the caller's `Tracing`. The per-event channel tag the meters carried was the
+  processor's own constant channel on those paths, so nothing is lost
+- **Contained, like the eventstore's**: the builder wraps the observer in
+  `BoundedContextObserver.contained(...)` once, so a throw (a `RuntimeException`, or a `LinkageError`
+  from a binding whose library is missing) is logged — ERROR once, DEBUG after — and never reaches the
+  work. `listenerFailed(context, event, failure)` replaces the `listener.failure` meter
+- **Two observers, two layers.** The event store the context builds reports to an `EventStoreObserver`:
+  the storage's own by default (a storage builder's `.observer(...)`), or `.eventStoreObserver(o)` on the
+  context builder, which wins — the same precedence as the shredding codec. `meterRegistry(...)` and
+  `meterOptions(...)` are gone: bounding a high-cardinality stream purpose is the metrics binding's
+  concern now, where the tag value is chosen. `ProjectorProcessor` names each projector
+  (`Projector.Builder.named(...)`) after its component's `ProcessorIdentification.id()`, so the store's
+  `ProjectorBatch` observations carry the read model, translator or dispatcher name — not the adapter
+  class wrapping it, which is what the eventstore would otherwise report every one of them under.
+  `ProjectorBatchNamingTest` pins it
+- **Cardinality is the observer's concern.** Names (commands, read models, event types) are bounded by
+  the code; `Tracing`, aggregate identities and snapshot keys are data, which a metrics binding must not
+  turn into tags unbounded
+- `RecordingBoundedContextObserver`, published in `sliceworkz-eventmodeling-testing`, records every scope
+  with its parent and checks the scope contract (`violations()`); `BoundedContextObservationTest` pins
+  every kind end to end and that the contract was kept, `AggregateObservationTest`,
+  `AggregateSnapshotObservationTest` and `LiveModelSnapshotObservationTest` the aggregate and snapshot
+  paths, `BoundedContextListenerFailureTest` the listener failures, and `ContainedObserverTest` in the api
+  module the containment
 
 ## Important Design Principles
 

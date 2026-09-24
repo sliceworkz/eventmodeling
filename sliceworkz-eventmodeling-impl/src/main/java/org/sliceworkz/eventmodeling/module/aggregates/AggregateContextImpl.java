@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.module.aggregates;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateContext;
@@ -28,7 +27,8 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
-import org.sliceworkz.eventmodeling.module.snapshots.SnapshotMeters;
+import org.sliceworkz.eventmodeling.module.snapshots.ObservedSnapshots;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -37,9 +37,6 @@ import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 
 public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext<DOMAIN_EVENT_TYPE> {
 
@@ -55,9 +52,8 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	
 	private SnapshotStorage<Object> snapshotStorage;
 	private int snapshotThresholdEventCount;
-	private SnapshotMeters snapshotMeters;
-	private MeterRegistry meterRegistry;
-	private ConcurrentHashMap<String, Counter> domainEventCounters;
+	private ObservedSnapshots snapshots;
+	private BoundedContextObserver observer;
 	private Tracing tracing;
 	private BoundedContextEventEmitter eventEmitter;
 
@@ -67,7 +63,10 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 	 */
 	private long eventsSinceLastSnapshot = 0;
 
-	public AggregateContextImpl ( String boundedContext, Instance instance, String aggregateName, Tags identity, Aggregate<DOMAIN_EVENT_TYPE> aggregate, EventStream<DOMAIN_EVENT_TYPE> eventStream, EventReference lastEventReference, SnapshotStorage<Object> snapshotStorage, int snapshotThresholdEventCount, SnapshotMeters snapshotMeters, MeterRegistry meterRegistry, ConcurrentHashMap<String, Counter> domainEventCounters, Tracing tracing, BoundedContextEventEmitter eventEmitter ) {
+	/** What the last {@link #updateFromStream()} projected, for the load's observation. */
+	private ProjectorMetrics lastUpdate;
+
+	public AggregateContextImpl ( String boundedContext, Instance instance, String aggregateName, Tags identity, Aggregate<DOMAIN_EVENT_TYPE> aggregate, EventStream<DOMAIN_EVENT_TYPE> eventStream, EventReference lastEventReference, SnapshotStorage<Object> snapshotStorage, int snapshotThresholdEventCount, ObservedSnapshots snapshots, BoundedContextObserver observer, Tracing tracing, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.aggregateName = aggregateName;
@@ -75,15 +74,14 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 		this.aggregate = aggregate;
 		this.eventStream = eventStream;
 		this.projectionTowardsAggregate = new ProjectionTowardsAggregate<>(aggregate, identity);
-		this.meterRegistry = meterRegistry;
-		this.domainEventCounters = domainEventCounters;
+		this.observer = observer;
 		this.tracing = tracing;
 		this.eventEmitter = eventEmitter;
-		this.aggregateEventAppender = new AggregateEventAppenderImpl<>(eventStream, aggregate, identity, null, boundedContext, instance, meterRegistry, domainEventCounters, tracing);
+		this.aggregateEventAppender = new AggregateEventAppenderImpl<>(eventStream, aggregate, identity, null, boundedContext, aggregateName, observer, tracing);
 		this.lastEventReference = lastEventReference;
 		this.snapshotStorage = snapshotStorage;
 		this.snapshotThresholdEventCount = snapshotThresholdEventCount;
-		this.snapshotMeters = snapshotMeters;
+		this.snapshots = snapshots;
 	}
 	
 	@Override
@@ -118,7 +116,7 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 		if ( lastEventReference != null ) {
 			eventsSinceLastSnapshot += appendedEvents;
 			if ( snapshotStorage != null && eventsSinceLastSnapshot >= snapshotThresholdEventCount && aggregate instanceof SnapshotCapable<?> snapshotCapable) {
-				snapshotMeters.save(snapshotStorage, snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), lastEventReference);
+				snapshots.save(snapshotStorage, snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), lastEventReference);
 				eventsSinceLastSnapshot = 0;
 			}
 		}
@@ -135,19 +133,27 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 		
 		ProjectorMetrics projectorMetrics = Projector.from(eventStream).into(projectionTowardsAggregate).startingAfter(lastEventReference).build().run();
 		this.lastEventReference = projectorMetrics.lastEventReference();
-		this.aggregateEventAppender = new AggregateEventAppenderImpl<>(eventStream, aggregate, identity, lastEventReference, boundedContext, instance, meterRegistry, domainEventCounters, tracing);
+		this.lastUpdate = projectorMetrics;
+		this.aggregateEventAppender = new AggregateEventAppenderImpl<>(eventStream, aggregate, identity, lastEventReference, boundedContext, aggregateName, observer, tracing);
 		Instant finish = Instant.now();
 		
 		long duration = finish.toEpochMilli() - start.toEpochMilli();
 		BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
 
 		if ( snapshotStorage != null && metrics.eventsStreamed() >= snapshotThresholdEventCount && aggregate instanceof SnapshotCapable<?> snapshotCapable) {
-			snapshotMeters.save(snapshotStorage, snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), metrics.until());
+			snapshots.save(snapshotStorage, snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), metrics.until());
 		} else {
 			eventsSinceLastSnapshot = projectorMetrics.eventsStreamed();
 		}
 
 		eventEmitter.emit(new BoundedContextEvent.AggregateLoaded(boundedContext, aggregate.getClass().getSimpleName(), metrics, eventEmitter.sliceFor(aggregate.getClass())), tracing);
 	}
-	
+
+	/**
+	 * What the last {@link #updateFromStream()} projected, null before the first.
+	 */
+	ProjectorMetrics lastUpdate ( ) {
+		return lastUpdate;
+	}
+
 }

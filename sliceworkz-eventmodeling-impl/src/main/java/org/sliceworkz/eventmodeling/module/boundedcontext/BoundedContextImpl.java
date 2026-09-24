@@ -23,7 +23,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -43,6 +42,9 @@ import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
 import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
@@ -69,8 +71,6 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * The bounded context itself.
@@ -129,10 +129,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private volatile LifecycleState lifecycleState = LifecycleState.BUILT;
 	private final Thread shutdownHook;
 
-	private MeterRegistry meterRegistry;
-	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
-	private ConcurrentHashMap<String, Counter> inboundEventCounters = new ConcurrentHashMap<>();
-	private ConcurrentHashMap<String, Counter> translateEventCounters = new ConcurrentHashMap<>();
+	private BoundedContextObserver observer;
 
 	private AdapterRegistry adapterRegistry;
 
@@ -158,11 +155,11 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			LeaderElector leaderElector,
 			ManagementModule managementModule,
 			Instance instance,
-			MeterRegistry meterRegistry,
+			BoundedContextObserver observer,
 			AdapterRegistry adapterRegistry ) {
 		this.name = name;
 		this.instance = instance;
-		this.meterRegistry = meterRegistry;
+		this.observer = observer;
 		this.deployedFeatureSlices = deployedFeatureSlices;
 		this.undeployedFeatureSlices = undeployedFeatureSlices;
 		this.startCommands = startCommands;
@@ -477,23 +474,24 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing ) {
 		tracing = tracing.instance(instance);
-		String eventName = EventType.of(event.getClass()).name();
-		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-		String cacheKey = eventName + ":" + channel;
 
-		Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
-			meterRegistry.counter("sliceworkz.eventmodeling.provided.event",
-				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName, "channel", channel)));
-		counter.increment();
-
-		// store event, no append criteria as we don't have any context for it. An idempotency key already
-		// used on this stream makes storage ignore the append silently, which comes back as an empty result
-		EphemeralEvent<DOMAIN_EVENT_TYPE> ephemeral = Event.of(event, tags);
-		if ( idempotencyKey != null ) {
-			ephemeral = ephemeral.withIdempotencyKey(idempotencyKey);
+		try ( Observation.Scope<Outcome.Provided> scope = observer.start(new Observation.ProvidedEvent(name, EventType.of(event.getClass()), tracing)) ) {
+			try {
+				// store event, no append criteria as we don't have any context for it. An idempotency key already
+				// used on this stream makes storage ignore the append silently, which comes back as an empty result
+				EphemeralEvent<DOMAIN_EVENT_TYPE> ephemeral = Event.of(event, tags);
+				if ( idempotencyKey != null ) {
+					ephemeral = ephemeral.withIdempotencyKey(idempotencyKey);
+				}
+				List<? extends Event<? extends DOMAIN_EVENT_TYPE>> result = domainEventStream.append(AppendCriteria.none(), Collections.singletonList(tracing.storeOn(ephemeral)));
+				Optional<EventReference> reference = result.stream().findFirst().map(Event::reference);
+				scope.completed(new Outcome.Provided(reference));
+				return reference;
+			} catch ( RuntimeException e ) {
+				scope.failed(e);
+				throw e;
+			}
 		}
-		List<? extends Event<? extends DOMAIN_EVENT_TYPE>> result = domainEventStream.append(AppendCriteria.none(), Collections.singletonList(tracing.storeOn(ephemeral)));
-		return result.stream().findFirst().map(Event::reference);
 	}
 
 	/*
@@ -518,16 +516,16 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
 		tracing = tracing.instance(instance);
-		String eventName = EventType.of(event.getClass()).name();
-		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-		String cacheKey = eventName + ":" + channel;
 
-		Counter counter = inboundEventCounters.computeIfAbsent(cacheKey, key ->
-			meterRegistry.counter("sliceworkz.eventmodeling.inbound.event",
-				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName, "channel", channel)));
-		counter.increment();
-
-		inboundModule.incoming ( event, idempotencyKey, tracing );
+		try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.IncomingEvent(name, EventType.of(event.getClass()), tracing)) ) {
+			try {
+				inboundModule.incoming ( event, idempotencyKey, tracing );
+				scope.completed(Outcome.Done.INSTANCE);
+			} catch ( RuntimeException e ) {
+				scope.failed(e);
+				throw e;
+			}
+		}
 	}
 
 	@Override
@@ -538,16 +536,17 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public List<EventReference> translate(INBOUND_EVENT_TYPE event, Tracing tracing) {
 		tracing = tracing.instance(instance);
-		String eventName = EventType.of(event.getClass()).name();
-		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-		String cacheKey = eventName + ":" + channel;
 
-		Counter counter = translateEventCounters.computeIfAbsent(cacheKey, key ->
-			meterRegistry.counter("sliceworkz.eventmodeling.translate.event",
-				io.micrometer.core.instrument.Tags.of("context", name, "event", eventName, "channel", channel)));
-		counter.increment();
-
-		return inboundModule.translate ( event, tracing );
+		try ( Observation.Scope<Outcome.Translated> scope = observer.start(new Observation.Translation(name, EventType.of(event.getClass()), tracing)) ) {
+			try {
+				List<EventReference> raised = inboundModule.translate ( event, tracing );
+				scope.completed(new Outcome.Translated(raised));
+				return raised;
+			} catch ( RuntimeException e ) {
+				scope.failed(e);
+				throw e;
+			}
+		}
 	}
 
 	/*

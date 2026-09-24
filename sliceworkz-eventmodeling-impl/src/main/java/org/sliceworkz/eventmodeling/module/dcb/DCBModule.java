@@ -17,9 +17,10 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import org.slf4j.Logger;
@@ -35,6 +36,9 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -42,10 +46,6 @@ import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 
 public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
 	
@@ -58,20 +58,17 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 	private EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream;
 
-	private MeterRegistry meterRegistry;
-	private ConcurrentHashMap<String, Counter> commandCounters = new ConcurrentHashMap<>();
-	private ConcurrentHashMap<String, Timer> commandTimers = new ConcurrentHashMap<>();
-	private ConcurrentHashMap<String, Counter> domainEventCounters = new ConcurrentHashMap<>();
+	private final BoundedContextObserver observer;
 
 	private final BoundedContextEventEmitter eventEmitter;
 
-	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
+	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.readModelModule = readModelModule;
 		this.domainEventStream = domainEventStream;
 		this.outboundEventStream = outboundEventStream;
-		this.meterRegistry = meterRegistry;
+		this.observer = observer;
 		this.eventEmitter = eventEmitter;
 	}
 	
@@ -108,64 +105,73 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	 * reference to either shape's {@code execute} fits here.
 	 */
 	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeAbstractCommand ( String commandName, Class<?> commandClass, Consumer<DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>> commandBody, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, boolean outboundTarget, String idempotencyKey ) {
-		return timed(commandName, () -> {
+		Tracing tracingWithCommand = tracing.command(commandName);
+		Observation.Target target = outboundTarget ? Observation.Target.OUTBOUND : Observation.Target.DOMAIN;
+		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, commandClass, target, tracingWithCommand)) ) {
 			long start = System.currentTimeMillis();
 
-			Tracing tracingWithCommand = tracing.command(commandName);
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracingWithCommand);
 			try {
 				commandBody.accept(commandContext);
 				CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-				List<EventReference> eventReferences = persistAndRecord(commandResult, targetEventStream, commandName, idempotencyKey, outboundTarget, tracingWithCommand);
+				List<EventReference> eventReferences = persist(commandResult, targetEventStream, commandName, idempotencyKey, outboundTarget);
 
 				emitCommandExecuted(commandContext, commandName, commandClass, start, eventReferences);
+				scope.completed(new Outcome.Executed(raisedPerType(commandResult), eventReferences));
 
 				return eventReferences.isEmpty() ? Optional.empty() : Optional.of(eventReferences.get(eventReferences.size() - 1));
 			} catch ( OptimisticLockingException ole ) {
 				emitCommandFailedOnOptimisticLocking(commandContext, commandName, commandClass, start, ole);
+				scope.completed(conflictOf(ole));
 				throw ole;
 			} catch ( BusinessException rejection ) {
 				emitCommandRejected(commandContext, commandName, commandClass, start, rejection);
+				scope.completed(new Outcome.Rejected(rejection.getMessage()));
 				throw rejection;
 			} catch ( RuntimeException e ) {
 				emitCommandFailed(commandContext, commandName, commandClass, start, e);
+				scope.failed(e);
 				throw e;
 			}
-		});
+		}
 	}
 
 	private <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> executeCommandWithResult ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing, String idempotencyKey ) {
 		String commandName = command.commandName();
-		return timed(commandName, () -> {
+		Tracing tracingWithCommand = tracing.command(commandName);
+		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, command.getClass(), Observation.Target.DOMAIN, tracingWithCommand)) ) {
 			long start = System.currentTimeMillis();
 
-			Tracing tracingWithCommand = tracing.command(commandName);
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand);
 			try {
 				RESPONSE_TYPE response = command.execute(commandContext);
 				CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 
-				List<EventReference> eventReferences = persistAndRecord(commandResult, domainEventStream, commandName, idempotencyKey, false, tracingWithCommand);
+				List<EventReference> eventReferences = persist(commandResult, domainEventStream, commandName, idempotencyKey, false);
 
 				emitCommandExecuted(commandContext, commandName, command.getClass(), start, eventReferences);
+				scope.completed(new Outcome.Executed(raisedPerType(commandResult), eventReferences));
 
 				Optional<EventReference> eventReference = eventReferences.isEmpty() ? Optional.empty() : Optional.of(eventReferences.get(eventReferences.size() - 1));
 				return new CommandExecutionResult<>(eventReference, response);
 			} catch ( OptimisticLockingException ole ) {
 				emitCommandFailedOnOptimisticLocking(commandContext, commandName, command.getClass(), start, ole);
+				scope.completed(conflictOf(ole));
 				throw ole;
 			} catch ( BusinessException rejection ) {
 				emitCommandRejected(commandContext, commandName, command.getClass(), start, rejection);
+				scope.completed(new Outcome.Rejected(rejection.getMessage()));
 				throw rejection;
 			} catch ( RuntimeException e ) {
 				emitCommandFailed(commandContext, commandName, command.getClass(), start, e);
+				scope.failed(e);
 				throw e;
 			}
-		});
+		}
 	}
 
-	private <PRODUCED_EVENT_TYPE> List<EventReference> persistAndRecord ( CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String commandName, String idempotencyKey, boolean outboundTarget, Tracing tracing ) {
+	private <PRODUCED_EVENT_TYPE> List<EventReference> persist ( CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String commandName, String idempotencyKey, boolean outboundTarget ) {
 		// resolve and apply idempotency key (internal strategy vs external key)
 		String resolvedKey = commandResult.resolveIdempotencyKey(idempotencyKey);
 		if ( resolvedKey != null ) {
@@ -183,38 +189,26 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		if ( !commandResult.raisedEvents().isEmpty() ) {
 			// append to the event store (with optimistic locking the DCB way)
 			// and return the last event reference produced (for bookmarking purposes etc ...)
-			List<EventReference> references = targetEventStream.append(commandResult.appendCriteria(), commandResult.raisedEvents())
+			return targetEventStream.append(commandResult.appendCriteria(), commandResult.raisedEvents())
 					.stream().map(Event::reference).toList();
-
-			// Record metrics for each raised domain event
-			String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-			for (EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event : commandResult.raisedEvents()) {
-				String eventName = EventType.of(event.data().getClass()).name();
-				String cacheKey = eventName + ":" + channel;
-				Counter eventCounter = domainEventCounters.computeIfAbsent(cacheKey, key ->
-					meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
-						io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "channel", channel, "source", "dcb")));
-				eventCounter.increment();
-			}
-
-			return references;
 		} else {
 			LOGGER.debug("no events raised by command {}", commandName);
 			return List.of();
 		}
 	}
 
-	private <T> T timed ( String commandName, java.util.function.Supplier<T> action ) {
-		Counter counter = commandCounters.computeIfAbsent(commandName, name ->
-			meterRegistry.counter("sliceworkz.eventmodeling.command.execute",
-				io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
-		counter.increment();
+	/** How many events of each type a command raised, by the name each is stored under. */
+	private static Map<EventType,Integer> raisedPerType ( CommandResultImpl<?,?> commandResult ) {
+		Map<EventType,Integer> raisedPerType = new LinkedHashMap<>();
+		for ( EphemeralEvent<?> event : commandResult.raisedEvents() ) {
+			raisedPerType.merge(EventType.of(event.data().getClass()), 1, Integer::sum);
+		}
+		return raisedPerType;
+	}
 
-		Timer timer = commandTimers.computeIfAbsent(commandName, name ->
-			meterRegistry.timer("sliceworkz.eventmodeling.command.duration",
-				io.micrometer.core.instrument.Tags.of("context", boundedContext, "command", name)));
-
-		return timer.record(action);
+	private static Outcome.Conflicted conflictOf ( OptimisticLockingException ole ) {
+		Optional<EventReference> expected = ole.getExpectedLastEventReference();
+		return new Outcome.Conflicted(expected != null ? expected : Optional.empty());
 	}
 
 	private void emitCommandExecuted ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, List<EventReference> eventReferences ) {

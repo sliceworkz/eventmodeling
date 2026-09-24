@@ -18,15 +18,13 @@
 package org.sliceworkz.eventmodeling.module.aggregates;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,30 +36,30 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
+import org.sliceworkz.eventmodeling.module.snapshots.SnapshotObservations;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage.MissReason;
+import org.sliceworkz.eventmodeling.testing.RecordingBoundedContextObserver;
+import org.sliceworkz.eventmodeling.testing.RecordingBoundedContextObserver.Recording;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Meter;
-import io.micrometer.core.instrument.Timer;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 /**
- * The snapshot storage calls of an aggregate are metered: hits and writes tagged by version, misses
- * tagged by the reason the storage gives, timers for what the storage itself costs, and failures
- * counted before the throw goes on. The miss reason is the load-bearing part — a bumped snapshot
- * version means a full replay on every load, and without the {@code version_mismatch} reason that
- * is indistinguishable from a key that was never snapshotted.
+ * The snapshot storage calls of an aggregate are observed: hits and writes by version, misses by the
+ * reason the storage gives, failures reported before the throw goes on, and every call nested in the
+ * aggregate load or append it belongs to. The miss reason is the load-bearing part — a bumped snapshot
+ * version means a full replay on every load, and without {@link MissReason#VERSION_MISMATCH} that is
+ * indistinguishable from a key that was never snapshotted.
  */
-public class AggregateSnapshotMeterTest extends AbstractMockDomainTest {
-
-	private static final String PREFIX = "sliceworkz.eventmodeling.aggregate.snapshot";
+public class AggregateSnapshotObservationTest extends AbstractMockDomainTest {
 
 	private ClassifyingSnapshotStorage snapshotStorage;
-	private SimpleMeterRegistry registry;
+	private RecordingBoundedContextObserver observer;
+	private SnapshotObservations snapshots;
 
 	@Override
 	@BeforeEach
@@ -69,69 +67,73 @@ public class AggregateSnapshotMeterTest extends AbstractMockDomainTest {
 		super.setUp();
 		MeteredAggregate.VERSION = "v1";
 		snapshotStorage = new ClassifyingSnapshotStorage();
-		registry = new SimpleMeterRegistry();
+		observer = new RecordingBoundedContextObserver();
+		snapshots = new SnapshotObservations(observer);
 	}
 
-	/** A load that finds nothing, a save, a load that hits, and a load after a version bump each land on their own meter. */
+	/** A load that finds nothing, a save, a load that hits, and a load after a version bump are each told apart. */
 	@Test
-	void hitsMissesAndWritesAreCountedByVersionAndReason ( ) {
+	void hitsMissesAndWritesAreObservedByVersionAndReason ( ) {
 		Mock domain = domainWithAggregate();
 
 		// nothing stored yet: the load misses, and the storage says why
 		MeteredAggregate aggregate = domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123"));
-		assertEquals(1, count(".miss.count", "reason", "absent", "version", "v1"));
-		assertEquals(1, timerCount(".load.duration"));
-		assertEquals(0, timerCount(".save.duration"));
+		assertEquals(1, snapshots.missed(MissReason.ABSENT, "v1"));
+		assertEquals(1, snapshots.loads().size());
+		assertEquals(0, snapshots.saves().size());
 
 		// two events reach the threshold of 2: one snapshot is written, under the current version
 		aggregate.doSomething();
 		aggregate.doSomething();
-		assertEquals(1, count(".write.count", "version", "v1"));
-		assertEquals(1, timerCount(".save.duration"));
+		assertEquals(1, snapshots.written("v1"));
+		assertEquals(1, snapshots.saves().size());
 
 		// reload: the snapshot is found
 		domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123"));
-		assertEquals(1, count(".read.count", "version", "v1"));
+		assertEquals(1, snapshots.found("v1"));
 
 		// a bumped version misses although a snapshot is stored -- the reason says so
 		MeteredAggregate.VERSION = "v2";
 		domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123"));
-		assertEquals(1, count(".miss.count", "reason", "version_mismatch", "version", "v2"));
-		assertEquals(1, count(".read.count", "version", "v1"), "the hit count is untouched by the mismatch");
+		assertEquals(1, snapshots.missed(MissReason.VERSION_MISMATCH, "v2"));
+		assertEquals(1, snapshots.found("v1"), "the hit is untouched by the mismatch");
+
+		assertEquals(List.of(), observer.violations());
 	}
 
-	/** A storage that does not override classifyMiss still has its misses counted, without a reason. */
+	/** A storage that does not override classifyMiss still has its misses reported, without a reason. */
 	@Test
-	void aStorageWithoutMissClassificationCountsMissesAsUnknown ( ) {
+	void aStorageWithoutMissClassificationReportsMissesAsUnknown ( ) {
 		snapshotStorage.classifies = false;
 
 		Mock domain = domainWithAggregate();
 		domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123"));
 
-		assertEquals(1, count(".miss.count", "reason", "unknown", "version", "v1"));
+		assertEquals(1, snapshots.missed(MissReason.UNKNOWN, "v1"));
 	}
 
-	/** A classification that throws never fails the read: the miss is counted as unknown and the load goes on. */
+	/** A classification that throws never fails the read: the miss is reported as unknown and the load goes on. */
 	@Test
-	void aThrowingClassificationIsContainedAndCountedAsUnknown ( ) {
+	void aThrowingClassificationIsContainedAndReportedAsUnknown ( ) {
 		snapshotStorage.failClassification = true;
 
 		Mock domain = domainWithAggregate();
 		MeteredAggregate aggregate = domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123"));
 
 		assertEquals(0, aggregate.getCounter(), "the aggregate loads normally");
-		assertEquals(1, count(".miss.count", "reason", "unknown", "version", "v1"));
+		assertEquals(1, snapshots.missed(MissReason.UNKNOWN, "v1"));
 	}
 
-	/** A load or save that throws is counted by operation, and the throw still reaches the caller. */
+	/** A load or save that throws fails its scope, and the throw still reaches the caller. */
 	@Test
-	void storageFailuresAreCountedByOperation ( ) {
+	void storageFailuresFailTheirScope ( ) {
 		Mock domain = domainWithAggregate();
 
 		snapshotStorage.failLoads = true;
 		assertThrows(IllegalStateException.class, () -> domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123")));
-		assertEquals(1, count(".failure.count", "operation", "load"));
-		assertEquals(1, timerCount(".load.duration"), "the failing load is still timed");
+		assertEquals(1, snapshots.failed(snapshots.loads()));
+		assertEquals(1, snapshots.loads().size(), "the failing load is still observed");
+		observer.last(Observation.AggregateLoad.class).failure().orElseThrow(); // and so fails the load it was part of
 
 		snapshotStorage.failLoads = false;
 		MeteredAggregate aggregate = domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123"));
@@ -139,55 +141,41 @@ public class AggregateSnapshotMeterTest extends AbstractMockDomainTest {
 		snapshotStorage.failSaves = true;
 		aggregate.doSomething();
 		assertThrows(IllegalStateException.class, () -> aggregate.doSomething()); // second event reaches the threshold, the save throws
-		assertEquals(1, count(".failure.count", "operation", "save"));
-		assertEquals(0, count(".write.count", "version", "v1"), "a failed save is not a write");
+		assertEquals(1, snapshots.failed(snapshots.saves()));
+		assertEquals(0, snapshots.written("v1"), "a failed save is not a write");
+
+		assertEquals(List.of(), observer.violations());
 	}
 
-	/** Every snapshot meter name carries exactly one set of tag keys — Prometheus rejects anything else. */
+	/** A snapshot load nests in the aggregate load it is part of, and the load reports the base it started from. */
 	@Test
-	void noSnapshotMeterNameCarriesTwoDifferentTagKeySets ( ) {
+	void aSnapshotLoadNestsInTheAggregateLoad ( ) {
 		Mock domain = domainWithAggregate();
 
 		MeteredAggregate aggregate = domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123"));
 		aggregate.doSomething();
 		aggregate.doSomething();
 		domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123"));
-		MeteredAggregate.VERSION = "v2";
-		domain.aggregate(MeteredAggregate.class, Tags.of("businessObject", "123"));
 
-		Map<String, Set<Set<String>>> keySetsByName = new HashMap<>();
-		registry.getMeters().forEach(meter ->
-			keySetsByName.computeIfAbsent(meter.getId().getName(), name -> new HashSet<>()).add(tagKeys(meter)));
+		Recording load = observer.last(Observation.AggregateLoad.class);
+		Recording snapshotLoad = observer.last(Observation.SnapshotLoad.class);
+		assertSame(load, snapshotLoad.parent().orElseThrow());
+		assertEquals(Observation.SnapshotOwner.AGGREGATE, snapshotLoad.observation(Observation.SnapshotLoad.class).owner());
+		assertEquals("MeteredAggregate", snapshotLoad.observation(Observation.SnapshotLoad.class).component());
 
-		String offenders = keySetsByName.entrySet().stream()
-				.filter(entry -> entry.getValue().size() > 1)
-				.map(entry -> "%s -> %s".formatted(entry.getKey(), entry.getValue()))
-				.collect(Collectors.joining(", "));
-		assertTrue(offenders.isEmpty(), "meter names registered under several tag key sets: " + offenders);
+		Outcome.AggregateLoaded loaded = load.outcome(Outcome.AggregateLoaded.class);
+		assertEquals(snapshotLoad.outcome(Outcome.SnapshotFound.class).at(), loaded.startedAfter().orElseThrow(), "restored from the snapshot");
+		assertEquals(0, loaded.eventsStreamed(), "with nothing to replay on top of it");
 	}
 
 	private Mock domainWithAggregate ( ) {
 		var builder = BoundedContext.newBuilder(Mock.class)
 				.name("UnitTestBoundedContext")
 				.eventStorage(eventStorage())
-				.meterRegistry(registry)
+				.observer(observer)
 				.instance(InstanceFactory.determine("unittests"));
 		builder.aggregate(MeteredAggregate.class).snapshots(snapshotStorage).eventCountThreshold(2).readAndWrite();
 		return buildBoundedContext(builder);
-	}
-
-	private double count ( String suffix, String... tags ) {
-		Counter counter = registry.find(PREFIX + suffix).tags(tags).counter();
-		return counter != null ? counter.count() : 0;
-	}
-
-	private long timerCount ( String suffix ) {
-		Timer timer = registry.find(PREFIX + suffix).timer();
-		return timer != null ? timer.count() : 0;
-	}
-
-	private static Set<String> tagKeys ( Meter meter ) {
-		return meter.getId().getTags().stream().map(io.micrometer.core.instrument.Tag::getKey).collect(Collectors.toSet());
 	}
 
 }

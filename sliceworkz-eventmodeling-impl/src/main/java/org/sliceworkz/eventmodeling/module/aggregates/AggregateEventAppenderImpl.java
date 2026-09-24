@@ -18,13 +18,17 @@
 package org.sliceworkz.eventmodeling.module.aggregates;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateEventAppender;
-import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -34,9 +38,7 @@ import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
+import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateEventAppender<DOMAIN_EVENT_TYPE> {
 
@@ -46,20 +48,18 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 	private Tags identity;
 	private EventReference lastReference;
 	private String boundedContext;
-	private Instance instance;
-	private MeterRegistry meterRegistry;
-	private ConcurrentHashMap<String, Counter> domainEventCounters;
+	private String aggregateName;
+	private BoundedContextObserver observer;
 	private Tracing tracing;
 
-	public AggregateEventAppenderImpl ( EventStream<DOMAIN_EVENT_TYPE> eventStream, Aggregate<DOMAIN_EVENT_TYPE> aggregate, Tags identity, EventReference lastReference, String boundedContext, Instance instance, MeterRegistry meterRegistry, ConcurrentHashMap<String, Counter> domainEventCounters, Tracing tracing ) {
+	public AggregateEventAppenderImpl ( EventStream<DOMAIN_EVENT_TYPE> eventStream, Aggregate<DOMAIN_EVENT_TYPE> aggregate, Tags identity, EventReference lastReference, String boundedContext, String aggregateName, BoundedContextObserver observer, Tracing tracing ) {
 		this.eventStream = eventStream;
 		this.aggregate = aggregate;
 		this.identity = identity;
 		this.lastReference = lastReference;
 		this.boundedContext = boundedContext;
-		this.instance = instance;
-		this.meterRegistry = meterRegistry;
-		this.domainEventCounters = domainEventCounters;
+		this.aggregateName = aggregateName;
+		this.observer = observer;
 		this.tracing = tracing;
 	}
 	
@@ -80,23 +80,28 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 
 	@Override
 	public EventReference append() {
-		// Record metrics for each raised domain event with tracing tags
-		String channel = (tracing != null && tracing.channel() != null) ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-		for (EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event : events) {
-			String eventName = EventType.of(event.data().getClass()).name();
-			String cacheKey = eventName + ":" + channel;
-
-			Counter counter = domainEventCounters.computeIfAbsent(cacheKey, key ->
-				meterRegistry.counter("sliceworkz.eventmodeling.domain.event",
-					io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", eventName, "channel", channel, "source", "aggregate")));
-			counter.increment();
+		Map<EventType,Integer> raisedPerType = new LinkedHashMap<>();
+		for ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event : events ) {
+			raisedPerType.merge(EventType.of(event.data().getClass()), 1, Integer::sum);
 		}
 
-		EventReference lastEvent = eventStream.append(
-				AppendCriteria.of(EventFilter.forEvents(EventTypesFilter.any(), identity), lastReference),
-				events).stream().map(e->{this.lastReference=e.reference();return e;}).map(e->{aggregate.when(e);return e;}).map(Event::reference).reduce((one,two)->two).orElse(null);
-		events.clear();
-		return lastEvent;
+		try ( Observation.Scope<Outcome.AppendResult> scope = observer.start(new Observation.AggregateAppend(boundedContext, aggregateName, identity, raisedPerType, tracing)) ) {
+			try {
+				List<EventReference> appended = eventStream.append(
+						AppendCriteria.of(EventFilter.forEvents(EventTypesFilter.any(), identity), lastReference),
+						events).stream().map(e->{this.lastReference=e.reference();return e;}).map(e->{aggregate.when(e);return e;}).map(Event::reference).toList();
+				events.clear();
+				scope.completed(new Outcome.Appended(appended));
+				return appended.isEmpty() ? null : appended.getLast();
+			} catch ( OptimisticLockingException ole ) {
+				Optional<EventReference> expected = ole.getExpectedLastEventReference();
+				scope.completed(new Outcome.Conflicted(expected != null ? expected : Optional.empty()));
+				throw ole;
+			} catch ( RuntimeException e ) {
+				scope.failed(e);
+				throw e;
+			}
+		}
 	}
 	
 }

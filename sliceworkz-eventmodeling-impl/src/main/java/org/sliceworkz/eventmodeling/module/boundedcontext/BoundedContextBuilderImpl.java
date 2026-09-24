@@ -58,6 +58,7 @@ import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.management.ManagementModule;
 import org.sliceworkz.eventmodeling.management.ManagementInstruction;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateSpecificationImpl;
 import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
@@ -80,7 +81,7 @@ import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.MeterOptions;
+import org.sliceworkz.eventstore.observability.EventStoreObserver;
 import org.sliceworkz.eventstore.shredding.AesGcmShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingKeyStore;
@@ -89,8 +90,6 @@ import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Metrics;
 
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implements BoundedContextBuilder<C> {
@@ -147,8 +146,9 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private BoundedContextListener boundedContextListener = BoundedContextListener.NO_OP;
 	private EventStream<ManagementInstruction> managementInstructions;
 
-	private MeterRegistry meterRegistry = Metrics.globalRegistry;
-	private MeterOptions meterOptions = MeterOptions.defaults();
+	private BoundedContextObserver observer = BoundedContextObserver.NOOP;
+	/** Null until set: the store then reports to the storage's own observer. */
+	private EventStoreObserver eventStoreObserver;
 
 	private EventStorage eventStorage;
 	private ShreddingCodec shreddingCodec;
@@ -227,18 +227,20 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	@Override
-	public BoundedContextBuilder<C> meterRegistry ( MeterRegistry meterRegistry ) {
-		if ( meterRegistry != null ) {
-			this.meterRegistry = meterRegistry;
-		} else {
-			this.meterRegistry = Metrics.globalRegistry;
+	public BoundedContextBuilder<C> observer ( BoundedContextObserver observer ) {
+		if ( observer == null ) {
+			throw new IllegalArgumentException("observer cannot be null.  Use BoundedContextObserver.NOOP to observe nothing");
 		}
+		this.observer = observer;
 		return this;
 	}
 
 	@Override
-	public BoundedContextBuilder<C> meterOptions ( MeterOptions meterOptions ) {
-		this.meterOptions = meterOptions == null ? MeterOptions.defaults() : meterOptions;
+	public BoundedContextBuilder<C> eventStoreObserver ( EventStoreObserver eventStoreObserver ) {
+		if ( eventStoreObserver == null ) {
+			throw new IllegalArgumentException("event store observer cannot be null.  Leave it unset for the storage's own observer");
+		}
+		this.eventStoreObserver = eventStoreObserver;
 		return this;
 	}
 
@@ -739,9 +741,11 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		// only a storage carrying none gives an unprotected store. A codec given here wins over the
 		// storage's, so a context can still narrow what it reads (a restricted or withholding codec)
 		// on a storage whose codec holds every key.
-		EventStore.Builder storeBuilder = EventStore.on(eventStorage)
-				.meterRegistry(meterRegistry)
-				.meterOptions(meterOptions);
+		// The observer is treated the same way: left unset, the store reports to the storage's own.
+		EventStore.Builder storeBuilder = EventStore.on(eventStorage);
+		if ( eventStoreObserver != null ) {
+			storeBuilder.observer(eventStoreObserver);
+		}
 		if ( shreddingCodec != null ) {
 			storeBuilder.shredding(shreddingCodec);
 		}
@@ -858,7 +862,10 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		rejectLiveReadModelsThatCannotBeInstantiated();
 		rejectAutomationsWhoseTodoListIsNotProjectedHere();
 
-		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices, sliceMembers), name, meterRegistry);
+		// contained once, here, so no module has to: whatever the observer throws never reaches the work
+		BoundedContextObserver observer = BoundedContextObserver.contained(this.observer);
+
+		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices, sliceMembers), name, observer);
 
 		// how each of these is projected (every instance or a single leader) follows from the read
 		// model's own storage class, see ReadModelModule.createProjectorProcessors
@@ -867,22 +874,22 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		// each module is recorded as soon as it exists, so a failure in the next one still finds it --
 		// see releasePartiallyBuilt
 		Collection<Translator> translators = translatorSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
-		InboundModule im = new InboundModule(name, inboundEventStream, translators, instance, meterRegistry, eventEmitter);
+		InboundModule im = new InboundModule(name, inboundEventStream, translators, instance, observer, eventEmitter);
 		constructed.add(im);
 
 		Collection<Dispatcher> dispatchers = dispatcherSpecs.stream().collect(Collectors.toCollection(ArrayList::new));
-		OutboundModule om = new OutboundModule(name, outboundEventStream, dispatchers, instance, meterRegistry, eventEmitter);
+		OutboundModule om = new OutboundModule(name, outboundEventStream, dispatchers, instance, observer, eventEmitter);
 		constructed.add(om);
 
-		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, meterRegistry, eventEmitter);
+		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, observer, eventEmitter);
 		constructed.add(am);
 
-		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentReadModels, instance, meterRegistry, eventEmitter);
+		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentReadModels, instance, observer, eventEmitter);
 		constructed.add(rmm);
-		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, outboundEventStream, meterRegistry, eventEmitter);
+		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, outboundEventStream, observer, eventEmitter);
 		constructed.add(dcb);
 
-		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, meterRegistry, eventEmitter);
+		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, observer, eventEmitter);
 
 		// one lease per leader-only processor, named by its ProcessorIdentification: an instance only
 		// contends for the elements it has deployed, so heterogeneous deployments elect per element.
@@ -908,7 +915,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
-						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, managementModule, instance, meterRegistry, adapterRegistry);
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, managementModule, instance, observer, adapterRegistry);
 
 		// From here the context owns the modules, and it is the only thing that can release them
 		// completely: its constructor registered a JVM shutdown hook holding it, which only its own

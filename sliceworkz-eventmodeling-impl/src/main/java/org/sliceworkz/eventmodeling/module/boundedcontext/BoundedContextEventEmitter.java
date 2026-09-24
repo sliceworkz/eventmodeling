@@ -17,22 +17,17 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextListener;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Metrics;
 
 /**
  * Internal helper that turns a {@link BoundedContextEvent} into a tagged {@link EphemeralEvent} and
@@ -44,8 +39,8 @@ import io.micrometer.core.instrument.Metrics;
  * path.
  * <p>
  * <strong>A listener failure is never the caller's failure, and never silent.</strong> Every
- * emission is contained here: the listener's exception is caught, counted on
- * {@code sliceworkz.eventmodeling.listener.failure} and logged at ERROR, and the operation that
+ * emission is contained here: the listener's exception is caught, reported to the context's
+ * {@link BoundedContextObserver#listenerFailed observer} and logged at ERROR, and the operation that
  * produced the event carries on as if no listener were registered. This is not defensive tidiness,
  * it is the only correct behaviour at three call sites:
  * <ul>
@@ -71,15 +66,12 @@ import io.micrometer.core.instrument.Metrics;
  * listener broken by a storage outage fails once per command, and a stack trace each would bury the
  * cause under its own symptoms. The first failure of a run is logged in full; identical repeats are
  * counted and summarised at most once per {@value #FAILURE_SUMMARY_INTERVAL_MS} ms, a different
- * exception type reports immediately, and the recovery is logged too. The meter is never throttled,
- * so the true rate is always available there.
+ * exception type reports immediately, and the recovery is logged too. The observer is never
+ * throttled, so the true rate is always available there.
  */
 public final class BoundedContextEventEmitter {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(BoundedContextEventEmitter.class);
-
-	/** Counts every failed delivery, tagged {@code context} and {@code event}. Never throttled. */
-	static final String FAILURE_METER = "sliceworkz.eventmodeling.listener.failure";
 
 	/** How long a run of identical failures stays quiet between summary lines. */
 	static final long FAILURE_SUMMARY_INTERVAL_MS = 60_000;
@@ -88,13 +80,8 @@ public final class BoundedContextEventEmitter {
 	private final Instance instance;
 	private final SliceRegistry sliceRegistry;
 	private final String boundedContext;
-	private final MeterRegistry meterRegistry;
-
-	/**
-	 * One counter per {@link BoundedContextEvent} type. Bounded by construction - the event hierarchy
-	 * is sealed - so this is not a cardinality risk.
-	 */
-	private final ConcurrentHashMap<String,Counter> failureCounters = new ConcurrentHashMap<>();
+	/** Told of every failed delivery. Never throttled. */
+	private final BoundedContextObserver observer;
 
 	private final Object failureLogLock = new Object();
 	/** Written under {@link #failureLogLock}; volatile so the success path can check it without locking. */
@@ -104,12 +91,12 @@ public final class BoundedContextEventEmitter {
 	private long suppressedSinceLastLog;
 
 	public BoundedContextEventEmitter ( BoundedContextListener listener, Instance instance, SliceRegistry sliceRegistry,
-			String boundedContext, MeterRegistry meterRegistry ) {
+			String boundedContext, BoundedContextObserver observer ) {
 		this.listener = listener == null ? BoundedContextListener.NO_OP : listener;
 		this.instance = instance;
 		this.sliceRegistry = sliceRegistry;
 		this.boundedContext = boundedContext;
-		this.meterRegistry = meterRegistry == null ? Metrics.globalRegistry : meterRegistry;
+		this.observer = BoundedContextObserver.contained(observer == null ? BoundedContextObserver.NOOP : observer);
 	}
 
 	/**
@@ -151,7 +138,7 @@ public final class BoundedContextEventEmitter {
 	 * tags always come from this bounded context. When {@code tracing} is {@code null} (or carries no
 	 * actor) the event falls back to the system actor. Does nothing when no listener is registered.
 	 * <p>
-	 * Never throws: a failing listener is contained, counted and logged (see the class javadoc).
+	 * Never throws: a failing listener is contained, reported to the observer and logged (see the class javadoc).
 	 */
 	public void emit ( BoundedContextEvent event, Tracing tracing ) {
 		if ( enabled() ) {
@@ -194,14 +181,12 @@ public final class BoundedContextEventEmitter {
 	}
 
 	/**
-	 * Counts the failure and logs it, subject to the throttling described on the class. The counter is
-	 * incremented before the lock is taken, so the meter keeps the exact rate however much the log is
-	 * suppressed.
+	 * Reports the failure and logs it, subject to the throttling described on the class. The observer is
+	 * told before the lock is taken, so it sees the exact rate however much the log is suppressed.
 	 */
 	private void noteFailure ( BoundedContextEvent event, Exception failure ) {
 		String eventName = EventType.of(event.getClass()).name();
-		failureCounters.computeIfAbsent(eventName, name -> meterRegistry.counter(FAILURE_METER,
-				io.micrometer.core.instrument.Tags.of("context", boundedContext, "event", name))).increment();
+		observer.listenerFailed(boundedContext, event, failure);
 
 		synchronized ( failureLogLock ) {
 			consecutiveFailures++;

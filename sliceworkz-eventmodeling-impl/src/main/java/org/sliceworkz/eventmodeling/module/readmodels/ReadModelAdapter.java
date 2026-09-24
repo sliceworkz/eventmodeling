@@ -18,92 +18,63 @@
 package org.sliceworkz.eventmodeling.module.readmodels;
 
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
-import org.sliceworkz.eventmodeling.events.Tracing;
-import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
 import org.sliceworkz.eventstore.query.EventQuery;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
-
 /**
- * Adapter that wraps a ReadModel and adds Micrometer monitoring for
- * eventually consistent read model processing.
- *
- * Metrics recorded:
- * - sliceworkz.eventmodeling.readmodel.ec.update: Counter for each event processed
- * - sliceworkz.eventmodeling.readmodel.ec.duration: Timer for event processing duration
- * - sliceworkz.eventmodeling.readmodel.ec.batch: Counter for each batch processed
- * - sliceworkz.eventmodeling.readmodel.ec.batch.duration: Timer for batch processing duration
- * - sliceworkz.eventmodeling.readmodel.ec.batch.events: Counter for total events processed in batches
+ * Wraps an eventually consistent ReadModel so that its projection is observed: every batch a
+ * {@link Observation.ReadModelBatch} scope, from {@link #beforeBatch()} to the read model's own
+ * {@link #afterBatch} (completed {@link Outcome.Projected}) or {@link #cancelBatch()} (completed
+ * {@link Outcome.Cancelled}), and every event handed to the read model a {@link Observation.ReadModelUpdate}
+ * nested inside it. All of it runs on the projector's thread, which is what the scope contract asks.
  */
 class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN_EVENT_TYPE> {
 
 	private final ReadModel<DOMAIN_EVENT_TYPE> readModel;
 	private final String boundedContext;
 	private final String readModelName;
-	private final String readModelType;
-	private final MeterRegistry meterRegistry;
-	private final Tracing tracing;
+	private final ReadModelStorage storage;
+	private final BoundedContextObserver observer;
 
-	private final ConcurrentHashMap<String, Counter> eventCounters = new ConcurrentHashMap<>();
-	private final ConcurrentHashMap<String, Timer> eventTimers = new ConcurrentHashMap<>();
+	/** The open batch, null between batches. Only ever touched from the projector's thread. */
+	private Observation.Scope<Outcome.BatchResult> batchScope;
+	private int batchEventCount;
 
-	private final Counter batchCounter;
-	private final Timer batchTimer;
-	private final Counter batchEventsCounter;
-
-	private Timer.Sample batchSample;
-	private final AtomicLong batchEventCount = new AtomicLong(0);
-
-	public ReadModelAdapter(ReadModel<DOMAIN_EVENT_TYPE> readModel, String boundedContext, Storage storage, MeterRegistry meterRegistry, Tracing tracing) {
+	public ReadModelAdapter(ReadModel<DOMAIN_EVENT_TYPE> readModel, String boundedContext, BoundedContextObserver observer) {
 		this.readModel = readModel;
 		this.boundedContext = boundedContext;
 		this.readModelName = readModel.readmodelName();
-		this.readModelType = storage.label();
-		this.meterRegistry = meterRegistry;
-		this.tracing = tracing;
-
-		Tags baseTags = Tags.of("context", boundedContext, "readmodel", readModelName, "readmodeltype", readModelType);
-		this.batchCounter = meterRegistry.counter("sliceworkz.eventmodeling.readmodel.ec.batch", baseTags);
-		this.batchTimer = meterRegistry.timer("sliceworkz.eventmodeling.readmodel.ec.batch.duration", baseTags);
-		this.batchEventsCounter = meterRegistry.counter("sliceworkz.eventmodeling.readmodel.ec.batch.events", baseTags);
+		this.storage = readModel.storage();
+		this.observer = observer;
 	}
 
 	@Override
 	public void when(Event<DOMAIN_EVENT_TYPE> eventWithMeta) {
-		String eventName = EventType.of(eventWithMeta.data().getClass()).name();
-		String channel = tracing.channel() != null ? tracing.channel() : Tracing.UNKNOWN_CHANNEL_LABEL;
-		String cacheKey = readModelName + ":" + readModelType + ":" + eventName + ":" + channel;
-
-		Counter counter = eventCounters.computeIfAbsent(cacheKey, key ->
-			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.ec.update",
-				Tags.of("context", boundedContext, "readmodel", readModelName, "readmodeltype", readModelType,
-					"event", eventName, "channel", channel)));
-		counter.increment();
-
-		Timer timer = eventTimers.computeIfAbsent(cacheKey, key ->
-			meterRegistry.timer("sliceworkz.eventmodeling.readmodel.ec.duration",
-				Tags.of("context", boundedContext, "readmodel", readModelName, "readmodeltype", readModelType,
-					"event", eventName, "channel", channel)));
-
-		timer.record(() -> readModel.when(eventWithMeta));
-		batchEventCount.incrementAndGet();
+		try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.ReadModelUpdate(boundedContext, readModelName, storage, eventWithMeta)) ) {
+			try {
+				readModel.when(eventWithMeta);
+				scope.completed(Outcome.Done.INSTANCE);
+			} catch ( RuntimeException | Error e ) {
+				scope.failed(e);
+				throw e;
+			}
+		}
+		batchEventCount++;
 	}
 
 	@Override
 	public void beforeBatch() {
-		batchSample = Timer.start(meterRegistry);
-		batchEventCount.set(0);
+		closeOpenBatch(); // a batch the projector never ended must not stay current on this thread
+		batchScope = observer.start(new Observation.ReadModelBatch(boundedContext, readModelName, storage));
+		batchEventCount = 0;
 		if (readModel instanceof BatchAwareProjection<?> batchAware) {
 			batchAware.beforeBatch();
 		}
@@ -111,27 +82,44 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN
 
 	@Override
 	public void afterBatch(Optional<EventReference> lastProcessedEvent) {
-		if (batchSample != null) {
-			batchSample.stop(batchTimer);
-			batchSample = null;
+		try {
+			if (readModel instanceof BatchAwareProjection<?> batchAware) {
+				batchAware.afterBatch(lastProcessedEvent);
+			}
+		} catch ( RuntimeException | Error e ) {
+			endBatch(scope -> scope.failed(e));
+			throw e;
 		}
-		long eventsProcessed = batchEventCount.getAndSet(0);
-		if (eventsProcessed > 0) {
-			batchCounter.increment();
-			batchEventsCounter.increment(eventsProcessed);
-		}
-		if (readModel instanceof BatchAwareProjection<?> batchAware) {
-			batchAware.afterBatch(lastProcessedEvent);
-		}
+		int eventsHandled = batchEventCount;
+		endBatch(scope -> scope.completed(new Outcome.Projected(eventsHandled, lastProcessedEvent)));
 	}
 
 	@Override
 	public void cancelBatch() {
-		batchSample = null;
-		batchEventCount.set(0);
-		if (readModel instanceof BatchAwareProjection<?> batchAware) {
-			batchAware.cancelBatch();
+		try {
+			if (readModel instanceof BatchAwareProjection<?> batchAware) {
+				batchAware.cancelBatch();
+			}
+		} finally {
+			endBatch(scope -> scope.completed(new Outcome.Cancelled()));
 		}
+	}
+
+	private void endBatch ( java.util.function.Consumer<Observation.Scope<Outcome.BatchResult>> outcome ) {
+		Observation.Scope<Outcome.BatchResult> scope = batchScope;
+		batchScope = null;
+		batchEventCount = 0;
+		if ( scope != null ) {
+			try {
+				outcome.accept(scope);
+			} finally {
+				scope.close();
+			}
+		}
+	}
+
+	private void closeOpenBatch ( ) {
+		endBatch(scope -> scope.completed(new Outcome.Cancelled()));
 	}
 
 	@Override

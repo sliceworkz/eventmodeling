@@ -52,6 +52,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDo
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
+import org.sliceworkz.eventmodeling.testing.RecordingBoundedContextObserver;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -61,8 +62,6 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
  * Observability must never be able to fail the work it observes. A {@link BoundedContextListener} is
@@ -76,9 +75,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
  *       progress.</li>
  *   <li>A projector's run listener throws inside the projection loop rather than beside it.</li>
  * </ul>
- * The kernel therefore contains every delivery: the exception is caught, counted on
- * {@code sliceworkz.eventmodeling.listener.failure} and logged at ERROR, and the operation carries
- * on as if no listener were registered. Nothing replays the dropped event.
+ * The kernel therefore contains every delivery: the exception is caught, reported to the
+ * {@code BoundedContextObserver} and logged at ERROR, and the operation carries on as if no listener were registered. Nothing replays the dropped event.
  *
  * @see BoundedContextEventEmitter
  */
@@ -86,14 +84,14 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 
 	private static final String CONTEXT_NAME = "ListenerFailureTestBoundedContext";
 
-	private SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+	private RecordingBoundedContextObserver observer = new RecordingBoundedContextObserver();
 
 	private Mock buildDomain ( BoundedContextListener listener ) {
 		return buildBoundedContext(BoundedContext.newBuilder(Mock.class)
 				.name(CONTEXT_NAME)
 				.eventStorage(eventStorage())
 				.instance(InstanceFactory.determine("unittests"))
-				.meterRegistry(meterRegistry)
+				.observer(observer)
 				.listener(listener));
 	}
 
@@ -193,7 +191,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 	 * It is tagged with the bounded context and the event type whose delivery failed.
 	 */
 	@Test
-	void everyFailedDeliveryIsCounted ( ) {
+	void everyFailedDeliveryIsReportedToTheObserver ( ) {
 		ThrowingListener listener = new ThrowingListener(event -> event instanceof CommandExecuted);
 		Mock domain = buildDomain(listener);
 
@@ -201,17 +199,18 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 		domain.execute(new MockCommand(List.of(new FirstDomainEvent("b"))));
 		domain.execute(new MockCommand(List.of(new FirstDomainEvent("c"))));
 
-		Counter counter = meterRegistry.find("sliceworkz.eventmodeling.listener.failure")
-				.tag("context", CONTEXT_NAME)
-				.tag("event", "CommandExecuted")
-				.counter();
+		List<RecordingBoundedContextObserver.ListenerFailure> failures = observer.listenerFailures().stream()
+				.filter(failure -> failure.event() instanceof CommandExecuted).toList();
 
-		assertNotNull(counter, "expected a failure counter tagged with the context and the event type");
-		assertEquals(3.0, counter.count(), "every failure counts, however much the logging is throttled");
+		assertEquals(3, failures.size(), "every failure is reported to the observer, however much the logging is throttled");
+		failures.forEach(failure -> {
+			assertEquals(CONTEXT_NAME, failure.boundedContext());
+			assertNotNull(failure.failure());
+		});
 	}
 
 	/**
-	 * A listener that cannot work at all is reported and counted, but does not stop the context coming up.
+	 * A listener that cannot work at all is reported to the observer and logged, but does not stop the context coming up.
 	 * The alternative - failing the boot - turns a transient blip in whatever the listener writes to into
 	 * an outage of the application it was only meant to observe.
 	 */
@@ -248,7 +247,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 				.name(CONTEXT_NAME)
 				.eventStorage(eventStorage())
 				.instance(InstanceFactory.determine("unittests"))
-				.meterRegistry(meterRegistry)
+				.observer(observer)
 				.listener(listener);
 		builder.readmodel(readModel).eventuallyConsistent();
 		Mock domain = buildBoundedContext(builder);
@@ -286,7 +285,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 				.name(CONTEXT_NAME)
 				.eventStorage(eventStorage())
 				.instance(InstanceFactory.determine("unittests"))
-				.meterRegistry(meterRegistry)
+				.observer(observer)
 				.listener(listener);
 		builder.readmodel(todoList).eventuallyConsistent();
 		builder.automation(new HandlingAutomation(todoList, handled));

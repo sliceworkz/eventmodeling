@@ -18,8 +18,10 @@
 package org.sliceworkz.eventmodeling.module.readmodels;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -31,31 +33,32 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
+import org.sliceworkz.eventmodeling.module.snapshots.SnapshotObservations;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotCapable;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
+import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage.MissReason;
+import org.sliceworkz.eventmodeling.testing.RecordingBoundedContextObserver;
+import org.sliceworkz.eventmodeling.testing.RecordingBoundedContextObserver.Recording;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Timer;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-
 /**
- * The live model snapshot path is metered through the same {@code SnapshotMeters} as the aggregate
- * one, under its own prefix and {@code readmodel} tag: hits and writes by version, misses by
- * reason, and timers for the storage calls themselves — kept apart from
- * {@code readmodel.live.duration}, which also contains the event replay.
+ * The live model snapshot path is observed through the same {@code ObservedSnapshots} as the aggregate
+ * one, as {@link Observation.SnapshotOwner#LIVE_MODEL}: hits and writes by version, misses by reason,
+ * each storage call a scope of its own nested in the live model read — so what the storage costs is kept
+ * apart from the read around it, which also contains the event replay.
  */
-public class LiveModelSnapshotMeterTest extends AbstractMockDomainTest {
-
-	private static final String PREFIX = "sliceworkz.eventmodeling.readmodel.live.snapshot";
+public class LiveModelSnapshotObservationTest extends AbstractMockDomainTest {
 
 	private ClassifyingLiveModelSnapshotStorage snapshotStorage;
-	private SimpleMeterRegistry registry;
+	private RecordingBoundedContextObserver observer;
+	private SnapshotObservations snapshots;
 
 	@Override
 	@BeforeEach
@@ -63,11 +66,12 @@ public class LiveModelSnapshotMeterTest extends AbstractMockDomainTest {
 		super.setUp();
 		MeteredLiveModel.VERSION = "v1";
 		snapshotStorage = new ClassifyingLiveModelSnapshotStorage();
-		registry = new SimpleMeterRegistry();
+		observer = new RecordingBoundedContextObserver();
+		snapshots = new SnapshotObservations(observer);
 	}
 
 	@Test
-	void hitsMissesAndWritesAreCountedByVersionAndReason ( ) {
+	void hitsMissesAndWritesAreObservedByVersionAndReason ( ) {
 		Mock domain = domainWithLiveModel();
 
 		domain.event(new FirstDomainEvent("one"));
@@ -76,56 +80,64 @@ public class LiveModelSnapshotMeterTest extends AbstractMockDomainTest {
 		// first read: nothing stored, so the load misses -- and 2 replayed events reach the
 		// threshold of 2, so a snapshot is written under the current version
 		domain.read(MeteredLiveModel.class, "myModel");
-		assertEquals(1, count(".miss.count", "reason", "absent", "version", "v1"));
-		assertEquals(1, count(".write.count", "version", "v1"));
-		assertEquals(1, timerCount(".load.duration"));
-		assertEquals(1, timerCount(".save.duration"));
+		assertEquals(1, snapshots.missed(MissReason.ABSENT, "v1"));
+		assertEquals(1, snapshots.written("v1"));
+		assertEquals(1, snapshots.loads().size());
+		assertEquals(1, snapshots.saves().size());
 
 		// second read: the snapshot is found, nothing new to snapshot
 		domain.read(MeteredLiveModel.class, "myModel");
-		assertEquals(1, count(".read.count", "version", "v1"));
-		assertEquals(1, count(".write.count", "version", "v1"));
+		assertEquals(1, snapshots.found("v1"));
+		assertEquals(1, snapshots.written("v1"));
 
 		// a bumped version misses although a snapshot is stored -- the reason says so
 		MeteredLiveModel.VERSION = "v2";
 		domain.read(MeteredLiveModel.class, "myModel");
-		assertEquals(1, count(".miss.count", "reason", "version_mismatch", "version", "v2"));
-		assertEquals(1, count(".read.count", "version", "v1"), "the hit count is untouched by the mismatch");
+		assertEquals(1, snapshots.missed(MissReason.VERSION_MISMATCH, "v2"));
+		assertEquals(1, snapshots.found("v1"), "the hit is untouched by the mismatch");
+
+		assertEquals(List.of(), observer.violations());
 	}
 
-	/** The base tags name the read model, so two snapshotting live models keep separate series. */
+	/** The observation names the context and the read model, so two snapshotting live models are told apart. */
 	@Test
-	void theMetersAreTaggedWithContextAndReadModel ( ) {
+	void theCallsNameTheContextAndTheReadModelAndNestInTheRead ( ) {
 		Mock domain = domainWithLiveModel();
 
 		domain.event(new FirstDomainEvent("one"));
 		domain.read(MeteredLiveModel.class, "myModel");
 
-		assertEquals(1, count(".miss.count",
-				"context", "UnitTestBoundedContext",
-				"readmodel", "MeteredLiveModel",
-				"reason", "absent",
-				"version", "v1"));
+		Recording load = observer.last(Observation.SnapshotLoad.class);
+		Observation.SnapshotLoad started = load.observation(Observation.SnapshotLoad.class);
+		assertEquals("UnitTestBoundedContext", started.boundedContext());
+		assertEquals(Observation.SnapshotOwner.LIVE_MODEL, started.owner());
+		assertEquals("MeteredLiveModel", started.component());
+		assertSame(observer.last(Observation.LiveModelRead.class), load.parent().orElseThrow());
+	}
+
+	/** A read restored from a snapshot reports the snapshot as the base it started after. */
+	@Test
+	void aReadFromASnapshotReportsItsBase ( ) {
+		Mock domain = domainWithLiveModel();
+
+		domain.event(new FirstDomainEvent("one"));
+		domain.event(new FirstDomainEvent("two"));
+		domain.read(MeteredLiveModel.class, "myModel");
+		domain.read(MeteredLiveModel.class, "myModel");
+
+		Outcome.LiveModelProjected projected = observer.last(Observation.LiveModelRead.class).outcome(Outcome.LiveModelProjected.class);
+		assertEquals(observer.last(Observation.SnapshotLoad.class).outcome(Outcome.SnapshotFound.class).at(), projected.startedAfter().orElseThrow());
+		assertEquals(0, projected.eventsStreamed());
 	}
 
 	private Mock domainWithLiveModel ( ) {
 		var builder = BoundedContext.newBuilder(Mock.class)
 				.name("UnitTestBoundedContext")
 				.eventStorage(eventStorage())
-				.meterRegistry(registry)
+				.observer(observer)
 				.instance(InstanceFactory.determine("unittests"));
 		builder.readmodel(MeteredLiveModel.class).snapshots(snapshotStorage).eventCountThreshold(2).readAndWrite();
 		return buildBoundedContext(builder);
-	}
-
-	private double count ( String suffix, String... tags ) {
-		Counter counter = registry.find(PREFIX + suffix).tags(tags).counter();
-		return counter != null ? counter.count() : 0;
-	}
-
-	private long timerCount ( String suffix ) {
-		Timer timer = registry.find(PREFIX + suffix).timer();
-		return timer != null ? timer.count() : 0;
 	}
 
 }

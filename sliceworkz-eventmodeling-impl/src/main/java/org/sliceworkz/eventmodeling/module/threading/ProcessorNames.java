@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
  * (read models, automations, translators, dispatchers).
  * <p>
  * A component's name ends up in {@link ProcessorIdentification#id()}, which is the reader name of the
- * bookmark recording how far that component has been projected — plus its metric tags and, for an
+ * bookmark recording how far that component has been projected — plus the name its observations carry and, for an
  * automation, the id {@code AutomationAdminCapability} addresses it by. Two properties are therefore
  * load-bearing, and neither is checked anywhere further down:
  * <ul>

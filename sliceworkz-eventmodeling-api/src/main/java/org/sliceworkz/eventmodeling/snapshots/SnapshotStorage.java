@@ -47,22 +47,23 @@ public interface SnapshotStorage<SNAPSHOT_TYPE> {
 
 	/**
 	 * Classifies why {@link #load(String, String)} returned empty for the given key and version,
-	 * so the framework can meter snapshot misses by reason
-	 * ({@code sliceworkz.eventmodeling.*.snapshot.miss.count}, tagged {@code reason}).
+	 * so the framework can report snapshot misses by reason (the
+	 * {@link org.sliceworkz.eventmodeling.observability.Outcome.SnapshotMissed} a snapshot load's
+	 * observation completes with).
 	 * <p>
 	 * The framework calls this only after a load returned empty — never on a hit. A miss already
 	 * means the component is about to be rebuilt by replaying events, so one extra storage lookup
 	 * here is noise next to the replay it accompanies.
 	 * <p>
 	 * The default returns {@link MissReason#UNKNOWN}, which keeps storages written before this
-	 * method existed working unchanged — their misses are metered without a reason. Override it to
+	 * method existed working unchanged — their misses are reported without a reason. Override it to
 	 * distinguish {@link MissReason#ABSENT} (nothing stored under the key) from
 	 * {@link MissReason#VERSION_MISMATCH} (a snapshot is stored under the key, but with a different
 	 * version). The mismatch is the case worth alerting on: a bumped version means every load
 	 * replays the full history until the next threshold-triggered save, and without this
 	 * classification that is indistinguishable from a key that was simply never snapshotted.
 	 * <p>
-	 * A throw out of this method is contained by the framework — the miss is metered as
+	 * A throw out of this method is contained by the framework — the miss is reported as
 	 * {@link MissReason#UNKNOWN} and the read goes on. Classification never fails the work it
 	 * observes.
 	 *

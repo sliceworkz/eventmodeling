@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -37,12 +38,15 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
-import org.sliceworkz.eventmodeling.module.snapshots.SnapshotMeters;
+import org.sliceworkz.eventmodeling.module.snapshots.ObservedSnapshots;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification.Storage;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
@@ -55,8 +59,6 @@ import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
-
-import io.micrometer.core.instrument.MeterRegistry;
 
 public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
@@ -77,7 +79,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private String boundedContext;
 	private Instance instance;
 
-	private MeterRegistry meterRegistry;
+	private BoundedContextObserver observer;
 	private BoundedContextEventEmitter eventEmitter;
 	private ProjectorProcessorAdmin admin;
 
@@ -87,7 +89,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			boolean readSnapshots,
 			boolean writeSnapshots,
 			int snapshotEventCountThreshold,
-			SnapshotMeters snapshotMeters
+			ObservedSnapshots snapshots
 		) {
 
 		public SnapshotStorage<Object> snapshotStorageForWrite ( ) {
@@ -103,7 +105,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			List<LMSI> liveModelSpecs,
 			Collection<ReadModel<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels,
 			Instance instance,
-			MeterRegistry meterRegistry,
+			BoundedContextObserver observer,
 			BoundedContextEventEmitter eventEmitter
 		) {
 
@@ -121,13 +123,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				throw new IllegalArgumentException("duplicate live readmodel %s".formatted(readModelClass));
 			}
 
-			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
-					.of("context", boundedContext)
-					.and("readmodel", readModelClass.getSimpleName());
-
-			// registered lazily inside SnapshotMeters: the counters carry a version tag, and the
-			// version is an instance method on the read model, unknown until a read constructs one
-			SnapshotMeters snapshotMeters = new SnapshotMeters(meterRegistry, "sliceworkz.eventmodeling.readmodel.live.snapshot", tags);
+			ObservedSnapshots snapshots = new ObservedSnapshots(observer, boundedContext, Observation.SnapshotOwner.LIVE_MODEL, readModelClass.getSimpleName());
 
 			this.liveModels.put(readModelClass, new LiveModelInfo<>(
 					readModelClass,
@@ -135,7 +131,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 					spec.readSnapshots(),
 					spec.writeSnapshots(),
 					spec.snapshotEventCountThreshold(),
-					snapshotMeters));
+					snapshots));
 		}
 
 		// the name keys this read model's bookmark, and readmodelName() defaults to the simple class name
@@ -151,7 +147,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			this.eventuallyConsistentReadModels.add(eventuallyConsistentReadModel);
 		}
 
-		this.meterRegistry = meterRegistry;
+		this.observer = observer;
 		this.admin = new ProjectorProcessorAdmin(ProcessorKind.READ_MODEL, boundedContext);
 
 		this.projectorProcessors = createProjectorProcessors(this.eventuallyConsistentReadModels);
@@ -177,7 +173,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 					.storage(readModelStorage)
 					.build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
-				new ReadModelAdapter<>(rm, boundedContext, storage, meterRegistry, Tracing.actorAndChannel(rm.readmodelName(), "readmodel").instance(instance)),
+				new ReadModelAdapter<>(rm, boundedContext, observer),
 				processorModeFor(readModelStorage),
 				instance,
 				ecProjectorListener(rm, storage),
@@ -310,14 +306,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL liveModel ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... constructorParams ) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
-			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
-					.of("context", boundedContext)
-					.and("readmodel", readModelClass.getSimpleName());
-			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
-
-			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				return readModelClass.cast(projectLiveModel(domainEventStream, readModelClass, info, tracing, constructorParams));
-			});
+			return readModelClass.cast(observedLiveModel(domainEventStream, readModelClass, false, info, tracing, constructorParams));
 
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
@@ -327,21 +316,26 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL liveModelUnbounded ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... constructorParams ) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
-			io.micrometer.core.instrument.Tags tags = io.micrometer.core.instrument.Tags
-					.of("context", boundedContext)
-					.and("readmodel", readModelClass.getSimpleName());
-			meterRegistry.counter("sliceworkz.eventmodeling.readmodel.live.render", tags).increment();
-
-			return meterRegistry.timer("sliceworkz.eventmodeling.readmodel.live.duration", tags).record(()->{
-				return readModelClass.cast(projectLiveModel(allInStorageEventStream, readModelClass, info, tracing, constructorParams));
-			});
+			return readModelClass.cast(observedLiveModel(allInStorageEventStream, readModelClass, true, info, tracing, constructorParams));
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
 		}
 	}
 
+	@SuppressWarnings("rawtypes")
+	private ReadModel<DOMAIN_EVENT_TYPE> observedLiveModel ( EventSource eventSource, Class<?> readModelClass, boolean unbounded, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams ) {
+		try ( Observation.Scope<Outcome.LiveModelProjected> scope = observer.start(new Observation.LiveModelRead(boundedContext, readModelClass.getSimpleName(), readModelClass, unbounded, tracing)) ) {
+			try {
+				return projectLiveModel(eventSource, readModelClass, info, tracing, constructorParams, scope);
+			} catch ( RuntimeException e ) {
+				scope.failed(e);
+				throw e;
+			}
+		}
+	}
+
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private ReadModel<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams ) {
+	private ReadModel<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams, Observation.Scope<Outcome.LiveModelProjected> scope ) {
 		long start = System.currentTimeMillis();
 		try {
 			ReadModel<DOMAIN_EVENT_TYPE> readModel = (ReadModel<DOMAIN_EVENT_TYPE>) LiveModelConstructors.select(readModelClass, constructorParams).newInstance(constructorParams);
@@ -361,7 +355,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			if ( info.readSnapshots() && readModel instanceof SnapshotCapable<?> snapshotCapable ) {
 				String key = snapshotCapable.key(readModel.readmodelName(), constructorParams);
 				String version = snapshotCapable.version();
-				var loadedSnapshot = info.snapshotMeters().load(info.snapshotStorage(), key, version);
+				var loadedSnapshot = info.snapshots().load(info.snapshotStorage(), key, version);
 				if ( loadedSnapshot.isPresent() ) {
 					((SnapshotCapable<Object>) snapshotCapable).fromSnapshot(loadedSnapshot.get().snapshot());
 					lastEventReference = loadedSnapshot.get().lastEventReference();
@@ -387,6 +381,9 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				eventEmitter.emit(new BoundedContextEvent.LiveModelProjected(boundedContext, readModel.readmodelName(), metrics, seededAt, eventEmitter.sliceFor(readModel.getClass())), tracing);
 			}
 
+			scope.completed(new Outcome.LiveModelProjected(projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(),
+					Optional.ofNullable(seededAt), Optional.ofNullable(projectorMetrics.lastEventReference())));
+
 			return readModel;
 		} catch (InvocationTargetException e) {
 			// the read model's own constructor threw: report that, not the reflective wrapper around it,
@@ -408,7 +405,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				&& projectorMetrics.eventsStreamed() >= info.snapshotEventCountThreshold()
 				&& readModel instanceof SnapshotCapable<?> snapshotCapable ) {
 			String key = snapshotCapable.key(readModel.readmodelName(), constructorParams);
-			info.snapshotMeters().save(snapshotStorageForWrite, key, snapshotCapable.version(), ((SnapshotCapable<Object>) snapshotCapable).takeSnapshot(), projectorMetrics.lastEventReference());
+			info.snapshots().save(snapshotStorageForWrite, key, snapshotCapable.version(), ((SnapshotCapable<Object>) snapshotCapable).takeSnapshot(), projectorMetrics.lastEventReference());
 		}
 	}
 

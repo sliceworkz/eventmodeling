@@ -34,7 +34,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-		<sliceworkz.eventstore.version>0.11.0</sliceworkz.eventstore.version>
+		<sliceworkz.eventstore.version>0.11.1</sliceworkz.eventstore.version>
 		
 		<maven.minimal-version>3.6.3</maven.minimal-version>
 		
@@ -189,6 +189,30 @@
 									<version>${maven.minimal-version}</version>
 								</requireMavenVersion>
 							</rules>    
+						</configuration>
+					</execution>
+					<!--
+						The framework reports what it does through its own observability SPI
+						(org.sliceworkz.eventmodeling.observability.BoundedContextObserver), as the eventstore
+						does through EventStoreObserver, and names no metrics library: a binding to one is an
+						application's choice, shipped outside these artifacts. Micrometer reaching any module,
+						in any scope, would be the start of that coupling coming back, so it fails the build.
+					-->
+					<execution>
+						<id>no-micrometer</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<bannedDependencies>
+									<message>The eventmodeling modules must not depend on Micrometer: they report through BoundedContextObserver (and the store through EventStoreObserver), and a Micrometer binding lives outside this repository.</message>
+									<searchTransitive>true</searchTransitive>
+									<excludes>
+										<exclude>io.micrometer:*</exclude>
+									</excludes>
+								</bannedDependencies>
+							</rules>
 						</configuration>
 					</execution>
 				</executions>

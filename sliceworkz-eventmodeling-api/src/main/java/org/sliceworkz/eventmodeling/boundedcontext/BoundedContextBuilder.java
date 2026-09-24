@@ -30,17 +30,16 @@ import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.management.ManagementInstruction;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
-import org.sliceworkz.eventstore.MeterOptions;
+import org.sliceworkz.eventstore.observability.EventStoreObserver;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingKeyStore;
 import org.sliceworkz.eventstore.spi.EventStorage;
 import org.sliceworkz.eventstore.stream.EventStream;
-
-import io.micrometer.core.instrument.MeterRegistry;
 
 /**
  * Configures a bounded context and, from {@link #build()}, produces it.
@@ -89,31 +88,36 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 
 	BoundedContextBuilder<C> instance(Instance instance);
 
-	BoundedContextBuilder<C> meterRegistry(MeterRegistry meterRegistry);
+	/**
+	 * The observer this bounded context reports its work to — commands, read models, aggregates, snapshots,
+	 * automations, translators, dispatchers — for an application to turn into meters, spans or anything
+	 * else. The framework names no metrics or tracing library itself: a binding to one is an observer.
+	 * <p>
+	 * Left unset, the context observes nothing ({@link BoundedContextObserver#NOOP}). Whatever the observer
+	 * throws is contained, never reaching the work it observes. The event store's own operations are
+	 * reported to a separate observer — see {@link #eventStoreObserver(EventStoreObserver)}.
+	 *
+	 * @param observer the observer; must not be null
+	 * @return this builder
+	 * @throws IllegalArgumentException if the observer is null
+	 */
+	BoundedContextBuilder<C> observer(BoundedContextObserver observer);
 
 	/**
-	 * How the event store tags the meters it registers, in particular how far it breaks them down by
-	 * stream purpose.
+	 * The observer the event store this context builds reports its own operations to — appends, queries,
+	 * bookmarks, projector batches, erasures — taking precedence over the one the storage was built with.
 	 * <p>
-	 * The default caps the {@code purpose} tag at 1000 distinct values and pools everything past that
-	 * under {@code _other}, which is the right answer for almost every context. Set this where you know
-	 * your own cardinality better than that default can:
-	 * <pre>{@code
-	 * // purpose is an entity id here -- never break down by it
-	 * .meterOptions(MeterOptions.withoutPurposeBreakdown())
+	 * Left unset, the store reports to the storage's own ({@code EventStorage.observer()}), which is what a
+	 * storage builder's {@code .observer(...)} put there and {@link EventStoreObserver#NOOP} for a storage
+	 * built without one — so a storage configured with an observer needs nothing repeated here, exactly as
+	 * with the shredding codec. Bounding a high-cardinality stream purpose, which the event store's meter
+	 * options used to do, is that observer's concern now.
 	 *
-	 * // a wider, but genuinely bounded, set of purposes
-	 * .meterOptions(MeterOptions.withMaxPurposeTagValues(5000))
-	 * }</pre>
-	 * Nothing evicts a meter once it is registered, so an uncapped high-cardinality purpose grows the
-	 * process for as long as it runs, with nothing failing to say so. A Micrometer {@code MeterFilter}
-	 * is not a substitute: it runs at registration, while the store keys some of its own state on the
-	 * tags it asked for.
-	 *
-	 * @param meterOptions how to tag the store's meters; null restores the defaults
+	 * @param observer the event store observer; must not be null
 	 * @return this builder
+	 * @throws IllegalArgumentException if the observer is null
 	 */
-	BoundedContextBuilder<C> meterOptions(MeterOptions meterOptions);
+	BoundedContextBuilder<C> eventStoreObserver(EventStoreObserver observer);
 
 	/**
 	 * The storage the bounded context keeps its events in.

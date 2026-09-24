@@ -199,7 +199,9 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 	 * leader continues where the deployment got to, not where this JVM did.
 	 */
 	private Projector<EVENT_TYPE> createProjector ( ) {
-		Projector.Builder<EVENT_TYPE> builder = Projector.from(eventSource).into(projection);
+		// named after the component, not the adapter wrapping it: the store reports this projector's
+		// batches under the name its bookmark, its ProcessorStatus and the bounded-context events use
+		Projector.Builder<EVENT_TYPE> builder = Projector.from(eventSource).into(projection).named(processorIdentification.id());
 
 		if ( ownBookmark != null ) {
 			// The projection wrote its position and its state in one transaction, so its position is

@@ -36,16 +36,14 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorInstanceMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.BookmarkListener;
-
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Tags;
-import io.micrometer.core.instrument.Timer;
 
 public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements BookmarkListener, Processor {
 
@@ -118,14 +116,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private volatile int consecutiveFailedBatches;
 
 	private final String boundedContext;
-	private final MeterRegistry meterRegistry;
-	private final Counter batchCounter;
-	private final Counter itemsHandledCounter;
-	private final Counter itemsFailedCounter;
-	private final Timer batchTimer;
+	private final BoundedContextObserver observer;
 	private final BoundedContextEventEmitter eventEmitter;
 
-	public AutomationProcessor ( ProcessorIdentification processorIdentification, ProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, MeterRegistry meterRegistry, BoundedContextEventEmitter eventEmitter ) {
+	public AutomationProcessor ( ProcessorIdentification processorIdentification, ProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
 		this.automationContextFactory = automationContextFactory;
 		this.automation = automation;
 		this.originalProcessorMode = processorMode;
@@ -136,19 +130,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		this.eventSource = eventSource;
 		this.instance = instance;
 		this.boundedContext = boundedContext;
-		this.meterRegistry = meterRegistry;
+		this.observer = observer;
 		this.eventEmitter = eventEmitter;
 
 		this.batchSize = AutomationBatch.batchSizeOf(automation);
-
-		// Initialize metrics with base tags
-		Tags baseTags = Tags.of("context", boundedContext)
-				.and("automation", processorIdentification.id());
-
-		this.batchCounter = meterRegistry.counter("sliceworkz.eventmodeling.automation.batch", baseTags);
-		this.itemsHandledCounter = meterRegistry.counter("sliceworkz.eventmodeling.automation.items.handled", baseTags);
-		this.itemsFailedCounter = meterRegistry.counter("sliceworkz.eventmodeling.automation.items.failed", baseTags);
-		this.batchTimer = meterRegistry.timer("sliceworkz.eventmodeling.automation.batch.duration", baseTags);
 
 		eventSource.subscribe(this);
 	}
@@ -268,23 +253,25 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 									LOGGER.debug("starting processing of max {} items at a time", batchSize);
 
-									// Time the batch processing and count items
-									Timer.Sample sample = Timer.start(meterRegistry);
 									long batchStartMs = System.currentTimeMillis();
 									// the batch semantics live in AutomationBatch, shared with the published
-									// AutomationTest harness; what this processor adds around them is the meters,
-									// the bookmark and the lifecycle below. The context is derived per item, so
-									// a CorrelatedTodoItem's handling is stamped with its flow's correlation id
-									AutomationBatch.Outcome outcome = AutomationBatch.handleBatch(
-											automation, AutomationBatch.correlatedContexts(automationContextFactory, tracing), batchSize, processorIdentification.toString(),
-											() -> terminating || processorMode == ProcessorMode.STOPPED || instanceMode == ProcessorInstanceMode.STANDBY,
-											t -> lastFailure = t);
-									sample.stop(batchTimer);
+									// AutomationTest harness; what this processor adds around them is the
+									// observation, the bookmark and the lifecycle below. The context is derived per
+									// item, so a CorrelatedTodoItem's handling is stamped with its flow's correlation id
+									AutomationBatch.Outcome outcome;
+									try ( Observation.Scope<Outcome.AutomationRan> scope = observer.start(new Observation.AutomationRun(boundedContext, processorIdentification.id(), tracing)) ) {
+										try {
+											outcome = AutomationBatch.handleBatch(
+													automation, AutomationBatch.correlatedContexts(automationContextFactory, tracing), batchSize, processorIdentification.toString(),
+													() -> terminating || processorMode == ProcessorMode.STOPPED || instanceMode == ProcessorInstanceMode.STANDBY,
+													t -> lastFailure = t);
+											scope.completed(new Outcome.AutomationRan(outcome.streamed(), outcome.handled(), outcome.failed(), Optional.ofNullable(outcome.lastProducedEvent())));
+										} catch ( RuntimeException | Error e ) {
+											scope.failed(e);
+											throw e;
+										}
+									}
 
-									// Record metrics
-									batchCounter.increment();
-									itemsHandledCounter.increment(outcome.handled());
-									itemsFailedCounter.increment(outcome.failed());
 									itemsFailed.addAndGet(outcome.failed());
 
 									if ( outcome.streamed() > 0 && eventEmitter.enabled() ) {

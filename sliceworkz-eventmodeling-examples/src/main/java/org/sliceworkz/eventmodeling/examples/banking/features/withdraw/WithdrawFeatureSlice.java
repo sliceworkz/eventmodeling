@@ -18,16 +18,16 @@
 package org.sliceworkz.eventmodeling.examples.banking.features.withdraw;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
-import org.sliceworkz.eventmodeling.examples.banking.Banking;
+import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 @FeatureSlice(type = Type.STATE_CHANGE, context = "banking", chapter = "Transactions")
-public class WithdrawFeatureSlice implements Slice<Banking> {
+public class WithdrawFeatureSlice implements Slice<ClosingTheBooks> {
 
 	@Override
-	public void configureCommand(BoundedContextBuilder<Banking> builder) {
+	public void configureCommand(BoundedContextBuilder<ClosingTheBooks> builder) {
 		builder.command(WithdrawCommand.class);
 	}
 

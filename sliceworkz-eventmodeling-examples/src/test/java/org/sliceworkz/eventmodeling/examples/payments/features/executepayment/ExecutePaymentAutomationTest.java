@@ -34,6 +34,7 @@ import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDom
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentRequested;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsInboundEvent;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsOutboundEvent;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsOutboundEvent.PaymentAnnounced;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentsToExecuteTodoList.PaymentToExecute;
 import org.sliceworkz.eventmodeling.testing.AutomationTest;
 import org.sliceworkz.eventstore.events.Event;
@@ -92,15 +93,17 @@ public class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecut
 
 	/** The reference the simulated gateway mints for a payment's idempotency key — deterministic. */
 	private static String gatewayReferenceFor ( PaymentId paymentId ) {
-		return "GW-" + Integer.toHexString(("payment-executed:" + paymentId.value()).hashCode());
+		return "GW-" + Integer.toHexString(("payment/" + paymentId.value()).hashCode());
 	}
 
 	@Test
-	void aPaymentIsExecutedAndLeavesTheTodoList ( ) {
+	void aPaymentIsExecutedAnnouncedAndLeavesTheTodoList ( ) {
 		given(new PaymentRequested(PAYMENT_1, IBAN_1, 100_00))
 			.expectTodoItems(new PaymentToExecute(PAYMENT_1, IBAN_1, 100_00, 0, null))
 			.whenBatchRuns()
 			.itemsHandled(1)
+			// publishAndRecord: the announcement on the outbound stream, the fact on the domain stream
+			.outboundEvents(new PaymentAnnounced(PAYMENT_1, gatewayReferenceFor(PAYMENT_1)))
 			.events(new PaymentExecuted(PAYMENT_1, gatewayReferenceFor(PAYMENT_1)))
 			.and()
 			// the PaymentExecuted event is projected at the start of the next round and drops the item
@@ -118,10 +121,11 @@ public class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecut
 			// bookmark does in production
 			.whenItemsAreRedelivered()
 			.itemsHandled(1)
-			.noEvents(); // the item-derived key made the duplicate append a no-op
+			.noOutboundEvents() // announced once: publishAndRecord keys the outbound half on the item too
+			.noEvents();        // the item-derived key made the duplicate append a no-op
 
 		// and the gateway was called twice but moved the money once: it de-duplicates on the same
-		// item-derived key the event carries, which is why handle() hands it the key at all
+		// item-derived key the events carry, which is why handle() hands it the key at all
 		assertEquals(2, gateway.calls(), "the retry did reach the gateway");
 	}
 
@@ -138,6 +142,8 @@ public class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecut
 				new PaymentAbandoned(PAYMENT_1, "unsupported IBAN NL91ABNA0417164300", 1),
 				// ... and the payment behind it, executed in the same batch
 				new PaymentExecuted(PAYMENT_2, gatewayReferenceFor(PAYMENT_2)))
+			// only the payment that went through is announced
+			.outboundEvents(new PaymentAnnounced(PAYMENT_2, gatewayReferenceFor(PAYMENT_2)))
 			.and()
 			.expectNoTodoItems();
 	}
@@ -191,6 +197,7 @@ public class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecut
 			.itemsFailed(1)
 			.itemsHandled(0)
 			.noEvents()               // an outage is not a fact about this payment
+			.noOutboundEvents()       // and nothing is announced for a payment that did not go through
 			.automationStillRunning();
 
 		// the gateway comes back, and the very next batch catches up by itself
@@ -219,7 +226,7 @@ public class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecut
 	/** Guards the deterministic gateway reference the assertions above rely on. */
 	@Test
 	void theSimulatedGatewayMintsDeterministicReferences ( ) {
-		assertEquals(gatewayReferenceFor(PAYMENT_1), gateway.execute(IBAN_1, 1, "payment-executed:p1"));
+		assertEquals(gatewayReferenceFor(PAYMENT_1), gateway.execute(IBAN_1, 1, "payment/p1"));
 	}
 
 }

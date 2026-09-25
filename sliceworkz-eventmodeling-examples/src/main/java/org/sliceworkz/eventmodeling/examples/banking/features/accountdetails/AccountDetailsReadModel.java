@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.examples.banking.features.accountdetails;
 
 import java.time.LocalDate;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain;
@@ -57,27 +58,25 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 		}
 	}
 	
+	/**
+	 * What a read of this model hands back. It is built by {@link #when} from an event and never
+	 * persisted, so nothing reconstructs it from stored JSON, and a strict constructor costs nothing:
+	 * this is the case {@code WHERE-VALIDATIONS-GO.md} calls "a record nothing ever persists". A
+	 * record carried <em>inside</em> an event payload is the opposite case, and keeps a lenient
+	 * canonical constructor, since Jackson rebuilds it on every read of history.
+	 */
 	public record AccountDetails ( String accountId, String customerId, LocalDate openDate ) {
-		
-		public AccountDetails ( String accountId, String customerId, LocalDate openDate ){
-			if ( accountId == null ) {
-				throw new IllegalArgumentException();
-			}
-			if ( customerId == null ) {
-				throw new IllegalArgumentException();
-			}
-			if ( openDate == null ) {
-				throw new IllegalArgumentException();
-			}
-			this.accountId = accountId;
-			this.customerId = customerId;
-			this.openDate = openDate;
+
+		public AccountDetails {
+			Objects.requireNonNull(accountId, "accountId is required");
+			Objects.requireNonNull(customerId, "customerId is required");
+			Objects.requireNonNull(openDate, "openDate is required");
 		}
-		
+
 		public static AccountDetails of ( String accountId, String customerId, LocalDate openDate ) {
 			return new AccountDetails(accountId, customerId, openDate);
 		}
-		
+
 	}
 
 }

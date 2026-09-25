@@ -17,19 +17,23 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.accountoverview;
 
-import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.banking.Banking;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
+/**
+ * The account overview, as a feature slice: it appears in the context's inventory under its chapter,
+ * but registers nothing itself.
+ * <p>
+ * The read model is eventually consistent, and a caller reads one by holding the instance being
+ * projected — {@code read(...)} only ever constructs live models. The instance therefore belongs to
+ * the application, which constructs it, registers it with
+ * {@code builder.readmodel(overview).eventuallyConsistent()} and keeps the reference; see
+ * {@code BankingExample}. Registering a fresh instance here would leave the application nothing to
+ * read, and a static one shared through a field would be shared by every bounded context in the JVM.
+ */
 @FeatureSlice(type = Type.STATE_READ, context="banking", chapter="Account management", tags= {"batch"})
 public class AccountOverviewFeatureSlice implements Slice<Banking> {
-
-	@Override
-	public void configureQuery(BoundedContextBuilder<Banking> builder) {
-		builder.readmodel(AccountOverviewReadModel.INSTANCE).eventuallyConsistent();
-	}
-
 
 }

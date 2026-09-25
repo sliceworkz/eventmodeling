@@ -121,6 +121,30 @@ The same four paths are covered deterministically — no polling, no sleeps — 
 the published `AutomationTest` base. Those two files are the reference for how to *test* an automation,
 the way `ExecutePaymentAutomation` is the reference for how to write one.
 
+The payments context is also the reference for the rest of what a context does beyond commands and live
+read models, one slice each:
+- **Translator** — `receivepayment/PaymentInstructionTranslator`: the example feeds payments in as
+  `PaymentInstructionReceived` through `incoming(...)`, and the translator raises `PaymentRequested`
+  under a key derived from the payment, since a translator runs at least once too
+- **Outbound command and `publishAndRecord`** — `ExecutePaymentAutomation.handle` publishes
+  `PaymentAnnounced` through `AnnouncePaymentCommand` (which declares `requireIdempotencyKey()`) and
+  records `PaymentExecuted` in one `publishAndRecord` call, keyed on the payment
+- **Dispatcher** — `announcepayment/PaymentAnnouncementDispatcher` delivers the announcement to a
+  `PaymentNotifications` port, under a message key derived from the payment so the receiver can
+  de-duplicate a redelivery
+- **SQL read model** — `paymentstatus/PaymentStatusProjector` and `PaymentStatusQuery` over a
+  `DataSource` port (qualified `readmodels`; the example binds an in-memory H2), using `insertIfAbsent`
+  and `updateOnce` so a replayed event can neither duplicate a row nor move a status backwards
+Each has a test on its published base (`PaymentInstructionTranslatorTest`,
+`PaymentAnnouncementDispatcherTest`, `PaymentStatusProjectorTest`, the last on H2 and PostgreSQL).
+
+**An eventually consistent read model the application reads is constructed by the application.**
+`read(...)` only constructs live models, so the caller has to hold the instance being projected:
+`BankingExample` constructs `AccountOverviewReadModel`, registers it with `.eventuallyConsistent()`,
+and keeps the reference; its feature slice registers nothing. The alternative — a static `INSTANCE` on
+the read model for the slice to register — loses because every bounded context in the JVM then
+projects into the same object.
+
 ## Architecture Patterns
 
 ### BoundedContext Pattern

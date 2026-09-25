@@ -25,6 +25,7 @@ import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.AutomationFailureAction;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentAbandoned;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentAttemptFailed;
@@ -73,6 +74,12 @@ import org.sliceworkz.eventstore.events.EventReference;
  *   </tr>
  * </table>
  *
+ * <h2>A payment that went through is recorded and announced in one step</h2>
+ * {@link #handle} ends in {@code publishAndRecord}: {@link AnnouncePaymentCommand} puts
+ * {@code PaymentAnnounced} on the outbound stream, then {@code PaymentExecuted} is recorded on the
+ * domain stream, each under a key derived from the payment. {@code PaymentAnnouncementDispatcher}
+ * takes the announcement from there.
+ *
  * <h2>The two delays, which are not the same thing</h2>
  * <ul>
  *   <li><strong>Per item</strong> — {@code PaymentAttemptFailed.nextAttemptDueAt}, honoured by the todo
@@ -109,11 +116,22 @@ public class ExecutePaymentAutomation implements Automation<PaymentToExecute,Pay
 		// after every failure below. So the key is derived from the payment, never from the attempt: a
 		// key that changed per attempt would de-duplicate nothing. The gateway is handed the same key,
 		// for the same reason -- appending our event once is no use if the money moved twice.
-		String idempotencyKey = "payment-executed:" + payment.paymentId().value();
+		String itemKey = "payment/" + payment.paymentId().value();
 
-		String gatewayReference = gateway.execute(payment.iban(), payment.amountInCents(), idempotencyKey);
+		String gatewayReference = gateway.execute(payment.iban(), payment.amountInCents(), itemKey);
 
-		return context.event(new PaymentExecuted(payment.paymentId(), gatewayReference), idempotencyKey);
+		// Record the fact and publish it: PaymentAnnounced for the systems downstream, PaymentExecuted
+		// for this context. Two streams, so two appends and no transaction between them --
+		// publishAndRecord composes them the one safe way. Outbound first, because only the domain
+		// event takes the payment off the todo list: a crash in between leaves it on, and the retry
+		// finds the announcement already stored under its key and records the execution. The other
+		// order would lose the announcement for good. The returned reference is the domain event's,
+		// which is the one the todo list has to catch up past.
+		return context.publishAndRecord(
+				new AnnouncePaymentCommand(payment.paymentId(), gatewayReference),
+				new PaymentExecuted(payment.paymentId(), gatewayReference),
+				PaymentsDomain.PAYMENT.tags(payment.paymentId()),
+				itemKey);
 	}
 
 	@Override

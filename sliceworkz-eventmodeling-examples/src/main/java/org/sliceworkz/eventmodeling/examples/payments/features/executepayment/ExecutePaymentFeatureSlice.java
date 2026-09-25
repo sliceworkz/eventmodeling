@@ -53,4 +53,11 @@ public class ExecutePaymentFeatureSlice implements Slice<Payments> {
 		builder.automation(new ExecutePaymentAutomation(todoList, gateway));
 	}
 
+	@Override
+	public void configureCommand ( BoundedContextBuilder<Payments> builder ) {
+		// declarative only: the automation executes the command, and this lists it among the slice's
+		// members from startup rather than from its first execution
+		builder.command(AnnouncePaymentCommand.class);
+	}
+
 }

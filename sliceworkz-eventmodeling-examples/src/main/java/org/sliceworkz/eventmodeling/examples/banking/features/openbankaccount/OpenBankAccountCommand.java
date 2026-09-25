@@ -20,8 +20,8 @@ package org.sliceworkz.eventmodeling.examples.banking.features.openbankaccount;
 import java.time.LocalDate;
 import java.time.YearMonth;
 
-import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
@@ -40,8 +40,14 @@ import org.sliceworkz.eventstore.events.Tags;
  * The raised {@link AccountOpened} event is tagged with both the account
  * identity and the initial month, so it appears when querying events
  * for that specific period.
+ * <p>
+ * It answers with the id it minted for the account — the one thing the caller cannot know
+ * beforehand and needs next — which is why it is a {@link CommandWithResult} rather than a plain
+ * command: the alternative, reading the {@code AccountOpened} back out of the event stream by the
+ * reference a plain command returns, puts the event log in application code for something the
+ * command already knew.
  */
-public class OpenBankAccountCommand implements Command<BankingEvent> {
+public class OpenBankAccountCommand implements CommandWithResult<BankingEvent, AccountId> {
 
 	private final CustomerId customerId;
 	private final YearMonth initialMonth;
@@ -52,7 +58,7 @@ public class OpenBankAccountCommand implements Command<BankingEvent> {
 	}
 
 	@Override
-	public void execute(CommandContext<BankingEvent, BankingEvent> context) {
+	public AccountId execute(CommandContext<BankingEvent, BankingEvent> context) {
 
 		var result = context.noDecisionModels();
 
@@ -65,5 +71,7 @@ public class OpenBankAccountCommand implements Command<BankingEvent> {
 				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(initialMonth))
 			)
 		);
+
+		return accountId;
 	}
 }

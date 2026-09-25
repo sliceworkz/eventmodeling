@@ -105,6 +105,15 @@ through its own `AggregateContext` — but it raises *within an identity*, again
 what `event()` does not. Both checked write paths therefore sit on the application surface, and a
 team using one of the two simply never registers the other.
 
+**No audience opens the event log.** An application reaches its events only through what the
+framework puts in front of them — commands and aggregates to decide, read models to read, a todo list
+and an automation to react, a translator for what comes in, a dispatcher for what goes out — and each
+of those carries a bookmark, a lease and retry that a raw read or subscription gives up. A caller that
+needs something a command decided, such as the id it minted, gets it from a `CommandWithResult`
+rather than by reading the event back. Tooling and tests that do read the streams directly find
+them through `BoundedContextStreams`, which states where a context keeps its events from the
+context's name alone, since tooling rarely holds a built context.
+
 **The inbound edge is separate from the application surface.** `incoming` and `translate` feed the
 domain events from outside, which is a different job from deciding on behalf of a user. An adapter
 that genuinely does both holds both types; most hold one.

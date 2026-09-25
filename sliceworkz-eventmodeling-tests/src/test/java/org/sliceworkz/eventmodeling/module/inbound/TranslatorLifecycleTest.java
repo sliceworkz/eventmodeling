@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
@@ -50,7 +51,6 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * A translator's processor now reports its lifecycle the way a read model's projector does —
@@ -170,7 +170,7 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 
 	private List<MockDomainEvent> translatedDomainEvents ( ) {
 		EventStream<MockDomainEvent> domainStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class);
+				.getEventStream(BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class);
 		return domainStream.query(EventQuery.matchAll()).stream().map(Event::data).toList();
 	}
 

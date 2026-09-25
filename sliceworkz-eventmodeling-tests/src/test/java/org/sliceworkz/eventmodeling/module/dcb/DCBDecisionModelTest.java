@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.Collections;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
@@ -41,7 +42,6 @@ import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
@@ -73,7 +73,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		// Create a direct event stream for injecting concurrent events during command execution
 		directStream = EventStore.on(eventStorage()).build()
 				.getEventStream(
-						EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
+						BoundedContextStreams.domain("UnitTestBoundedContext"),
 						MockDomainEvent.class);
 
 		return domain;

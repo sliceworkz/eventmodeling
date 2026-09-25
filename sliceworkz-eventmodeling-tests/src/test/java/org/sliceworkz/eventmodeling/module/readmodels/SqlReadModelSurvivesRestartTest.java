@@ -31,6 +31,7 @@ import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -44,7 +45,6 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * A durable SQL read model does not re-project what it has already committed, even when the
@@ -64,7 +64,6 @@ import org.sliceworkz.eventstore.stream.EventStreamId;
 public class SqlReadModelSurvivesRestartTest extends AbstractMockDomainTest {
 
 	private static final String CONTEXT_NAME = "UnitTestBoundedContext";
-	private static final String DOMAIN_PURPOSE = "domain";
 	private static final int EVENT_COUNT = 25;
 
 	private DataSource readModelDatabase;
@@ -142,7 +141,7 @@ public class SqlReadModelSurvivesRestartTest extends AbstractMockDomainTest {
 	private void appendDomainEvents ( ) {
 		EventStore eventStore = EventStore.on(eventStorage()).build();
 		EventStream<MockDomainEvent> domainEventStream = eventStore.getEventStream(
-				EventStreamId.forContext(CONTEXT_NAME).withPurpose(DOMAIN_PURPOSE), MockDomainEvent.class);
+				BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class);
 
 		List<EphemeralEvent<? extends MockDomainEvent>> events = new ArrayList<>();
 		for ( int i = 0; i < EVENT_COUNT; i++ ) {
@@ -155,7 +154,7 @@ public class SqlReadModelSurvivesRestartTest extends AbstractMockDomainTest {
 	private List<String> removeFrameworkBookmarks ( ) {
 		EventStore eventStore = EventStore.on(eventStorage()).build();
 		EventStream<MockDomainEvent> domainEventStream = eventStore.getEventStream(
-				EventStreamId.forContext(CONTEXT_NAME).withPurpose(DOMAIN_PURPOSE), MockDomainEvent.class);
+				BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class);
 
 		List<String> removed = new ArrayList<>();
 		domainEventStream.getBookmarks().stream()

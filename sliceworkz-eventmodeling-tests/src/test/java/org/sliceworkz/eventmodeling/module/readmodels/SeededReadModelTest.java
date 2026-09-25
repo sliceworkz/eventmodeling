@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -50,7 +51,6 @@ import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -67,7 +67,6 @@ import org.sliceworkz.eventstore.testing.ForEachBackend;
 public class SeededReadModelTest extends AbstractMockDomainTest {
 
 	private static final String CONTEXT_NAME = "UnitTestBoundedContext";
-	private static final String DOMAIN_PURPOSE = "domain";
 
 	/**
 	 * The end-to-end shape: the base is an ordinary eventually consistent read model, projected in the
@@ -252,7 +251,7 @@ public class SeededReadModelTest extends AbstractMockDomainTest {
 
 	private EventStream<MockDomainEvent> domainStream ( ) {
 		EventStore eventStore = EventStore.on(eventStorage()).build();
-		return eventStore.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose(DOMAIN_PURPOSE), MockDomainEvent.class);
+		return eventStore.getEventStream(BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class);
 	}
 
 }

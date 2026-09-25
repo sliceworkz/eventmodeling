@@ -26,6 +26,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -41,7 +42,6 @@ import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.spi.EventStorage.StoredEvent;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.stream.IdempotencyKeyConflictException;
 
 /**
@@ -75,7 +75,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 
 		directStream = EventStore.on(eventStorage()).build()
 				.getEventStream(
-						EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
+						BoundedContextStreams.domain("UnitTestBoundedContext"),
 						MockDomainEvent.class);
 
 		return domain;
@@ -88,7 +88,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	/** The keys as stored, in stream order: the public {@code Event} does not carry them. */
 	private List<String> storedKeys() {
 		return eventStorage().query(EventFilter.matchAll(),
-				EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"), null, Limit.none()).stream()
+				BoundedContextStreams.domain("UnitTestBoundedContext"), null, Limit.none()).stream()
 				.map(StoredEvent::idempotencyKey).toList();
 	}
 

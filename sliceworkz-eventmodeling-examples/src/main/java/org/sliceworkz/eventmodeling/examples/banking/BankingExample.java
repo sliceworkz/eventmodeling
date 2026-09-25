@@ -17,8 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.Set;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.LoggingBoundedContextListener;
@@ -26,35 +25,29 @@ import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.AccountId;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountdetails.AccountDetailsReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountoverview.AccountOverviewReadModel;
+import org.sliceworkz.eventmodeling.examples.banking.features.accountoverview.AccountOverviewReadModel.AccountSummary;
 import org.sliceworkz.eventmodeling.examples.banking.features.openaccount.OpenAccountCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.openaccountwithresult.OpenAccountWithResultCommand;
-import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelResult;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.spi.EventStorage;
-import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.AppendListener;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 public class BankingExample {
 	
 	public static void main ( String[] args ) {
 		
 		EventStorage eventStorage = InMemoryEventStorage.newBuilder().build();
-		EventStore eventStore = EventStore.on(eventStorage).build();
 
 		Instance instance = InstanceFactory.determine("banking-app");
 		
 		/*
-		 * Create the BoundedContext 
+		 * Create the BoundedContext. The LoggingBoundedContextListener logs everything the context
+		 * reports -- among it a CommandExecuted per command, naming the events that command raised --
+		 * which is the view of "what was appended" an application needs. Pass a
+		 * StreamAppendingBoundedContextListener instead to keep that record in a stream of your own.
 		 */
 		Banking bc = BoundedContext.newBuilder(Banking.class)
 			.name("banking")
@@ -75,70 +68,34 @@ public class BankingExample {
 		 * narrower surface instead. It costs this one line: a built context already is a BankingApi,
 		 * and app.terminate() now does not compile.
 		 *
-		 * See WHO-MAY-DO-WHAT.md for the other audiences.
+		 * Note what the application does not do: open the event stream. It decides through commands and
+		 * reads through read models, and those are the only two ways in it needs. See WHO-MAY-DO-WHAT.md
+		 * for the other audiences.
 		 */
 		BankingApi app = bc;
 
-		EventStream<BankingDomainEvent> eventStream = eventStore.getEventStream(EventStreamId.forContext("banking").withPurpose("domain"), BankingDomainEvent.class);
+		/*
+		 * Open an account with a plain Command. It answers with the reference of the event it appended
+		 * -- not with the new account's id, which the command minted for itself and did not hand back.
+		 */
+		EventReference opened = app.execute(new OpenAccountCommand(BankingDomain.CUSTOMER.newId())).orElseThrow();
 
 		/*
-		 * Kernel events (BoundedContextStarted, CommandExecuted, ...) are no longer persisted by
-		 * default: they are delivered to the BoundedContextListener registered above (here simply
-		 * logged). Pass a StreamAppendingBoundedContextListener instead to persist them to a stream.
-		 * So at this point the event store is still empty.
+		 * The overview of all accounts is an eventually consistent read model: a background thread
+		 * projects it, so the account opened a moment ago may not be in it yet. published() hands back
+		 * its state together with the position that state reflects, as one observation -- so the
+		 * reference the command returned is all a caller needs to tell whether its own write is in the
+		 * answer, rather than guessing. An empty position means nothing has reached it yet at all.
 		 */
-		eventStore.getRawEventStream(EventStreamId.anyContext()).query(EventQuery.matchAll()).forEach(System.out::println);
-		
-		/*
-		 * Register a Subscriber on all event updates that justs prints out what has been added to the eventlog 
-		 */
-		eventStream.subscribe(
-				new AppendListener() {
-					
-					private EventReference lastSeen;
-					
-					@Override
-					public EventReference eventsAppended(EventReference atLeastUntil) {
-						List<Event<BankingDomainEvent>> events = eventStream.query(EventQuery.matchAll(), lastSeen);
-						events.forEach(System.out::println);
-						if ( events.size() > 0 ) {
-							lastSeen = events.getLast().reference();
-						}
-						return lastSeen;
-					}
-				}
-			);
-
-		
-		// Open an Account
-		Optional<EventReference> ref = app.execute(new OpenAccountCommand(BankingDomain.CUSTOMER.newId()));
-		
-		// Go fetch the AccountOpened Event that should have been raised by the OpenAccountCommmand
-		AccountOpened ao = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none())).stream()
-			.filter(e -> e.reference().id().equals(ref.get().id()))
-			.map(Event::data)
-			.map(e -> (AccountOpened) e)
-			.findFirst()
-			.get();
-		
-		// Render a live model with the details of the Account
-		AccountDetailsReadModel rm = app.read(AccountDetailsReadModel.class, ao.accountId());
-		System.out.println(rm.getAccountDetails());
-		
-		/*
-		 * Also print out the eventually consistent readmodel on all accounts.
-		 *
-		 * Note what it prints alongside: how far it has been projected. This read model is filled by a
-		 * background thread, so the account opened a moment ago may not be in it yet -- and because it
-		 * publishes its state together with the position that state reflects, it can say so rather than
-		 * leaving the caller to guess. An empty position means nothing has reached it yet at all.
-		 */
-		System.out.println(AccountOverviewReadModel.INSTANCE.getAccounts());
-		System.out.println("  (as projected up to " + AccountOverviewReadModel.INSTANCE.upTo() + ")");
+		ReadModelResult<Set<AccountSummary>> overview = AccountOverviewReadModel.INSTANCE.published();
+		boolean includesOurAccount = overview.upTo() != null && !opened.happenedAfter(overview.upTo());
+		System.out.println(overview.data());
+		System.out.println("  (as projected up to " + overview.upTo() + "; includes the account just opened: " + includesOurAccount + ")");
 
 		/*
-		 * Open another account using CommandWithResult — the generated account ID
-		 * is returned directly, no need to query the event stream.
+		 * When the caller needs something the command decided -- here the id, to read the account
+		 * straight back -- the command says so in its type: a CommandWithResult returns it. The live
+		 * read model below is projected on the spot, so unlike the overview it is always current.
 		 */
 		CommandExecutionResult<AccountId> openResult =
 				app.execute(new OpenAccountWithResultCommand(BankingDomain.CUSTOMER.newId()));
@@ -146,24 +103,16 @@ public class BankingExample {
 		AccountId accountId = openResult.response();
 		System.out.println("Account opened with ID: " + accountId);
 
-		AccountDetailsReadModel rm2 = app.read(AccountDetailsReadModel.class, accountId);
-		System.out.println(rm2.getAccountDetails());
-
-		try {
-			Thread.sleep(1000);
-		} catch (InterruptedException e1) {
-			e1.printStackTrace();
-		}
+		AccountDetailsReadModel details = app.read(AccountDetailsReadModel.class, accountId);
+		System.out.println(details.getAccountDetails());
 
 		/*
 		 * Shut down from the outside in: terminate the bounded context (which closes the EventStore it
-		 * built for itself), then the store this example built to read the stream directly, and only
-		 * then the storage that backs both. This process would exit cleanly without any of it -- a
-		 * shutdown hook terminates the context -- but an application that keeps running after its
-		 * bounded context is done has to release these, and the storage is never released for it.
+		 * built for itself), then the storage behind it. This process would exit cleanly without either
+		 * -- a shutdown hook terminates the context -- but an application that keeps running after its
+		 * bounded context is done has to release both, and the storage is never released for it.
 		 */
 		bc.terminate();
-		eventStore.close();
 		eventStorage.close();
 	}
 }

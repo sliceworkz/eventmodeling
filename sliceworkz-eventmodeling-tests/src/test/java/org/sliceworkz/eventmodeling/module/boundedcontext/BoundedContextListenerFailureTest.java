@@ -42,6 +42,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandExecuted;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.CommandFailed;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextListener;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -60,7 +61,6 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 
 /**
@@ -145,7 +145,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 		// and the event is genuinely in the store - the append happened before the listener ran
 		try ( EventStore store = EventStore.on(eventStorage()).build() ) {
 			var stored = store
-					.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class)
+					.getEventStream(BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class)
 					.query(EventQuery.matchAll());
 			assertEquals(1, stored.size(), "the domain event must be durably appended: " + stored);
 			assertEquals(new FirstDomainEvent("x"), stored.get(0).data());

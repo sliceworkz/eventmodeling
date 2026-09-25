@@ -24,6 +24,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -36,7 +37,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * A processor reads its event-store bookmark once, before its first execution, and never again while
@@ -100,7 +100,7 @@ public class ProjectorBookmarkReadOnceTest extends AbstractMockDomainTest {
 
 	private EventStream<MockDomainEvent> domainStream ( ) {
 		EventStore eventStore = EventStore.on(eventStorage()).build();
-		return eventStore.getEventStream(EventStreamId.forContext(CONTEXT_NAME).withPurpose("domain"), MockDomainEvent.class);
+		return eventStore.getEventStream(BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class);
 	}
 
 	private static void sleepBriefly ( ) {

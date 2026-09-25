@@ -27,6 +27,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -44,7 +45,6 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * Pins the guard rails around {@link OutboundCommand} and the {@code publishAndRecord} composition:
@@ -71,10 +71,10 @@ public class OutboundCommandGuardsTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(builder);
 
 		domainStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
+				.getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"),
 						MockDomainEvent.class);
 		outboundStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("outbound"),
+				.getEventStream(BoundedContextStreams.outbound("UnitTestBoundedContext"),
 						MockOutboundEvent.class);
 
 		return domain;

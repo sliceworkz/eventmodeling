@@ -24,6 +24,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -36,7 +37,6 @@ import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * The bounded context must not report itself started before its ephemeral read models have been
@@ -46,7 +46,6 @@ import org.sliceworkz.eventstore.stream.EventStreamId;
 public class EphemeralReadModelProjectedOnStartTest extends AbstractMockDomainTest {
 
 	private static final String CONTEXT_NAME = "UnitTestBoundedContext";
-	private static final String DOMAIN_PURPOSE = "domain";
 	private static final int PRE_EXISTING_EVENT_COUNT = 250;
 
 	@Test
@@ -74,7 +73,7 @@ public class EphemeralReadModelProjectedOnStartTest extends AbstractMockDomainTe
 	private void appendPreExistingEvents ( ) {
 		EventStore eventStore = EventStore.on(eventStorage()).build();
 		EventStream<MockDomainEvent> domainEventStream = eventStore.getEventStream(
-				EventStreamId.forContext(CONTEXT_NAME).withPurpose(DOMAIN_PURPOSE), MockDomainEvent.class);
+				BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class);
 
 		List<EphemeralEvent<? extends MockDomainEvent>> events = new ArrayList<>();
 		for ( int i = 0; i < PRE_EXISTING_EVENT_COUNT; i++ ) {

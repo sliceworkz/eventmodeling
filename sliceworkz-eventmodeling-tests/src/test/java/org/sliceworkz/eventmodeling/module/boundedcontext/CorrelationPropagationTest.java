@@ -38,6 +38,7 @@ import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -62,7 +63,6 @@ import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * One correlation id names one flow, reused - never re-minted - across every step: command → domain
@@ -77,7 +77,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 	@BeforeEach
 	void openDomainStream ( ) {
 		domainStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
+				.getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"),
 						MockDomainEvent.class);
 	}
 

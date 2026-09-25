@@ -19,14 +19,11 @@ package org.sliceworkz.eventmodeling.examples.banking;
 
 import java.math.BigDecimal;
 import java.time.YearMonth;
-import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CustomerId;
 import org.sliceworkz.eventmodeling.examples.banking.features.closemonth.CloseMonthCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActiveMonthReadModel;
@@ -38,16 +35,8 @@ import org.sliceworkz.eventmodeling.examples.banking.features.monthstatement.Mon
 import org.sliceworkz.eventmodeling.examples.banking.features.monthstatement.MonthStatementReadModel.MonthStatement;
 import org.sliceworkz.eventmodeling.examples.banking.features.openbankaccount.OpenBankAccountCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.withdraw.WithdrawCommand;
-import org.sliceworkz.eventstore.EventStore;
-import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.spi.EventStorage;
-import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * Demonstrates the "Closing The Books" pattern for bank account monthly periods.
@@ -78,7 +67,6 @@ public class BankingClosingTheBooksExample {
 	public static void main(String[] args) {
 
 		EventStorage eventStorage = InMemoryEventStorage.newBuilder().build();
-		EventStore eventStore = EventStore.on(eventStorage).build();
 
 		Instance instance = InstanceFactory.determine("banking-closing-the-books");
 
@@ -116,11 +104,6 @@ public class BankingClosingTheBooksExample {
 		
 		bc.start();
 
-		EventStream<BankingEvent> eventStream = eventStore.getEventStream(
-			EventStreamId.forContext("banking-ctb").withPurpose("domain"),
-			BankingEvent.class);
-
-
 		// ── Step 1: Open an account (starts January 2025) ───────────────
 
 		System.out.println("=== STEP 1: Open account (starts January 2025 period) ===");
@@ -129,19 +112,11 @@ public class BankingClosingTheBooksExample {
 		YearMonth january = YearMonth.of(2025, 1);
 		CustomerId customerId = BankingDomainWithClosingTheBooks.CUSTOMER.newId();
 
-		Optional<EventReference> ref = bc.execute(new OpenBankAccountCommand(customerId, january));
-
-		// Retrieve the AccountOpened event to get the generated accountId
-		AccountOpened accountOpened = eventStream.query(EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class), Tags.none())).stream()
-			.filter(e -> e.reference().id().equals(ref.get().id()))
-			.map(Event::data)
-			.map(e -> (AccountOpened) e)
-			.findFirst()
-			.get();
-		AccountId accountId = accountOpened.accountId();
+		// the command minted the account's id, and hands it back: it is a CommandWithResult
+		AccountId accountId = bc.execute(new OpenBankAccountCommand(customerId, january)).response();
 
 		System.out.println("Account opened: " + accountId.value());
-		System.out.println("Initial period: " + accountOpened.initialMonth());
+		System.out.println("Initial period: " + january);
 		System.out.println();
 
 
@@ -309,11 +284,9 @@ public class BankingClosingTheBooksExample {
 
 		/*
 		 * Shut down from the outside in: the bounded context (which closes the EventStore it built for
-		 * itself), then the store this example built to read the stream directly, then the storage that
-		 * backs both -- it is ours, and nothing else closes it.
+		 * itself), then the storage behind it -- it is ours, and nothing else closes it.
 		 */
 		bc.terminate();
-		eventStore.close();
 		eventStorage.close();
 	}
 

@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
@@ -45,7 +46,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.EventStreamId;
 
 /**
  * Verifies the {@code x-command} metadata tag added to events that are raised
@@ -69,10 +69,10 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(builder);
 
 		domainStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("domain"),
+				.getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"),
 						MockDomainEvent.class);
 		outboundStream = EventStore.on(eventStorage()).build()
-				.getEventStream(EventStreamId.forContext("UnitTestBoundedContext").withPurpose("outbound"),
+				.getEventStream(BoundedContextStreams.outbound("UnitTestBoundedContext"),
 						MockOutboundEvent.class);
 
 		return domain;

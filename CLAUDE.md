@@ -121,6 +121,23 @@ The same four paths are covered deterministically — no polling, no sleeps — 
 the published `AutomationTest` base. Those two files are the reference for how to *test* an automation,
 the way `ExecutePaymentAutomation` is the reference for how to write one.
 
+**Business Rules Example — SBVR enforcement levels, overrides and previews (main method):**
+```bash
+cd sliceworkz-eventmodeling-examples
+mvn compile exec:java -Dexec.mainClass="org.sliceworkz.eventmodeling.examples.banking.BankingBusinessRulesExample"
+```
+
+The reference for business rules people may break under conditions. The banking rulebook in
+`BankingDomainWithClosingTheBooks` uses every enforcement level: `WithdrawCommand` checks a strictly
+enforced maximum, a pre-authorized overdraft (granted by the command itself to identified tellers, three
+a day, on `OverdraftExceptionsTodayDecisionModel`), a post-justified large withdrawal and a guideline;
+`DepositCommand` an override with explanation and a deferred enforcement. The two levels enforced after
+the fact are followed up by ordinary slices fed by the rule tags: `justifywithdrawal` (a live read model
+of what awaits justification, and the command that justifies it) and `excessbalance` (a todo list and an
+automation). The example evaluates before it executes, the way a front end would, and prints each
+judgement as the widget it becomes. `WithdrawCommandTest`, `DepositCommandTest`,
+`JustifyWithdrawalCommandTest` and `ReportExcessBalanceAutomationTest` are the reference for testing it.
+
 ## Architecture Patterns
 
 ### BoundedContext Pattern
@@ -212,7 +229,7 @@ the other, and when advising on who holds what, name the audience.
 
 - **`AllCapabilities` is a composition of audiences and declares nothing itself.** Six interfaces
   narrower than the context, each the surface of one caller: `ApplicationCapabilities<D,O>`
-  (`execute`, `executeWithRetry`, `read`, `aggregate`) for code driving the domain,
+  (`execute`, `executeWithRetry`, `evaluate`, `read`, `aggregate`) for code driving the domain,
   `TranslationCapability<I>` for the inbound edge, `OperationsCapabilities` (the two admin
   capabilities) for an operator's tooling, `PrivacyCapability` for an erasure request,
   `ProvidedEventCapability<D>` for the escape hatch, and the owner's own — `LifecycleCapability`,
@@ -635,7 +652,79 @@ reconstructs payloads through the canonical constructor on every read of history
 rejections in commands throw `BusinessException`, keeping them distinguishable from bugs — never
 `IllegalStateException`, which is what a bug throws. The banking example's `WithdrawCommand`,
 `DepositCommand` and `CloseMonthCommand` are the shape to copy: `BusinessException.when(condition,
-message)` per rule, straight after `decisionModels(...)`.
+message)` per rule, straight after `decisionModels(...)` — for what makes no sense; a rule people may
+break under conditions is a business rule with an enforcement level (below).
+
+**Business rules with an enforcement level: checked by the command, judged by the kernel.**
+[BUSINESS-RULES.md](BUSINESS-RULES.md) is the user-facing guide; keep it in step via links, and when
+advising on a rule, say which of the two kinds it is and, for a behavioral one, which level. The
+framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook` + `DCBModule` (impl).
+- **Two kinds of "no", after SBVR.** A request that makes no sense (the account does not exist, the
+  period is closed) is a *definitional* rule and stays a `BusinessException`, thrown on the spot: no
+  override can make it meaningful, and reporting it as a rule would put a decision in front of the user
+  where there is none. A rule people *can* break is *behavioral* and carries an `EnforcementLevel`:
+  `STRICTLY_ENFORCED`, `DEFERRED_ENFORCEMENT`, `PRE_AUTHORIZED_OVERRIDE`, `POST_JUSTIFIED_OVERRIDE`,
+  `OVERRIDE_WITH_EXPLANATION`, `GUIDELINE`. A `BusinessRule` is an id (wire format: override key, stored
+  in every `RuleViolation`, tag value), a statement (wording, not stored) and a level (policy, kept out
+  of the identity — equality is on the id — because SBVR has a level change without the rule changing).
+  `BusinessRule.of` defaults to strictly enforced: a rule nobody relaxed is enforced
+- **`context.check(rule, violated, message)` never throws; the kernel judges after `execute` returns**,
+  in `DCBModule.enforceBusinessRules`, before anything is appended. That is what lets one execution
+  report every violated rule at once, and what makes `evaluate(...)` the same code path minus the append.
+  A command raises its events as if everything were allowed and records `context.ruleViolations()` in
+  the payload; a violation that stops the execution becomes a `RuleViolationException`, so the events
+  are never stored. A `check` or `overridableWhen` after `ruleViolations()` was read is an
+  `IllegalStateException` (a bug, `CommandFailed`): the recorded violations must be the judged ones.
+  `check` is on `CommandContext` only — an `OutboundCommand` has no decision models to judge a rule on
+- **`RuleViolationException extends BusinessException`**, so everything that tells a rejection from a
+  bug keeps doing so: `CommandRejected`, `executeWithRetry` leaving it alone, `businessError()` in the
+  harness. It carries the `Evaluation` a preview would have answered, so an HTTP binding answers a
+  rejected `POST` (422) with the same shape a `QUERY` preview returns
+- **Who may override is the command's decision, through `RuleCheck.overridableWhen(authorized, whyNot)`,
+  on its decision models.** It is usually a subtle rule of its own — a quota per actor per day, a role
+  granted through events — and taken there it sits inside the consistency boundary: two overrides racing
+  past a quota cannot both succeed, the second conflicts and its retry re-decides. The alternative — an
+  override policy on the builder — loses because it reads no history, sits outside the boundary and
+  escapes the command's tests. Defaults: a pre-authorized override authorizes nobody unless the command
+  says so; post-justified and with-explanation are open to whoever asks unless narrowed. The actor is
+  `OutboundCommandContext.actor()`, read from the `Tracing` — the same value as the `x-actor` tag
+- **Overrides are an input of the command** (`Overrides`, exposed by `implements Overriding`; a record
+  component `Overrides overrides` suffices), not an `execute` parameter and not a field of `Tracing`.
+  No `execute`/`executeWithRetry` overload changes, and whatever builds a command without a user
+  (automations, translators, retries, tests) overrides nothing. `Tracing` loses because it continues
+  down a flow into translators and correlated automations, and an override must never reach a step the
+  user did not see. A request for a rule that is not violated is ignored and records nothing
+- **What an execution going ahead with violations records, twice**: the `RuleViolation`s the command put
+  in its payload (the business fact, and the only place free text such as an explanation belongs), and
+  the rule tags the kernel adds to every event of the append whatever the payload says —
+  `x-rule-overridden` on every override, plus `x-rule-justification-pending`, `x-rule-deferred`,
+  `x-rule-not-followed` (`RuleTags`). The tags are what a quota decision model
+  (`RuleTags.overriddenBy(actor, rule)`, together with `Tracing.actorTag`), a follow-up todo list and an
+  auditor query by. The actor is not repeated in the payload: it is the `x-actor` tag
+- **`RuleViolation` is a payload record, and its derived methods carry no `get`/`is` prefix** — a JSON
+  mapper takes a prefixed method for a property, writes it into every stored event and then refuses to
+  read it back under `FAIL_ON_UNKNOWN_PROPERTIES` — so it is `overridden()`, never `isOverride()`.
+  Its canonical constructor is lenient, as every payload record's must be. `RuleJudgement` does expose
+  `overridable` and `explanationRequired` as JSON properties, deliberately (`@JsonProperty`), since a
+  front end lays its widgets out by them; `@JsonIgnoreProperties(ignoreUnknown = true)` lets it read back
+- **`evaluate(command[, tracing])` on `CommandEvaluationCapability`, filed on `ApplicationCapabilities`**:
+  the command run as an execution, judged, nothing appended, no idempotency key resolved, no
+  `CommandExecuted`/`CommandRejected` emitted (a front end may evaluate per keystroke; the monitoring
+  record is of what happened), a `BusinessException` the answer `REJECTED` with the judgements made
+  before it. Observed as `Observation.CommandEvaluation` → `Outcome.Evaluated`. Automations and
+  translators have no user to preview for, so their contexts do not carry it. Bound to HTTP it is the
+  `QUERY` method on the resource a `POST` executes on — safe, idempotent, same body; `OPTIONS` loses
+  (resource capabilities, CORS preflight, no body semantics), and so does a dry-run flag (one method
+  meaning two things)
+- **The levels enforced after the fact need no machinery beyond the recorded violation**: the follow-up
+  of a post-justified override or a deferred enforcement is an ordinary read model or todo list selected
+  by the kernel's tag, subtracting the event that finishes it (the banking `justifywithdrawal` and
+  `excessbalance` slices)
+- `BusinessRuleEnforcementTest` pins every level, the command's authorization and its defaults, what is
+  recorded and tagged, the evaluation (nothing appended, no key spent, not an execution in the
+  monitoring record, observed), the actor, and — per backend — an override quota taken on the rule tags
+  and two overrides racing past it; `BusinessRuleJsonTest` the two JSON shapes; `BusinessRulesTest` in
+  the api module the value types and that the exception survives serialization
 
 **How a read model is projected has to be said out loud.** `builder.readmodel(X.class)` and
 `builder.readmodel(instance)` register, but `build()` rejects either unless `.live()` /
@@ -1697,6 +1786,9 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 **Base Classes:**
 - `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves. The release *terminates* the context rather than stopping it, because terminating is what closes the `EventStore` the context built and drains its processor threads — see "Shutdown — who closes what" below
 - Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `TranslatorTest`, `DispatcherTest`, `SqlReadModelTest`)
+- `CommandTest` tests business rules with `as(actor)` (seeded events and the execution carry the actor),
+  `whenEvaluated(command).thenEvaluation()` (fails if anything was appended) and
+  `then().rulesViolated()`, both handing out `EvaluationAssertions`
 - Use JUnit 5 (Jupiter)
 
 **The other half of the patterns is served too — automations, translators and dispatchers have published
@@ -1957,7 +2049,7 @@ what it answered, which is what an observation is.
   own observations (and the framework's nested ones) beneath it with nothing propagated. The durations
   are the observer's to measure; no outcome carries one
 - **The operations** (`Observation` is sealed): `CommandExecution` (with its `Target`, DOMAIN or
-  OUTBOUND, and the caller's `Tracing`), `ProvidedEvent`, `IncomingEvent`, `Translation` (the
+  OUTBOUND, and the caller's `Tracing`), `CommandEvaluation` (a preview, nothing appended), `ProvidedEvent`, `IncomingEvent`, `Translation` (the
   interactive `translate`) with a `TranslatorInvocation` per translator nested inside, the async
   `TranslatorInvocation` on the processor thread, `Dispatch`, `ReadModelBatch` with a `ReadModelUpdate`
   per event nested inside, `LiveModelRead`, `AggregateLoad`, `AggregateAppend`, `SnapshotLoad`/

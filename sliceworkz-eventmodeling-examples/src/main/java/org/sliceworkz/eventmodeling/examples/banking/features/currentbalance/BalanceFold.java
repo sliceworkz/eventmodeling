@@ -27,6 +27,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyWithdrawn;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthClosed;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthOpened;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.RulebookFollowUp;
 
 /**
  * What one event does to one account's balance — the whole rule of this read model, in one pure
@@ -53,6 +54,8 @@ final class BalanceFold {
 			case MonthOpened opened -> opened.carryForwardBalance();
 			// a summary of a month that has already been folded transaction by transaction
 			case MonthClosed ignored -> balance;
+			// a justification or a report moves no money
+			case RulebookFollowUp ignored -> balance;
 		};
 	}
 
@@ -64,6 +67,7 @@ final class BalanceFold {
 			case MoneyWithdrawn withdrawn -> withdrawn.accountId();
 			case MonthOpened opened -> opened.accountId();
 			case MonthClosed closed -> closed.accountId();
+			case RulebookFollowUp followUp -> followUp.accountId();
 		};
 	}
 

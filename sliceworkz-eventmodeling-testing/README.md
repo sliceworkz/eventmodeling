@@ -121,6 +121,32 @@ public void setUp ( ) {          // was: void setUp ( )
 }
 ```
 
+## Testing business rules
+
+A command checking business rules with an enforcement level (see
+[BUSINESS-RULES.md](../BUSINESS-RULES.md)) is tested with the same `CommandTest`, plus three verbs:
+
+```java
+given().event(accountOpened(), tags)
+    .as("alice")                          // the actor from here on: seeded events carry her x-actor tag,
+                                          // and the command runs for her — what context.actor() answers
+    .whenEvaluated(command)               // evaluate instead of execute; fails if anything was appended
+    .thenEvaluation()
+    .needsOverrideOf(NO_OVERDRAFT)
+    .judged(WITHDRAWAL_DESCRIBED, Verdict.ADVISED);
+
+given()...when(command).then()
+    .rulesViolated()                      // the kernel rejected the execution on its rules
+    .notOverridable(NO_OVERDRAFT, "Only an identified teller can authorize an overdraft");
+```
+
+`thenEvaluation()` and `rulesViolated()` hand out the same `EvaluationAssertions`, because a rejected
+execution carries the evaluation a preview would have answered. A violation an execution went ahead
+with is asserted through the event: the `RuleViolation`s in its payload, and the rule tags
+(`RuleTags.overridden(rule)`, ...) on it. A quota counted by the command is tested by seeding the history
+it counts, as the actor and tagged as the kernel tags an override. `WithdrawCommandTest` in
+`sliceworkz-eventmodeling-examples` is the worked example.
+
 ## Testing an automation
 
 `AutomationTest` tests an `Automation` together with its `TodoListReadModel` — synchronously, on the

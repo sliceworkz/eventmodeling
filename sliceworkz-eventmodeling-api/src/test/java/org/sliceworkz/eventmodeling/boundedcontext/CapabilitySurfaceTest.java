@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.EventTypes;
 import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
 import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
+import org.sliceworkz.eventmodeling.commands.CommandEvaluationCapability;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionCapability;
 import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
 import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
@@ -56,8 +57,9 @@ public class CapabilitySurfaceTest {
 
 	/** the leaves, each one concern, each reachable through a reference narrower than the context */
 	private static final List<Class<?>> AUDIENCE_CAPABILITIES = List.of(
-			// application: decide and read
+			// application: decide, preview a decision, and read
 			CommandExecutionCapability.class,
+			CommandEvaluationCapability.class,
 			ReadModelCapability.class,
 			AggregateCapability.class,
 			// the inbound edge
@@ -92,9 +94,9 @@ public class CapabilitySurfaceTest {
 	}
 
 	@Test
-	void theApplicationSurfaceIsTheTwoCheckedWritePathsAndTheRead ( ) {
+	void theApplicationSurfaceIsTheTwoCheckedWritePathsTheReadAndThePreview ( ) {
 		assertEquals(
-				Set.of(CommandExecutionCapability.class, ReadModelCapability.class, AggregateCapability.class),
+				Set.of(CommandExecutionCapability.class, CommandEvaluationCapability.class, ReadModelCapability.class, AggregateCapability.class),
 				Set.of(ApplicationCapabilities.class.getInterfaces()));
 		assertEquals(List.of(), names(ApplicationCapabilities.class.getDeclaredMethods()));
 	}

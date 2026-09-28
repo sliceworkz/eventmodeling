@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
@@ -29,6 +30,10 @@ import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventmodeling.rules.BusinessRule;
+import org.sliceworkz.eventmodeling.rules.Overrides;
+import org.sliceworkz.eventmodeling.rules.RuleCheck;
+import org.sliceworkz.eventmodeling.rules.RuleViolation;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector;
@@ -53,6 +58,8 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 	private boolean decisionModelsDetermined = false;
 
+	private final RuleBook ruleBook;
+
 	/**
 	 * Per-decision-model projection result emitted as a {@code DecisionModelProjected} bounded-context
 	 * event. {@code eventsStreamed}/{@code queriesDone}/{@code durationMs}/{@code until} describe the
@@ -63,6 +70,11 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	public record DecisionModelProjection ( Class<?> decisionModelClass, long durationMs, long queriesDone, long eventsStreamed, long eventsHandled, EventReference until ) { }
 	
 	public DCBCommandContextImpl ( String boundedContext, ReadModelModule<CONSUMED_EVENT_TYPE> readModelModule, EventStream<CONSUMED_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, Tracing tracing ) {
+		this(boundedContext, readModelModule, queryEventStream, targetEventStream, tracing, Overrides.none());
+	}
+
+	public DCBCommandContextImpl ( String boundedContext, ReadModelModule<CONSUMED_EVENT_TYPE> readModelModule, EventStream<CONSUMED_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, Tracing tracing, Overrides overrides ) {
+		this.ruleBook = new RuleBook(overrides);
 		this.boundedContext = boundedContext;
 		this.readModelModule = readModelModule;
 		this.queryEventStream = queryEventStream;
@@ -324,6 +336,29 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 	public Tracing tracing ( ) {
 		return tracing;
+	}
+
+	@Override
+	public RuleCheck check ( BusinessRule rule, boolean violated, String message ) {
+		return ruleBook.check(rule, violated, message);
+	}
+
+	@Override
+	public List<RuleViolation> ruleViolations ( ) {
+		return ruleBook.ruleViolations();
+	}
+
+	@Override
+	public Optional<String> actor ( ) {
+		String actor = tracing.actor();
+		return ( actor == null || actor.isBlank() ) ? Optional.empty() : Optional.of(actor.strip());
+	}
+
+	/**
+	 * @return the business rules this execution checked, judged by the kernel after the command ran
+	 */
+	RuleBook ruleBook ( ) {
+		return ruleBook;
 	}
 	
 	public ProjectorMetrics projectorMetrics ( ) {

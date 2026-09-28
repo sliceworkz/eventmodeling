@@ -59,6 +59,22 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	 */
 	public static final String TAG_CORRELATION_ID = "x-correlation-id";
 
+	/**
+	 * The tag the actor is stored under on every event the framework appends ({@code x-actor}), for a query
+	 * selecting the events one actor caused — for instance the overrides one actor made, through
+	 * {@link org.sliceworkz.eventmodeling.rules.RuleTags#overriddenBy}. The value is stripped, exactly as
+	 * {@link #storeOn} strips it when it writes the tag.
+	 *
+	 * @param actor the actor
+	 * @return the actor's tag
+	 */
+	public static Tag actorTag ( String actor ) {
+		if ( actor == null || actor.isBlank() ) {
+			throw new IllegalArgumentException("an actor tag needs an actor");
+		}
+		return Tag.of(TAG_ACTOR, actor.strip());
+	}
+
 	public Tracing actor ( String actor ) {
 		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
 	}

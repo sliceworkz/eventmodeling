@@ -42,6 +42,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.rules.Evaluation;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
 import org.sliceworkz.eventmodeling.observability.Outcome;
@@ -547,6 +548,30 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 				throw e;
 			}
 		}
+	}
+
+	/*
+	 * COMMAND EVALUATION
+	 */
+
+	@Override
+	public Evaluation evaluate ( Command<DOMAIN_EVENT_TYPE> command ) {
+		return evaluate(command, Tracing.init(instance));
+	}
+
+	@Override
+	public Evaluation evaluate ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
+		return dcbDomainModule.evaluate(command, tracing.instance(instance));
+	}
+
+	@Override
+	public Evaluation evaluate ( CommandWithResult<DOMAIN_EVENT_TYPE, ?> command ) {
+		return evaluate(command, Tracing.init(instance));
+	}
+
+	@Override
+	public Evaluation evaluate ( CommandWithResult<DOMAIN_EVENT_TYPE, ?> command, Tracing tracing ) {
+		return dcbDomainModule.evaluate(command, tracing.instance(instance));
 	}
 
 	/*

@@ -30,6 +30,9 @@ import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
+import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.rules.Evaluation;
+import org.sliceworkz.eventmodeling.rules.RuleViolationException;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -101,6 +104,18 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 
 		void noEvents ( );
 
+		/**
+		 * Asserts the execution was rejected on its business rules — a {@code RuleViolationException},
+		 * thrown by the kernel after the command ran because a violated rule blocks, or needs an override
+		 * that was not (sufficiently) requested — and hands over its evaluation for the details:
+		 * <pre>{@code
+		 * .then().rulesViolated().needsOverrideOf(NO_OVERDRAFT);
+		 * }</pre>
+		 *
+		 * @return assertions on the evaluation the rejection carries
+		 */
+		EvaluationAssertions rulesViolated ( );
+
 	}
 
 	public interface TestResultWithResponse<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> extends TestResult<DOMAIN_EVENT_TYPE> {
@@ -112,6 +127,22 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 	public class TestDefinition {
 	
 		TestResult<DOMAIN_EVENT_TYPE> result;
+		Evaluation evaluation;
+		Tracing tracing;
+
+		/**
+		 * Acts as this actor from here on: every event seeded after this call is appended with the actor
+		 * in its tracing (so it carries the {@code x-actor} tag a decision model counting an actor's
+		 * overrides queries for), and the command is executed or evaluated for this actor — which is what
+		 * {@code CommandContext.actor()} answers.
+		 *
+		 * @param actor the actor
+		 * @return this definition
+		 */
+		public TestDefinition as ( String actor ) {
+			this.tracing = Tracing.actorAndChannel(actor, "test");
+			return this;
+		}
 		
 		public TestDefinition given ( @SuppressWarnings("unchecked") DOMAIN_EVENT_TYPE... events ) {
 			Arrays.asList(events).forEach(e->kernel().event(e));
@@ -124,14 +155,48 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		}
 		
 		public TestDefinition event ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-			kernel().event(event, tags);
+			if ( tracing != null ) {
+				kernel().event(event, tags, tracing);
+			} else {
+				kernel().event(event, tags);
+			}
 			return this;
+		}
+
+		/**
+		 * Evaluates the command instead of executing it — decision models projected, business rules judged,
+		 * nothing appended — and fails if anything was appended all the same.
+		 * Assert on the outcome with {@link #thenEvaluation()}.
+		 *
+		 * @param command the command
+		 * @return this definition
+		 */
+		public TestDefinition whenEvaluated ( Command<DOMAIN_EVENT_TYPE> command ) {
+			EventReference before = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
+			this.evaluation = ( tracing != null ) ? kernel().evaluate(command, tracing) : kernel().evaluate(command);
+			EventReference after = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
+			assertEquals(before, after, "evaluating a command must not append anything");
+			return this;
+		}
+
+		/**
+		 * @return assertions on the evaluation made by {@link #whenEvaluated(Command)}
+		 */
+		public EvaluationAssertions thenEvaluation ( ) {
+			if ( evaluation == null ) {
+				fail("no evaluation present - has the Command been evaluated with whenEvaluated(...)?");
+			}
+			return new EvaluationAssertions(evaluation);
 		}
 
 		public TestDefinition when ( Command<DOMAIN_EVENT_TYPE> command ) {
 			try {
 				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
-				kernel().execute(command);
+				if ( tracing != null ) {
+					kernel().execute(command, tracing);
+				} else {
+					kernel().execute(command);
+				}
 				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark);
 				this.result = new TestResultImpl ( newEvents );
 			} catch (Exception exception) {
@@ -143,7 +208,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		public <RESPONSE_TYPE> TestDefinition when ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command ) {
 			try {
 				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
-				CommandExecutionResult<RESPONSE_TYPE> executionResult = kernel().execute(command);
+				CommandExecutionResult<RESPONSE_TYPE> executionResult = ( tracing != null ) ? kernel().execute(command, tracing) : kernel().execute(command);
 				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark);
 				this.result = new TestResultWithResponseImpl<> ( newEvents, executionResult.response() );
 			} catch (Exception exception) {
@@ -238,6 +303,12 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 			assertEquals(0, producedEvents.size(), () -> "no events expected, produced: " + listing(producedEvents));
 		}
 		
+		@Override
+		public EvaluationAssertions rulesViolated ( ) {
+			error.assertType(RuleViolationException.class);
+			return new EvaluationAssertions(((RuleViolationException) error.thrown()).evaluation());
+		}
+
 		public void noException ( ) {
 			error.assertNone("no failure expected");
 		}

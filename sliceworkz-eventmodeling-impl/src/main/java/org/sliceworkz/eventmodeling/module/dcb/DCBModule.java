@@ -39,6 +39,11 @@ import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
 import org.sliceworkz.eventmodeling.observability.Outcome;
+import org.sliceworkz.eventmodeling.rules.Evaluation;
+import org.sliceworkz.eventmodeling.rules.Overrides;
+import org.sliceworkz.eventmodeling.rules.Overriding;
+import org.sliceworkz.eventmodeling.rules.RuleTags;
+import org.sliceworkz.eventmodeling.rules.RuleViolationException;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -73,19 +78,19 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	}
 	
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, tracing, domainEventStream, false, null);
+		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, overridesOf(command), tracing, domainEventStream, false, null);
 	}
 
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, tracing, domainEventStream, false, idempotencyKey);
+		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, overridesOf(command), tracing, domainEventStream, false, idempotencyKey);
 	}
 
 	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, Tracing tracing ) {
-		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, tracing, outboundEventStream, true, null);
+		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, Overrides.none(), tracing, outboundEventStream, true, null);
 	}
 
 	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, tracing, outboundEventStream, true, idempotencyKey);
+		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, Overrides.none(), tracing, outboundEventStream, true, idempotencyKey);
 	}
 
 	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing ) {
@@ -104,16 +109,17 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	 * {@code AbstractCommand} to call — {@code DCBCommandContextImpl} implements both, so a method
 	 * reference to either shape's {@code execute} fits here.
 	 */
-	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeAbstractCommand ( String commandName, Class<?> commandClass, Consumer<DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>> commandBody, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, boolean outboundTarget, String idempotencyKey ) {
+	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeAbstractCommand ( String commandName, Class<?> commandClass, Consumer<DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>> commandBody, Overrides overrides, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, boolean outboundTarget, String idempotencyKey ) {
 		Tracing tracingWithCommand = tracing.command(commandName);
 		Observation.Target target = outboundTarget ? Observation.Target.OUTBOUND : Observation.Target.DOMAIN;
 		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, commandClass, target, tracingWithCommand)) ) {
 			long start = System.currentTimeMillis();
 
-			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracingWithCommand);
+			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracingWithCommand, overrides);
 			try {
 				commandBody.accept(commandContext);
 				CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = commandContext.getCommandResult();
+				enforceBusinessRules(commandContext, commandResult);
 
 				List<EventReference> eventReferences = persist(commandResult, targetEventStream, commandName, idempotencyKey, outboundTarget);
 
@@ -143,10 +149,11 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, command.getClass(), Observation.Target.DOMAIN, tracingWithCommand)) ) {
 			long start = System.currentTimeMillis();
 
-			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand);
+			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand, overridesOf(command));
 			try {
 				RESPONSE_TYPE response = command.execute(commandContext);
 				CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
+				enforceBusinessRules(commandContext, commandResult);
 
 				List<EventReference> eventReferences = persist(commandResult, domainEventStream, commandName, idempotencyKey, false);
 
@@ -169,6 +176,73 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 				throw e;
 			}
 		}
+	}
+
+	/**
+	 * Evaluates a command: runs it exactly as {@link #execute(Command, Tracing)} would — decision models
+	 * projected, its {@code BusinessException}s thrown, its business rules checked — judges the rules, and
+	 * appends nothing. See {@link org.sliceworkz.eventmodeling.commands.CommandEvaluationCapability}.
+	 */
+	public Evaluation evaluate ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
+		return evaluateCommand(command.commandName(), command.getClass(), command::execute, overridesOf(command), tracing);
+	}
+
+	public Evaluation evaluate ( CommandWithResult<DOMAIN_EVENT_TYPE, ?> command, Tracing tracing ) {
+		return evaluateCommand(command.commandName(), command.getClass(), command::execute, overridesOf(command), tracing);
+	}
+
+	/**
+	 * The evaluation path: the execution path without the append, and without anything that only an
+	 * append warrants — no idempotency key is resolved or spent, no {@code CommandExecuted} or
+	 * {@code CommandRejected} is emitted (a front end may evaluate on every keystroke, and the monitoring
+	 * record is a record of what happened, not of what was previewed). A {@code BusinessException} the
+	 * command throws is the answer {@code REJECTED}, not a failure of the evaluation; anything else it throws
+	 * is a failure, and propagates as it would from an execution.
+	 */
+	private Evaluation evaluateCommand ( String commandName, Class<?> commandClass, Consumer<DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE>> commandBody, Overrides overrides, Tracing tracing ) {
+		Tracing tracingWithCommand = tracing.command(commandName);
+		try ( Observation.Scope<Outcome.Evaluated> scope = observer.start(new Observation.CommandEvaluation(boundedContext, commandName, commandClass, tracingWithCommand)) ) {
+			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand, overrides);
+			try {
+				Evaluation evaluation;
+				try {
+					commandBody.accept(commandContext);
+					commandContext.getCommandResult();
+					evaluation = commandContext.ruleBook().evaluation();
+				} catch ( BusinessException rejection ) {
+					evaluation = Evaluation.rejected(rejection.getMessage(), commandContext.ruleBook().judgements());
+				}
+				scope.completed(new Outcome.Evaluated(evaluation.outcome(), evaluation.judgements().size()));
+				return evaluation;
+			} catch ( RuntimeException e ) {
+				scope.failed(e);
+				throw e;
+			}
+		}
+	}
+
+	/**
+	 * Judges the business rules the command checked, once it returned and before anything is appended.
+	 * A violation that stops the execution rejects it with a {@link RuleViolationException} — a
+	 * {@code BusinessException}, so it is reported as {@code CommandRejected} like any other rejection. A
+	 * violation the execution goes ahead with is recorded as rule tags on every event it raised, whether or
+	 * not the command also recorded it in the payload: the tags are the framework's own account of the
+	 * exception, and cost the command nothing.
+	 */
+	private static void enforceBusinessRules ( DCBCommandContextImpl<?,?> commandContext, CommandResultImpl<?,?> commandResult ) {
+		Evaluation evaluation = commandContext.ruleBook().evaluation();
+		if ( !evaluation.stopping().isEmpty() ) {
+			throw new RuleViolationException(evaluation);
+		}
+		commandResult.tagAll(RuleTags.of(evaluation.recorded()));
+	}
+
+	private static Overrides overridesOf ( Object command ) {
+		if ( command instanceof Overriding overriding ) {
+			Overrides overrides = overriding.overrides();
+			return ( overrides == null ) ? Overrides.none() : overrides;
+		}
+		return Overrides.none();
 	}
 
 	private <PRODUCED_EVENT_TYPE> List<EventReference> persist ( CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String commandName, String idempotencyKey, boolean outboundTarget ) {

@@ -122,6 +122,7 @@ public class CapabilityAudienceTest {
 		assertAccepted("application.execute(command);");
 		assertAccepted("application.execute(command, \"key\");");
 		assertAccepted("application.executeWithRetry(command, RetryPolicy.DEFAULT);");
+		assertAccepted("application.evaluate(command);");
 		assertAccepted("AccountDetails d = application.read(AccountDetails.class, \"id\");");
 		assertAccepted("Account a = application.aggregate(Account.class, Tags.of(\"account\", \"1\"));");
 	}
@@ -184,6 +185,7 @@ public class CapabilityAudienceTest {
 	@Test
 	void anOperatorDecidesNothingOnTheApplicationsBehalf ( ) {
 		assertRejected("operations.execute(command);", NO_SUCH_METHOD);
+		assertRejected("operations.evaluate(command);", NO_SUCH_METHOD);
 		assertRejected("operations.read(AccountDetails.class, \"id\");", NO_SUCH_METHOD);
 		assertRejected("operations.terminate();", NO_SUCH_METHOD);
 		assertRejected("operations.erase(\"customer\", \"alice-42\", ErasureReason.of(\"why\"));", NO_SUCH_METHOD);
@@ -195,6 +197,7 @@ public class CapabilityAudienceTest {
 	void theOwnerOfTheContextStillHasEveryCapability ( ) {
 		// nothing moved off the wide surface: filing the methods under an audience is all this does
 		assertAccepted("owner.execute(command);");
+		assertAccepted("owner.evaluate(command);");
 		assertAccepted("owner.read(AccountDetails.class, \"id\");");
 		assertAccepted("owner.aggregate(Account.class, Tags.of(\"account\", \"1\"));");
 		assertAccepted("owner.event(domainEvent);");

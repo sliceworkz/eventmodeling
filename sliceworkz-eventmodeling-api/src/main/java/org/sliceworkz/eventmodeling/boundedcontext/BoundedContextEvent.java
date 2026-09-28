@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Set;
 
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
+import org.sliceworkz.eventmodeling.rules.BusinessRule;
+import org.sliceworkz.eventmodeling.rules.RuleJudgement;
 import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -70,6 +72,13 @@ public sealed interface BoundedContextEvent {
 	 * runs here when its aspect is among these. {@code aspects} is {@code null} on an event written
 	 * before deployments announced them - meaning unknown, not "none".
 	 * <p>
+	 * {@code businessRules} is the context's rulebook as it was declared on the builder
+	 * ({@code BoundedContextBuilder.businessRules(...)}): every behavioral rule with its statement and the
+	 * enforcement level in force for this deployment. It is the only place a rule that was never violated,
+	 * and a rule's statement, can be read from outside the code — the events carry only the ids of the rules
+	 * they were exceptions to. {@code null} on an event written before contexts announced a rulebook; empty
+	 * for a context that declared none.
+	 * <p>
 	 * The context is not usable yet at this point. What happens between this event and the
 	 * {@link BoundedContextStarted} that follows it is the startup work — most notably projecting the
 	 * ephemeral read models, which {@code start()} waits for.
@@ -81,12 +90,20 @@ public sealed interface BoundedContextEvent {
 			String process,
 			Set<FeatureSlice> enabledFeatures,
 			Set<FeatureSlice> disabledFeatures,
-			Set<Aspect> aspects ) implements BoundedContextEvent {
+			Set<Aspect> aspects,
+			List<BusinessRule> businessRules ) implements BoundedContextEvent {
 
 		public BoundedContextStarting {
 			// null is kept, and means "written before a deployment announced its aspects" - which is not
 			// the same as an instance that runs none of them, so it must not be normalized away.
 			aspects = aspects == null ? null : Set.copyOf(aspects);
+			// the same for the rulebook: null is an event written before contexts declared one
+			businessRules = businessRules == null ? null : List.copyOf(businessRules);
+		}
+
+		public BoundedContextStarting ( String boundedContext, String logical, String physical, String process,
+				Set<FeatureSlice> enabledFeatures, Set<FeatureSlice> disabledFeatures, Set<Aspect> aspects ) {
+			this(boundedContext, logical, physical, process, enabledFeatures, disabledFeatures, aspects, null);
 		}
 	}
 
@@ -189,8 +206,30 @@ public sealed interface BoundedContextEvent {
 	 * <p>
 	 * {@code slice} identifies the feature slice the command belongs to (resolved by package
 	 * convention) and is {@code null} when the command is not located within a known slice package.
+	 * <p>
+	 * {@code ruleJudgements} is the kernel's judgement of every business rule the execution violated when
+	 * it was rejected on those rules (a {@link org.sliceworkz.eventmodeling.rules.RuleViolationException}):
+	 * which rule, at which level, what the command said and the verdict — {@code BLOCKS} with the reason an
+	 * override was refused, or {@code OVERRIDE_REQUIRED} for one nobody asked for. It is what an auditor
+	 * reads to see who tried to go past a rule, without parsing {@code reason}. Empty for a rejection the
+	 * command threw itself, and on an event stored before the component existed. Explanations are in it only
+	 * where the actor gave one, which is free text: a listener persisting these events stores it.
 	 */
-	record CommandRejected ( String boundedContext, String command, String reason, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+	record CommandRejected ( String boundedContext, String command, String reason, Metrics metrics, FeatureSlice slice,
+			@JsonSetter(nulls = Nulls.AS_EMPTY) List<RuleJudgement> ruleJudgements ) implements BoundedContextEvent {
+
+		public CommandRejected {
+			ruleJudgements = ( ruleJudgements == null ) ? List.of() : List.copyOf(ruleJudgements);
+		}
+
+		/**
+		 * A rejection that no business rule with an enforcement level made: the command threw a
+		 * {@link org.sliceworkz.eventmodeling.commands.BusinessException} of its own.
+		 */
+		public CommandRejected ( String boundedContext, String command, String reason, Metrics metrics, FeatureSlice slice ) {
+			this(boundedContext, command, reason, metrics, slice, List.of());
+		}
+	}
 
 	/**
 	 * Emitted when a command execution failed with an exception other than a business rejection

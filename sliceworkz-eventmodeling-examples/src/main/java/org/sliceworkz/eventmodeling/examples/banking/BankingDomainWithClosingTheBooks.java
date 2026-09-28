@@ -26,6 +26,7 @@ import org.sliceworkz.eventmodeling.domain.Entity;
 import org.sliceworkz.eventmodeling.domain.EntityId;
 import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.EnforcementLevel;
+import org.sliceworkz.eventmodeling.rules.RuleFollowUp;
 import org.sliceworkz.eventmodeling.rules.RuleViolation;
 
 
@@ -287,14 +288,13 @@ public interface BankingDomainWithClosingTheBooks {
 			 * A teller justified, afterwards, a withdrawal that went ahead under a post-justified override.
 			 *
 			 * @param withdrawal the id of the {@code MoneyWithdrawn} event being justified
-			 * @param rule the id of the rule the withdrawal was an exception to
-			 * @param justification the justification, in the teller's words
+			 * @param justification the justification as the kernel links it — the rule, the withdrawal and the
+			 *                      teller's words — from {@code CommandContext.justifies(...)}
 			 */
 			record WithdrawalJustified(
 				AccountId accountId,
 				String withdrawal,
-				String rule,
-				String justification
+				RuleFollowUp justification
 			) implements RulebookFollowUp {}
 
 			/**
@@ -303,11 +303,13 @@ public interface BankingDomainWithClosingTheBooks {
 			 *
 			 * @param deposit the id of the {@code MoneyDeposited} event that took the balance over the guarantee
 			 * @param balance the balance right after that deposit
+			 * @param enforcement the enforcement as the kernel links it, from {@code CommandContext.enforces(...)}
 			 */
 			record ExcessBalanceReported(
 				AccountId accountId,
 				String deposit,
-				BigDecimal balance
+				BigDecimal balance,
+				RuleFollowUp enforcement
 			) implements RulebookFollowUp {}
 		}
 	}

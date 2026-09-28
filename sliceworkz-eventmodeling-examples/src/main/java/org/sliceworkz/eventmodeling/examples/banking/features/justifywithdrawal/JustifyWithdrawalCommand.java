@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.RulebookFollowUp.WithdrawalJustified;
 import org.sliceworkz.eventmodeling.rules.RuleViolation.Disposition;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
@@ -40,8 +41,9 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
  * Everything here is an ordinary command. Whether there is something to justify is read from the withdrawal
  * itself — the violation it recorded in its payload, with disposition {@code JUSTIFICATION_PENDING} — and a
  * justification for a withdrawal that needs none, or has one already, makes no sense and is rejected with a
- * {@link BusinessException}. What the post-justified level added was only the recorded obligation; the
- * framework needs nothing further to follow it up.
+ * {@link BusinessException}. {@code context.justifies(...)} links the justification to the withdrawal: the kernel
+ * tags the event {@code x-rule-justified:large-withdrawal-justified@<withdrawal>}, which is how an auditor
+ * pairs every pending override with the justification that settled it, without knowing this domain.
  *
  * @param accountId the account of the withdrawal
  * @param withdrawal the id of the {@code MoneyWithdrawn} event, as {@code OverridesAwaitingJustificationReadModel} lists it
@@ -68,7 +70,8 @@ public record JustifyWithdrawalCommand ( AccountId accountId, String withdrawal,
 		BusinessException.when(state.justified(), "Withdrawal " + withdrawal + " was already justified");
 
 		result.raiseEvent(
-			new WithdrawalJustified(accountId, withdrawal, LARGE_WITHDRAWAL_JUSTIFIED.id(), justification.strip()),
+			new WithdrawalJustified(accountId, withdrawal,
+				context.justifies(LARGE_WITHDRAWAL_JUSTIFIED, EventId.of(withdrawal), justification.strip())),
 			BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
 	}
 

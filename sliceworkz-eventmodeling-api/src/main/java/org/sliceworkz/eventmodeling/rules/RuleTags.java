@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
@@ -67,6 +68,19 @@ public final class RuleTags {
 	/** The key of the tag on a {@link EnforcementLevel#GUIDELINE} not followed. */
 	public static final String NOT_FOLLOWED = "x-rule-not-followed";
 
+	/**
+	 * The key of the tag on an event that justifies a post-justified override made earlier. Its value is
+	 * {@code <rule>@<event id>}, naming the override and the event it was recorded on, so the pending
+	 * override and its justification pair up exactly — an event id is a UUID, and never holds an {@code @}.
+	 */
+	public static final String JUSTIFIED = "x-rule-justified";
+
+	/**
+	 * The key of the tag on an event that enforces a deferred violation recorded earlier; its value is
+	 * {@code <rule>@<event id>}, as for {@link #JUSTIFIED}.
+	 */
+	public static final String ENFORCED = "x-rule-enforced";
+
 	private RuleTags ( ) { }
 
 	/**
@@ -99,6 +113,50 @@ public final class RuleTags {
 	 */
 	public static Tag notFollowed ( BusinessRule rule ) {
 		return Tag.of(NOT_FOLLOWED, rule.id());
+	}
+
+	/**
+	 * @param rule the rule the event was an exception to
+	 * @param event the event that recorded the override still to be justified
+	 * @return the tag on every event raised with the justification of that override
+	 */
+	public static Tag justified ( BusinessRule rule, EventId event ) {
+		return Tag.of(JUSTIFIED, link(rule.id(), event.value()));
+	}
+
+	/**
+	 * @param rule the rule whose enforcement was deferred
+	 * @param event the event that recorded the deferred enforcement
+	 * @return the tag on every event raised with the enforcement of that violation
+	 */
+	public static Tag enforced ( BusinessRule rule, EventId event ) {
+		return Tag.of(ENFORCED, link(rule.id(), event.value()));
+	}
+
+	/**
+	 * The value of a {@link #JUSTIFIED} or {@link #ENFORCED} tag: the rule and the event it follows up.
+	 *
+	 * @param rule the rule id
+	 * @param event the event id
+	 * @return {@code <rule>@<event>}
+	 */
+	public static String link ( String rule, String event ) {
+		return rule + "@" + event;
+	}
+
+	/**
+	 * The tags the kernel adds to every event of an append that follows these violations up.
+	 *
+	 * @param followUps the follow-ups the command made
+	 * @return their tags; none for no follow-ups
+	 */
+	public static Tags ofFollowUps ( List<RuleFollowUp> followUps ) {
+		Set<Tag> tags = new HashSet<>();
+		for ( RuleFollowUp followUp: followUps ) {
+			String key = ( followUp.kind() == RuleFollowUp.Kind.JUSTIFIED ) ? JUSTIFIED : ENFORCED;
+			tags.add(Tag.of(key, link(followUp.rule(), followUp.event())));
+		}
+		return tags.isEmpty() ? Tags.none() : new Tags(tags);
 	}
 
 	/**

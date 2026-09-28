@@ -42,6 +42,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.Evaluation;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
@@ -134,6 +135,9 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	private AdapterRegistry adapterRegistry;
 
+	/** The rulebook declared on the builder, announced on {@code BoundedContextStarting}. */
+	private final List<BusinessRule> businessRules;
+
 	public BoundedContextImpl (
 			String name,
 			List<? extends Slice<? extends BoundedContext<?,?,?>>> deployedFeatureSlices,
@@ -157,7 +161,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			ManagementModule managementModule,
 			Instance instance,
 			BoundedContextObserver observer,
-			AdapterRegistry adapterRegistry ) {
+			AdapterRegistry adapterRegistry,
+			List<BusinessRule> businessRules ) {
 		this.name = name;
 		this.instance = instance;
 		this.observer = observer;
@@ -183,6 +188,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.managementModule = managementModule;
 
 		this.adapterRegistry = adapterRegistry;
+		this.businessRules = List.copyOf(businessRules);
 		this.instance = instance;
 		this.eventEmitter = eventEmitter;
 
@@ -242,7 +248,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		LOGGER.info("starting bounded context '{}' ...", name);
 		long startedAt = System.currentTimeMillis();
 		eventEmitter.emit(new BoundedContextStarting(name, instance.logical(), instance.physical(), instance.process(),
-				map(deployedFeatureSlices), map(undeployedFeatureSlices), deployedAspects()));
+				map(deployedFeatureSlices), map(undeployedFeatureSlices), deployedAspects(), businessRules));
 		for (var slice : deployedFeatureSlices) {
 			Slice raw = (Slice) slice;
 			if (startCommands) raw.startCommand(selfReference);

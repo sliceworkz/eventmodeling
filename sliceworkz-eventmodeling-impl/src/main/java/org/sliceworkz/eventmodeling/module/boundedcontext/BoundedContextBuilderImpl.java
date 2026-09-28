@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +82,7 @@ import org.sliceworkz.eventmodeling.slices.AnnotationBasedDiscoveryAndConfigurat
 import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Slice;
+import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.observability.EventStoreObserver;
 import org.sliceworkz.eventstore.shredding.AesGcmShreddingCodec;
@@ -153,6 +155,9 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private Instance instance;
 
 	private long leadershipPriority = 0;
+
+	/** The declared rulebook, by id, in declaration order. */
+	private final Map<String, BusinessRule> businessRules = new LinkedHashMap<>();
 	private Duration leadershipHeartbeat = Duration.ofSeconds(5);
 	private Duration leadershipTtl = Duration.ofSeconds(20);
 
@@ -264,6 +269,25 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	@Override
 	public BoundedContextBuilder<C> eventStorage ( EventStorage eventStorage ) {
 		this.eventStorage = eventStorage;
+		return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<C> businessRules ( BusinessRule... rules ) {
+		if ( rules == null ) {
+			throw new IllegalArgumentException("businessRules(...) needs the rules to declare");
+		}
+		for ( BusinessRule rule: rules ) {
+			if ( rule == null ) {
+				throw new IllegalArgumentException("businessRules(...) cannot declare a null rule");
+			}
+			BusinessRule declared = businessRules.putIfAbsent(rule.id(), rule);
+			if ( declared != null && ( !declared.statement().equals(rule.statement()) || declared.enforcementLevel() != rule.enforcementLevel() ) ) {
+				throw new IllegalArgumentException(("business rule '%s' is declared twice, differently: \"%s\" (%s) and \"%s\" (%s)."
+						+ " A rule has one statement and one enforcement level per deployment").formatted(
+						rule.id(), declared.statement(), declared.enforcementLevel(), rule.statement(), rule.enforcementLevel()));
+			}
+		}
 		return this;
 	}
 
@@ -912,7 +936,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
-						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, managementModule, instance, observer, adapterRegistry);
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, managementModule, instance, observer, adapterRegistry, List.copyOf(businessRules.values()));
 
 		// From here the context owns the modules, and it is the only thing that can release them
 		// completely: its constructor registered a JVM shutdown hook holding it, which only its own

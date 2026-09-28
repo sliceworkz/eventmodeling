@@ -35,6 +35,7 @@ import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventstore.observability.EventStoreObserver;
 import org.sliceworkz.eventstore.shredding.ShreddingCodec;
 import org.sliceworkz.eventstore.shredding.ShreddingKeyStore;
@@ -178,6 +179,25 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * @return this builder
 	 */
 	BoundedContextBuilder<C> shredding(ShreddingCodec shreddingCodec);
+
+	/**
+	 * Declares business rules of this context's rulebook: the behavioral rules its commands
+	 * {@linkplain org.sliceworkz.eventmodeling.commands.CommandContext#check check}, each with its statement and
+	 * the enforcement level in force for this deployment. Declaring them is not needed to check them; it is
+	 * what makes them visible from outside the code. The rulebook is announced on
+	 * {@link BoundedContextEvent.BoundedContextStarting}, which is the only place a rule that was never violated,
+	 * and the statement of any rule, can be read by an observer — a stored event carries only the ids of the
+	 * rules it was an exception to.
+	 * <p>
+	 * Calls accumulate, so a feature slice may declare the rules it checks from its {@code configure...} method
+	 * and the context the rest. Declaring one rule twice is harmless when both declarations agree; two
+	 * declarations of one id with a different statement or level are an {@code IllegalArgumentException}, since
+	 * the rulebook would then say two things about one rule.
+	 *
+	 * @param rules the rules
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> businessRules ( BusinessRule... rules );
 
 	/**
 	 * This deployment's priority in leader election, default {@code 0}.

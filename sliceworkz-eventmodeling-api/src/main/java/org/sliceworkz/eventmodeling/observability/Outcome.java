@@ -95,6 +95,14 @@ public sealed interface Outcome {
 	record Rejected ( String reason ) implements CommandOutcome { }
 
 	/**
+	 * A command was evaluated: what executing it would have done.
+	 *
+	 * @param outcome the evaluation's overall answer
+	 * @param violatedRules how many business rules the evaluation found violated
+	 */
+	record Evaluated ( org.sliceworkz.eventmodeling.rules.Evaluation.Outcome outcome, int violatedRules ) implements Outcome { }
+
+	/**
 	 * An aggregate's events were stored.
 	 *
 	 * @param appended the references of the events stored

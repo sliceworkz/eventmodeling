@@ -99,6 +99,16 @@ public void execute ( CommandContext<BankingEvent, BankingEvent> context ) {
 }
 ```
 
+**Not every rule is a plain no.** A rule people may break under conditions — an overdraft a teller
+may grant, a large deposit that goes through once explained, advice that never blocks — is a
+*behavioral* business rule with an SBVR enforcement level. It is checked with
+`context.check(rule, violated, message)` instead of thrown, judged by the kernel after the command
+ran, overridable where its level allows and the command authorizes the actor, and previewable with
+`evaluate(...)` before anything is submitted. [BUSINESS-RULES.md](BUSINESS-RULES.md) is that guide.
+Keep `BusinessException` for what makes no sense at all (the account does not exist, the period is
+closed): no override can make it meaningful. The banking example's `WithdrawCommand` shows the two
+side by side — its balance check above is the `no-overdraft` rule there.
+
 This is where invariants live, and the shape is always the same three lines: **select decision models,
 check, raise.** A `DecisionModel` is a projection the command instantiates inline — `eventQuery()`
 scoped by tags to the entity, `when(...)` folding state, accessors for the checks
@@ -129,7 +139,8 @@ failure, and a dashboard can alert on failures and chart rejections. A rule reje
 `when(condition, message)` helper) precisely so a rule rejection is distinguishable from a bug in a
 catch block and in the observability record, where an `IllegalStateException` is reported as a
 `CommandFailed` with a stack trace, since the kernel cannot tell it from a bug. The banking example's
-`WithdrawCommand`, `DepositCommand` and `CloseMonthCommand` are written this way.
+`WithdrawCommand`, `DepositCommand` and `CloseMonthCommand` are written this way. A behavioral rule the
+kernel rejects on is a `BusinessException` too (`RuleViolationException`), so all of this holds for it.
 
 **A rule that needs no history needs no decision model.** `noDecisionModels()` is the greppable
 declaration that this command's append needs no guard, and it is what hands the command the
@@ -262,6 +273,7 @@ promises will happen.
 | Value object factory | at construction | data that cannot be said | exception at the edge | no — fix the input |
 | Input check (command) | before any read | a malformed request | `IllegalArgumentException` | no |
 | Decision model check | after projecting history | a rule history rejects | `BusinessException` + `CommandRejected` | no — the answer is no |
+| Business rule with an enforcement level | judged after the command ran | a rule people may break under conditions | `RuleViolationException` (a `BusinessException`) unless overridden, or recorded on the events — see [BUSINESS-RULES.md](BUSINESS-RULES.md) | no — override, or change the request |
 | DCB append check | inside the append | facts newer than the decision | `OptimisticLockingException` | yes — re-execute (`executeWithRetry`, bounded attempts) |
 | Empty boundary (uniqueness) | inside the append | a concurrent duplicate claim | `OptimisticLockingException` | re-execute; then rejected by the check — under `executeWithRetry` the re-decide's `BusinessException` propagates as the outcome |
 | Idempotency key | inside the append | the same request twice | empty result, silently | no — already done |
@@ -271,6 +283,7 @@ promises will happen.
 `given(events).when(command).then().error("Insufficient balance")` for steps 2–4 (it compares the root
 cause's message, so the wrapped exception does not obscure the rule), `.event(expected, tags)` to pin
 that the claim tag really is on the raised event, and `.noEvents()` to prove a rejection stored
-nothing. The concurrent half of step 4 is the storage's promise, pinned per backend by the eventstore
+nothing. For business rules with an enforcement level, `as(actor)`, `whenEvaluated(...)` and
+`then().rulesViolated()` assert what the kernel made of them (BUSINESS-RULES.md, section 11). The concurrent half of step 4 is the storage's promise, pinned per backend by the eventstore
 TCK — your test asserts the sequential rejection and the tags, and leaves the race to
 `ConcurrentOptimisticLockingTest`.

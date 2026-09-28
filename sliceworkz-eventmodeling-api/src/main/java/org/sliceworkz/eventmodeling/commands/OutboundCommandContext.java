@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.commands;
 
+import java.util.Optional;
+
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 
 /**
@@ -53,5 +55,20 @@ public interface OutboundCommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE
 	<READ_MODEL extends ReadModel<? extends CONSUMED_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... constructorParams );
 
 	CommandResult<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> noDecisionModels ( );
+
+	/**
+	 * The actor the command is executed for: the actor of the tracing it was executed with, and so the same
+	 * value the kernel stores in the {@code x-actor} tag of every event it appends. Meant for decisions about
+	 * <em>who</em> may do something — above all whether this actor may override a business rule, see
+	 * {@link org.sliceworkz.eventmodeling.rules.RuleCheck#overridableWhen}.
+	 * <p>
+	 * Empty for an execution without an actor (no tracing given, or one naming none): a decision that needs
+	 * an actor should then say no. The framework's own actors — {@code "automation"} for an automation,
+	 * {@code "system"} for the kernel — are returned as they are, so a decision granting rights by actor
+	 * name grants them only to the names it was given.
+	 *
+	 * @return the actor, if there is one
+	 */
+	Optional<String> actor ( );
 
 }

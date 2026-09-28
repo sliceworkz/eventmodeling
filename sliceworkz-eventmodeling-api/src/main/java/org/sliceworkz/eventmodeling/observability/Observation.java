@@ -81,6 +81,18 @@ public sealed interface Observation<O extends Outcome> {
 	record CommandExecution ( String boundedContext, String command, Class<?> commandClass, Target target, Tracing tracing ) implements Observation<Outcome.CommandOutcome> { }
 
 	/**
+	 * One evaluation of a command: run as an execution would be, its business rules judged, nothing appended.
+	 * A front end may evaluate on every change of a form, which is why this is an observation of its own and
+	 * not a {@link CommandExecution}.
+	 *
+	 * @param boundedContext the bounded context
+	 * @param command the command's name
+	 * @param commandClass the command's class
+	 * @param tracing the caller's tracing, the command named on it
+	 */
+	record CommandEvaluation ( String boundedContext, String command, Class<?> commandClass, Tracing tracing ) implements Observation<Outcome.Evaluated> { }
+
+	/**
 	 * A domain event provided through {@code event(...)}, appended with no consistency boundary.
 	 *
 	 * @param boundedContext the bounded context

@@ -20,8 +20,13 @@ package org.sliceworkz.eventmodeling.examples.banking;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.List;
+
 import org.sliceworkz.eventmodeling.domain.Entity;
 import org.sliceworkz.eventmodeling.domain.EntityId;
+import org.sliceworkz.eventmodeling.rules.BusinessRule;
+import org.sliceworkz.eventmodeling.rules.EnforcementLevel;
+import org.sliceworkz.eventmodeling.rules.RuleViolation;
 
 
 /**
@@ -52,8 +57,32 @@ import org.sliceworkz.eventmodeling.domain.EntityId;
  * <ul>
  *   <li><b>STATE_CHANGE</b>: DepositCommand, WithdrawCommand, CloseMonthCommand</li>
  *   <li><b>STATE_READ</b>: CurrentPeriodReadModel (live), MonthStatementReadModel (live)</li>
- *   <li><b>AUTOMATION</b>: MonthEndClosingAutomation (time-triggered)</li>
+ *   <li><b>AUTOMATION</b>: MonthEndClosingAutomation (time-triggered), ReportExcessBalanceAutomation
+ *       (the follow-up of a deferred enforcement)</li>
  * </ul>
+ *
+ * <h2>The rulebook</h2>
+ * <p>
+ * The {@link BusinessRule business rules} below are part of the domain's vocabulary as much as its events
+ * are: the statements are what a teller is shown, the ids are what history records. Between them, the
+ * withdrawal and the deposit use every SBVR enforcement level the framework knows, so this is the place to
+ * look for how each one is written. What does <em>not</em> appear here is a request that makes no sense —
+ * an account that does not exist, a period already closed: those are {@code BusinessException}s in the
+ * commands, not rules with an enforcement level.
+ * </p>
+ * <table>
+ * <caption>Banking rules</caption>
+ * <tr><th>Rule</th><th>Level</th><th>Checked by</th><th>Follow-up</th></tr>
+ * <tr><td>{@link #MAXIMUM_WITHDRAWAL}</td><td>strictly enforced</td><td>WithdrawCommand</td><td>—</td></tr>
+ * <tr><td>{@link #NO_OVERDRAFT}</td><td>pre-authorized override</td><td>WithdrawCommand, which grants it to
+ *     identified tellers up to three times a day</td><td>—</td></tr>
+ * <tr><td>{@link #LARGE_WITHDRAWAL_JUSTIFIED}</td><td>post-justified override</td><td>WithdrawCommand</td>
+ *     <td>JustifyWithdrawalCommand, OverridesAwaitingJustificationReadModel</td></tr>
+ * <tr><td>{@link #WITHDRAWAL_DESCRIBED}</td><td>guideline</td><td>WithdrawCommand</td><td>—</td></tr>
+ * <tr><td>{@link #ORIGIN_OF_FUNDS_EXPLAINED}</td><td>override with explanation</td><td>DepositCommand</td><td>—</td></tr>
+ * <tr><td>{@link #BALANCE_WITHIN_GUARANTEE}</td><td>deferred enforcement</td><td>DepositCommand</td>
+ *     <td>ReportExcessBalanceAutomation</td></tr>
+ * </table>
  */
 public interface BankingDomainWithClosingTheBooks {
 
@@ -72,6 +101,71 @@ public interface BankingDomainWithClosingTheBooks {
 	static MonthId monthId ( YearMonth month ) {
 		return MONTH.id(month.toString());
 	}
+
+	// ── Business rules ───────────────────────────────────────────────────
+	//
+	// The ids are wire format (recorded in every RuleViolation, used as tag values, sent back by front
+	// ends); the statements are wording and may change; the enforcement level is policy and may change too
+	// — a bank tightening its overdraft policy changes one word below and nothing else.
+
+	/** Above this amount a single withdrawal is refused, whoever asks. */
+	BigDecimal MAXIMUM_WITHDRAWAL_AMOUNT = new BigDecimal("50000");
+
+	/** Above this amount a withdrawal is an exception that has to be justified afterwards. */
+	BigDecimal LARGE_WITHDRAWAL_AMOUNT = new BigDecimal("5000");
+
+	/** Above this amount a deposit has to come with an explanation of where the money comes from. */
+	BigDecimal ORIGIN_OF_FUNDS_AMOUNT = new BigDecimal("10000");
+
+	/** The balance a deposit guarantee scheme covers. */
+	BigDecimal GUARANTEED_BALANCE = new BigDecimal("100000");
+
+	/** How many overdraft exceptions one teller may grant per day. */
+	int DAILY_OVERDRAFT_EXCEPTIONS = 3;
+
+	/**
+	 * Strictly enforced: nobody may override it. Not a {@code BusinessException} all the same, because it is a
+	 * behavioral rule of the bank — reported next to every other violation when a withdrawal is evaluated, and
+	 * relaxable one day by changing its level rather than the command.
+	 */
+	BusinessRule MAXIMUM_WITHDRAWAL = BusinessRule.of("maximum-withdrawal",
+			"A single withdrawal must not exceed " + MAXIMUM_WITHDRAWAL_AMOUNT + ".")
+		.enforcedAt(EnforcementLevel.STRICTLY_ENFORCED);
+
+	/**
+	 * Pre-authorized override: only a teller the command authorizes may let an account go negative — an
+	 * identified one, and no more than {@link #DAILY_OVERDRAFT_EXCEPTIONS} times a day. That decision is taken
+	 * in {@code WithdrawCommand}, on a decision model counting the teller's earlier overrides.
+	 */
+	BusinessRule NO_OVERDRAFT = BusinessRule.of("no-overdraft",
+			"A withdrawal must not make the balance of the account negative.")
+		.enforcedAt(EnforcementLevel.PRE_AUTHORIZED_OVERRIDE);
+
+	/**
+	 * Post-justified override: a teller may pay out a large amount on the spot, and has to justify it
+	 * afterwards. Until then the withdrawal is listed by {@code OverridesAwaitingJustificationReadModel}.
+	 */
+	BusinessRule LARGE_WITHDRAWAL_JUSTIFIED = BusinessRule.of("large-withdrawal-justified",
+			"A withdrawal above " + LARGE_WITHDRAWAL_AMOUNT + " must be justified.")
+		.enforcedAt(EnforcementLevel.POST_JUSTIFIED_OVERRIDE);
+
+	/** Guideline: nothing stops a withdrawal without a description, but the teller is told it should have one. */
+	BusinessRule WITHDRAWAL_DESCRIBED = BusinessRule.of("withdrawal-described",
+			"A withdrawal should say what it is for.")
+		.enforcedAt(EnforcementLevel.GUIDELINE);
+
+	/** Override with explanation: a large deposit goes through once the teller records where the money comes from. */
+	BusinessRule ORIGIN_OF_FUNDS_EXPLAINED = BusinessRule.of("origin-of-funds-explained",
+			"A deposit above " + ORIGIN_OF_FUNDS_AMOUNT + " must come with an explanation of the origin of the funds.")
+		.enforcedAt(EnforcementLevel.OVERRIDE_WITH_EXPLANATION);
+
+	/**
+	 * Deferred enforcement: a deposit is never refused for it, and an account above the guarantee is reported to
+	 * its customer afterwards, by {@code ReportExcessBalanceAutomation}.
+	 */
+	BusinessRule BALANCE_WITHIN_GUARANTEE = BusinessRule.of("balance-within-guarantee",
+			"The balance of an account should not exceed the guaranteed " + GUARANTEED_BALANCE + ".")
+		.enforcedAt(EnforcementLevel.DEFERRED_ENFORCEMENT);
 
 	// ── Domain Events ────────────────────────────────────────────────────
 
@@ -95,23 +189,55 @@ public interface BankingDomainWithClosingTheBooks {
 
 		/**
 		 * Money was deposited into the account during the current period.
+		 *
+		 * @param ruleViolations the business rules the deposit went ahead in violation of — an explained
+		 *        origin of funds, a balance above the guarantee — as the command recorded them; empty for an
+		 *        ordinary deposit, and for deposits stored before the field existed
 		 */
 		record MoneyDeposited(
 			AccountId accountId,
 			YearMonth month,
 			BigDecimal amount,
-			String description
-		) implements BankingEvent {}
+			String description,
+			List<RuleViolation> ruleViolations
+		) implements BankingEvent {
+
+			// lenient, as every payload record must be: this is what Jackson calls on every read of history
+			public MoneyDeposited {
+				ruleViolations = ( ruleViolations == null ) ? List.of() : List.copyOf(ruleViolations);
+			}
+
+			/** A deposit that violated no rule. */
+			public MoneyDeposited ( AccountId accountId, YearMonth month, BigDecimal amount, String description ) {
+				this(accountId, month, amount, description, List.of());
+			}
+		}
 
 		/**
 		 * Money was withdrawn from the account during the current period.
+		 *
+		 * @param ruleViolations the business rules the withdrawal went ahead in violation of — an overdraft
+		 *        a teller was authorized to grant, a large amount still to be justified, a missing
+		 *        description — as the command recorded them; empty for an ordinary withdrawal, and for
+		 *        withdrawals stored before the field existed
 		 */
 		record MoneyWithdrawn(
 			AccountId accountId,
 			YearMonth month,
 			BigDecimal amount,
-			String description
-		) implements BankingEvent {}
+			String description,
+			List<RuleViolation> ruleViolations
+		) implements BankingEvent {
+
+			public MoneyWithdrawn {
+				ruleViolations = ( ruleViolations == null ) ? List.of() : List.copyOf(ruleViolations);
+			}
+
+			/** A withdrawal that violated no rule. */
+			public MoneyWithdrawn ( AccountId accountId, YearMonth month, BigDecimal amount, String description ) {
+				this(accountId, month, amount, description, List.of());
+			}
+		}
 
 		// ── Closing The Books events ─────────────────────────────────
 
@@ -144,6 +270,46 @@ public interface BankingDomainWithClosingTheBooks {
 			BigDecimal carryForwardBalance,
 			YearMonth previousMonth
 		) implements BankingEvent {}
+
+		// ── Rulebook follow-ups ──────────────────────────────────────
+
+		/**
+		 * The facts that finish what a violation left open: a justification given afterwards for a
+		 * post-justified override, an enforcement carried out for a deferred one. They move no money, which
+		 * is why the read models folding balances and periods ignore the whole branch in one case.
+		 */
+		sealed interface RulebookFollowUp extends BankingEvent {
+
+			/** @return the account the follow-up concerns */
+			AccountId accountId();
+
+			/**
+			 * A teller justified, afterwards, a withdrawal that went ahead under a post-justified override.
+			 *
+			 * @param withdrawal the id of the {@code MoneyWithdrawn} event being justified
+			 * @param rule the id of the rule the withdrawal was an exception to
+			 * @param justification the justification, in the teller's words
+			 */
+			record WithdrawalJustified(
+				AccountId accountId,
+				String withdrawal,
+				String rule,
+				String justification
+			) implements RulebookFollowUp {}
+
+			/**
+			 * The customer was told the balance of the account exceeds what the deposit guarantee covers: the
+			 * enforcement of {@code balance-within-guarantee}, deferred when the deposit was made.
+			 *
+			 * @param deposit the id of the {@code MoneyDeposited} event that took the balance over the guarantee
+			 * @param balance the balance right after that deposit
+			 */
+			record ExcessBalanceReported(
+				AccountId accountId,
+				String deposit,
+				BigDecimal balance
+			) implements RulebookFollowUp {}
+		}
 	}
 
 	// ── Inbound Events (external triggers) ───────────────────────────────

@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.boundedcontext;
 
 import org.sliceworkz.eventmodeling.aggregates.AggregateCapability;
+import org.sliceworkz.eventmodeling.commands.CommandEvaluationCapability;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionCapability;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
 
@@ -29,7 +30,9 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
  * CommandExecutionCapability#execute executing a command}, which pins its boundary at the domain
  * stream's head and re-checks it on append, and {@link AggregateCapability#aggregate loading an
  * aggregate}, which raises through its own identity — together with {@link
- * ReadModelCapability#read reading a read model}. It carries nothing else.
+ * ReadModelCapability#read reading a read model}, and {@link CommandEvaluationCapability#evaluate
+ * evaluating a command} — the preview of an execution that a user sees before submitting it. It carries
+ * nothing else.
  *
  * <h2>Holding it</h2>
  * A built context already is one, because {@link AllCapabilities} extends this interface, so
@@ -66,6 +69,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
  */
 public interface ApplicationCapabilities<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends
 	CommandExecutionCapability<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
+	CommandEvaluationCapability<DOMAIN_EVENT_TYPE>,
 	ReadModelCapability<DOMAIN_EVENT_TYPE>,
 	AggregateCapability<DOMAIN_EVENT_TYPE> {
 

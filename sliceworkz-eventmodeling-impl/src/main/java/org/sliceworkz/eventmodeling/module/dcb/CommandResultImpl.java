@@ -202,6 +202,19 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 		}
 	}
 
+	/**
+	 * Adds tags to every raised event — the rule tags of the violations the execution went ahead with.
+	 */
+	public void tagAll ( Tags extraTags ) {
+		if ( extraTags.tags().isEmpty() ) {
+			return;
+		}
+		for ( int i = 0; i < events.size(); i++ ) {
+			EphemeralEvent<? extends PRODUCED_EVENT_TYPE> event = events.get(i);
+			events.set(i, event.withTags(event.tags().merge(extraTags)));
+		}
+	}
+
 	public List<EphemeralEvent<? extends PRODUCED_EVENT_TYPE>> raisedEvents ( ) {
 		return events;
 	}

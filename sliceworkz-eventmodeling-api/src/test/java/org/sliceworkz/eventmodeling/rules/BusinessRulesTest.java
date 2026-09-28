@@ -86,6 +86,8 @@ public class BusinessRulesTest {
 		assertThrows(IllegalArgumentException.class, () -> Overrides.of("a", "a"));
 		assertThrows(IllegalArgumentException.class, () -> OverrideRequest.of(" "));
 		assertTrue(new Overrides(null).isEmpty());
+		assertTrue(Overrides.of((List<OverrideRequest>) null).isEmpty(), "a request body without overrides");
+		assertEquals(Optional.of(OverrideRequest.of("a")), Overrides.of(List.of(OverrideRequest.of("a"))).requestFor("a"));
 	}
 
 	@Test

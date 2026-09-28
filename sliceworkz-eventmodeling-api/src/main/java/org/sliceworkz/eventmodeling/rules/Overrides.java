@@ -83,6 +83,16 @@ public record Overrides ( List<OverrideRequest> requests ) {
 	}
 
 	/**
+	 * The overrides a request body carried, as the list an HTTP payload record deserializes them into.
+	 *
+	 * @param requests the override requests; {@code null} (a body without any) is none
+	 * @return the overrides
+	 */
+	public static Overrides of ( List<OverrideRequest> requests ) {
+		return ( requests == null || requests.isEmpty() ) ? NONE : new Overrides(requests);
+	}
+
+	/**
 	 * @param rule the id of a further rule to override
 	 * @return these overrides plus that one, without explanation
 	 */

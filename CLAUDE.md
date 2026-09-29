@@ -1792,16 +1792,20 @@ a `DataSource` proxy would time `getConnection()`, which is pool checkout, not t
   older reader) and `slice` — the *caller's* slice, since a port is bound on the builder and belongs to none.
   The instance travels on the `x-instance-*` tags and the flow on `x-correlation-id`, from the caller's
   tracing, as on every kernel event.
-- **A port a slice takes in its `start...` method is attributed to that slice.** That is where a slice
-  wires its REST endpoints, and their calls run on request threads where no component is running — the
-  ordinary shape of a membership or permission check made before a command is executed. `port()` on the
-  context, called while a slice is being started, hands out a proxy of its own for that slice (one per
-  slice and binding) whose calls report `PortCaller.slice(name)` and that slice whenever no component
-  scope is active; a command executed through the same reference is still the command's. A port taken
-  from the built context anywhere else is `PortCaller.UNATTRIBUTED` on a thread the framework did not
-  start. The start-time takers are deliberately not added to the `BoundedContextStarting` inventory,
-  which is announced before any slice starts — listing them only from a restart on would make it depend
-  on history; the caller is on every call instead
+- **A port a slice reaches from its `start...` methods is attributed to that slice.** That is where a
+  slice wires its REST endpoints, and their calls run on request threads where no component is running —
+  the ordinary shape of a membership or permission check made before a command is executed. Each slice's
+  `start...` methods are handed a view of the context of their own — the context itself in every respect
+  but `port(...)`, which hands out a proxy for that slice (one per slice and binding) whose calls report
+  `PortCaller.slice(name)` and that slice whenever no component scope is active. So an endpoint is
+  attributed whether it took the port when the slice started or looks it up per request through the
+  context it was handed; a command executed through the same reference is still the command's, and a port
+  taken from the built context by application code is `PortCaller.UNATTRIBUTED`. The alternative — a
+  thread-local marking the slice being started — loses because it only covers a port taken during the
+  start call, and endpoints routinely look their ports up per request. A context built on a class rather
+  than an interface cannot be wrapped, so its slices get the context itself. These slices are
+  deliberately not added to the `BoundedContextStarting` inventory, which is announced before any slice
+  starts; the caller is on every call instead
 - **Per call by default; summarized for a busy port.** Each per-call event is an append to the monitoring
   store on the caller's thread, so a port called per projected event would double the load.
   `PortMonitoring.summarized(interval)` condenses a port's calls into one `PortCallsSummarized` per port,

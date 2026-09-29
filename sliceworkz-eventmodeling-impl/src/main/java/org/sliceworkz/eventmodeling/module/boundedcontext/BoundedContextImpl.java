@@ -17,10 +17,14 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -110,8 +114,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> deployedFeatureSlices;
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> undeployedFeatureSlices;
 
-	/** The feature slice whose {@code start...} methods are running on this thread, if any. */
-	private static final ThreadLocal<Slice<?>> STARTING_SLICE = new ThreadLocal<>();
+	/** The context as each slice's {@code start...} methods are handed it, one per slice, kept across restarts. */
+	private final Map<Slice<?>, BoundedContext<?,?,?>> sliceViews = new IdentityHashMap<>();
 
 	private boolean startCommands;
 	private boolean startQueries;
@@ -265,17 +269,11 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		}
 		for (var slice : deployedFeatureSlices) {
 			Slice raw = (Slice) slice;
-			// a port the slice takes now is handed out attributed to it: the endpoints it wires here call
-			// through it on request threads, where no component of the framework is running
-			STARTING_SLICE.set(raw);
-			try {
-				if (startCommands) raw.startCommand(selfReference);
-				if (startQueries) raw.startQuery(selfReference);
-				if (startAutomations) raw.startAutomation(selfReference);
-				if (startProjections) raw.startProjection(selfReference);
-			} finally {
-				STARTING_SLICE.remove();
-			}
+			BoundedContext<?,?,?> view = sliceView(raw);
+			if (startCommands) raw.startCommand(view);
+			if (startQueries) raw.startQuery(view);
+			if (startAutomations) raw.startAutomation(view);
+			if (startProjections) raw.startProjection(view);
 		}
 		// one synchronous election round before any processor takes its first loop pass, so a single
 		// instance -- or the preferred one on a quiet deployment -- leads from the start instead of a
@@ -706,10 +704,46 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public <T> T port(Class<T> portType, String qualification) {
-		Slice<?> starting = STARTING_SLICE.get();
-		return starting == null
-				? adapterRegistry.lookup(portType, qualification)
-				: adapterRegistry.lookupForStartingSlice(portType, qualification, starting);
+		return adapterRegistry.lookup(portType, qualification);
+	}
+
+	/**
+	 * The context as a slice's {@code start...} methods are handed it: the context itself in every respect
+	 * but {@code port(...)}, which hands out the ports attributed to that slice. A slice keeps this reference
+	 * in the endpoints it wires, which call through its ports on request threads where no component of the
+	 * framework is running — so whether an endpoint takes a port when the slice starts or looks it up per
+	 * request, its calls are reported as the slice's rather than as unattributed. A context built on a
+	 * class rather than an interface cannot be wrapped, and its slices are handed the context itself.
+	 */
+	private BoundedContext<?,?,?> sliceView(Slice<?> slice) {
+		if (!Proxy.isProxyClass(selfReference.getClass())) {
+			return selfReference;
+		}
+		synchronized (sliceViews) {
+			return sliceViews.computeIfAbsent(slice, s -> (BoundedContext<?,?,?>) Proxy.newProxyInstance(
+					selfReference.getClass().getClassLoader(), selfReference.getClass().getInterfaces(),
+					(proxy, method, args) -> {
+						if (method.getName().equals("port") && args != null && args.length >= 1 && args[0] instanceof Class<?> portType) {
+							String qualification = args.length == 2 ? (String) args[1] : AdapterRegistry.DEFAULT_QUALIFICATION;
+							if (qualification == null) {
+								throw new IllegalArgumentException("qualification must not be null");
+							}
+							return adapterRegistry.lookupForSlice(portType, qualification, s);
+						}
+						if (method.getDeclaringClass() == Object.class) {
+							return switch (method.getName()) {
+								case "equals" -> proxy == args[0];
+								case "hashCode" -> System.identityHashCode(proxy);
+								default -> "%s (as handed to slice %s)".formatted(selfReference, s.name());
+							};
+						}
+						try {
+							return method.invoke(selfReference, args);
+						} catch (InvocationTargetException e) {
+							throw e.getCause();
+						}
+					}));
+		}
 	}
 
 }

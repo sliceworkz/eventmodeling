@@ -114,6 +114,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		observed.clear();
 		CallGatewayFeatureSlice.handedOut = null;
 		CallGatewayFeatureSlice.startedWith = null;
+		CallGatewayFeatureSlice.startedOn = null;
 	}
 
 	// ════════════════════════════════════════════════════════════════════
@@ -397,6 +398,31 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		PortCallRejected rejected = only(PortCallRejected.class);
 		assertEquals(PortCaller.slice("CallGateway"), rejected.caller());
 		assertEquals("CallGateway", rejected.slice().name());
+	}
+
+	@Test
+	void aPortLookedUpPerRequestThroughTheContextASliceWasHandedIsThatSlicesToo ( ) throws InterruptedException {
+		buildBoundedContext(slicedBuilder(PortMonitoring.perCall()));
+		Mock startedOn = CallGatewayFeatureSlice.startedOn;
+
+		// an endpoint that keeps the context and asks it for the port on every request
+		Thread request = Thread.ofVirtual().start(( ) -> startedOn.port(GatewayPort.class).answer("per request"));
+		request.join();
+
+		assertEquals(PortCaller.slice("CallGateway"), only(PortCalled.class).caller());
+		assertSame(CallGatewayFeatureSlice.startedWith, startedOn.port(GatewayPort.class), "one proxy per slice and binding");
+	}
+
+	@Test
+	void theContextASliceIsHandedIsTheContextInEveryOtherRespect ( ) {
+		Mock domain = buildBoundedContext(slicedBuilder(PortMonitoring.perCall()));
+		Mock startedOn = CallGatewayFeatureSlice.startedOn;
+
+		assertNotSame(domain, startedOn);
+		startedOn.execute(new CallGatewayCommand(domain.port(GatewayPort.class), g -> g.answer("q")));
+		assertEquals(PortCaller.command("CallGateway"), only(PortCalled.class).caller(), "executed on the context itself");
+		assertThrows(IllegalStateException.class, ( ) -> startedOn.port(GatewayPort.class, "no such qualification"),
+				"a missing binding is refused as it is on the context");
 	}
 
 	@Test

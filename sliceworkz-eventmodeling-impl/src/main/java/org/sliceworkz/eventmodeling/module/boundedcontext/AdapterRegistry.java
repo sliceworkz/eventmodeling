@@ -116,18 +116,18 @@ class AdapterRegistry {
 	}
 
 	/**
-	 * Looks a port up for a feature slice being started: a monitored port comes back as a proxy that
-	 * attributes the calls made through it to that slice whenever no component is running on the calling
-	 * thread — which is what a REST endpoint the slice wires in its {@code start...} method is. One proxy
-	 * per slice and binding, so a slice started again gets the one it had.
+	 * Looks a port up through the context a feature slice was handed in its {@code start...} methods: a
+	 * monitored port comes back as a proxy that attributes the calls made through it to that slice whenever
+	 * no component is running on the calling thread — which is what a REST endpoint the slice wires there
+	 * is. One proxy per slice and binding, so every lookup of a slice gets the same one.
 	 * <p>
 	 * The slice is not added to the binding's inventory: that is announced by {@code BoundedContextStarting},
-	 * before any slice is started, and listing a slice there only from the second start on would make the
-	 * inventory depend on whether the context was ever restarted. Who calls a port through the proxy is
+	 * before any slice is started, and a lookup made per request would otherwise list a slice there only
+	 * from the first request after a restart on. Who calls a port through the proxy is
 	 * on every call instead.
 	 */
 	@SuppressWarnings("unchecked")
-	<T> T lookupForStartingSlice(Class<T> portType, String qualification, Slice<?> slice) {
+	<T> T lookupForSlice(Class<T> portType, String qualification, Slice<?> slice) {
 		Object handedOut = lookup(portType, qualification, null);
 		Binding binding = adapters.get(new PortKey(portType, qualification));
 		if (binding.monitored() == null) {

@@ -43,8 +43,12 @@ public class CallGatewayFeatureSlice implements Slice<Mock> {
 		builder.command(CallGatewayCommand.class);
 	}
 
+	/** The context {@code startCommand} was handed — what an endpoint keeps to look its ports up per request. */
+	public static volatile Mock startedOn;
+
 	@Override
 	public void startCommand ( Mock boundedContext ) {
+		startedOn = boundedContext;
 		startedWith = boundedContext.port(GatewayPort.class);
 	}
 

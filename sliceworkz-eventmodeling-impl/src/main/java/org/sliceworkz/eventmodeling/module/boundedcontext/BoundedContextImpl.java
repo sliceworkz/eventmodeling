@@ -110,6 +110,9 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> deployedFeatureSlices;
 	private List<? extends Slice<? extends BoundedContext<?,?,?>>> undeployedFeatureSlices;
 
+	/** The feature slice whose {@code start...} methods are running on this thread, if any. */
+	private static final ThreadLocal<Slice<?>> STARTING_SLICE = new ThreadLocal<>();
+
 	private boolean startCommands;
 	private boolean startQueries;
 	private boolean startAutomations;
@@ -262,10 +265,17 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		}
 		for (var slice : deployedFeatureSlices) {
 			Slice raw = (Slice) slice;
-			if (startCommands) raw.startCommand(selfReference);
-			if (startQueries) raw.startQuery(selfReference);
-			if (startAutomations) raw.startAutomation(selfReference);
-			if (startProjections) raw.startProjection(selfReference);
+			// a port the slice takes now is handed out attributed to it: the endpoints it wires here call
+			// through it on request threads, where no component of the framework is running
+			STARTING_SLICE.set(raw);
+			try {
+				if (startCommands) raw.startCommand(selfReference);
+				if (startQueries) raw.startQuery(selfReference);
+				if (startAutomations) raw.startAutomation(selfReference);
+				if (startProjections) raw.startProjection(selfReference);
+			} finally {
+				STARTING_SLICE.remove();
+			}
 		}
 		// one synchronous election round before any processor takes its first loop pass, so a single
 		// instance -- or the preferred one on a quiet deployment -- leads from the start instead of a
@@ -691,12 +701,15 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public <T> T port(Class<T> portType) {
-		return adapterRegistry.lookup(portType, AdapterRegistry.DEFAULT_QUALIFICATION);
+		return port(portType, AdapterRegistry.DEFAULT_QUALIFICATION);
 	}
 
 	@Override
 	public <T> T port(Class<T> portType, String qualification) {
-		return adapterRegistry.lookup(portType, qualification);
+		Slice<?> starting = STARTING_SLICE.get();
+		return starting == null
+				? adapterRegistry.lookup(portType, qualification)
+				: adapterRegistry.lookupForStartingSlice(portType, qualification, starting);
 	}
 
 }

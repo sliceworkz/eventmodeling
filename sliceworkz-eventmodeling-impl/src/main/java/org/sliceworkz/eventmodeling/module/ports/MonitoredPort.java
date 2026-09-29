@@ -85,6 +85,17 @@ public final class MonitoredPort implements InvocationHandler {
 		return Proxy.newProxyInstance(portType.getClassLoader(), new Class<?>[] { portType }, this);
 	}
 
+	/**
+	 * A proxy reporting its calls as made by the given caller whenever no component is running on the
+	 * calling thread: the port as handed to a feature slice while it is started, so the endpoints it wires
+	 * report as that slice rather than as unattributed. A component running on the thread still wins —
+	 * a command's own call through the same reference is the command's.
+	 */
+	public Object proxyFor ( PortCallerScope.Current fallback ) {
+		return Proxy.newProxyInstance(portType.getClassLoader(), new Class<?>[] { portType },
+				( proxy, method, args ) -> invoke(proxy, method, args, fallback));
+	}
+
 	/** Starts reporting calls to the given reporter. */
 	public void attach ( PortReporter reporter ) {
 		this.reporter = reporter;
@@ -104,6 +115,10 @@ public final class MonitoredPort implements InvocationHandler {
 
 	@Override
 	public Object invoke ( Object proxy, Method method, Object[] args ) throws Throwable {
+		return invoke(proxy, method, args, null);
+	}
+
+	private Object invoke ( Object proxy, Method method, Object[] args, PortCallerScope.Current fallback ) throws Throwable {
 		if ( method.getDeclaringClass() == Object.class ) {
 			return switch ( method.getName() ) {
 				case "equals" -> proxy == args[0];
@@ -116,7 +131,7 @@ public final class MonitoredPort implements InvocationHandler {
 		if ( current == null ) {
 			return invokeAdapter(method, args);
 		}
-		PortReporter.Call call = current.start(this, method.getName());
+		PortReporter.Call call = current.start(this, method.getName(), fallback);
 		long started = System.nanoTime();
 		try {
 			Object result = invokeAdapter(method, args);

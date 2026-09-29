@@ -21,13 +21,15 @@ package org.sliceworkz.eventmodeling.ports;
  * Who called a port: the component of the bounded context whose code was running on the calling thread.
  * The framework knows it at every point it hands control to user code — a command's {@code execute}, an
  * automation's {@code handle}/{@code onFailure}, a translator, a dispatcher, a read model's {@code when},
- * a live model read — and a call made anywhere else (straight from a web handler, from a thread the
+ * a live model read. A call from anywhere else through a port a feature slice took in its {@code start...}
+ * method — the REST endpoint it wired there, on a request thread — is that {@link #slice slice}'s, and one
+ * through a port taken anywhere else (from the built context by application code, from a thread the
  * application started) is {@link #UNATTRIBUTED}.
  *
  * @param kind one of the {@code KIND_*} constants. A string rather than an enum, so a reader built before a
  *        new kind existed still reads the event
  * @param name the component's name as its own events name it: a command's name, an automation's class name,
- *        a read model's {@code readmodelName()}
+ *        a read model's {@code readmodelName()}, a slice's name
  */
 public record PortCaller ( String kind, String name ) {
 
@@ -36,6 +38,7 @@ public record PortCaller ( String kind, String name ) {
 	public static final String KIND_TRANSLATOR = "TRANSLATOR";
 	public static final String KIND_DISPATCHER = "DISPATCHER";
 	public static final String KIND_READ_MODEL = "READ_MODEL";
+	public static final String KIND_SLICE = "SLICE";
 	public static final String KIND_UNATTRIBUTED = "UNATTRIBUTED";
 
 	/** A call made outside any component the framework invoked. */
@@ -59,6 +62,14 @@ public record PortCaller ( String kind, String name ) {
 
 	public static PortCaller readModel ( String name ) {
 		return new PortCaller(KIND_READ_MODEL, name);
+	}
+
+	/**
+	 * A feature slice's own code outside any component: a REST endpoint it wired in its {@code start...}
+	 * method, calling through the port it took there, on a request thread the framework did not start.
+	 */
+	public static PortCaller slice ( String name ) {
+		return new PortCaller(KIND_SLICE, name);
 	}
 
 }

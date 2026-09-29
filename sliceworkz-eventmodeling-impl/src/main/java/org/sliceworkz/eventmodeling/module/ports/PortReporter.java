@@ -170,9 +170,14 @@ public final class PortReporter {
 	/**
 	 * Starts reporting one call. Called on the caller's thread, before the adapter is: the observation is
 	 * current while the call runs, so whatever the adapter does is nested beneath it.
+	 *
+	 * @param fallback who called when no component is running on this thread, {@code null} for unattributed
 	 */
-	Call start ( MonitoredPort port, String method ) {
+	Call start ( MonitoredPort port, String method, PortCallerScope.Current fallback ) {
 		PortCallerScope.Current current = PortCallerScope.current();
+		if ( fallback != null && current.componentClass() == null ) {
+			current = fallback;
+		}
 		Observation.Scope<Outcome.PortCallOutcome> scope = observer.start(new Observation.PortCall(
 				boundedContext, port.portType().getSimpleName(), port.qualification(), method, current.caller(), current.tracing()));
 		return new Call(port, method, current, scope);

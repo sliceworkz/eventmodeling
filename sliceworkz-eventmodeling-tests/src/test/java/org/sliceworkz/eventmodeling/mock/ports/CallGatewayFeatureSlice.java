@@ -34,10 +34,18 @@ public class CallGatewayFeatureSlice implements Slice<Mock> {
 	/** What {@code configureCommand} was handed for the port — the proxy for a monitored one. */
 	public static volatile GatewayPort handedOut;
 
+	/** What {@code startCommand} was handed for the port — the port as the endpoints a slice wires there use it. */
+	public static volatile GatewayPort startedWith;
+
 	@Override
 	public void configureCommand ( BoundedContextBuilder<Mock> builder ) {
 		handedOut = builder.port(GatewayPort.class);
 		builder.command(CallGatewayCommand.class);
+	}
+
+	@Override
+	public void startCommand ( Mock boundedContext ) {
+		startedWith = boundedContext.port(GatewayPort.class);
 	}
 
 }

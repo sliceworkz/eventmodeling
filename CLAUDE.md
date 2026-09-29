@@ -1791,8 +1791,17 @@ a `DataSource` proxy would time `getConnection()`, which is pool checkout, not t
   it. The event carries `caller` (`PortCaller(kind, name)`, kind a string so a newer kind does not break an
   older reader) and `slice` — the *caller's* slice, since a port is bound on the builder and belongs to none.
   The instance travels on the `x-instance-*` tags and the flow on `x-correlation-id`, from the caller's
-  tracing, as on every kernel event. A call from a thread the framework did not start is
-  `PortCaller.UNATTRIBUTED`
+  tracing, as on every kernel event.
+- **A port a slice takes in its `start...` method is attributed to that slice.** That is where a slice
+  wires its REST endpoints, and their calls run on request threads where no component is running — the
+  ordinary shape of a membership or permission check made before a command is executed. `port()` on the
+  context, called while a slice is being started, hands out a proxy of its own for that slice (one per
+  slice and binding) whose calls report `PortCaller.slice(name)` and that slice whenever no component
+  scope is active; a command executed through the same reference is still the command's. A port taken
+  from the built context anywhere else is `PortCaller.UNATTRIBUTED` on a thread the framework did not
+  start. The start-time takers are deliberately not added to the `BoundedContextStarting` inventory,
+  which is announced before any slice starts — listing them only from a restart on would make it depend
+  on history; the caller is on every call instead
 - **Per call by default; summarized for a busy port.** Each per-call event is an append to the monitoring
   store on the caller's thread, so a port called per projected event would double the load.
   `PortMonitoring.summarized(interval)` condenses a port's calls into one `PortCallsSummarized` per port,
@@ -1820,7 +1829,8 @@ a `DataSource` proxy would time `getConnection()`, which is pool checkout, not t
 - `MonitoredPortTest` pins every outcome (return, null, default method, business exception, declared type and
   subtype, undeclared type, runtime failure, `PortUnavailableException`, checked exception, `Error`), that the
   caller receives the adapter's own throwable, the binding checks, the inventory, the caller per component kind
-  with its slice and flow, nested scopes, summarized counting and first-failure emission, the observer and its
+  with its slice and flow, the slice a port was handed to when started (and a component still winning over
+  it), nested scopes, summarized counting and first-failure emission, the observer and its
   nesting, a throwing and a slow listener, and the round trip of every shape through a monitoring stream.
   `PortMonitoringTest`, `PortLatencyBucketsTest` and `PortSummaryWindowTest` pin the rules below the context
 

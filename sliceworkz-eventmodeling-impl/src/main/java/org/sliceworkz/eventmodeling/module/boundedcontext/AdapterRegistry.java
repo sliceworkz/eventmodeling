@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -26,8 +27,11 @@ import java.util.Set;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.module.ports.MonitoredPort;
+import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
 import org.sliceworkz.eventmodeling.module.ports.PortReporter;
+import org.sliceworkz.eventmodeling.ports.PortCaller;
 import org.sliceworkz.eventmodeling.ports.PortMonitoring;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
  * Registry that stores adapter-to-port bindings with optional qualifications.
@@ -68,7 +72,7 @@ class AdapterRegistry {
 							.formatted(portType.getName(), qualDisplay));
 		}
 		MonitoredPort monitored = monitoring == null ? null : MonitoredPort.of(portType, displayed(qualification), adapter, monitoring);
-		adapters.put(key, new Binding(adapter, monitored, monitored == null ? adapter : monitored.proxy(), new LinkedHashSet<>()));
+		adapters.put(key, new Binding(adapter, monitored, monitored == null ? adapter : monitored.proxy(), new LinkedHashSet<>(), new HashMap<>()));
 	}
 
 	void register(Object adapter, Class<?> portType, String qualification) {
@@ -109,6 +113,30 @@ class AdapterRegistry {
 			}
 		}
 		return (T) binding.handedOut();
+	}
+
+	/**
+	 * Looks a port up for a feature slice being started: a monitored port comes back as a proxy that
+	 * attributes the calls made through it to that slice whenever no component is running on the calling
+	 * thread — which is what a REST endpoint the slice wires in its {@code start...} method is. One proxy
+	 * per slice and binding, so a slice started again gets the one it had.
+	 * <p>
+	 * The slice is not added to the binding's inventory: that is announced by {@code BoundedContextStarting},
+	 * before any slice is started, and listing a slice there only from the second start on would make the
+	 * inventory depend on whether the context was ever restarted. Who calls a port through the proxy is
+	 * on every call instead.
+	 */
+	@SuppressWarnings("unchecked")
+	<T> T lookupForStartingSlice(Class<T> portType, String qualification, Slice<?> slice) {
+		Object handedOut = lookup(portType, qualification, null);
+		Binding binding = adapters.get(new PortKey(portType, qualification));
+		if (binding.monitored() == null) {
+			return (T) handedOut;
+		}
+		synchronized (binding.sliceProxies()) {
+			return (T) binding.sliceProxies().computeIfAbsent(slice.name(), name -> binding.monitored().proxyFor(
+					new PortCallerScope.Current(PortCaller.slice(name), slice.getClass(), null)));
+		}
 	}
 
 	/**
@@ -156,6 +184,6 @@ class AdapterRegistry {
 
 	private record PortKey(Class<?> portType, String qualification) {}
 
-	private record Binding(Object adapter, MonitoredPort monitored, Object handedOut, Set<String> slices) {}
+	private record Binding(Object adapter, MonitoredPort monitored, Object handedOut, Set<String> slices, Map<String, Object> sliceProxies) {}
 
 }

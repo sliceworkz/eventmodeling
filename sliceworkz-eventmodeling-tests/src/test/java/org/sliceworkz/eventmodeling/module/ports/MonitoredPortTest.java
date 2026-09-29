@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -112,6 +113,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		adapter = new ScriptedGateway();
 		observed.clear();
 		CallGatewayFeatureSlice.handedOut = null;
+		CallGatewayFeatureSlice.startedWith = null;
 	}
 
 	// ════════════════════════════════════════════════════════════════════
@@ -366,6 +368,62 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		assertEquals("CallGateway", tag(event, "x-command"));
 		assertNotNull(tag(event, "x-instance-logical"), "the instance travels on the tags, as on every kernel event");
 		assertNotNull(tag(event, "x-instance-process"));
+	}
+
+	@Test
+	void aCallThroughThePortASliceTookWhenStartedIsThatSlicesOnARequestThread ( ) throws InterruptedException {
+		buildBoundedContext(slicedBuilder(PortMonitoring.perCall().businessExceptions(DeclinedException.class)));
+		GatewayPort startedWith = CallGatewayFeatureSlice.startedWith;
+		assertNotNull(startedWith, "the slice took the port while it was started");
+
+		// the way a REST endpoint wired in startCommand calls it: on a thread the framework did not start
+		List<Throwable> thrown = Collections.synchronizedList(new ArrayList<>());
+		Thread request = Thread.ofVirtual().start(( ) -> {
+			startedWith.answer("from an endpoint");
+			try {
+				startedWith.decline("no");
+			} catch ( Throwable t ) {
+				thrown.add(t);
+			}
+		});
+		request.join();
+		assertEquals(1, thrown.size());
+		assertInstanceOf(DeclinedException.class, thrown.get(0));
+
+		PortCalled called = only(PortCalled.class);
+		assertEquals(PortCaller.slice("CallGateway"), called.caller());
+		assertNotNull(called.slice());
+		assertEquals("CallGateway", called.slice().name());
+		PortCallRejected rejected = only(PortCallRejected.class);
+		assertEquals(PortCaller.slice("CallGateway"), rejected.caller());
+		assertEquals("CallGateway", rejected.slice().name());
+	}
+
+	@Test
+	void aComponentRunningOnTheThreadStillWinsOverTheSliceThatTookThePort ( ) {
+		Mock domain = buildBoundedContext(slicedBuilder(PortMonitoring.perCall()));
+
+		domain.execute(new CallGatewayCommand(CallGatewayFeatureSlice.startedWith, g -> g.answer("q")));
+
+		assertEquals(PortCaller.command("CallGateway"), only(PortCalled.class).caller());
+	}
+
+	@Test
+	void aPortTakenFromTheBuiltContextOutsideAStartIsUnattributed ( ) {
+		Mock domain = buildBoundedContext(slicedBuilder(PortMonitoring.perCall()));
+
+		domain.port(GatewayPort.class).answer("from application code");
+
+		assertEquals(PortCaller.UNATTRIBUTED, only(PortCalled.class).caller());
+		assertNotSame(domain.port(GatewayPort.class), CallGatewayFeatureSlice.startedWith);
+	}
+
+	@Test
+	void anUnmonitoredPortASliceTakesWhenStartedIsTheAdapterItself ( ) {
+		buildBoundedContext(baseBuilder().listener(observed::add).adapter(adapter).forPort(GatewayPort.class)
+				.features().rootPackage(CallGatewayFeatureSlice.class.getPackage()).done());
+
+		assertSame(adapter, CallGatewayFeatureSlice.startedWith);
 	}
 
 	@Test

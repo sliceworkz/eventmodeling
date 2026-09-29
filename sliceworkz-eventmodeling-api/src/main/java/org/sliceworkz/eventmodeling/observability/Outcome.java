@@ -54,6 +54,22 @@ public sealed interface Outcome {
 	 */
 	sealed interface SnapshotLoadResult extends Outcome { }
 
+	/** What a call through a monitored port answered. */
+	sealed interface PortCallOutcome extends Outcome { }
+
+	/**
+	 * A port call returned.
+	 */
+	record PortReturned ( ) implements PortCallOutcome { }
+
+	/**
+	 * A port call threw a business exception — the port's "no", an answer rather than a failure.
+	 *
+	 * @param exceptionType the fully qualified class name of what was thrown
+	 * @param reason its message
+	 */
+	record PortRejected ( String exceptionType, String reason ) implements PortCallOutcome { }
+
 	/**
 	 * An operation with nothing to report but its completion.
 	 */

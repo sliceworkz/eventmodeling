@@ -111,7 +111,10 @@ and deliberately is not.
 context. The gateway is a port: the application binds an adapter on the builder,
 `.adapter(gateway).forPort(PaymentGateway.class)`, and the slice takes it with
 `builder.port(PaymentGateway.class)` from `configureAutomation`, wiring its own todo list and
-automation around it. The slice keeps its wiring, the application keeps the choice of infrastructure,
+automation around it. `PaymentsExample` binds it `.monitored(...)`, declaring the decline and the rejection
+business exceptions: every gateway call is then reported as `PortCalled`, `PortCallRejected` or
+`PortCallFailed`, and `PaymentGatewayUnavailableException` extends `PortUnavailableException`, so an outage
+is always a failure (see "Ports and adapters — monitored calls"). The slice keeps its wiring, the application keeps the choice of infrastructure,
 and a deployed slice whose port has no adapter fails at `build()` naming the port. The alternative —
 the application constructing the automation and registering it beside the scanned slices — loses
 because the slice then carries metadata only, and every deployment repeats the wiring by hand.
@@ -1757,6 +1760,84 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   delivery after a failing one still arrives, every failure reaches the observer, and the projector and automation
   both keep making progress
 
+### Ports and adapters — monitored calls
+
+**A slice reaches outside its context through a port, and a port can be monitored.** The application binds
+an adapter on the builder, `.adapter(gateway).forPort(PaymentGateway.class)`, and a slice takes it with
+`builder.port(PaymentGateway.class)` while it is configured. Adding `.monitored()` — or
+`.monitored(PortMonitoring...)` — before `forPort` hands the port out as a `java.lang.reflect.Proxy` that
+times every call and reports how it ended; an unmonitored binding is handed out as the adapter itself, as
+before. Monitoring is opt-in per binding because a "port" is also where configuration and infrastructure
+are bound (`RoutesConfig`, a `String` path, a `DataSource`), and none of those are calls worth reporting —
+a `DataSource` proxy would time `getConnection()`, which is pool checkout, not the query.
+
+- **Three outcomes, three events — the command's own split, one layer out.** `PortCalled` (returned),
+  `PortCallRejected` (a *business* exception: the port answered "no" — declined, not found; carries the
+  exception type and message, no stack trace, counts against nothing, the counterpart of `CommandRejected`)
+  and `PortCallFailed` (anything else: unreachable, timed out, an adapter bug; carries the whole `Failure`
+  like `CommandFailed`). A `BusinessException` is a business exception; `PortMonitoring.businessExceptions(...)`
+  adds the types a third-party client throws; a `PortUnavailableException` never is one, and declaring it or
+  a supertype of it (`RuntimeException`) is refused — it would count outages as answers. The two layers agree
+  by construction: a command letting a port's business exception through is `CommandRejected`, a failure
+  `CommandFailed`
+- **What the caller receives is exactly what the adapter threw.** The proxy unwraps the reflective
+  `InvocationTargetException`, so a declared checked exception arrives as itself, never as an
+  `UndeclaredThrowableException`. `equals`/`hashCode`/`toString` are the proxy's own and not reported, and a
+  monitored port type must be an interface — `forPort` refuses a class, naming why
+- **Who called is part of the event.** `PortCallerScope` is a thread-local the framework sets at every point
+  it hands control to user code — a command's `execute` (and evaluation), an automation's
+  `handle`/`onFailure`, a translator, a dispatcher, a read model's `when`, a live model read — restored when
+  the component returns, so a live read inside a command is the read model's and the command's again after
+  it. The event carries `caller` (`PortCaller(kind, name)`, kind a string so a newer kind does not break an
+  older reader) and `slice` — the *caller's* slice, since a port is bound on the builder and belongs to none.
+  The instance travels on the `x-instance-*` tags and the flow on `x-correlation-id`, from the caller's
+  tracing, as on every kernel event.
+- **A port a slice reaches from its `start...` methods is attributed to that slice.** That is where a
+  slice wires its REST endpoints, and their calls run on request threads where no component is running —
+  the ordinary shape of a membership or permission check made before a command is executed. Each slice's
+  `start...` methods are handed a view of the context of their own — the context itself in every respect
+  but `port(...)`, which hands out a proxy for that slice (one per slice and binding) whose calls report
+  `PortCaller.slice(name)` and that slice whenever no component scope is active. So an endpoint is
+  attributed whether it took the port when the slice started or looks it up per request through the
+  context it was handed; a command executed through the same reference is still the command's, and a port
+  taken from the built context by application code is `PortCaller.UNATTRIBUTED`. The alternative — a
+  thread-local marking the slice being started — loses because it only covers a port taken during the
+  start call, and endpoints routinely look their ports up per request. A context built on a class rather
+  than an interface cannot be wrapped, so its slices get the context itself. These slices are
+  deliberately not added to the `BoundedContextStarting` inventory, which is announced before any slice
+  starts; the caller is on every call instead
+- **Per call by default; summarized for a busy port.** Each per-call event is an append to the monitoring
+  store on the caller's thread, so a port called per projected event would double the load.
+  `PortMonitoring.summarized(interval)` condenses a port's calls into one `PortCallsSummarized` per port,
+  method and caller per interval — counts per outcome, total and max time blocked, and a histogram over the
+  fixed `PortLatencyBuckets` (fixed so histograms of windows and instances add up; percentiles do not);
+  `perCall().summarizing(interval, "isMember")` does it for the hot methods only. Windows are aligned to the
+  wall clock so instances line up; the reporter's thread exists only for a context that summarizes something
+  and is created by `start()`; `stop()` and `terminate()` emit the unfinished window, before
+  `BoundedContextStopped`. A failure on a summarized port is still emitted on its own — the first of each
+  exception type per method and caller per window — and counted in the window
+- **The duration is the call's and never the reporting's**: the clock stops before anything is emitted, and
+  reporting is contained (the emitter and observer already are), so a failing monitoring store never fails a
+  port call. The `BoundedContextObserver` sees every call as `Observation.PortCall`, nested under the
+  operation that made it, whatever the mode
+- **The proxy exists before the context does.** A slice takes its port during configuration, inside
+  `build()`, before the emitter exists — so the registry makes the proxy at binding time and the builder
+  attaches the reporter once it has one; until then a call passes through unreported. The same proxy is
+  handed to every lookup, so the reference a slice kept is the one the running context reports on
+- **`BoundedContextStarting.ports` is the inventory**: every binding, monitored or not, with the slices that
+  asked for it while being configured — what a deployment depends on, announced before any call. `null` on an
+  event written before contexts announced it
+- **Not in this phase:** a circuit breaker and a `CommandUnavailable` outcome for a `PortUnavailableException`.
+  `PortUnavailableException` exists already so an adapter's own "cannot reach" exception can extend it and be
+  matched by type — by an automation's `onFailure` to retry, and by an HTTP binding to answer `503`
+- `MonitoredPortTest` pins every outcome (return, null, default method, business exception, declared type and
+  subtype, undeclared type, runtime failure, `PortUnavailableException`, checked exception, `Error`), that the
+  caller receives the adapter's own throwable, the binding checks, the inventory, the caller per component kind
+  with its slice and flow, the slice a port was handed to when started (and a component still winning over
+  it), nested scopes, summarized counting and first-failure emission, the observer and its
+  nesting, a throwing and a slow listener, and the round trip of every shape through a monitoring stream.
+  `PortMonitoringTest`, `PortLatencyBucketsTest` and `PortSummaryWindowTest` pin the rules below the context
+
 ## Event Modeling Core Templates
 
 The framework supports the 4 Event Modeling patterns:
@@ -2073,8 +2154,13 @@ what it answered, which is what an observation is.
   interactive `translate`) with a `TranslatorInvocation` per translator nested inside, the async
   `TranslatorInvocation` on the processor thread, `Dispatch`, `ReadModelBatch` with a `ReadModelUpdate`
   per event nested inside, `LiveModelRead`, `AggregateLoad`, `AggregateAppend`, `SnapshotLoad`/
-  `SnapshotSave` (nested in the load or read they belong to) and `AutomationRun` (whose handlings'
-  commands and provided events nest inside it). Each replaces meters the framework used to register:
+  `SnapshotSave` (nested in the load or read they belong to), `AutomationRun` (whose handlings'
+  commands and provided events nest inside it) and `PortCall` — one call through a monitored port,
+  started on the caller's thread before the adapter runs, so it nests under whatever made the call (a
+  command execution, an automation run, a read model update) and a tracer gets the port as a child span.
+  It carries the port, qualification, method, the `PortCaller` and the caller's `Tracing` (null for an
+  unattributed call), and is observed for **every** call whatever the binding's mode: summarizing
+  decides what reaches the monitoring stream, never what the observer sees. Each of the others replaces meters the framework used to register:
   the command counter and timer and the per-event `domain.event` counters, the `provided`/`inbound`/
   `translate` event counters, the translator and dispatcher counters and timers, the read model
   `ec.*` meters, the live model render meters, the aggregate load meters, the snapshot meters and the
@@ -2082,7 +2168,8 @@ what it answered, which is what an observation is.
 - **A completion is an answer, not only a success** — the same split the `BoundedContextEvent`s make. A
   command answers `Executed` (raised per type, and what was appended — empty for a swallowed idempotent
   repeat), `Conflicted` (the DCB outcome) or `Rejected` (a `BusinessException`); an aggregate append
-  answers `Appended` or `Conflicted`; a read model batch `Projected` or `Cancelled`; a snapshot load
+  answers `Appended` or `Conflicted`; a port call `PortReturned`, or `PortRejected` for a business
+  exception — the port's "no", an answer like a command's rejection, with its type and message; a read model batch `Projected` or `Cancelled`; a snapshot load
   `SnapshotFound` or `SnapshotMissed` with the `MissReason` — the version-mismatch visibility the miss
   meter used to give. `failed` is for an operation that could not answer, with the throwable the caller
   receives
@@ -2110,7 +2197,8 @@ what it answered, which is what an observation is.
   with its parent and checks the scope contract (`violations()`); `BoundedContextObservationTest` pins
   every kind end to end and that the contract was kept, `AggregateObservationTest`,
   `AggregateSnapshotObservationTest` and `LiveModelSnapshotObservationTest` the aggregate and snapshot
-  paths, `BoundedContextListenerFailureTest` the listener failures, and `ContainedObserverTest` in the api
+  paths, `MonitoredPortTest.theObserverSeesEveryCallNestedInTheOperationThatMadeIt` the port calls (all
+  three endings, the nesting under a command, on a summarized port), `BoundedContextListenerFailureTest` the listener failures, and `ContainedObserverTest` in the api
   module the containment
 
 ## Important Design Principles

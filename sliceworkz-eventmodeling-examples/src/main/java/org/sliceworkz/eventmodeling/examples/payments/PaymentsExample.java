@@ -24,11 +24,14 @@ import java.util.function.BooleanSupplier;
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
+import org.sliceworkz.eventmodeling.ports.PortMonitoring;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentRequested;
 import org.sliceworkz.eventmodeling.examples.payments.features.abandonedpayments.AbandonedPaymentsReadModel;
 import org.sliceworkz.eventmodeling.examples.payments.features.abandonedpayments.AbandonedPaymentsReadModel.AbandonedPayment;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.ExecutePaymentAutomation;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentGateway;
+import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentGateway.PaymentDeclinedException;
+import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentGateway.PaymentRejectedException;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.SimulatedPaymentGateway;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -60,14 +63,19 @@ public class PaymentsExample {
 		EventStorage eventStorage = InMemoryEventStorage.newBuilder().build();
 
 		// The adapter onto the outside world is the application's to choose; the feature slice asks
-		// for it through the port, and wires its own todo list and automation around it.
+		// for it through the port, and wires its own todo list and automation around it. Monitoring the
+		// port reports every call as PortCalled, PortCallRejected (a decline or a rejection: the gateway's
+		// "no", an answer) or PortCallFailed (the gateway down: a problem) -- a declined payment must not
+		// make the gateway look unhealthy, which is why those two are declared business exceptions.
 		SimulatedPaymentGateway gateway = new SimulatedPaymentGateway();
 
 		Payments payments = BoundedContext.newBuilder(Payments.class)
 				.name("payments")
 				.eventStorage(eventStorage)
 				.instance(InstanceFactory.determine("payments-app"))
-				.adapter(gateway).forPort(PaymentGateway.class)
+				.adapter(gateway)
+					.monitored(PortMonitoring.perCall().businessExceptions(PaymentDeclinedException.class, PaymentRejectedException.class))
+					.forPort(PaymentGateway.class)
 				.features().rootPackage(PaymentsExample.class.getPackage()).done()
 				.build();
 		payments.start();

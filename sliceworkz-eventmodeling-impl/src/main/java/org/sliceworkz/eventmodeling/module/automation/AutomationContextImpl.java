@@ -39,6 +39,11 @@ public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND
 		this.tracing = tracing;
 	}
 
+	/** The tracing this context raises its events with — the item's flow for a correlated todo item. */
+	public Tracing tracing ( ) {
+		return tracing;
+	}
+
 	@Override
 	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command) {
 		return delegate.execute(command, tracing);

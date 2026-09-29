@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.readmodels;
 
+import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
+import org.sliceworkz.eventmodeling.ports.PortCaller;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -324,7 +326,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 	@SuppressWarnings("rawtypes")
 	private ReadModel<DOMAIN_EVENT_TYPE> observedLiveModel ( EventSource eventSource, Class<?> readModelClass, boolean unbounded, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams ) {
-		try ( Observation.Scope<Outcome.LiveModelProjected> scope = observer.start(new Observation.LiveModelRead(boundedContext, readModelClass.getSimpleName(), readModelClass, unbounded, tracing)) ) {
+		try ( Observation.Scope<Outcome.LiveModelProjected> scope = observer.start(new Observation.LiveModelRead(boundedContext, readModelClass.getSimpleName(), readModelClass, unbounded, tracing));
+				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.readModel(readModelClass.getSimpleName()), readModelClass, tracing) ) {
 			try {
 				return projectLiveModel(eventSource, readModelClass, info, tracing, constructorParams, scope);
 			} catch ( RuntimeException e ) {

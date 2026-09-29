@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.automation;
 
+import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
+import org.sliceworkz.eventmodeling.ports.PortCaller;
 import java.util.Iterator;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
@@ -170,7 +172,10 @@ public final class AutomationBatch {
 				streamed++;
 				AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context = contextForItem == null ? null : contextForItem.apply(item);
 				try {
-					Optional<EventReference> produced = automation.handle(item, context);
+					Optional<EventReference> produced;
+					try ( PortCallerScope.Scope caller = callerScope(automation, context) ) {
+						produced = automation.handle(item, context);
+					}
 					handled++;
 					if ( produced != null && produced.isPresent() ) {
 						lastProducedEvent = produced.get();
@@ -207,13 +212,22 @@ public final class AutomationBatch {
 	}
 
 	private static <TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> AutomationFailureAction determineFailureAction ( Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, TODO_ITEM_TYPE item, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context, String automationName ) {
-		try {
+		try ( PortCallerScope.Scope caller = callerScope(automation, context) ) {
 			AutomationFailureAction action = automation.onFailure(item, cause, context);
 			return action != null ? action : AutomationFailureAction.RETRY_ITEM;
 		} catch ( Throwable t ) {
 			LOGGER.error("failure handler of automation '{}' threw, abandoning the rest of this batch", automationName, t);
 			return AutomationFailureAction.RETRY_ITEM;
 		}
+	}
+
+	/**
+	 * Marks the thread as running the automation, so a port it calls reports it as the caller, with the
+	 * item's tracing — which is where the flow of a {@link CorrelatedTodoItem} is carried.
+	 */
+	private static PortCallerScope.Scope callerScope ( Automation<?,?,?> automation, AutomationContext<?,?> context ) {
+		Tracing tracing = context instanceof AutomationContextImpl<?,?,?> impl ? impl.tracing() : null;
+		return PortCallerScope.enter(PortCaller.automation(automation.getClass().getSimpleName()), automation.getClass(), tracing);
 	}
 
 	private static Throwable rootCauseOf ( Throwable t ) {

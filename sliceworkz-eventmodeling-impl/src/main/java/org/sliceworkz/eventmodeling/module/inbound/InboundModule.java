@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.inbound;
 
+import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
+import org.sliceworkz.eventmodeling.ports.PortCaller;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -229,7 +231,8 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 	/** Runs one translator on one inbound event, as an observed {@link Observation.TranslatorInvocation}. */
 	private void invoke ( Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator, String translatorName, EventType eventType, Tracing tracing, Runnable translation ) {
-		try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.TranslatorInvocation(boundedContext, translatorName, eventType, tracing)) ) {
+		try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.TranslatorInvocation(boundedContext, translatorName, eventType, tracing));
+				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.translator(translatorName), translator.getClass(), tracing) ) {
 			try {
 				translation.run();
 				scope.completed(Outcome.Done.INSTANCE);

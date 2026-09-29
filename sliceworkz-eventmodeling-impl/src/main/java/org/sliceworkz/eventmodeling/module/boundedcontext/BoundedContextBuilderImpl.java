@@ -59,6 +59,8 @@ import org.sliceworkz.eventmodeling.module.automation.AutomationProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.management.ManagementModule;
+import org.sliceworkz.eventmodeling.module.ports.PortReporter;
+import org.sliceworkz.eventmodeling.ports.PortMonitoring;
 import org.sliceworkz.eventmodeling.management.ManagementInstruction;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateSpecificationImpl;
@@ -470,7 +472,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	@Override
 	public <T> T port(Class<T> portType) {
-		return adapterRegistry.lookup(portType, AdapterRegistry.DEFAULT_QUALIFICATION);
+		return adapterRegistry.lookup(portType, AdapterRegistry.DEFAULT_QUALIFICATION, configuringSliceName());
 	}
 
 	@Override
@@ -478,7 +480,12 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		if (qualification == null) {
 			throw new IllegalArgumentException("qualification must not be null");
 		}
-		return adapterRegistry.lookup(portType, qualification);
+		return adapterRegistry.lookup(portType, qualification, configuringSliceName());
+	}
+
+	/** The name of the slice being configured, which is who a port handed out now is for. */
+	private String configuringSliceName() {
+		return configuringSlice == null ? null : configuringSlice.name();
 	}
 
 	/**
@@ -888,6 +895,11 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices, sliceMembers), name, observer);
 
+		// the monitored ports were handed out as proxies while the slices were configured, reporting
+		// nothing until now: from here on they report through the context's emitter and observer
+		PortReporter portReporter = new PortReporter(name, eventEmitter, observer, null);
+		boolean summarizingPorts = adapterRegistry.attach(portReporter);
+
 		// how each of these is projected (every instance or a single leader) follows from the read
 		// model's own storage class, see ReadModelModule.createProjectorProcessors
 		Collection<ReadModel> eventuallyConsistentReadModels = eventuallyConsistentReadModelSpecs.stream().map(EventuallyConsistentReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
@@ -936,7 +948,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
-						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, managementModule, instance, observer, adapterRegistry, List.copyOf(businessRules.values()));
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, managementModule, instance, observer, adapterRegistry, portReporter, summarizingPorts, List.copyOf(businessRules.values()));
 
 		// From here the context owns the modules, and it is the only thing that can release them
 		// completely: its constructor registered a JVM shutdown hook holding it, which only its own
@@ -1094,14 +1106,24 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private class AdapterBindingImpl implements AdapterBinding<C> {
 
 		private final Object adapter;
+		private PortMonitoring monitoring;
 
 		AdapterBindingImpl(Object adapter) {
 			this.adapter = adapter;
 		}
 
 		@Override
+		public AdapterBinding<C> monitored(PortMonitoring monitoring) {
+			if (monitoring == null) {
+				throw new IllegalArgumentException("monitoring must not be null; leave monitored() out to bind the adapter unmonitored");
+			}
+			this.monitoring = monitoring;
+			return this;
+		}
+
+		@Override
 		public <T> BoundedContextBuilder<C> forPort(Class<T> portType) {
-			adapterRegistry.register(adapter, portType, AdapterRegistry.DEFAULT_QUALIFICATION);
+			adapterRegistry.register(adapter, portType, AdapterRegistry.DEFAULT_QUALIFICATION, monitoring);
 			return BoundedContextBuilderImpl.this;
 		}
 
@@ -1110,7 +1132,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			if (qualification == null) {
 				throw new IllegalArgumentException("qualification must not be null");
 			}
-			adapterRegistry.register(adapter, portType, qualification);
+			adapterRegistry.register(adapter, portType, qualification, monitoring);
 			return BoundedContextBuilderImpl.this;
 		}
 	}

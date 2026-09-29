@@ -17,6 +17,9 @@
  */
 package org.sliceworkz.eventmodeling.module.outbound;
 
+import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
+import org.sliceworkz.eventmodeling.ports.PortCaller;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -187,7 +190,8 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 
 		@Override
 		public void when(Event<OUTBOUND_EVENT_TYPE> eventWithMeta) {
-			try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.Dispatch(boundedContext, dispatcherName, eventWithMeta)) ) {
+			try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.Dispatch(boundedContext, dispatcherName, eventWithMeta));
+					PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.dispatcher(dispatcherName), dispatcher.getClass(), Tracing.readFrom(eventWithMeta)) ) {
 				try {
 					dispatcher.when(eventWithMeta);
 					scope.completed(Outcome.Done.INSTANCE);

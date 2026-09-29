@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.observability;
 import java.util.Map;
 
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.ports.PortCaller;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -253,6 +254,24 @@ public sealed interface Observation<O extends Outcome> {
 	 * @param tracing the tracing of the run
 	 */
 	record AutomationRun ( String boundedContext, String automation, Tracing tracing ) implements Observation<Outcome.AutomationRan> { }
+
+	/**
+	 * One call through a monitored port, on the caller's thread — nested under whatever the caller is
+	 * observed as (a command execution, an automation run, a read model update), so a tracer gets the port
+	 * call as a span inside the operation that made it. Observed for every call, whether the binding reports
+	 * per call or summarized.
+	 * <p>
+	 * Completes with {@link Outcome.PortReturned} or, for a business exception, {@link Outcome.PortRejected};
+	 * fails with anything else the call threw, which the caller receives unchanged.
+	 *
+	 * @param boundedContext the bounded context
+	 * @param port the port's simple type name
+	 * @param qualification the binding's qualification, {@code null} for the default one
+	 * @param method the method called
+	 * @param caller who called it
+	 * @param tracing the caller's tracing, {@code null} for an unattributed call
+	 */
+	record PortCall ( String boundedContext, String port, String qualification, String method, PortCaller caller, Tracing tracing ) implements Observation<Outcome.PortCallOutcome> { }
 
 	/**
 	 * One observed operation, current on the caller's thread from {@link BoundedContextObserver#start} to

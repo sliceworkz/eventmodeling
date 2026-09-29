@@ -17,10 +17,12 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
+import org.sliceworkz.eventmodeling.ports.PortCaller;
 import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.RuleJudgement;
 import org.sliceworkz.eventmodeling.slices.Aspect;
@@ -79,6 +81,10 @@ public sealed interface BoundedContextEvent {
 	 * they were exceptions to. {@code null} on an event written before contexts announced a rulebook; empty
 	 * for a context that declared none.
 	 * <p>
+	 * {@code ports} is every adapter bound to a port on the builder, monitored or not, with the feature
+	 * slices that asked for it while being configured — the inventory of what this deployment depends on,
+	 * announced before any call is made. {@code null} on an event written before contexts announced it.
+	 * <p>
 	 * The context is not usable yet at this point. What happens between this event and the
 	 * {@link BoundedContextStarted} that follows it is the startup work — most notably projecting the
 	 * ephemeral read models, which {@code start()} waits for.
@@ -91,7 +97,8 @@ public sealed interface BoundedContextEvent {
 			Set<FeatureSlice> enabledFeatures,
 			Set<FeatureSlice> disabledFeatures,
 			Set<Aspect> aspects,
-			List<BusinessRule> businessRules ) implements BoundedContextEvent {
+			List<BusinessRule> businessRules,
+			List<PortBinding> ports ) implements BoundedContextEvent {
 
 		public BoundedContextStarting {
 			// null is kept, and means "written before a deployment announced its aspects" - which is not
@@ -99,11 +106,19 @@ public sealed interface BoundedContextEvent {
 			aspects = aspects == null ? null : Set.copyOf(aspects);
 			// the same for the rulebook: null is an event written before contexts declared one
 			businessRules = businessRules == null ? null : List.copyOf(businessRules);
+			// and for the ports: null is an event written before contexts announced their bindings
+			ports = ports == null ? null : List.copyOf(ports);
+		}
+
+		public BoundedContextStarting ( String boundedContext, String logical, String physical, String process,
+				Set<FeatureSlice> enabledFeatures, Set<FeatureSlice> disabledFeatures, Set<Aspect> aspects,
+				List<BusinessRule> businessRules ) {
+			this(boundedContext, logical, physical, process, enabledFeatures, disabledFeatures, aspects, businessRules, null);
 		}
 
 		public BoundedContextStarting ( String boundedContext, String logical, String physical, String process,
 				Set<FeatureSlice> enabledFeatures, Set<FeatureSlice> disabledFeatures, Set<Aspect> aspects ) {
-			this(boundedContext, logical, physical, process, enabledFeatures, disabledFeatures, aspects, null);
+			this(boundedContext, logical, physical, process, enabledFeatures, disabledFeatures, aspects, null, null);
 		}
 	}
 
@@ -818,6 +833,106 @@ public sealed interface BoundedContextEvent {
 		TRANSLATOR,
 		DISPATCHER,
 		AGGREGATE
+	}
+
+	/**
+	 * A call through a monitored port that returned. Emitted per call for a port monitored per call (the
+	 * default); a summarized port counts it in {@link PortCallsSummarized} instead.
+	 * <p>
+	 * The event is about the caller as much as about the port: {@code caller} is the component whose code
+	 * made the call and {@code slice} is that component's feature slice — a port is bound on the builder and
+	 * belongs to no slice. The instance is on the {@code x-instance-*} tags and the flow on
+	 * {@code x-correlation-id}, as on every kernel event; actor, channel and command are there too when the
+	 * caller had them.
+	 *
+	 * @param boundedContext the calling bounded context
+	 * @param port the port's simple interface name
+	 * @param qualification the binding's qualification, {@code null} for the default one
+	 * @param method the method called
+	 * @param caller who called it
+	 * @param durationMicros how long the caller was blocked in the call, in microseconds
+	 * @param slice the caller's feature slice, {@code null} when it has none (or the call is unattributed)
+	 */
+	record PortCalled ( String boundedContext, String port, String qualification, String method,
+			PortCaller caller, long durationMicros, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * A call through a monitored port that threw a <em>business</em> exception: the port answered "no" —
+	 * declined, not found, not allowed. An answer and not a problem, so it carries the exception's type and
+	 * message but no stack trace, counts against nothing, and never makes a port look unhealthy — the
+	 * port-side counterpart of {@link CommandRejected}. Which exceptions are business exceptions is the
+	 * binding's {@code PortMonitoring}: a {@code BusinessException}, and whatever types it declares.
+	 * Per call on a per-call port; counted in {@link PortCallsSummarized} on a summarized one.
+	 *
+	 * @param exceptionType the fully qualified class name of what was thrown
+	 * @param reason its message, {@code null} when it had none
+	 */
+	record PortCallRejected ( String boundedContext, String port, String qualification, String method,
+			PortCaller caller, long durationMicros, String exceptionType, String reason, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * A call through a monitored port that threw anything but a business exception: something is wrong —
+	 * the port is unreachable, timed out, or the adapter has a bug. Carries the whole {@link Failure}, stack
+	 * trace included, like {@link CommandFailed}, and is what a port's failure rate counts. Emitted per call
+	 * on a per-call port. On a summarized port the first failure of each exception type per method per
+	 * interval is emitted too, since a failure is the one outcome somebody opens to read, and every failure
+	 * is counted in the {@link PortCallsSummarized} of its window.
+	 *
+	 * @param summarized whether this call is also counted in a {@link PortCallsSummarized} — true for a
+	 *        failure of a summarized method, which a reader adding up calls must then not count twice
+	 */
+	record PortCallFailed ( String boundedContext, String port, String qualification, String method,
+			PortCaller caller, long durationMicros, Failure failure, FeatureSlice slice, boolean summarized ) implements BoundedContextEvent { }
+
+	/**
+	 * What a summarized port did in one interval, per method and caller: how many calls returned, were
+	 * rejected with a business exception and failed, how long they blocked their callers in total and at
+	 * most, and how the durations spread over the fixed {@code PortLatencyBuckets}. Emitted at the end of each
+	 * window that had calls, and for the partial window when the context stops. Windows are aligned to the
+	 * wall clock, so windows of several instances of one deployment cover the same span and add up, bucket
+	 * by bucket.
+	 *
+	 * @param windowStart the start of the window, inclusive
+	 * @param windowEnd the end of the window, exclusive; earlier than a full interval for the last window
+	 *        before a stop
+	 * @param latencyBuckets the calls per latency bucket, {@code PortLatencyBuckets.COUNT} long, all outcomes
+	 */
+	record PortCallsSummarized ( String boundedContext, String port, String qualification, String method,
+			PortCaller caller, Instant windowStart, Instant windowEnd,
+			long called, long rejected, long failed, long totalMicros, long maxMicros,
+			List<Long> latencyBuckets, FeatureSlice slice ) implements BoundedContextEvent {
+
+		public PortCallsSummarized {
+			latencyBuckets = latencyBuckets == null ? List.of() : List.copyOf(latencyBuckets);
+		}
+
+		/** @return every call of the window, whatever its outcome */
+		public long calls ( ) {
+			return called + rejected + failed;
+		}
+	}
+
+	/**
+	 * An adapter bound to a port, as {@link BoundedContextStarting} announces it.
+	 *
+	 * @param port the port's simple type name
+	 * @param portType the port's fully qualified type name
+	 * @param qualification the binding's qualification, {@code null} for the default one
+	 * @param adapter the adapter's class name
+	 * @param monitored whether calls through it are reported
+	 * @param monitoring how, for a monitored port ({@code PortMonitoring.toString()}); {@code null} otherwise
+	 * @param summarizedMethods the methods reported per interval rather than per call; every method of a
+	 *        summarized port is listed as {@code "*"}
+	 * @param slices the feature slices that asked for the port while being configured; a port handed out
+	 *        outside a slice's configuration names none
+	 */
+	record PortBinding ( String port, String portType, String qualification, String adapter,
+			boolean monitored, String monitoring, Set<String> summarizedMethods, Set<String> slices ) {
+
+		public PortBinding {
+			summarizedMethods = summarizedMethods == null ? Set.of() : Set.copyOf(summarizedMethods);
+			slices = slices == null ? Set.of() : Set.copyOf(slices);
+		}
 	}
 
 	/**

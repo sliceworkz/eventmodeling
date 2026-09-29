@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.examples.payments.features.executepayment;
 
+import org.sliceworkz.eventmodeling.ports.PortUnavailableException;
+
 /**
  * The outside world, as far as this automation is concerned.
  * <p>
@@ -36,8 +38,12 @@ public interface PaymentGateway {
 	 */
 	String execute ( String iban, long amountInCents, String idempotencyKey );
 
-	/** The gateway is down. Every payment would fail right now, so there is no point trying the next one. */
-	class PaymentGatewayUnavailableException extends RuntimeException {
+	/**
+	 * The gateway is down. Every payment would fail right now, so there is no point trying the next one.
+	 * A {@link PortUnavailableException}: a monitored port reports it as a failure whatever is declared a
+	 * business exception, and an HTTP binding can answer it with {@code 503} by its type alone.
+	 */
+	class PaymentGatewayUnavailableException extends PortUnavailableException {
 		private static final long serialVersionUID = 1L;
 		public PaymentGatewayUnavailableException ( String message ) {
 			super(message);

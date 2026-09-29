@@ -53,6 +53,7 @@ import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
 import org.sliceworkz.eventmodeling.module.inbound.InboundModule;
 import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.management.ManagementModule;
+import org.sliceworkz.eventmodeling.module.ports.PortReporter;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
@@ -134,6 +135,9 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private BoundedContextObserver observer;
 
 	private AdapterRegistry adapterRegistry;
+	/** Reports the calls of the monitored ports; its thread runs only for a context summarizing a port. */
+	private PortReporter portReporter;
+	private boolean summarizingPorts;
 
 	/** The rulebook declared on the builder, announced on {@code BoundedContextStarting}. */
 	private final List<BusinessRule> businessRules;
@@ -162,6 +166,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			Instance instance,
 			BoundedContextObserver observer,
 			AdapterRegistry adapterRegistry,
+			PortReporter portReporter,
+			boolean summarizingPorts,
 			List<BusinessRule> businessRules ) {
 		this.name = name;
 		this.instance = instance;
@@ -188,6 +194,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.managementModule = managementModule;
 
 		this.adapterRegistry = adapterRegistry;
+		this.portReporter = portReporter;
+		this.summarizingPorts = summarizingPorts;
 		this.businessRules = List.copyOf(businessRules);
 		this.instance = instance;
 		this.eventEmitter = eventEmitter;
@@ -248,7 +256,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		LOGGER.info("starting bounded context '{}' ...", name);
 		long startedAt = System.currentTimeMillis();
 		eventEmitter.emit(new BoundedContextStarting(name, instance.logical(), instance.physical(), instance.process(),
-				map(deployedFeatureSlices), map(undeployedFeatureSlices), deployedAspects(), businessRules));
+				map(deployedFeatureSlices), map(undeployedFeatureSlices), deployedAspects(), businessRules, adapterRegistry.describe()));
+		if (summarizingPorts) {
+			portReporter.start();
+		}
 		for (var slice : deployedFeatureSlices) {
 			Slice raw = (Slice) slice;
 			if (startCommands) raw.startCommand(selfReference);
@@ -295,6 +306,9 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		// after the processors have stopped, so the leases are handed over once nothing here still
 		// works on them -- a stopped instance holding leases would stall the whole deployment
 		this.leaderElector.stop();
+		// the windows counted so far, the unfinished ones included: a stopped context may not be started
+		// again, and a window kept for a start that never comes is a window lost
+		portReporter.flush();
 		LOGGER.info("stopped bounded context '{}'.", name);
 	}
 	
@@ -327,6 +341,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			// the one thing that ends the instruction subscription: stop() deliberately does not
 			managementModule.terminate();
 		}
+		// once the processors are drained, so no call is left to count, and before the context says it stopped
+		portReporter.terminate();
 		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopped(name, instance.logical(), instance.physical(), instance.process()));
 		// The store is ours: the builder created it over the storage it was handed, and nothing outside
 		// this context holds it. Closing it releases the notification machinery it started -- left

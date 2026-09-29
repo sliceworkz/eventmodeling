@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
+import org.sliceworkz.eventmodeling.ports.PortCaller;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -114,7 +116,8 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeAbstractCommand ( String commandName, Class<?> commandClass, Consumer<DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>> commandBody, Overrides overrides, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, boolean outboundTarget, String idempotencyKey ) {
 		Tracing tracingWithCommand = tracing.command(commandName);
 		Observation.Target target = outboundTarget ? Observation.Target.OUTBOUND : Observation.Target.DOMAIN;
-		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, commandClass, target, tracingWithCommand)) ) {
+		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, commandClass, target, tracingWithCommand));
+				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.command(commandName), commandClass, tracingWithCommand) ) {
 			long start = System.currentTimeMillis();
 
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracingWithCommand, overrides);
@@ -148,7 +151,8 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	private <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> executeCommandWithResult ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing, String idempotencyKey ) {
 		String commandName = command.commandName();
 		Tracing tracingWithCommand = tracing.command(commandName);
-		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, command.getClass(), Observation.Target.DOMAIN, tracingWithCommand)) ) {
+		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, command.getClass(), Observation.Target.DOMAIN, tracingWithCommand));
+				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.command(commandName), command.getClass(), tracingWithCommand) ) {
 			long start = System.currentTimeMillis();
 
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand, overridesOf(command));
@@ -203,7 +207,8 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	 */
 	private Evaluation evaluateCommand ( String commandName, Class<?> commandClass, Consumer<DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE>> commandBody, Overrides overrides, Tracing tracing ) {
 		Tracing tracingWithCommand = tracing.command(commandName);
-		try ( Observation.Scope<Outcome.Evaluated> scope = observer.start(new Observation.CommandEvaluation(boundedContext, commandName, commandClass, tracingWithCommand)) ) {
+		try ( Observation.Scope<Outcome.Evaluated> scope = observer.start(new Observation.CommandEvaluation(boundedContext, commandName, commandClass, tracingWithCommand));
+				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.command(commandName), commandClass, tracingWithCommand) ) {
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand, overrides);
 			try {
 				Evaluation evaluation;

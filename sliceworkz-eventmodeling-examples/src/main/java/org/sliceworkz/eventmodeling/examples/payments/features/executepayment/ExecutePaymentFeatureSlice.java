@@ -33,6 +33,8 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * <pre>
  *   .adapter(gateway).forPort(PaymentGateway.class)
  * </pre>
+ * — monitored or not; the slice cannot tell, and does not need to: {@code builder.port} hands out whatever
+ * the binding produces, the adapter itself or the proxy reporting on it.
  * and the slice asks for the port by its interface. The dependency stays declared where it is used, the
  * infrastructure stays chosen where it is deployed, and a build that binds no adapter for a port a
  * deployed slice asks for fails at {@code build()} naming the port, instead of the automation failing

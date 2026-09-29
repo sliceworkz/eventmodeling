@@ -17,6 +17,9 @@
  */
 package org.sliceworkz.eventmodeling.module.readmodels;
 
+import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
+import org.sliceworkz.eventmodeling.ports.PortCaller;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
@@ -58,7 +61,8 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN
 
 	@Override
 	public void when(Event<DOMAIN_EVENT_TYPE> eventWithMeta) {
-		try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.ReadModelUpdate(boundedContext, readModelName, storage, eventWithMeta)) ) {
+		try ( Observation.Scope<Outcome.Done> scope = observer.start(new Observation.ReadModelUpdate(boundedContext, readModelName, storage, eventWithMeta));
+				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.readModel(readModelName), readModel.getClass(), Tracing.readFrom(eventWithMeta)) ) {
 			try {
 				readModel.when(eventWithMeta);
 				scope.completed(Outcome.Done.INSTANCE);

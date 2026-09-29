@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.excessbalance;
 
+import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BALANCE_WITHIN_GUARANTEE;
+
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
@@ -25,6 +27,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.RulebookFollowUp.ExcessBalanceReported;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActivePeriodDecisionModel;
+import org.sliceworkz.eventstore.events.EventId;
 
 /**
  * Reports to the customer that the balance of the account exceeds what the deposit guarantee covers: the
@@ -32,7 +35,8 @@ import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.Acti
  * <p>
  * Raised with an idempotency key derived from the deposit it enforces for, never from the attempt, so an
  * automation handing the same item over twice (a crash between the append and its bookmark) reports once.
- * The report carries the balance as it is when the report is made, which is what the customer is told about.
+ * The report carries the balance as it is when the report is made, which is what the customer is told about, and
+ * {@code context.enforces(...)} links it to the deposit whose enforcement was deferred.
  *
  * @param accountId the account
  * @param deposit the id of the deposit whose enforcement was deferred
@@ -46,7 +50,8 @@ public record ReportExcessBalanceCommand ( AccountId accountId, String deposit )
 
 		BusinessException.when(!period.accountExists(), "Account does not exist");
 
-		result.raiseEvent(new ExcessBalanceReported(accountId, deposit, period.balance()),
+		result.raiseEvent(new ExcessBalanceReported(accountId, deposit, period.balance(),
+					context.enforces(BALANCE_WITHIN_GUARANTEE, EventId.of(deposit), "customer told the balance is " + period.balance())),
 				BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId),
 				"excess-balance-reported/" + deposit);
 	}

@@ -17,6 +17,11 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.withdraw;
 
+import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.LARGE_WITHDRAWAL_JUSTIFIED;
+import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.MAXIMUM_WITHDRAWAL;
+import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.NO_OVERDRAFT;
+import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.WITHDRAWAL_DESCRIBED;
+
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
@@ -29,6 +34,8 @@ public class WithdrawFeatureSlice implements Slice<ClosingTheBooks> {
 	@Override
 	public void configureCommand(BoundedContextBuilder<ClosingTheBooks> builder) {
 		builder.command(WithdrawCommand.class);
+		// the rules the command checks, announced with the rulebook so an auditor sees them with their statement and level
+		builder.businessRules(MAXIMUM_WITHDRAWAL, NO_OVERDRAFT, LARGE_WITHDRAWAL_JUSTIFIED, WITHDRAWAL_DESCRIBED);
 	}
 
 }

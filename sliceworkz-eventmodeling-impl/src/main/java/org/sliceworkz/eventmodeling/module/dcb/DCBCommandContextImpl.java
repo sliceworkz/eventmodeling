@@ -33,8 +33,10 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.Overrides;
 import org.sliceworkz.eventmodeling.rules.RuleCheck;
+import org.sliceworkz.eventmodeling.rules.RuleFollowUp;
 import org.sliceworkz.eventmodeling.rules.RuleViolation;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
@@ -59,6 +61,8 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	private boolean decisionModelsDetermined = false;
 
 	private final RuleBook ruleBook;
+
+	private final List<RuleFollowUp> followUps = new ArrayList<>();
 
 	/**
 	 * Per-decision-model projection result emitted as a {@code DecisionModelProjected} bounded-context
@@ -346,6 +350,32 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 	@Override
 	public List<RuleViolation> ruleViolations ( ) {
 		return ruleBook.ruleViolations();
+	}
+
+	@Override
+	public RuleFollowUp justifies ( BusinessRule rule, EventId event, String justification ) {
+		return followUp(rule, event, RuleFollowUp.Kind.JUSTIFIED, justification, "justifies");
+	}
+
+	@Override
+	public RuleFollowUp enforces ( BusinessRule rule, EventId event, String note ) {
+		return followUp(rule, event, RuleFollowUp.Kind.ENFORCED, note, "enforces");
+	}
+
+	private RuleFollowUp followUp ( BusinessRule rule, EventId event, RuleFollowUp.Kind kind, String note, String method ) {
+		if ( rule == null || event == null ) {
+			throw new IllegalArgumentException(method + "(...) needs the business rule and the id of the event it follows up");
+		}
+		RuleFollowUp followUp = new RuleFollowUp(rule.id(), event.value(), kind, ( note == null || note.isBlank() ) ? null : note.strip());
+		followUps.add(followUp);
+		return followUp;
+	}
+
+	/**
+	 * @return the follow-ups this execution made, in the order it made them
+	 */
+	List<RuleFollowUp> followUps ( ) {
+		return List.copyOf(followUps);
 	}
 
 	@Override

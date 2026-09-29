@@ -38,10 +38,12 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingInboundEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingOutboundEvent;
 import org.sliceworkz.eventmodeling.rules.EnforcementLevel;
+import org.sliceworkz.eventmodeling.rules.RuleFollowUp;
 import org.sliceworkz.eventmodeling.rules.RuleTags;
 import org.sliceworkz.eventmodeling.rules.RuleViolation;
 import org.sliceworkz.eventmodeling.rules.RuleViolation.Disposition;
 import org.sliceworkz.eventmodeling.testing.CommandTest;
+import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.Tags;
 
 /**
@@ -85,7 +87,10 @@ public class JustifyWithdrawalCommandTest extends CommandTest<BankingEvent, Bank
 			.as("alice")
 			.when(new JustifyWithdrawalCommand(ACCOUNT_1, withdrawal, "customer renovating"))
 			.then()
-			.event(new WithdrawalJustified(ACCOUNT_1, withdrawal, LARGE_WITHDRAWAL_JUSTIFIED.id(), "customer renovating"));
+			.event(new WithdrawalJustified(ACCOUNT_1, withdrawal,
+					new RuleFollowUp(LARGE_WITHDRAWAL_JUSTIFIED.id(), withdrawal, RuleFollowUp.Kind.JUSTIFIED, "customer renovating")),
+				// the kernel pairs the justification with the override it settles
+				Tags.of(RuleTags.justified(LARGE_WITHDRAWAL_JUSTIFIED, EventId.of(withdrawal))));
 
 		assertEquals(List.of(), awaiting());
 	}

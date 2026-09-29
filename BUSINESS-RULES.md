@@ -48,6 +48,10 @@ BusinessRule NO_OVERDRAFT = BusinessRule.of(
   enforced" is one word in the declaration and nothing else. Two rules with the same id are the same
   rule, whatever their levels. A rule declared without a level is strictly enforced: a rule nobody
   decided to relax is enforced.
+- **Declare them on the context** with `builder.businessRules(...)`, typically from the slice that checks
+  them (`builder.businessRules(NO_OVERDRAFT, ...)` in `configureCommand`). Checking a rule does not need
+  it; being seen does: the declared rulebook is announced when the context starts, which is how a
+  dashboard shows every rule with its statement and level — also the ones nobody has violated yet.
 - **Where to put them:** with the rest of the domain's vocabulary, in the context definition. The
   rulebook is part of the ubiquitous language, and a rule that one slice checks is often followed up
   by another (section 9). `BankingDomainWithClosingTheBooks` keeps its rules, and the thresholds they
@@ -309,13 +313,31 @@ Two levels are enforced after the command: post-justified override, and deferred
 needs anything from the framework beyond the recorded violation. The follow-up is an ordinary slice,
 fed by the tag the kernel wrote.
 
+The command that finishes a follow-up says which violation it settles, and the kernel links the two:
+
+```java
+result.raiseEvent(new WithdrawalJustified(accountId, withdrawal,
+        context.justifies(LARGE_WITHDRAWAL_JUSTIFIED, EventId.of(withdrawal), justification)), tags);
+```
+
+| call | tag on every event of the append | returns |
+|---|---|---|
+| `context.justifies(rule, eventId, text)` | `x-rule-justified:<rule>@<event id>` | a `RuleFollowUp` of kind `JUSTIFIED` |
+| `context.enforces(rule, eventId, note)` | `x-rule-enforced:<rule>@<event id>` | a `RuleFollowUp` of kind `ENFORCED` |
+
+The pending tag stays on the original event for good, because events are never rewritten; the link tag
+is what says it was settled, and by whom (`x-actor`), without anyone knowing the domain event that did
+it. Record the `RuleFollowUp` in the payload, as the violations are: the text is free text and belongs
+there, not in a tag. Whether the event needs the follow-up is the command's decision on its decision
+models; a follow-up in an execution that raises nothing is refused with an `IllegalStateException`.
+
 **Post-justified override** (`features/justifywithdrawal`):
 
 - `OverridesAwaitingJustificationReadModel` selects `MoneyWithdrawn` events by
   `x-rule-justification-pending:large-withdrawal-justified`, and subtracts the `WithdrawalJustified`
-  events. The tag stays on the withdrawal after it is justified, because events are never rewritten.
-- `JustifyWithdrawalCommand` records the justification. Justifying a withdrawal that needs none, or
-  that is already justified, makes no sense and is a `BusinessException`.
+  events.
+- `JustifyWithdrawalCommand` records the justification, through `context.justifies(...)`. Justifying a
+  withdrawal that needs none, or that is already justified, makes no sense and is a `BusinessException`.
 - Escalating an override that is never justified is an automation over a todo list of the same shape,
   offering an item once its withdrawal is older than the deadline. `PaymentsToExecuteTodoList` shows a
   todo list that withholds what is not yet due.
@@ -326,7 +348,13 @@ fed by the tag the kernel wrote.
   `x-rule-deferred:balance-within-guarantee`, and drops each item once `ExcessBalanceReported` names
   its deposit.
 - `ReportExcessBalanceAutomation` executes `ReportExcessBalanceCommand` for each item, with an
-  idempotency key derived from the deposit, so an item handed over twice is reported once.
+  idempotency key derived from the deposit, so an item handed over twice is reported once. The command
+  links the report to the deposit with `context.enforces(...)`.
+
+**Auditing.** Everything above is visible to an observer without any domain class: the rule tags and the
+link tags on the events, the actor on every event, the rulebook on `BoundedContextStarting`, and — for an
+execution the rules stopped — the judgements on `CommandRejected.ruleJudgements`. The dashboard's Business
+Rules screen is built on exactly these.
 
 ```
 DepositCommand → MoneyDeposited [x-rule-deferred] → DepositsAboveGuaranteeTodoList
@@ -426,3 +454,5 @@ as they are then.
 | Preview | `evaluate(command, tracing)`; HTTP `QUERY` | `Evaluation`, nothing appended |
 | Rejected execution | `RuleViolationException` (a `BusinessException`) | carries the same `Evaluation`; HTTP `422` |
 | Follow-up | todo list or read model on `RuleTags` | justification, deferred enforcement |
+| Settling a follow-up | `context.justifies(...)` / `context.enforces(...)` | `x-rule-justified` / `x-rule-enforced` link tag, `RuleFollowUp` for the payload |
+| Rulebook | `builder.businessRules(...)` | announced on `BoundedContextStarting` |

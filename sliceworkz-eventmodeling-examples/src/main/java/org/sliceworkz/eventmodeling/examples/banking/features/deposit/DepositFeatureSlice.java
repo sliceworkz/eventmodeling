@@ -17,6 +17,9 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.deposit;
 
+import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BALANCE_WITHIN_GUARANTEE;
+import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.ORIGIN_OF_FUNDS_EXPLAINED;
+
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
@@ -29,6 +32,8 @@ public class DepositFeatureSlice implements Slice<ClosingTheBooks> {
 	@Override
 	public void configureCommand(BoundedContextBuilder<ClosingTheBooks> builder) {
 		builder.command(DepositCommand.class);
+		// the rules the command checks, announced with the rulebook so an auditor sees them with their statement and level
+		builder.businessRules(ORIGIN_OF_FUNDS_EXPLAINED, BALANCE_WITHIN_GUARANTEE);
 	}
 
 }

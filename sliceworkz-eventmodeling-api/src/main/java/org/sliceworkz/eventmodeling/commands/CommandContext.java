@@ -21,7 +21,9 @@ import java.util.List;
 
 import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.RuleCheck;
+import org.sliceworkz.eventmodeling.rules.RuleFollowUp;
 import org.sliceworkz.eventmodeling.rules.RuleViolation;
+import org.sliceworkz.eventstore.events.EventId;
 
 /**
  * The execution context handed to a {@link Command} (and to a {@link CommandWithResult}).
@@ -93,5 +95,37 @@ public interface CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> extend
 	 * @return the violations to record; empty when nothing was violated, or nothing that may go ahead
 	 */
 	List<RuleViolation> ruleViolations ( );
+
+	/**
+	 * Records that this execution justifies a {@link org.sliceworkz.eventmodeling.rules.EnforcementLevel#POST_JUSTIFIED_OVERRIDE
+	 * post-justified override} made earlier: the second half of that enforcement level. The kernel tags every
+	 * event of the append {@link org.sliceworkz.eventmodeling.rules.RuleTags#justified RuleTags.justified(rule, event)},
+	 * which pairs the override with its justification for a follow-up read model and for an auditor alike;
+	 * the returned {@link RuleFollowUp} is for the command to record in the payload of the event it raises,
+	 * which is where the justification's text belongs.
+	 * <p>
+	 * Whether the event needs a justification, and whether it has one already, is the command's to decide on
+	 * its decision models — asking for something the request cannot mean is a {@link BusinessException}, as
+	 * everywhere. The kernel does not read the event again. An execution that makes a follow-up and raises
+	 * nothing is refused with an {@code IllegalStateException}, since the link would be recorded nowhere.
+	 *
+	 * @param rule the rule the event was an exception to
+	 * @param event the id of the event that recorded the override
+	 * @param justification the justification, in the actor's words; may be null
+	 * @return the follow-up, to record in the payload
+	 */
+	RuleFollowUp justifies ( BusinessRule rule, EventId event, String justification );
+
+	/**
+	 * Records that this execution enforces a {@link org.sliceworkz.eventmodeling.rules.EnforcementLevel#DEFERRED_ENFORCEMENT
+	 * deferred enforcement} recorded earlier. The counterpart of {@link #justifies} for that level: the kernel tags
+	 * every event of the append {@link org.sliceworkz.eventmodeling.rules.RuleTags#enforced RuleTags.enforced(rule, event)}.
+	 *
+	 * @param rule the rule whose enforcement was deferred
+	 * @param event the id of the event that recorded the deferred enforcement
+	 * @param note what was done to enforce it; may be null
+	 * @return the follow-up, to record in the payload
+	 */
+	RuleFollowUp enforces ( BusinessRule rule, EventId event, String note );
 
 }

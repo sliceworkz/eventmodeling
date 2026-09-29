@@ -42,6 +42,8 @@ import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.rules.Evaluation;
 import org.sliceworkz.eventmodeling.rules.Overrides;
 import org.sliceworkz.eventmodeling.rules.Overriding;
+import org.sliceworkz.eventmodeling.rules.RuleFollowUp;
+import org.sliceworkz.eventmodeling.rules.RuleJudgement;
 import org.sliceworkz.eventmodeling.rules.RuleTags;
 import org.sliceworkz.eventmodeling.rules.RuleViolationException;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
@@ -227,7 +229,8 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	 * {@code BusinessException}, so it is reported as {@code CommandRejected} like any other rejection. A
 	 * violation the execution goes ahead with is recorded as rule tags on every event it raised, whether or
 	 * not the command also recorded it in the payload: the tags are the framework's own account of the
-	 * exception, and cost the command nothing.
+	 * exception, and cost the command nothing. The follow-ups it made ({@code justifies}, {@code enforces}) are
+	 * tagged the same way, so an obligation and what settled it pair up without any payload being read.
 	 */
 	private static void enforceBusinessRules ( DCBCommandContextImpl<?,?> commandContext, CommandResultImpl<?,?> commandResult ) {
 		Evaluation evaluation = commandContext.ruleBook().evaluation();
@@ -235,6 +238,16 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 			throw new RuleViolationException(evaluation);
 		}
 		commandResult.tagAll(RuleTags.of(evaluation.recorded()));
+
+		List<RuleFollowUp> followUps = commandContext.followUps();
+		if ( !followUps.isEmpty() ) {
+			if ( commandResult.raisedEvents().isEmpty() ) {
+				throw new IllegalStateException(("the command followed up %s but raised no events: the follow-up is recorded as tags on the events"
+						+ " it raises, so an execution that raises nothing would record it nowhere").formatted(
+						followUps.stream().map(f -> f.kind().name().toLowerCase() + " " + RuleTags.link(f.rule(), f.event())).toList()));
+			}
+			commandResult.tagAll(RuleTags.ofFollowUps(followUps));
+		}
 	}
 
 	private static Overrides overridesOf ( Object command ) {
@@ -306,8 +319,13 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	 */
 	private void emitCommandRejected ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, BusinessException rejection ) {
 		String reason = rejection.getMessage();
+		// a rejection on the command's business rules carries the kernel's judgement of every violated rule,
+		// so an observer sees which rule stopped whom without parsing the reason
+		List<RuleJudgement> judgements = ( rejection instanceof RuleViolationException violation )
+				? violation.evaluation().judgements()
+				: List.of();
 		emitOutcome(commandContext, commandClass, start, (metrics, slice) ->
-			new BoundedContextEvent.CommandRejected(boundedContext, commandName, reason, metrics, slice));
+			new BoundedContextEvent.CommandRejected(boundedContext, commandName, reason, metrics, slice, judgements));
 	}
 
 	private void emitCommandFailed ( DCBCommandContextImpl<?,?> commandContext, String commandName, Class<?> commandClass, long start, Throwable failure ) {

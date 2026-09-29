@@ -716,15 +716,35 @@ framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook
   `QUERY` method on the resource a `POST` executes on — safe, idempotent, same body; `OPTIONS` loses
   (resource capabilities, CORS preflight, no body semantics), and so does a dry-run flag (one method
   meaning two things)
-- **The levels enforced after the fact need no machinery beyond the recorded violation**: the follow-up
-  of a post-justified override or a deferred enforcement is an ordinary read model or todo list selected
-  by the kernel's tag, subtracting the event that finishes it (the banking `justifywithdrawal` and
-  `excessbalance` slices)
+- **The levels enforced after the fact need no machinery beyond the recorded violation and a link back
+  to it**: the follow-up of a post-justified override or a deferred enforcement is an ordinary read model
+  or todo list selected by the kernel's tag, subtracting the event that finishes it (the banking
+  `justifywithdrawal` and `excessbalance` slices). The command that finishes it says so with
+  `context.justifies(rule, eventId, text)` / `context.enforces(rule, eventId, note)`: the kernel tags every
+  event of the append `x-rule-justified:<rule>@<event id>` / `x-rule-enforced:<rule>@<event id>`
+  (`RuleTags.justified`/`enforced`), and hands back a `RuleFollowUp` payload record for the command to
+  record, which is where the text belongs. **The link is what makes an obligation auditable from outside
+  the domain**: the pending tag stays on the original event for good, and the event that settles it is a
+  domain event nothing but the domain could otherwise recognise. One tag holding rule *and* event, rather
+  than a rule tag beside an event tag, because an append may settle several obligations and two separate
+  tags would pair every rule with every event. The kernel does not read the event again — whether it
+  needs a follow-up is the command's decision on its decision models, as everywhere — and a follow-up in
+  an execution that raises nothing is an `IllegalStateException`, since the link would be stored nowhere
+- **The use of the rules is reported for an auditor, not only enforced.** `BoundedContextBuilder.businessRules(...)`
+  declares the rulebook (accumulating, so a slice declares the rules it checks from `configureCommand`;
+  two different declarations of one id are an `IllegalArgumentException`), announced as
+  `BoundedContextStarting.businessRules` — the only place a rule never violated, and any rule's statement,
+  is visible outside the code; `null` there is an event from before, not an empty rulebook. A rejection on
+  the rules carries `CommandRejected.ruleJudgements`, so who tried to go past which rule is read without
+  parsing the reason (empty for a `BusinessException` the command threw itself). The dashboard's Business
+  Rules screen is built on exactly these three and the rule tags
 - `BusinessRuleEnforcementTest` pins every level, the command's authorization and its defaults, what is
   recorded and tagged, the evaluation (nothing appended, no key spent, not an execution in the
   monitoring record, observed), the actor, and — per backend — an override quota taken on the rule tags
   and two overrides racing past it; `BusinessRuleJsonTest` the two JSON shapes; `BusinessRulesTest` in
-  the api module the value types and that the exception survives serialization
+  the api module the value types and that the exception survives serialization;
+  `BusinessRuleAuditTrailTest` the follow-up link, the judgements on a rejection and the announced
+  rulebook, including through a monitoring stream and on events stored before they existed
 
 **How a read model is projected has to be said out loud.** `builder.readmodel(X.class)` and
 `builder.readmodel(instance)` register, but `build()` rejects either unless `.live()` /

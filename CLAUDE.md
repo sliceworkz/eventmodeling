@@ -2140,8 +2140,13 @@ what it answered, which is what an observation is.
   interactive `translate`) with a `TranslatorInvocation` per translator nested inside, the async
   `TranslatorInvocation` on the processor thread, `Dispatch`, `ReadModelBatch` with a `ReadModelUpdate`
   per event nested inside, `LiveModelRead`, `AggregateLoad`, `AggregateAppend`, `SnapshotLoad`/
-  `SnapshotSave` (nested in the load or read they belong to) and `AutomationRun` (whose handlings'
-  commands and provided events nest inside it). Each replaces meters the framework used to register:
+  `SnapshotSave` (nested in the load or read they belong to), `AutomationRun` (whose handlings'
+  commands and provided events nest inside it) and `PortCall` — one call through a monitored port,
+  started on the caller's thread before the adapter runs, so it nests under whatever made the call (a
+  command execution, an automation run, a read model update) and a tracer gets the port as a child span.
+  It carries the port, qualification, method, the `PortCaller` and the caller's `Tracing` (null for an
+  unattributed call), and is observed for **every** call whatever the binding's mode: summarizing
+  decides what reaches the monitoring stream, never what the observer sees. Each of the others replaces meters the framework used to register:
   the command counter and timer and the per-event `domain.event` counters, the `provided`/`inbound`/
   `translate` event counters, the translator and dispatcher counters and timers, the read model
   `ec.*` meters, the live model render meters, the aggregate load meters, the snapshot meters and the
@@ -2149,7 +2154,8 @@ what it answered, which is what an observation is.
 - **A completion is an answer, not only a success** — the same split the `BoundedContextEvent`s make. A
   command answers `Executed` (raised per type, and what was appended — empty for a swallowed idempotent
   repeat), `Conflicted` (the DCB outcome) or `Rejected` (a `BusinessException`); an aggregate append
-  answers `Appended` or `Conflicted`; a read model batch `Projected` or `Cancelled`; a snapshot load
+  answers `Appended` or `Conflicted`; a port call `PortReturned`, or `PortRejected` for a business
+  exception — the port's "no", an answer like a command's rejection, with its type and message; a read model batch `Projected` or `Cancelled`; a snapshot load
   `SnapshotFound` or `SnapshotMissed` with the `MissReason` — the version-mismatch visibility the miss
   meter used to give. `failed` is for an operation that could not answer, with the throwable the caller
   receives
@@ -2177,7 +2183,8 @@ what it answered, which is what an observation is.
   with its parent and checks the scope contract (`violations()`); `BoundedContextObservationTest` pins
   every kind end to end and that the contract was kept, `AggregateObservationTest`,
   `AggregateSnapshotObservationTest` and `LiveModelSnapshotObservationTest` the aggregate and snapshot
-  paths, `BoundedContextListenerFailureTest` the listener failures, and `ContainedObserverTest` in the api
+  paths, `MonitoredPortTest.theObserverSeesEveryCallNestedInTheOperationThatMadeIt` the port calls (all
+  three endings, the nesting under a command, on a summarized port), `BoundedContextListenerFailureTest` the listener failures, and `ContainedObserverTest` in the api
   module the containment
 
 ## Important Design Principles

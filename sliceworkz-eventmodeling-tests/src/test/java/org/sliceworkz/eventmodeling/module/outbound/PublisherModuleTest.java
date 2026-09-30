@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
@@ -44,7 +45,12 @@ import org.sliceworkz.eventmodeling.mock.publishing.ItemPublisher;
 import org.sliceworkz.eventmodeling.mock.publishing.ItemReadModel;
 import org.sliceworkz.eventmodeling.mock.publishing.PublishingFeatureSlice;
 import org.sliceworkz.eventmodeling.mock.querylivepublisher.QueryLiveFeatureSlice;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.outbound.Publisher;
+import org.sliceworkz.eventmodeling.outbound.PublisherContext;
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
+import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -108,6 +114,24 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 
 		waitBecauseOfEventualConsistency(() -> outbound().size() >= 1);
 		assertEquals(new SomeOutboundEvent("while-stopped"), outbound().get(0).data(), "nothing is lost while a publisher is stopped");
+	}
+
+	/**
+	 * A seeded read model loads its base as {@code seed()} answers where that base reflects, and a base past
+	 * a read's boundary cannot be unprojected — so a bounded read never seeds, and replays instead. Seeded
+	 * here, the published state would carry the seed's marker.
+	 */
+	@Test
+	void aReadAsOfAnEventIsNeverSeeded ( ) {
+		BoundedContextBuilder<Mock> builder = baseBuilder();
+		builder.readmodel(SeededItem.class).live();
+		builder.publisher(new SeededItemPublisher());
+		Mock context = buildBoundedContext(builder);
+
+		context.event(new FirstDomainEvent("v1"), ItemReadModel.tags("a"));
+
+		waitBecauseOfEventualConsistency(() -> outbound().size() >= 1);
+		assertEquals(new SomeOutboundEvent("v1"), outbound().get(0).data());
 	}
 
 	// ── how a publisher has to be registered ─────────────────────────────────
@@ -178,6 +202,45 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, builder::build);
 		assertFalse(e.getMessage().isBlank());
+	}
+
+	/** An item whose seed would mark its state, so a read that seeded it shows. */
+	public static class SeededItem extends ItemReadModel implements SeededReadModel<MockDomainEvent> {
+
+		private boolean seeded;
+
+		public SeededItem ( String itemId ) {
+			super(itemId);
+		}
+
+		@Override
+		public Optional<EventReference> seed ( ) {
+			seeded = true;
+			return Optional.empty();
+		}
+
+		@Override
+		public String state ( ) {
+			return seeded ? "SEEDED," + super.state() : super.state();
+		}
+	}
+
+	public static class SeededItemPublisher implements Publisher<MockDomainEvent, MockOutboundEvent> {
+
+		@Override
+		public EventQuery eventQuery ( ) {
+			return EventQuery.forTypes(FirstDomainEvent.class);
+		}
+
+		@Override
+		public Set<Class<? extends ReadModel<? extends MockDomainEvent>>> reads ( ) {
+			return Set.of(SeededItem.class);
+		}
+
+		@Override
+		public void publish ( Event<MockDomainEvent> event, PublisherContext<MockDomainEvent, MockOutboundEvent> context ) {
+			context.publish(new SomeOutboundEvent(context.readAsOfEvent(SeededItem.class, "a").state()), Tags.none());
+		}
 	}
 
 	static class NoSnapshots implements SnapshotStorage<Object> {

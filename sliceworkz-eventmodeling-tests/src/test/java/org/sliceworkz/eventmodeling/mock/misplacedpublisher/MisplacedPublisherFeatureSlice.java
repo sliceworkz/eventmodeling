@@ -21,11 +21,10 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockPublisher;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /** Registers a publisher from the projection aspect, which the builder refuses. */
-@FeatureSlice(type = Type.AUTOMATION, context = "mock", chapter = "Publishing", tags = {"unit-test"})
+@FeatureSlice(chapter = "Publishing")
 public class MisplacedPublisherFeatureSlice implements Slice<Mock> {
 
 	@Override

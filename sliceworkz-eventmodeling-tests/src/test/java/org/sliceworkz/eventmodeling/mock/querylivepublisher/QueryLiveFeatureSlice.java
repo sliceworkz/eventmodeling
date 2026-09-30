@@ -22,14 +22,13 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.publishing.ItemPublisher;
 import org.sliceworkz.eventmodeling.mock.publishing.ItemReadModel;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
  * Registers the read model its publisher reads from {@code configureQuery} only: fine on an instance that
  * deploys queries too, refused on one that runs automations alone.
  */
-@FeatureSlice(type = Type.AUTOMATION, context = "mock", chapter = "Publishing", tags = {"unit-test"})
+@FeatureSlice(chapter = "Publishing")
 public class QueryLiveFeatureSlice implements Slice<Mock> {
 
 	@Override

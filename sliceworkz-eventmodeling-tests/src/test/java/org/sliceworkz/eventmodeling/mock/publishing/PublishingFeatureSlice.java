@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.mock.publishing;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
@@ -28,7 +27,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * {@code configureQuery} for the endpoint that reads it, and again from {@code configureAutomation} beside
  * the publisher that reads it.
  */
-@FeatureSlice(type = Type.AUTOMATION, context = "mock", chapter = "Publishing", tags = {"unit-test"})
+@FeatureSlice(chapter = "Publishing")
 public class PublishingFeatureSlice implements Slice<Mock> {
 
 	@Override

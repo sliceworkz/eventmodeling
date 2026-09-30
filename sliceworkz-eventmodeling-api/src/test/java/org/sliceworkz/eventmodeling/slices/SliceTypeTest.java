@@ -69,6 +69,13 @@ class SliceTypeTest {
 	}
 
 	@Test
+	void aPublicationIsAnAutomation ( ) {
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER));
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER, MemberKind.DISPATCHER));
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.READ_MODEL, MemberKind.PUBLISHER, MemberKind.DISPATCHER));
+	}
+
+	@Test
 	void anAutomationCountsItsTodoListEvenWhenAnotherSliceRegistersIt ( ) {
 		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.AUTOMATION));
 	}

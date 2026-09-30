@@ -289,7 +289,7 @@ Features are organized as vertical slices:
 3. **Types of feature slices** (`SliceType`, derived from what the slice registers, never declared):
    - `STATE_CHANGE`: a command (or aggregate) raising domain events
    - `STATE_READ`: read models and nothing else
-   - `AUTOMATION`: an automation and its todo list — or any command beside a read model
+   - `AUTOMATION`: an automation and its todo list, a publisher — or any command beside a read model
    - `TRANSLATION`: a translator
    - `UNCLEAR`: parts fitting no pattern, or several
    - `UNDEFINED`: nothing registered
@@ -1684,7 +1684,8 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   `SliceType.derive(commands, readModels, producedDomainEvents, inbound, outbound)`, over the slice's
   registered `SliceMember`s mapped onto the model's elements: a command or an aggregate is a command
   raising events; a read model is a read model; an automation is a command issued from a read model (its
-  todo list, counted whether or not the same slice registers it); a translator is an inbound event and
+  todo list, counted whether or not the same slice registers it); a publisher counts as an automation,
+  since it is the publication an automation slice carries; a translator is an inbound event and
   its command; a dispatcher is an outbound event. The code cannot say which events a command raises, so
   every command is taken to raise one. Porting the rule rather than writing one for code is the point:
   a slice in the code and the same slice in the model come out as the same type, which is what makes

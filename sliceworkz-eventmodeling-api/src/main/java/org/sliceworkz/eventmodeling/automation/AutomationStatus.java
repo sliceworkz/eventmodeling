@@ -19,6 +19,8 @@ package org.sliceworkz.eventmodeling.automation;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * What an automation is doing on this instance, as far as an operator needs to know.
  * <p>
@@ -46,6 +48,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
  *        running. Kept apart from {@code lastFailure} because a running automation has usually survived
  *        failures, and the one that stopped it is the one an operator is looking for
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record AutomationStatus (
 		String automation,
 		String automationClass,

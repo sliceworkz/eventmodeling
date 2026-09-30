@@ -116,7 +116,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		assertNotNull(starting.disabledFeatures(), "Starting should announce the undeployed feature slices");
 
 		assertEquals(CONTEXT_NAME, started.boundedContext());
-		assertTrue(started.startupDurationMs() >= 0, "Started should carry the time spent starting up");
+		assertTrue(started.startupDurationMicros() >= 0, "Started should carry the time spent starting up");
 	}
 
 	@Test
@@ -372,7 +372,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		BoundedContextStarted started = (BoundedContextStarted) persisted.getFirst();
 		assertEquals("orders", started.boundedContext());
 		assertEquals("orders-1", started.physical());
-		assertEquals(0, started.startupDurationMs()); // the property did not exist when the event was written
+		assertEquals(0, started.startupDurationMicros()); // the property did not exist when the event was written
 	}
 
 	@Test
@@ -398,6 +398,52 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		assertEquals("PlaceOrder", placeOrder.name());
 		assertNotNull(placeOrder.members(), "an absent members property must read as an empty set, not null");
 		assertTrue(placeOrder.members().isEmpty());
+	}
+
+	@Test
+	void readsBackAKernelEventWhoseNestedRecordsCarryPropertiesThisVersionDoesNotKnow() {
+		// The nested value records (Metrics, FeatureSlice, ...) do not implement BoundedContextEvent, so the
+		// interface's @JsonIgnoreProperties(ignoreUnknown) does not reach them: each carries its own. A
+		// property a newer writer added to one of them must not turn the whole event into a poison event.
+		EventStreamId streamId = EventStreamId.forContext(CONTEXT_NAME).withPurpose("kernel-nested-unknown");
+		eventStorage().append(AppendCriteria.none(), streamId, List.of(new EventToStore(streamId,
+				EventType.of(CommandExecuted.class),
+				"""
+				{"boundedContext":"orders","command":"PlaceOrder","raisedEvents":[],\
+				"metrics":{"durationMicros":42,"queriesDone":1,"eventsStreamed":3,"eventsHandled":2,"until":null,"addedLater":7},\
+				"slice":{"name":"PlaceOrder","type":"STATE_CHANGE","context":"orders","chapter":"checkout","tags":[],"members":[],"addedLater":true}}""",
+				Tags.none(), null)));
+
+		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
+				.getEventStream(streamId, BoundedContextEvent.class);
+		CommandExecuted executed = (CommandExecuted)
+				kernelStream.query(EventQuery.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
+
+		assertEquals(42, executed.metrics().durationMicros());
+		assertEquals(3, executed.metrics().eventsStreamed());
+		assertEquals("PlaceOrder", executed.slice().name());
+	}
+
+	@Test
+	void readsBackAKernelEventWhoseMetricsCarryNoDuration() {
+		// A monitoring stream can hold events whose metrics carry no duration property. They must bind,
+		// with the duration reading as 0, rather than fail on a null that cannot map onto a primitive.
+		EventStreamId streamId = EventStreamId.forContext(CONTEXT_NAME).withPurpose("kernel-no-duration");
+		eventStorage().append(AppendCriteria.none(), streamId, List.of(new EventToStore(streamId,
+				EventType.of(CommandExecuted.class),
+				"""
+				{"boundedContext":"orders","command":"PlaceOrder","raisedEvents":[],\
+				"metrics":{"queriesDone":1,"eventsStreamed":3,"eventsHandled":2,"until":null},\
+				"slice":null}""",
+				Tags.none(), null)));
+
+		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
+				.getEventStream(streamId, BoundedContextEvent.class);
+		CommandExecuted executed = (CommandExecuted)
+				kernelStream.query(EventQuery.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
+
+		assertEquals(0, executed.metrics().durationMicros());
+		assertEquals(3, executed.metrics().eventsStreamed());
 	}
 
 }

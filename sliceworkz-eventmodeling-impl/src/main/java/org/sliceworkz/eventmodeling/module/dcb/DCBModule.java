@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import org.sliceworkz.eventmodeling.module.timing.Elapsed;
 import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
 import org.sliceworkz.eventmodeling.ports.PortCaller;
 import java.util.LinkedHashMap;
@@ -118,7 +119,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		Observation.Target target = outboundTarget ? Observation.Target.OUTBOUND : Observation.Target.DOMAIN;
 		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, commandClass, target, tracingWithCommand));
 				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.command(commandName), commandClass, tracingWithCommand) ) {
-			long start = System.currentTimeMillis();
+			long start = Elapsed.start();
 
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracingWithCommand, overrides);
 			try {
@@ -153,7 +154,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		Tracing tracingWithCommand = tracing.command(commandName);
 		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, command.getClass(), Observation.Target.DOMAIN, tracingWithCommand));
 				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.command(commandName), command.getClass(), tracingWithCommand) ) {
-			long start = System.currentTimeMillis();
+			long start = Elapsed.start();
 
 			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand, overridesOf(command));
 			try {
@@ -353,15 +354,15 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		if ( !eventEmitter.enabled() ) {
 			return;
 		}
-		long duration = System.currentTimeMillis() - start;
+		long durationMicros = Elapsed.microsSince(start);
 		ProjectorMetrics projectorMetrics = commandContext.projectorMetrics();
 
 		for ( DCBCommandContextImpl.DecisionModelProjection projection : commandContext.decisionModelProjections() ) {
-			BoundedContextEvent.Metrics dmMetrics = new BoundedContextEvent.Metrics(projection.durationMs(), projection.queriesDone(), projection.eventsStreamed(), projection.eventsHandled(), projection.until());
+			BoundedContextEvent.Metrics dmMetrics = new BoundedContextEvent.Metrics(projection.durationMicros(), projection.queriesDone(), projection.eventsStreamed(), projection.eventsHandled(), projection.until());
 			eventEmitter.emit(new BoundedContextEvent.DecisionModelProjected(boundedContext, projection.decisionModelClass().getSimpleName(), dmMetrics, eventEmitter.sliceFor(projection.decisionModelClass())), commandContext.tracing());
 		}
 
-		BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+		BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(durationMicros, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
 		eventEmitter.emit(terminal.apply(metrics, eventEmitter.sliceFor(commandClass)), commandContext.tracing());
 	}
 

@@ -24,6 +24,7 @@ import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sliceworkz.eventmodeling.module.timing.Elapsed;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
@@ -253,7 +254,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 									LOGGER.debug("starting processing of max {} items at a time", batchSize);
 
-									long batchStartMs = System.currentTimeMillis();
+									long batchStarted = Elapsed.start();
 									// the batch semantics live in AutomationBatch, shared with the published
 									// AutomationTest harness; what this processor adds around them is the
 									// observation, the bookmark and the lifecycle below. The context is derived per
@@ -275,8 +276,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 									itemsFailed.addAndGet(outcome.failed());
 
 									if ( outcome.streamed() > 0 && eventEmitter.enabled() ) {
-										long duration = System.currentTimeMillis() - batchStartMs;
-										BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, 0, outcome.streamed(), outcome.handled(), outcome.lastProducedEvent());
+										BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(Elapsed.microsSince(batchStarted), 0, outcome.streamed(), outcome.handled(), outcome.lastProducedEvent());
 										eventEmitter.emit(new BoundedContextEvent.AutomationProcessed(boundedContext, processorIdentification.id(), metrics, eventEmitter.sliceFor(automation.getClass())), tracing);
 									}
 

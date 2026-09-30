@@ -1689,9 +1689,7 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   todo list, counted whether or not the same slice registers it); a translator is an inbound event and
   its command; a publisher and a dispatcher are an outbound event — in the model a publisher is no element
   of its own, only the integration event linked to the slice whose domain event it publishes, so a state
-  change or an automation that also publishes keeps its type. The rule has a fifth shape that lands on `AUTOMATION`: a
-  publication in the model — domain events and an outbound event, no command, no inbound event — which is
-  what a publisher slice looks like there. The code cannot say which events a command raises, so
+  change or an automation that also publishes keeps its type. The code cannot say which events a command raises, so
   every command is taken to raise one. Porting the rule rather than writing one for code is the point:
   a slice in the code and the same slice in the model come out as the same type, which is what makes
   comparing the two meaningful. The modeler's `SliceTypeDerivation` delegates to `SliceType.derive`, so the

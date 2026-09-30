@@ -32,6 +32,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
+import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.events.TracingScope;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
@@ -172,11 +174,20 @@ public final class PortReporter {
 	 * current while the call runs, so whatever the adapter does is nested beneath it.
 	 *
 	 * @param fallback who called when no component is running on this thread, {@code null} for unattributed
+	 *        — its tracing, and an unattributed call's, is the one a {@link TracingScope} bound to this thread
 	 */
 	Call start ( MonitoredPort port, String method, PortCallerScope.Current fallback ) {
 		PortCallerScope.Current current = PortCallerScope.current();
 		if ( fallback != null && current.componentClass() == null ) {
 			current = fallback;
+		}
+		if ( current.tracing() == null ) {
+			// no component supplies one -- a REST endpoint's call on a request thread: the request's own tracing,
+			// so the call is reported under the flow the request's commands and reads belong to
+			Tracing bound = TracingScope.current().orElse(null);
+			if ( bound != null ) {
+				current = new PortCallerScope.Current(current.caller(), current.componentClass(), bound);
+			}
 		}
 		Observation.Scope<Outcome.PortCallOutcome> scope = observer.start(new Observation.PortCall(
 				boundedContext, port.portType().getSimpleName(), port.qualification(), method, current.caller(), current.tracing()));

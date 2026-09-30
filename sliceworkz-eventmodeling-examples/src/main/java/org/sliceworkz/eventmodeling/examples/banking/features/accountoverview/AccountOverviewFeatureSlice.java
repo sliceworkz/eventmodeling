@@ -20,10 +20,9 @@ package org.sliceworkz.eventmodeling.examples.banking.features.accountoverview;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.banking.Banking;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
-@FeatureSlice(type = Type.STATE_READ, context="banking", chapter="Account management", tags= {"batch"})
+@FeatureSlice(chapter="Account management")
 public class AccountOverviewFeatureSlice implements Slice<Banking> {
 
 	@Override

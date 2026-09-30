@@ -48,7 +48,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.mock.sliced.SlicedCommand;
 import org.sliceworkz.eventmodeling.mock.sliced.SlicedFeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Aspect;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.SliceType;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventType;
@@ -183,7 +183,8 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 
 		assertNotNull(commandExecuted.slice(), "expected the command to be attributed to its feature slice");
 		assertEquals("Sliced", commandExecuted.slice().name());
-		assertEquals(Type.STATE_CHANGE, commandExecuted.slice().type());
+		assertEquals(SliceType.STATE_CHANGE, commandExecuted.slice().type());
+		assertEquals("Mock", commandExecuted.slice().context(), "the context is the C of Slice<C>");
 	}
 
 	@Test

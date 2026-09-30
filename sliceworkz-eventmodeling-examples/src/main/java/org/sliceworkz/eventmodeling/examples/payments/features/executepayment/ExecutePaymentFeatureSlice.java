@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.examples.payments.features.executepayment;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.payments.Payments;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
@@ -43,8 +42,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * scanned slices — loses because the slice is then a slice in name only: its wiring lives in another
  * file, and every deployment has to repeat it. See {@code PaymentsExample} for the application side.
  */
-@FeatureSlice(type = Type.AUTOMATION, context = "payments", chapter = "Executing Payments",
-	tags = {"automation", "outbound", "failure-handling"})
+@FeatureSlice(chapter = "Executing Payments")
 public class ExecutePaymentFeatureSlice implements Slice<Payments> {
 
 	@Override

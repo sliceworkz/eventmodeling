@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.mock.multicontext;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
@@ -28,7 +27,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * read model of event types the Mock context does not hold — nor count it among the Mock context's
  * slices.
  */
-@FeatureSlice(type = Type.STATE_READ, context = "other")
+@FeatureSlice
 public class OtherContextFeatureSlice implements Slice<OtherContext> {
 
 	@Override

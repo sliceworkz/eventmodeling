@@ -22,24 +22,38 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/**
+ * Marks a class as a feature slice: one vertical slice of a bounded context, discovered by package
+ * scanning from the {@code rootPackage} given to the builder's {@code features()}.
+ * <p>
+ * The annotated class implements {@link Slice Slice&lt;C&gt;}, and everything that can be read off the
+ * code is deliberately not repeated here:
+ * <ul>
+ * <li><b>The bounded context</b> is the {@code C} of {@code Slice<C>}. It is what decides which context
+ *     deploys the slice when several scan one package: a slice is deployed by every context it can be
+ *     handed to, so one declared over {@code BoundedContext<?,?,?>} serves them all and a raw
+ *     {@code Slice} is kept by every context.</li>
+ * <li><b>The name</b> is the class' simple name without its {@code FeatureSlice} suffix
+ *     ({@link Slice#name()}).</li>
+ * <li><b>The type</b> — state change, state read, automation, translation — is derived from the
+ *     components the slice registers in its {@code configure...} methods, by the rule the Sliceworkz
+ *     Modeler applies to a modeled slice; see {@link SliceType}.</li>
+ * </ul>
+ * What is left is the one thing the code cannot say: the chapter.
+ * <p>
+ * Nothing here changes how a slice runs. The chapter is reported on {@code BoundedContextStarting} and on
+ * every kernel event attributed to the slice, which is how a dashboard lays out a deployment. Which slices
+ * a deployment runs is the builder's {@code features().filter(...)} — over {@link Slice#name()},
+ * {@link Slice#chapter()}, the class or its package — and which parts of them, its aspects.
+ */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
 public @interface FeatureSlice {
-	
-	Type type() default Type.UNDEFINED;
-	
+
+	/**
+	 * The chapter of the event model the slice belongs to: the column it is grouped under, both in the
+	 * model and on a dashboard. Name it as the model does. Empty for a slice in no chapter.
+	 */
 	String chapter() default "";
 
-	String context() default "";
-	
-	String[] tags() default {};
-
-	public enum Type {
-		STATE_CHANGE,
-		STATE_READ,
-		AUTOMATION,
-		TRANSLATION,
-		UNDEFINED
-	}
-	
 }

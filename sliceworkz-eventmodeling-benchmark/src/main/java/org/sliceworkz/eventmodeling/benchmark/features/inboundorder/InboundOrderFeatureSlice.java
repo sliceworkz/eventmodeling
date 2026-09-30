@@ -20,10 +20,9 @@ package org.sliceworkz.eventmodeling.benchmark.features.inboundorder;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessing;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
-@FeatureSlice(type = Type.TRANSLATION)
+@FeatureSlice
 public class InboundOrderFeatureSlice implements Slice<OrderProcessing> {
 
 	@Override

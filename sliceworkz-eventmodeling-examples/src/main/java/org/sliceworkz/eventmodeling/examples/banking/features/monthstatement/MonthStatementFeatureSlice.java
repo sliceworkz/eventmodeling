@@ -19,7 +19,6 @@ package org.sliceworkz.eventmodeling.examples.banking.features.monthstatement;
 
 import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
@@ -29,6 +28,6 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * very fast to load — only the events tagged with that specific
  * month are replayed (thanks to the month tag filter).
  */
-@FeatureSlice(type = Type.STATE_READ, context = "banking", chapter = "Closing The Books")
+@FeatureSlice(chapter = "Closing The Books")
 public class MonthStatementFeatureSlice implements Slice<ClosingTheBooks> {
 }

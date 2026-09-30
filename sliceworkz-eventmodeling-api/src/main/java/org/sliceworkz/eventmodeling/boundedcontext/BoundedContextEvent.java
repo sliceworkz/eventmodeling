@@ -26,7 +26,7 @@ import org.sliceworkz.eventmodeling.ports.PortCaller;
 import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.RuleJudgement;
 import org.sliceworkz.eventmodeling.slices.Aspect;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.SliceType;
 import org.sliceworkz.eventstore.events.EventReference;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -802,9 +802,18 @@ public sealed interface BoundedContextEvent {
 	record InstanceStatusReported ( String boundedContext, List<AutomationStatus> automations, List<ProcessorStatus> processors ) implements BoundedContextEvent { }
 
 	/**
-	 * A feature slice descriptor: the slice name, its event-modeling {@link Type}, the
-	 * {@code context}/{@code chapter}/{@code tags} declared on its {@code @FeatureSlice} annotation,
+	 * A feature slice descriptor: the slice name, its {@link SliceType}, the bounded context type it is
+	 * declared over, the {@code chapter} declared on its {@code @FeatureSlice} annotation,
 	 * and the components the slice registered on the bounded context.
+	 * <p>
+	 * {@code type} is derived from {@code members} with {@link SliceType#of}, so it describes what this
+	 * instance deployed of the slice: an instance running only some aspects sees only the members
+	 * registered in those, and an undeployed slice is {@link SliceType#UNDEFINED}. A reader combining
+	 * several instances derives it again from the union of their members.
+	 * <p>
+	 * {@code context} is the simple name of the {@code C} in the slice's {@code Slice<C>} — the context
+	 * type it declares, which for a slice declared over a supertype is that supertype — and {@code null}
+	 * for a raw {@code Slice}. The context deploying it is the one the event is about.
 	 * <p>
 	 * {@code members} is what the slice declares while the bounded context is built: the commands, read
 	 * models, automations, translators, dispatchers and aggregates it registers in its
@@ -819,7 +828,7 @@ public sealed interface BoundedContextEvent {
 	 * normalizes that to an empty set so readers never have to null-check it.
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	record FeatureSlice ( String name, Type type, String context, String chapter, Set<String> tags, Set<SliceMember> members ) {
+	record FeatureSlice ( String name, SliceType type, String context, String chapter, Set<SliceMember> members ) {
 
 		public FeatureSlice {
 			members = members == null ? Set.of() : Set.copyOf(members);

@@ -24,6 +24,7 @@ import java.util.Set;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.slices.Slice;
+import org.sliceworkz.eventmodeling.slices.SliceType;
 
 /**
  * Resolves the originating feature slice of a component (command, read model, aggregate, automation)
@@ -66,8 +67,18 @@ public final class SliceRegistry {
 	 * Describes any feature slice - deployed or not - as it is announced on the wire.
 	 */
 	public BoundedContextEvent.FeatureSlice describe ( Slice<?> slice ) {
-		return new BoundedContextEvent.FeatureSlice(slice.name(), slice.type(), slice.context(), slice.chapter(), slice.tags(),
-				members.getOrDefault(slice, Set.of()));
+		Set<BoundedContextEvent.SliceMember> declared = members.getOrDefault(slice, Set.of());
+		return new BoundedContextEvent.FeatureSlice(slice.name(), SliceType.of(declared), contextOf(slice), slice.chapter(),
+				declared);
+	}
+
+	/**
+	 * The simple name of the {@code C} the slice declares in {@code Slice<C>}, {@code null} for a raw
+	 * {@code Slice}: the one place a slice says which context it belongs to.
+	 */
+	static String contextOf ( Slice<?> slice ) {
+		Class<?> declared = TypeArguments.of(slice.getClass(), Slice.class, 0);
+		return declared == null ? null : declared.getSimpleName();
 	}
 
 }

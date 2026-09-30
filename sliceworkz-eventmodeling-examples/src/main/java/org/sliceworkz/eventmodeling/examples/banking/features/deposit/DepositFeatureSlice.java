@@ -23,10 +23,9 @@ import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClo
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
-@FeatureSlice(type = Type.STATE_CHANGE, context = "banking", chapter = "Transactions")
+@FeatureSlice(chapter = "Transactions")
 public class DepositFeatureSlice implements Slice<ClosingTheBooks> {
 
 	@Override

@@ -301,7 +301,7 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * Call it from {@link org.sliceworkz.eventmodeling.slices.Slice#configureCommand}, so the commands
 	 * are attributed to that slice and are only declared where commands are actually deployed:
 	 * <pre>{@code
-	 * @FeatureSlice(type = Type.STATE_CHANGE)
+	 * @FeatureSlice
 	 * public class PlaceOrderFeatureSlice implements Slice<Orders> {
 	 *     @Override
 	 *     public void configureCommand ( BoundedContextBuilder<Orders> builder ) {

@@ -20,12 +20,10 @@ package org.sliceworkz.eventmodeling.examples.payments.features.abandonedpayment
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.payments.Payments;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /** The dead-letter view over the payments the automation gave up on. */
-@FeatureSlice(type = Type.STATE_READ, context = "payments", chapter = "Executing Payments",
-	tags = {"dead-letter", "operations"})
+@FeatureSlice(chapter = "Executing Payments")
 public class AbandonedPaymentsFeatureSlice implements Slice<Payments> {
 
 	@Override

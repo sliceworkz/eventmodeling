@@ -19,13 +19,12 @@ package org.sliceworkz.eventmodeling.mock.multicontext;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
  * A slice declared over a supertype of every bounded context, which can therefore accept any of them
  * and is deployed by all of them.
  */
-@FeatureSlice(type = Type.UNDEFINED, context = "any")
+@FeatureSlice
 public class AnyContextFeatureSlice implements Slice<BoundedContext<?,?,?>> {
 }

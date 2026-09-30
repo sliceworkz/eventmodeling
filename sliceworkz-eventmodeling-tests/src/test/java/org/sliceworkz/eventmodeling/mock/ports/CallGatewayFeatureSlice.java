@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.mock.ports;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
@@ -28,7 +27,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * {@code BoundedContextStarting} names it as a user of the port, and the command in its package is reported
  * with it as its slice.
  */
-@FeatureSlice(type = Type.STATE_CHANGE, context = "mock", chapter = "Ports")
+@FeatureSlice(chapter = "Ports")
 public class CallGatewayFeatureSlice implements Slice<Mock> {
 
 	/** What {@code configureCommand} was handed for the port — the proxy for a monitored one. */

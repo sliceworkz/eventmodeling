@@ -21,7 +21,6 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.multicontext.OtherContextReadModel;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
@@ -29,7 +28,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * context-type filter on the scan cannot catch, since this slice really is a {@code Slice<Mock>}.
  * What catches it is the registration check, which is why that has to run after the scan.
  */
-@FeatureSlice(type = Type.STATE_READ, context = "mock")
+@FeatureSlice
 public class LyingFeatureSlice implements Slice<Mock> {
 
 	@Override

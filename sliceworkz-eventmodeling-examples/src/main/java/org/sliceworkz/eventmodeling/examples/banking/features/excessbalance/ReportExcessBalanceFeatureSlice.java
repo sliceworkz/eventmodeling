@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.examples.banking.features.excessbalance;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
@@ -28,7 +27,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * that took an account over the guarantee, worked off by an automation reporting it to the customer. See
  * {@code BUSINESS-RULES.md}, "Following up after the fact".
  */
-@FeatureSlice(type = Type.AUTOMATION, context = "banking", chapter = "Rulebook", tags = {"business-rules", "automation"})
+@FeatureSlice(chapter = "Rulebook")
 public class ReportExcessBalanceFeatureSlice implements Slice<ClosingTheBooks> {
 
 	@Override

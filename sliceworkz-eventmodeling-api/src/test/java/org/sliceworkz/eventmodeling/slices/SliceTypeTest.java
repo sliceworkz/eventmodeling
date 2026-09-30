@@ -69,10 +69,9 @@ class SliceTypeTest {
 	}
 
 	@Test
-	void aPublicationIsAnAutomation ( ) {
-		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER));
-		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER, MemberKind.DISPATCHER));
-		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.READ_MODEL, MemberKind.PUBLISHER, MemberKind.DISPATCHER));
+	void aPublisherIsAnOutboundEventOfTheSliceWhoseFactItPublishes ( ) {
+		assertEquals(SliceType.STATE_CHANGE, typeOf(MemberKind.COMMAND, MemberKind.PUBLISHER, MemberKind.DISPATCHER));
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.READ_MODEL, MemberKind.AUTOMATION, MemberKind.PUBLISHER, MemberKind.DISPATCHER));
 	}
 
 	@Test

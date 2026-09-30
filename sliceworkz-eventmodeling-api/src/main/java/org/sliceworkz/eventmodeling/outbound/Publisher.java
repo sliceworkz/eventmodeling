@@ -37,9 +37,11 @@ import org.sliceworkz.eventstore.query.EventQuery;
  * it was published for.
  * <p>
  * <strong>How it runs.</strong> A publisher is projected over the domain stream on a single elected leader
- * of the deployment, and bookmarked there like a translator or a dispatcher. It is part of a slice's
- * automation aspect: register it from {@code configureAutomation} with
- * {@code builder.publisher(...)}, together with the live read models it {@linkplain #reads() reads}.
+ * of the deployment, and bookmarked there like a translator or a dispatcher. It belongs to the slice whose
+ * domain event it publishes — a state change or an automation, which the event model shows with the
+ * integration event linked to it — and is part of that slice's automation aspect: register it from
+ * {@code configureAutomation} with {@code builder.publisher(...)}, together with the live read models it
+ * {@linkplain #reads() reads}.
  * <p>
  * <strong>What it may do</strong> is read live read models and publish, through its
  * {@link PublisherContext} — nothing else. It decides nothing: whatever needs deciding is decided by a

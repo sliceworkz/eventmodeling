@@ -289,7 +289,7 @@ Features are organized as vertical slices:
 3. **Types of feature slices** (`SliceType`, derived from what the slice registers, never declared):
    - `STATE_CHANGE`: a command (or aggregate) raising domain events
    - `STATE_READ`: read models and nothing else
-   - `AUTOMATION`: an automation and its todo list, a publisher — or any command beside a read model
+   - `AUTOMATION`: an automation and its todo list — or any command beside a read model
    - `TRANSLATION`: a translator
    - `UNCLEAR`: parts fitting no pattern, or several
    - `UNDEFINED`: nothing registered
@@ -1549,8 +1549,10 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   derives from the one event, so that refusal can only mean it was published before: it is answered
   `Outcome.AlreadyPublished` and nothing is stored. Everywhere else that exception retires a processor;
   here it is the expected answer, caught before the projector sees it
-- **Part of a slice's automation aspect.** Registered from `configureAutomation` with
-  `builder.publisher(...)`, it runs on the instances deploying automations, leader-only, one lease per
+- **Part of the automation aspect of the slice whose domain event it publishes** — a state change or an
+  automation, which in the model simply has the integration event linked to it: there is no publication
+  slice and no publisher element in the model, only the class in the code. Registered from
+  `configureAutomation` with `builder.publisher(...)`, it runs on the instances deploying automations, leader-only, one lease per
   publisher named by its `ProcessorIdentification` (type `publisher`), bookmarked on the domain stream.
   `build()` rejects one a slice registered from another aspect's hook, naming the slice and the hook
   (`rejectPublishersOutsideTheAutomationAspect`); one registered straight on the builder runs wherever
@@ -1684,9 +1686,10 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   `SliceType.derive(commands, readModels, producedDomainEvents, inbound, outbound)`, over the slice's
   registered `SliceMember`s mapped onto the model's elements: a command or an aggregate is a command
   raising events; a read model is a read model; an automation is a command issued from a read model (its
-  todo list, counted whether or not the same slice registers it); a publisher counts as an automation,
-  since it is the publication an automation slice carries; a translator is an inbound event and
-  its command; a dispatcher is an outbound event. The rule has a fifth shape that lands on `AUTOMATION`: a
+  todo list, counted whether or not the same slice registers it); a translator is an inbound event and
+  its command; a publisher and a dispatcher are an outbound event — in the model a publisher is no element
+  of its own, only the integration event linked to the slice whose domain event it publishes, so a state
+  change or an automation that also publishes keeps its type. The rule has a fifth shape that lands on `AUTOMATION`: a
   publication in the model — domain events and an outbound event, no command, no inbound event — which is
   what a publisher slice looks like there. The code cannot say which events a command raises, so
   every command is taken to raise one. Porting the rule rather than writing one for code is the point:

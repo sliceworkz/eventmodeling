@@ -22,7 +22,7 @@ import org.sliceworkz.eventmodeling.examples.banking.Banking;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
-@FeatureSlice(chapter="Account management", tags= {"online"})
+@FeatureSlice(chapter="Account management")
 public class OpenAccountFeatureSlice implements Slice<Banking> {
 
 	@Override

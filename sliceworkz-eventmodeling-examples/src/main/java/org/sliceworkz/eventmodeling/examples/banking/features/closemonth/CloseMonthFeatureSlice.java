@@ -36,7 +36,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  *   <li>{@link MonthEndClosingAutomation} — processes the todo list</li>
  * </ul>
  */
-@FeatureSlice(chapter = "Closing The Books", tags = {"closing-the-books", "month-end"})
+@FeatureSlice(chapter = "Closing The Books")
 public class CloseMonthFeatureSlice implements Slice<ClosingTheBooks> {
 
 	@Override

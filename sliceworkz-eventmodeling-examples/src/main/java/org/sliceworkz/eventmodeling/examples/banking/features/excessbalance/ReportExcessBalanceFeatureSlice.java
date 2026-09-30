@@ -27,7 +27,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * that took an account over the guarantee, worked off by an automation reporting it to the customer. See
  * {@code BUSINESS-RULES.md}, "Following up after the fact".
  */
-@FeatureSlice(chapter = "Rulebook", tags = {"business-rules", "automation"})
+@FeatureSlice(chapter = "Rulebook")
 public class ReportExcessBalanceFeatureSlice implements Slice<ClosingTheBooks> {
 
 	@Override

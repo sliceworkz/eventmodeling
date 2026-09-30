@@ -39,12 +39,12 @@ import java.lang.annotation.Target;
  *     components the slice registers in its {@code configure...} methods, by the rule the Sliceworkz
  *     Modeler applies to a modeled slice; see {@link SliceType}.</li>
  * </ul>
- * What is left is what the code cannot say.
+ * What is left is the one thing the code cannot say: the chapter.
  * <p>
- * Nothing here changes how a slice runs. Both values are reported on {@code BoundedContextStarting} and
- * on every kernel event attributed to the slice, which is how a dashboard lays out and filters a
- * deployment; {@code tags} can also select which slices a deployment runs, through the builder's
- * {@code features().filter(...)}.
+ * Nothing here changes how a slice runs. The chapter is reported on {@code BoundedContextStarting} and on
+ * every kernel event attributed to the slice, which is how a dashboard lays out a deployment. Which slices
+ * a deployment runs is the builder's {@code features().filter(...)} — over {@link Slice#name()},
+ * {@link Slice#chapter()}, the class or its package — and which parts of them, its aspects.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
@@ -55,12 +55,5 @@ public @interface FeatureSlice {
 	 * model and on a dashboard. Name it as the model does. Empty for a slice in no chapter.
 	 */
 	String chapter() default "";
-
-	/**
-	 * Free-form labels, for filtering a dashboard and for selecting the slices a deployment runs: a
-	 * {@code features().filter(slice -> ...)} over {@link Slice#tags()} is how one build is split over
-	 * several processes. None by default.
-	 */
-	String[] tags() default {};
 
 }

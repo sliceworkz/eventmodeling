@@ -23,7 +23,7 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /** The dead-letter view over the payments the automation gave up on. */
-@FeatureSlice(chapter = "Executing Payments", tags = {"dead-letter", "operations"})
+@FeatureSlice(chapter = "Executing Payments")
 public class AbandonedPaymentsFeatureSlice implements Slice<Payments> {
 
 	@Override

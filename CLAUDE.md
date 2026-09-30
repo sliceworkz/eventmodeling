@@ -284,7 +284,7 @@ the other, and when advising on who holds what, name the audience.
 
 Features are organized as vertical slices:
 
-1. **@FeatureSlice annotation**: Classes annotated with `@FeatureSlice` are discovered via package scanning. It carries only what the code cannot say — `chapter` and `tags`; see "A slice's annotation carries what the code cannot say" below
+1. **@FeatureSlice annotation**: Classes annotated with `@FeatureSlice` are discovered via package scanning. It carries only what the code cannot say — its `chapter`; see "A slice's annotation carries what the code cannot say" below
 2. **Slice interface**: Feature slices implement `Slice<C>` where `C` is the bounded context type (e.g., `Slice<Banking>`). That declaration is what decides which context deploys the slice when several share a root package — see "A feature slice is scanned for the bounded context it declares" below
 3. **Types of feature slices** (`SliceType`, derived from what the slice registers, never declared):
    - `STATE_CHANGE`: a command (or aggregate) raising domain events
@@ -1641,7 +1641,7 @@ the other's slices in their own inventory. The banking examples are that layout 
 
 ### A slice's annotation carries what the code cannot say
 
-**`@FeatureSlice` holds a `chapter` and `tags`, and nothing that can be read off the class.** The name
+**`@FeatureSlice` holds a `chapter`, and nothing that can be read off the class.** The name
 is the class' simple name minus `FeatureSlice`, the bounded context is the `C` of `Slice<C>`, and the
 type is derived from the components the slice registers. A value repeated in the annotation would be
 one nobody checks, agreeing with the code only by luck; the reported descriptor
@@ -1675,6 +1675,12 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   time — loses** because a check can only ever reject what the derivation would simply compute, and it
   fails the build over a label: every slice would state its type once in the annotation and once in its
   `configure...` methods, with the build policing that the two agree.
+- **There are no free-form tags on a slice.** Which slices a deployment runs is the builder's
+  `features().filter(...)` — over the slice's name, chapter, class or package — and which parts of them
+  its aspects. The alternative — labels on the annotation for a filter to select on — loses because
+  nothing checks them against anything, so they drift into as many spellings as there are authors, and
+  the split they served is the one aspects already make. A `tags` property on a stored descriptor is
+  ignored when it is read back, as any property this version does not know.
 - `SliceTypeTest` in the api module pins the rule and the mapping; `BoundedContextListenerTest.
   commandExecutedIsAttributedToOwningSlice` a derived type and context on a real descriptor.
 

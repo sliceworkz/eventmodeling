@@ -26,7 +26,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * The follow-up of the post-justified override on large withdrawals: a list of what still has to be
  * justified, and the command that justifies it. See {@code BUSINESS-RULES.md}, "Following up after the fact".
  */
-@FeatureSlice(chapter = "Rulebook", tags = {"business-rules"})
+@FeatureSlice(chapter = "Rulebook")
 public class JustifyWithdrawalFeatureSlice implements Slice<ClosingTheBooks> {
 
 	@Override

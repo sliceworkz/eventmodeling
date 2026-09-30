@@ -68,7 +68,7 @@ public final class SliceRegistry {
 	 */
 	public BoundedContextEvent.FeatureSlice describe ( Slice<?> slice ) {
 		Set<BoundedContextEvent.SliceMember> declared = members.getOrDefault(slice, Set.of());
-		return new BoundedContextEvent.FeatureSlice(slice.name(), SliceType.of(declared), contextOf(slice), slice.chapter(), slice.tags(),
+		return new BoundedContextEvent.FeatureSlice(slice.name(), SliceType.of(declared), contextOf(slice), slice.chapter(),
 				declared);
 	}
 

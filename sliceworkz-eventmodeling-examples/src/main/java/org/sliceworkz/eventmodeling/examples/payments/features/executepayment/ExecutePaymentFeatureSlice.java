@@ -42,7 +42,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * scanned slices — loses because the slice is then a slice in name only: its wiring lives in another
  * file, and every deployment has to repeat it. See {@code PaymentsExample} for the application side.
  */
-@FeatureSlice(chapter = "Executing Payments", tags = {"automation", "outbound", "failure-handling"})
+@FeatureSlice(chapter = "Executing Payments")
 public class ExecutePaymentFeatureSlice implements Slice<Payments> {
 
 	@Override

@@ -17,8 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.slices;
 
-import java.util.Set;
-
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 
@@ -50,12 +48,6 @@ public interface Slice<C extends BoundedContext<?,?,?>> {
 	default String chapter ( ) {
 		FeatureSlice meta = meta();
 		return meta == null ? "" : meta.chapter();
-	}
-
-	/** The {@link FeatureSlice#tags() tags} the annotation declares. */
-	default Set<String> tags ( ) {
-		FeatureSlice meta = meta();
-		return meta == null ? Set.of() : Set.of(meta.tags());
 	}
 
 	/** The annotation on this slice's class, {@code null} for a slice that is not annotated. */

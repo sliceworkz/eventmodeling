@@ -803,7 +803,7 @@ public sealed interface BoundedContextEvent {
 
 	/**
 	 * A feature slice descriptor: the slice name, its {@link SliceType}, the bounded context type it is
-	 * declared over, the {@code chapter}/{@code tags} declared on its {@code @FeatureSlice} annotation,
+	 * declared over, the {@code chapter} declared on its {@code @FeatureSlice} annotation,
 	 * and the components the slice registered on the bounded context.
 	 * <p>
 	 * {@code type} is derived from {@code members} with {@link SliceType#of}, so it describes what this
@@ -828,7 +828,7 @@ public sealed interface BoundedContextEvent {
 	 * normalizes that to an empty set so readers never have to null-check it.
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	record FeatureSlice ( String name, SliceType type, String context, String chapter, Set<String> tags, Set<SliceMember> members ) {
+	record FeatureSlice ( String name, SliceType type, String context, String chapter, Set<SliceMember> members ) {
 
 		public FeatureSlice {
 			members = members == null ? Set.of() : Set.copyOf(members);

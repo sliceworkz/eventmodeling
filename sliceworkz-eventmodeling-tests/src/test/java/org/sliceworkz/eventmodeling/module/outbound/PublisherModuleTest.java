@@ -22,11 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
@@ -96,6 +99,38 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 				"an outbound event names the domain event it was published for");
 		assertEquals("flow-1", Tracing.readFrom(published).correlationId(), "and continues its flow");
 		assertTrue(published.tags().containsAll(ItemReadModel.tags("a")), "and carries the tags the publisher gave it");
+	}
+
+	/**
+	 * A run that published something is reported, so a board sees the backlog move as it happens; a
+	 * publisher with nothing to publish reports no run.
+	 */
+	@Test
+	void aRunThatPublishedSomethingIsReportedAndAnIdlePublisherReportsNone ( ) {
+		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
+		BoundedContextBuilder<Mock> builder = baseBuilder().listener(event -> received.add(event.data()));
+		builder.publisher(new MockPublisher());
+		Mock context = buildBoundedContext(builder);
+
+		assertTrue(processed(received).isEmpty(), "an idle publisher must not report runs: " + received);
+
+		Optional<EventReference> recorded = context.event(new FirstDomainEvent("v1"));
+
+		waitBecauseOfEventualConsistency(() -> !processed(received).isEmpty());
+		BoundedContextEvent.PublisherProcessed processed = processed(received).get(0);
+		assertEquals(CONTEXT_NAME, processed.boundedContext());
+		assertEquals("MockPublisher", processed.publisher());
+		assertEquals(1, processed.metrics().eventsHandled());
+		assertEquals(recorded.orElseThrow().id(), processed.metrics().until().id(), "the report names the last domain event published");
+	}
+
+	private static List<BoundedContextEvent.PublisherProcessed> processed ( List<BoundedContextEvent> received ) {
+		synchronized ( received ) {
+			return received.stream()
+					.filter(BoundedContextEvent.PublisherProcessed.class::isInstance)
+					.map(BoundedContextEvent.PublisherProcessed.class::cast)
+					.toList();
+		}
 	}
 
 	@Test

@@ -529,6 +529,21 @@ public sealed interface BoundedContextEvent {
 	}
 
 	/**
+	 * Emitted after a dispatcher's processor has sent a batch of outbound events — the dispatcher
+	 * counterpart of {@link EventuallyConsistentReadModelUpdated}, and the signal that its backlog moved.
+	 * <p>
+	 * <strong>Only when the run handled something.</strong> A dispatcher that finds nothing to send emits
+	 * nothing, so silence means "caught up" at least as often as anything else, and never means the
+	 * dispatcher is gone — {@link DispatcherStarted} and {@link DispatcherStopped} answer that.
+	 *
+	 * @param boundedContext the context the dispatcher belongs to
+	 * @param dispatcher the dispatcher's name
+	 * @param metrics the run: its duration, the outbound events read and handled, and the last one handled
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record DispatcherProcessed ( String boundedContext, String dispatcher, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
 	 * Emitted when a publisher's processor starts reading the domain stream: once per publisher when the
 	 * bounded context starts on an instance deploying automations, and again when a stopped one is
 	 * restarted. The publisher counterpart of {@link DispatcherStarted}.
@@ -567,6 +582,19 @@ public sealed interface BoundedContextEvent {
 	 * @param reason whether a permanent failure retired the publisher or an operator stopped it
 	 */
 	record PublisherStopped ( String boundedContext, String publisher, Failure failure, EventReference failedAt, FeatureSlice slice, ProcessorStopReason reason ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted after a publisher's processor has mapped a batch of domain events onto the outbound stream —
+	 * the publisher counterpart of {@link DispatcherProcessed}, and the signal that its backlog moved. Only
+	 * when the run handled something; {@link PublisherStarted} and {@link PublisherStopped} say whether the
+	 * publisher is there at all.
+	 *
+	 * @param boundedContext the context the publisher belongs to
+	 * @param publisher the publisher's name
+	 * @param metrics the run: its duration, the domain events read and handled, and the last one handled
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record PublisherProcessed ( String boundedContext, String publisher, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted after an automation has processed a batch of todo items.

@@ -835,7 +835,10 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
   projects read models, translators and dispatchers alike and has no business knowing which, so it
   reports to its module and the module names the events — `ReadModelModule` the read model trio,
   `InboundModule` `TranslatorStarted`/`TranslatorFailed`/`TranslatorStopped`, `OutboundModule` the
-  `Dispatcher…` trio. The latter two used to pass no listener at all, so a dead dispatcher —
+  `Dispatcher…` trio and `PublisherModule` the `Publisher…` one. A run that handled something is reported
+  too — `EventuallyConsistentReadModelUpdated`, `DispatcherProcessed`, `PublisherProcessed`, from `onRun` —
+  which is what lets a board follow a backlog as it moves rather than on its next poll. The inbound and
+  outbound modules used to pass no listener at all, so a dead dispatcher —
   deployment-wide silence toward an external system, since a dispatcher is the outbound stream's only
   publisher — was two log lines and no bounded-context event. Every delivery is contained by the
   processor — `onRun` runs *inside* the projector loop and `onStopped` on a path already handling a

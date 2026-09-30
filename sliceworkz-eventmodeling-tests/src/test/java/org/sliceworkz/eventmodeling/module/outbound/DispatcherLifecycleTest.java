@@ -21,6 +21,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -103,6 +104,31 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 	}
 
 	/**
+	 * A run that sent something is reported, which is what lets a board follow the backlog as it moves
+	 * rather than on its next poll; a dispatcher with nothing to send reports no run at all.
+	 */
+	@Test
+	void aRunThatSentSomethingIsReportedAndAnIdleDispatcherReportsNone ( ) {
+		FlakyDispatcher dispatcher = new FlakyDispatcher();
+		BoundedContextBuilder<Mock> builder = observedBuilder();
+		builder.dispatcher(dispatcher);
+		buildBoundedContext(builder);
+
+		await().atMost(Duration.ofSeconds(15)).until(() -> started("FlakyDispatcher") != null);
+		assertNull(processed("FlakyDispatcher"), "an idle dispatcher must not report runs: " + received);
+
+		appendOutbound(new SomeOutboundEvent("sent"));
+
+		await().atMost(Duration.ofSeconds(15)).untilAsserted(
+				() -> assertNotNull(processed("FlakyDispatcher"), "a run that sent something must be reported: " + received));
+		BoundedContextEvent.DispatcherProcessed processed = processed("FlakyDispatcher");
+		assertEquals(CONTEXT_NAME, processed.boundedContext());
+		assertEquals(1, processed.metrics().eventsHandled());
+		assertNotNull(processed.metrics().until(), "the report names the last outbound event sent");
+		assertEquals(List.of("sent"), dispatcher.published());
+	}
+
+	/**
 	 * The outbox surviving its external system being down: the dispatch is retried with backoff,
 	 * reported per fruitless round, and publishes exactly once when the system comes back — the
 	 * outbound event was never skipped, which is the outbox guarantee holding through the failure.
@@ -179,6 +205,16 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 			return received.stream()
 					.filter(BoundedContextEvent.DispatcherStarted.class::isInstance)
 					.map(BoundedContextEvent.DispatcherStarted.class::cast)
+					.filter(e -> dispatcher.equals(e.dispatcher()))
+					.findFirst().orElse(null);
+		}
+	}
+
+	private BoundedContextEvent.DispatcherProcessed processed ( String dispatcher ) {
+		synchronized ( received ) {
+			return received.stream()
+					.filter(BoundedContextEvent.DispatcherProcessed.class::isInstance)
+					.map(BoundedContextEvent.DispatcherProcessed.class::cast)
 					.filter(e -> dispatcher.equals(e.dispatcher()))
 					.findFirst().orElse(null);
 		}

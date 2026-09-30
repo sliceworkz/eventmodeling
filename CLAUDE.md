@@ -284,14 +284,15 @@ the other, and when advising on who holds what, name the audience.
 
 Features are organized as vertical slices:
 
-1. **@FeatureSlice annotation**: Classes annotated with `@FeatureSlice` are discovered via package scanning
+1. **@FeatureSlice annotation**: Classes annotated with `@FeatureSlice` are discovered via package scanning. It carries only what the code cannot say — `chapter` and `tags`; see "A slice's annotation carries what the code cannot say" below
 2. **Slice interface**: Feature slices implement `Slice<C>` where `C` is the bounded context type (e.g., `Slice<Banking>`). That declaration is what decides which context deploys the slice when several share a root package — see "A feature slice is scanned for the bounded context it declares" below
-3. **Types of feature slices**:
-   - `STATE_CHANGE`: Commands that change state
-   - `STATE_READ`: Read models that project state
-   - `AUTOMATION`: Process managers/sagas
-   - `TRANSLATION`: Inbound event handlers
-   - `UNDEFINED`: anything the four patterns do not name
+3. **Types of feature slices** (`SliceType`, derived from what the slice registers, never declared):
+   - `STATE_CHANGE`: a command (or aggregate) raising domain events
+   - `STATE_READ`: read models and nothing else
+   - `AUTOMATION`: an automation and its todo list — or any command beside a read model
+   - `TRANSLATION`: a translator
+   - `UNCLEAR`: parts fitting no pattern, or several
+   - `UNDEFINED`: nothing registered
 
 **Feature Slice Structure:**
 ```
@@ -1525,7 +1526,7 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
 **Translators:**
 - Implement `Translator<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>`
 - Convert external events to domain events
-- Registered with the bounded context via a `@FeatureSlice(type = TRANSLATION)` slice (`builder.translator(...)`)
+- Registered with the bounded context from a feature slice (`builder.translator(...)`), which is what makes that slice a `TRANSLATION`
 - Two ways to run a translation, both reusing the same registered `Translator` implementations:
   - `boundedContext.incoming(inboundEvent)`: eventually-consistent. Appends the inbound event to the inbound stream; matching translators run asynchronously via projectors. Supports idempotency keys.
   - `boundedContext.translate(inboundEvent)`: interactive. Runs every matching translator synchronously in the calling thread, does **not** persist the inbound event, and returns the `List<EventReference>` of domain events raised. Throws `NoTranslatorRegisteredException` if no registered translator matches the event. Useful for integration scenarios that need to act immediately on the produced domain events.
@@ -1637,6 +1638,45 @@ the other's slices in their own inventory. The banking examples are that layout 
   declared over a supertype: each context deploys its own and the shared one, the foreign slice is
   neither configured nor counted in either inventory, and the same package scanned by the other context
   yields the mirror image
+
+### A slice's annotation carries what the code cannot say
+
+**`@FeatureSlice` holds a `chapter` and `tags`, and nothing that can be read off the class.** The name
+is the class' simple name minus `FeatureSlice`, the bounded context is the `C` of `Slice<C>`, and the
+type is derived from the components the slice registers. A value repeated in the annotation would be
+one nobody checks, agreeing with the code only by luck; the reported descriptor
+(`BoundedContextEvent.FeatureSlice`) is filled from the code instead, in `SliceRegistry.describe`.
+
+- **The context on the descriptor is the simple name of `C`** (`SliceRegistry.contextOf`, through the
+  same `TypeArguments` the scan uses), so it names the type the slice *declares*: for a slice declared
+  over a supertype that is the supertype, for a raw `Slice` it is `null`. The context *deploying* the
+  slice is the one the surrounding event is about, so the descriptor does not repeat it.
+- **The type is `SliceType.of(members)`** — the Sliceworkz Modeler's `SliceTypeDerivation`, ported as
+  `SliceType.derive(commands, readModels, producedDomainEvents, inbound, outbound)`, over the slice's
+  registered `SliceMember`s mapped onto the model's elements: a command or an aggregate is a command
+  raising events; a read model is a read model; an automation is a command issued from a read model (its
+  todo list, counted whether or not the same slice registers it); a translator is an inbound event and
+  its command; a dispatcher is an outbound event. The code cannot say which events a command raises, so
+  every command is taken to raise one. Porting the rule rather than writing one for code is the point:
+  a slice in the code and the same slice in the model come out as the same type, which is what makes
+  comparing the two meaningful. The modeler's `SliceTypeDerivation` delegates to `SliceType.derive`, so the
+  rule lives here, once.
+- **Two consequences of reading the type off the registrations**, both documented on `SliceType`:
+  - Only what is registered counts. A slice that only wires an endpoint in `startCommand` is
+    `UNDEFINED`; `builder.command(...)`, which is purely declarative, makes it a state change. A
+    scheduler executing a command is a state change by its parts. And a command beside a read model is
+    an automation, exactly as the model reads it — a slice that is a state change and a state read at
+    once is two slices in Event Modeling.
+  - Only what is deployed is registered. A slice is configured for the aspects its instance runs, so the
+    type on the descriptor is the type of what *this instance* deployed of it (an undeployed slice is
+    `UNDEFINED`), and a reader combining instances — the dashboard — derives it again from the union of
+    their members.
+- **The alternative — keeping `type` on the annotation, checked against the registrations at build
+  time — loses** because a check can only ever reject what the derivation would simply compute, and it
+  fails the build over a label: every slice would state its type once in the annotation and once in its
+  `configure...` methods, with the build policing that the two agree.
+- `SliceTypeTest` in the api module pins the rule and the mapping; `BoundedContextListenerTest.
+  commandExecutedIsAttributedToOwningSlice` a derived type and context on a real descriptor.
 
 ### Component names are bookmark keys
 

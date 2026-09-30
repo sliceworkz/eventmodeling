@@ -21,11 +21,10 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockCommand;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /** A slice of the Mock context, in the package the other context's slice also sits in. */
-@FeatureSlice(type = Type.STATE_CHANGE, context = "mock")
+@FeatureSlice
 public class MockContextFeatureSlice implements Slice<Mock> {
 
 	@Override

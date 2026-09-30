@@ -20,14 +20,13 @@ package org.sliceworkz.eventmodeling.examples.banking.features.justifywithdrawal
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
  * The follow-up of the post-justified override on large withdrawals: a list of what still has to be
  * justified, and the command that justifies it. See {@code BUSINESS-RULES.md}, "Following up after the fact".
  */
-@FeatureSlice(type = Type.STATE_CHANGE, context = "banking", chapter = "Rulebook", tags = {"business-rules"})
+@FeatureSlice(chapter = "Rulebook", tags = {"business-rules"})
 public class JustifyWithdrawalFeatureSlice implements Slice<ClosingTheBooks> {
 
 	@Override

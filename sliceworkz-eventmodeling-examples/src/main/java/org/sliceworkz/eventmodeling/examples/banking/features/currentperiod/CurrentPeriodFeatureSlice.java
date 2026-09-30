@@ -19,9 +19,8 @@ package org.sliceworkz.eventmodeling.examples.banking.features.currentperiod;
 
 import org.sliceworkz.eventmodeling.examples.banking.ClosingTheBooks;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
-@FeatureSlice(type = Type.STATE_READ, context = "banking", chapter = "Account management")
+@FeatureSlice(chapter = "Account management")
 public class CurrentPeriodFeatureSlice implements Slice<ClosingTheBooks> {
 }

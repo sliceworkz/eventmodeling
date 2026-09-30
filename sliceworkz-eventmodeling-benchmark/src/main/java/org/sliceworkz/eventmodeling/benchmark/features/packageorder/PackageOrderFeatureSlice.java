@@ -22,11 +22,10 @@ import javax.sql.DataSource;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessing;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 import org.sliceworkz.eventstore.infra.postgres.DatabaseInitMode;
 
-@FeatureSlice(type=Type.AUTOMATION)
+@FeatureSlice
 public class PackageOrderFeatureSlice implements Slice<OrderProcessing>{
 
 	@Override

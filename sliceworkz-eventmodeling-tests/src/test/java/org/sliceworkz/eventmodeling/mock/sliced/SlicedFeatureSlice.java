@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.mock.sliced;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
-import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
@@ -28,7 +27,7 @@ import org.sliceworkz.eventmodeling.slices.Slice;
  * {@code BoundedContextEvent}s. {@link SlicedCommand} lives in the same package and is therefore
  * attributed to this slice; it is also declared below, so the slice announces it before it runs.
  */
-@FeatureSlice(type = Type.STATE_CHANGE, context = "mock", chapter = "Sliced", tags = {"unit-test"})
+@FeatureSlice(chapter = "Sliced", tags = {"unit-test"})
 public class SlicedFeatureSlice implements Slice<Mock> {
 
 	@Override

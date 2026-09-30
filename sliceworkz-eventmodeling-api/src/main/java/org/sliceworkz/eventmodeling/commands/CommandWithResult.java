@@ -35,7 +35,7 @@ package org.sliceworkz.eventmodeling.commands;
 public interface CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> {
 
 	default String commandName ( ) {
-		return AbstractCommand.commandNameOf(this.getClass());
+		return Command.commandNameOf(this.getClass());
 	}
 
 	RESPONSE_TYPE execute ( CommandContext<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> context );

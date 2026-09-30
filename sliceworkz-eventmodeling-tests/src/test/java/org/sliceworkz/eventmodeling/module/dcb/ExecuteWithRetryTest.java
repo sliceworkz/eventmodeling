@@ -41,8 +41,6 @@ import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
-import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
 import org.sliceworkz.eventmodeling.commands.RetryPolicy;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -51,7 +49,6 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -205,16 +202,6 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		}
 	}
 
-	static class UnkeyedOutboundCommand implements OutboundCommand<MockDomainEvent, MockOutboundEvent> {
-		final AtomicInteger attempts = new AtomicInteger();
-
-		@Override
-		public void execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
-			attempts.incrementAndGet();
-			context.noDecisionModels().raiseEvent(new SomeOutboundEvent("v1"), Tags.none());
-		}
-	}
-
 	// ── tests ───────────────────────────────────────────────────────────────
 
 	@Test
@@ -320,27 +307,6 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		assertEquals("done", result.response());
 		assertTrue(result.eventReference().isPresent());
 		assertEquals(2, command.attempts.get());
-	}
-
-	@Test
-	void anOutboundCommandsGuardFailureIsNeverRetried() {
-		Mock domain = buildDomain();
-		UnkeyedOutboundCommand command = new UnkeyedOutboundCommand();
-
-		// the missing-key guard is an IllegalStateException, not a conflict, so it propagates at once
-		assertThrows(IllegalStateException.class, () -> domain.executeWithRetry(command, RetryPolicy.of(5)));
-		assertEquals(1, command.attempts.get());
-	}
-
-	@Test
-	void anOutboundCommandExecutesThroughTheRetryTwin() {
-		Mock domain = buildDomain();
-		UnkeyedOutboundCommand command = new UnkeyedOutboundCommand();
-
-		Optional<EventReference> reference = domain.executeWithRetry(command, "external/1", RetryPolicy.of(3));
-
-		assertTrue(reference.isPresent());
-		assertEquals(1, command.attempts.get());
 	}
 
 }

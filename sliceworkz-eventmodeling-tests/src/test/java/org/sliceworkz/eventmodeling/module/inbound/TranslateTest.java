@@ -18,9 +18,11 @@
 package org.sliceworkz.eventmodeling.module.inbound;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
+import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.inbound.NoTranslatorRegisteredException;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
@@ -68,6 +71,27 @@ public class TranslateTest extends AbstractMockDomainTest {
 		List<MockDomainEvent> domainEvents = domainStream().query(EventQuery.matchAll()).stream().map(Event::data).toList();
 		assertEquals(domainBefore + 1, domainEvents.size());
 		assertEquals(new FirstDomainEvent("hello"), domainEvents.get(domainEvents.size() - 1));
+	}
+
+	/**
+	 * The interactive path stores nothing, yet the translator is handed the {@code Event} every component is
+	 * handed: the caller's tracing on its tags, and a reference with an id of its own to key what it raises.
+	 */
+	@Test
+	void anInteractivelyTranslatedEventCarriesTheCallersFlowAndAnIdOfItsOwn ( ) {
+		CapturingTranslator translator = new CapturingTranslator();
+		Mock ctx = buildBoundedContext(baseBuilder().translator(translator));
+
+		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("partner").correlationId("flow-7");
+		ctx.translate(new SomeInboundEvent("hello"), tracing);
+		ctx.translate(new SomeInboundEvent("again"), tracing);
+
+		assertEquals(2, translator.handed.size());
+		Event<MockInboundEvent> first = translator.handed.get(0);
+		assertEquals(new SomeInboundEvent("hello"), first.data());
+		assertEquals("flow-7", Tracing.readFrom(first).correlationId());
+		assertEquals("partner", Tracing.readFrom(first).actor());
+		assertNotEquals(first.reference().id(), translator.handed.get(1).reference().id(), "each translation gets an id of its own");
 	}
 
 	@Test
@@ -118,6 +142,21 @@ public class TranslateTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"));
 	}
 
+	static class CapturingTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
+
+		final List<Event<MockInboundEvent>> handed = new ArrayList<>();
+
+		@Override
+		public EventQuery eventQuery ( ) {
+			return EventQuery.forEvents(EventTypesFilter.of(SomeInboundEvent.class), Tags.none());
+		}
+
+		@Override
+		public void translate ( Event<MockInboundEvent> event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+			handed.add(event);
+		}
+	}
+
 	static class SomeInboundTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
 
 		@Override
@@ -126,8 +165,8 @@ public class TranslateTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
-			switch ( event ) {
+		public void translate ( Event<MockInboundEvent> event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+			switch ( event.data() ) {
 				case SomeInboundEvent e -> context.event(new FirstDomainEvent(e.someValue()));
 				default -> { }
 			}
@@ -143,7 +182,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+		public void translate ( Event<MockInboundEvent> event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
 			// no-op for the test
 		}
 	}

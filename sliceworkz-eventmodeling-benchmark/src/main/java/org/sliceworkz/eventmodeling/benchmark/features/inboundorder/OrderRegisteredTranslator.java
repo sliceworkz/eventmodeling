@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.benchmark.features.inboundorder;
 
+import org.sliceworkz.eventstore.events.Event;
+
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderReceived;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingInboundEvent;
@@ -35,8 +37,8 @@ public class OrderRegisteredTranslator implements Translator<OrderProcessingInbo
 	}
 
 	@Override
-	public void translate(OrderProcessingInboundEvent event, TranslatorContext<OrderProcessingInboundEvent,OrderProcessingDomainEvent> context) {
-		switch(event) {
+	public void translate ( Event<OrderProcessingInboundEvent> event, TranslatorContext<OrderProcessingInboundEvent,OrderProcessingDomainEvent> context) {
+		switch ( event.data() ) {
 			case OrderRegistered or -> context.event(new OrderReceived(or.orderId()));
 			default -> { }
 		}

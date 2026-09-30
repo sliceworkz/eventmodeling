@@ -164,10 +164,9 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 	}
 
 	/**
-	 * Appends straight to the outbound stream. The framework's own writers go through an
-	 * {@code OutboundCommand}, but the dispatcher's processor subscribes to the stream and cares only
-	 * that events arrive on it — and this keeps the test about the dispatcher rather than about
-	 * command plumbing.
+	 * Appends straight to the outbound stream. In production a publisher writes it, but the dispatcher's
+	 * processor subscribes to the stream and cares only that events arrive on it — and this keeps the
+	 * test about the dispatcher rather than about publication.
 	 */
 	private void appendOutbound ( MockOutboundEvent event ) {
 		EventStream<MockOutboundEvent> outboundStream = EventStore.on(eventStorage()).build()

@@ -50,16 +50,6 @@ public sealed interface Observation<O extends Outcome> {
 	String boundedContext ( );
 
 	/**
-	 * Which stream a command appends to.
-	 */
-	enum Target {
-		/** A {@code Command} or {@code CommandWithResult}: the domain stream. */
-		DOMAIN,
-		/** An {@code OutboundCommand}: the outbound stream. */
-		OUTBOUND
-	}
-
-	/**
 	 * Who holds a snapshot.
 	 */
 	enum SnapshotOwner {
@@ -76,10 +66,9 @@ public sealed interface Observation<O extends Outcome> {
 	 * @param boundedContext the bounded context
 	 * @param command the command's name
 	 * @param commandClass the command's class
-	 * @param target the stream the command appends to
 	 * @param tracing the caller's tracing, the command named on it
 	 */
-	record CommandExecution ( String boundedContext, String command, Class<?> commandClass, Target target, Tracing tracing ) implements Observation<Outcome.CommandOutcome> { }
+	record CommandExecution ( String boundedContext, String command, Class<?> commandClass, Tracing tracing ) implements Observation<Outcome.CommandOutcome> { }
 
 	/**
 	 * One evaluation of a command: run as an execution would be, its business rules judged, nothing appended.
@@ -152,6 +141,25 @@ public sealed interface Observation<O extends Outcome> {
 	}
 
 	/**
+	 * One publisher handed one domain event: the outbound events it maps the event into, appended to the
+	 * outbound stream. The live read models it reads are {@link LiveModelRead}s nested in this scope.
+	 *
+	 * @param boundedContext the bounded context
+	 * @param publisher the publisher's name
+	 * @param event the domain event published
+	 */
+	record Publication ( String boundedContext, String publisher, Event<?> event ) implements Observation<Outcome.PublicationResult> {
+
+		/**
+		 * @return the type of the domain event published
+		 */
+		public EventType eventType ( ) {
+			return event.type();
+		}
+
+	}
+
+	/**
 	 * One batch of an eventually consistent read model's projector: from the batch starting to it being
 	 * committed or cancelled. Each event handed to the read model is a {@link ReadModelUpdate} nested in
 	 * this scope.
@@ -190,9 +198,11 @@ public sealed interface Observation<O extends Outcome> {
 	 * @param readModel the read model's name, its class's simple name
 	 * @param readModelClass the read model's class
 	 * @param unbounded whether it is read across every stream in the storage rather than this context's own
+	 * @param until the last event the read includes, for a read bounded at a moment ({@code null} when it
+	 *              reads everything there is)
 	 * @param tracing the caller's tracing
 	 */
-	record LiveModelRead ( String boundedContext, String readModel, Class<?> readModelClass, boolean unbounded, Tracing tracing ) implements Observation<Outcome.LiveModelProjected> { }
+	record LiveModelRead ( String boundedContext, String readModel, Class<?> readModelClass, boolean unbounded, EventReference until, Tracing tracing ) implements Observation<Outcome.LiveModelProjected> { }
 
 	/**
 	 * A load of an aggregate: constructed, restored from a snapshot if it has one, and brought up to date

@@ -40,6 +40,8 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
+import org.sliceworkz.eventmodeling.outbound.Publisher;
+import org.sliceworkz.eventmodeling.outbound.PublisherContext;
 import org.sliceworkz.eventmodeling.readmodels.PublishingReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
@@ -119,6 +121,16 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
 				baseBuilder().dispatcher(new ForeignDispatcher()).build());
 		assertTrue(e.getMessage().contains("dispatcher ForeignDispatcher (its outbound event type is "
+				+ ForeignOutboundEvent.class.getName()), e.getMessage());
+	}
+
+	@Test
+	void aPublisherOfAnotherContextIsRejected ( ) {
+		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
+				baseBuilder().publisher(new ForeignPublisher()).build());
+		assertTrue(e.getMessage().contains("publisher ForeignPublisher (its domain event type is "
+				+ ForeignDomainEvent.class.getName()), e.getMessage());
+		assertTrue(e.getMessage().contains("publisher ForeignPublisher (its outbound event type is "
 				+ ForeignOutboundEvent.class.getName()), e.getMessage());
 	}
 
@@ -215,7 +227,12 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 
 	public static class ForeignTranslator implements Translator<ForeignInboundEvent,ForeignDomainEvent> {
 		@Override public EventQuery eventQuery ( ) { return EventQuery.matchAll(); }
-		@Override public void translate ( ForeignInboundEvent event, TranslatorContext<ForeignInboundEvent,ForeignDomainEvent> context ) { }
+		@Override public void translate ( Event<ForeignInboundEvent> event, TranslatorContext<ForeignInboundEvent,ForeignDomainEvent> context ) { }
+	}
+
+	public static class ForeignPublisher implements Publisher<ForeignDomainEvent,ForeignOutboundEvent> {
+		@Override public EventQuery eventQuery ( ) { return EventQuery.matchAll(); }
+		@Override public void publish ( Event<ForeignDomainEvent> event, PublisherContext<ForeignDomainEvent,ForeignOutboundEvent> context ) { }
 	}
 
 	public static class ForeignDispatcher implements Dispatcher<ForeignOutboundEvent> {

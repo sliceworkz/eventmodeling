@@ -225,8 +225,8 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
-			switch ( event ) {
+		public void translate ( Event<MockInboundEvent> event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+			switch ( event.data() ) {
 				case SomeInboundEvent e -> context.event(new FirstDomainEvent(e.someValue()));
 				default -> { }
 			}

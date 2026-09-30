@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.module.inbound;
 
 import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
 import org.sliceworkz.eventmodeling.ports.PortCaller;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -47,6 +48,7 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorNames;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
@@ -59,6 +61,11 @@ import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
+
+	// the position and transaction of the reference an interactively translated inbound event carries: it is
+	// stored nowhere, and an EventReference refuses a position below 1
+	private static final long UNSTORED_POSITION = 1;
+	private static final long UNSTORED_TX = 0;
 
 	private EventStream<INBOUND_EVENT_TYPE> inboundEventStream;
 
@@ -220,7 +227,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 			}
 			TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> tracedContext = new TracingTranslatorContext<>(context.get(), eventTracing);
 
-			invoke(translator, translatorName, eventWithMeta.type(), eventTracing, () -> translator.translate(eventWithMeta.data(), tracedContext));
+			invoke(translator, translatorName, eventWithMeta.type(), eventTracing, () -> translator.translate(eventWithMeta, tracedContext));
 		}
 
 		@Override
@@ -283,9 +290,17 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		CapturingTranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> capturingContext =
 				new CapturingTranslatorContext<>(new TracingTranslatorContext<>(context, tracing));
 
+		// The inbound event is not stored on this path, so it has no reference of its own. The translator is
+		// handed the Event every other component is handed nonetheless -- the caller's tracing as its tags, so
+		// Tracing.readFrom(event) answers the flow it belongs to -- with a freshly minted id, fit to key what
+		// the translation raises, under a position that names no stored event.
+		Event<INBOUND_EVENT_TYPE> unstored = new Event<>(inboundEventStream.id(), eventType, eventType,
+				EventReference.of(EventId.create(), UNSTORED_POSITION, UNSTORED_TX), event,
+				tracing.storeOn(Event.of(event, Tags.none())).tags(), Instant.now());
+
 		for ( Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator : matching ) {
 			String translatorName = translator.getClass().getSimpleName();
-			invoke(translator, translatorName, eventType, tracing, () -> translator.translate(event, capturingContext));
+			invoke(translator, translatorName, eventType, tracing, () -> translator.translate(unstored, capturingContext));
 		}
 
 		return capturingContext.references();

@@ -480,8 +480,8 @@ public sealed interface BoundedContextEvent {
 	 * Emitted when a dispatcher's processor starts reading the outbound stream: once per dispatcher
 	 * when the bounded context starts, and again when a stopped one is restarted. The dispatcher
 	 * counterpart of {@link TranslatorStarted}, and the more important of the two to watch — a
-	 * dispatcher is the only thing publishing the outbound stream, so its processor being down is
-	 * deployment-wide silence toward an external system.
+	 * dispatcher is the only thing sending the outbound stream off the store, so its processor being
+	 * down is deployment-wide silence toward an external system.
 	 *
 	 * @param boundedContext the context the dispatcher belongs to
 	 * @param dispatcher the dispatcher's name, the same one its bookmark and metric tags use
@@ -527,6 +527,46 @@ public sealed interface BoundedContextEvent {
 			this(boundedContext, dispatcher, failure, failedAt, slice, ProcessorStopReason.FAILURE);
 		}
 	}
+
+	/**
+	 * Emitted when a publisher's processor starts reading the domain stream: once per publisher when the
+	 * bounded context starts on an instance deploying automations, and again when a stopped one is
+	 * restarted. The publisher counterpart of {@link DispatcherStarted}.
+	 *
+	 * @param boundedContext the context the publisher belongs to
+	 * @param publisher the publisher's name, the same one its bookmark uses
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record PublisherStarted ( String boundedContext, String publisher, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a publisher's processor completes a run that failed — running, retrying with backoff,
+	 * and getting nowhere, which for a publisher means domain events are accumulating unpublished. Once per
+	 * fruitless retry round, as {@link DispatcherFailed}; the retry skips no domain event.
+	 *
+	 * @param boundedContext the context the publisher belongs to
+	 * @param publisher the publisher's name
+	 * @param failure what escaped the publication on this round
+	 * @param failedAt the last domain event the publisher handled, as on {@link ReadModelProjectorStopped}
+	 * @param consecutiveFailedRuns how many runs in a row have now failed, 1 for the first
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record PublisherFailed ( String boundedContext, String publisher, Failure failure, EventReference failedAt, int consecutiveFailedRuns, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a publisher's processor has retired on a permanent failure, or an operator stopped it,
+	 * and will publish nothing further until something restarts it. Nothing is lost: the domain events sit
+	 * behind the publisher's bookmark and are published from there once it is restarted. Not emitted at
+	 * shutdown, the shared asymmetry.
+	 *
+	 * @param boundedContext the context the publisher belongs to
+	 * @param publisher the publisher's name
+	 * @param failure what escaped the publication; {@code null} for an operator's stop
+	 * @param failedAt the last domain event the publisher handled, as on {@link ReadModelProjectorStopped}
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 * @param reason whether a permanent failure retired the publisher or an operator stopped it
+	 */
+	record PublisherStopped ( String boundedContext, String publisher, Failure failure, EventReference failedAt, FeatureSlice slice, ProcessorStopReason reason ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted after an automation has processed a batch of todo items.
@@ -857,6 +897,7 @@ public sealed interface BoundedContextEvent {
 		AUTOMATION,
 		TRANSLATOR,
 		DISPATCHER,
+		PUBLISHER,
 		AGGREGATE
 	}
 

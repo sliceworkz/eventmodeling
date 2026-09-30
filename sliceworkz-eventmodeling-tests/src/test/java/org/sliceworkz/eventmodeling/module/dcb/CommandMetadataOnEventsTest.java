@@ -31,8 +31,6 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
-import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -107,17 +105,6 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		var events = domainEvents();
 		assertEquals(1, events.size());
 		assertEquals("RaiseDomainCommandWithResult", events.get(0).tags().tag(X_COMMAND).get().value());
-	}
-
-	@Test
-	void outboundCommandFlavor_addsXCommandTag() {
-		Mock domain = buildDomain();
-
-		domain.execute(new RaiseOutboundCommand("v1"));
-
-		var events = outboundEvents();
-		assertEquals(1, events.size());
-		assertEquals("RaiseOutbound", events.get(0).tags().tag(X_COMMAND).get().value());
 	}
 
 	@Test
@@ -227,21 +214,6 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		@Override
 		public void execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			context.noDecisionModels().raiseEvent(new FirstDomainEvent(value), Tags.none());
-		}
-	}
-
-	static class RaiseOutboundCommand implements OutboundCommand<MockDomainEvent, MockOutboundEvent> {
-
-		private final String value;
-
-		RaiseOutboundCommand(String value) {
-			this.value = value;
-		}
-
-		@Override
-		public void execute(OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context) {
-			// keyed per event: an outbound event without an idempotency key is rejected
-			context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none(), "meta/" + value);
 		}
 	}
 

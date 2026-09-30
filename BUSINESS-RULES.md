@@ -125,8 +125,9 @@ public void execute ( CommandContext<BankingEvent, BankingEvent> context ) {
 - **Check everything before reading `ruleViolations()`.** The events must record the judgement the
   execution is made on, so a `check` or an `overridableWhen` after that read is refused with an
   `IllegalStateException` — a bug, reported as `CommandFailed`.
-- **Only domain commands check rules.** `check` is on `CommandContext`, not on the narrower context an
-  `OutboundCommand` gets: an outbound command has no decision models, so nothing to judge a rule on.
+- **Only commands check rules.** `check` is on `CommandContext`: a rule is judged on decision models, and
+  a command is where they are read. A publisher, an automation or a translator decides nothing of its own
+  — whatever it needs decided, it has a command decide.
 
 ## 5. Who may override: the command decides
 

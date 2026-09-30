@@ -46,7 +46,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Pins that a live read model read is typed by the class it is asked for: {@code read(AccountDetails.class,
  * id)} is an {@code AccountDetails} on {@link ReadModelCapability}, on {@link UnboundedReadModelCapability}
- * and on the command's {@code OutboundCommandContext} alike, and assigning it to anything else is a compile
+ * and on the command's {@code CommandContext} alike, and assigning it to anything else is a compile
  * error. And that the class argument stays constrained to the read models of the context's own event type,
  * as it was before the result was typed.
  * <p>
@@ -59,7 +59,7 @@ import org.junit.jupiter.api.io.TempDir;
 public class ReadModelCapabilityTypeParameterTest {
 
 	private static final String PROBE_PRELUDE = """
-			import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
+			import org.sliceworkz.eventmodeling.commands.CommandContext;
 			import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 			import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
 			import org.sliceworkz.eventmodeling.readmodels.UnboundedReadModelCapability;
@@ -75,7 +75,7 @@ public class ReadModelCapabilityTypeParameterTest {
 
 				void probe ( ReadModelCapability<BankingEvent> context,
 						UnboundedReadModelCapability<BankingEvent> unbounded,
-						OutboundCommandContext<BankingEvent, Object> command,
+						CommandContext<BankingEvent, Object> command,
 						Class<? extends ReadModel<BankingEvent>> someReadModelClass ) {
 			""";
 

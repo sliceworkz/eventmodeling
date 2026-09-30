@@ -15,28 +15,31 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.benchmark.features.dispatchorder;
+package org.sliceworkz.eventmodeling.mock.publishing;
 
-import javax.sql.DataSource;
-
-import org.sliceworkz.eventmodeling.benchmark.OrderProcessing;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Slice;
-import org.sliceworkz.eventstore.infra.postgres.DatabaseInitMode;
 
-@FeatureSlice
-public class DispatchOrderFeatureSlice implements Slice<OrderProcessing> {
+/**
+ * A slice the way a publication is meant to be registered: the read model live from
+ * {@code configureQuery} for the endpoint that reads it, and again from {@code configureAutomation} beside
+ * the publisher that reads it.
+ */
+@FeatureSlice(chapter = "Publishing")
+public class PublishingFeatureSlice implements Slice<Mock> {
 
 	@Override
-	public void configureAutomation(BoundedContextBuilder<OrderProcessing> builder) {
-		var ordersReadyToDispatch = new OrdersReadyToDispatch(builder.port(DataSource.class));
-		if ( builder.port(DatabaseInitMode.class) == DatabaseInitMode.RECREATE ) {
-			ordersReadyToDispatch.initialize();
-		}
-		builder.readmodel(ordersReadyToDispatch).eventuallyConsistent();
-		builder.automation(new DispatchOrderAutomation(ordersReadyToDispatch));
-		builder.publisher(new OrderDispatchedPublisher());
+	public void configureQuery ( BoundedContextBuilder<Mock> builder ) {
+		builder.readmodel(ItemReadModel.class).live();
+	}
+
+	@Override
+	public void configureAutomation ( BoundedContextBuilder<Mock> builder ) {
+		builder
+			.readmodel(ItemReadModel.class).live()
+			.publisher(new ItemPublisher());
 	}
 
 }

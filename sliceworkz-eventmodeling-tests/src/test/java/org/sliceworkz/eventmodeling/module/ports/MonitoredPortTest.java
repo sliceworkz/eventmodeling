@@ -934,8 +934,8 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
-			if ( event instanceof SomeInboundEvent some ) {
+		public void translate ( Event<MockInboundEvent> event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+			if ( event.data() instanceof SomeInboundEvent some ) {
 				context.event(new SecondDomainEvent(gateway.answer(some.someValue())));
 			}
 		}

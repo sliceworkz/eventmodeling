@@ -30,7 +30,7 @@ import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundCommand;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockPublisher;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
@@ -62,16 +62,16 @@ public class ProjectorBatchNamingTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"))
 				.eventStoreObserver(storeObserver);
 		builder.readmodel(new MockReadModel("balances", ReadModelStorage.EPHEMERAL)).eventuallyConsistent();
+		builder.publisher(new MockPublisher());
 		builder.dispatcher(new PublishingDispatcher());
 		Mock domain = buildBoundedContext(builder);
 
 		domain.event(new FirstDomainEvent("projected"));
-		domain.execute(new MockOutboundCommand("published"), "outbound/1");
 
-		waitBecauseOfEventualConsistency(() -> projectionNames().containsAll(Set.of("balances", "PublishingDispatcher")));
+		waitBecauseOfEventualConsistency(() -> projectionNames().containsAll(Set.of("balances", "MockPublisher", "PublishingDispatcher")));
 
 		Set<String> names = projectionNames();
-		assertTrue(names.containsAll(Set.of("balances", "PublishingDispatcher")), "each processor under its component's name: " + names);
+		assertTrue(names.containsAll(Set.of("balances", "MockPublisher", "PublishingDispatcher")), "each processor under its component's name: " + names);
 		assertFalse(names.stream().anyMatch(name -> name.endsWith("Adapter")), "no processor under its adapter's name: " + names);
 	}
 

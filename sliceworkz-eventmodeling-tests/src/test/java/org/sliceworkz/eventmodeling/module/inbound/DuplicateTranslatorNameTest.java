@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.inbound;
 
+import org.sliceworkz.eventstore.events.Event;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -86,7 +88,7 @@ public class DuplicateTranslatorNameTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+		public void translate ( Event<MockInboundEvent> event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
 			// no-op for the test
 		}
 	}

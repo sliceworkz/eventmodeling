@@ -18,27 +18,32 @@
 package org.sliceworkz.eventmodeling.benchmark.features.dispatchorder;
 
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent;
+import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingDomainEvent.OrderDispatched;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent.OrderProcessed;
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
-import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
+import org.sliceworkz.eventmodeling.outbound.Publisher;
+import org.sliceworkz.eventmodeling.outbound.PublisherContext;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventQuery;
 
-public class RegisterOrderDispatched implements OutboundCommand<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> {
+/**
+ * Tells the world an order is processed, once the automation has recorded that it was dispatched: the
+ * domain event is the fact, and this maps it into the published language. Keyed by the domain event, so a
+ * redelivery publishes nothing twice.
+ */
+public class OrderDispatchedPublisher implements Publisher<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> {
 
-	private long orderId;
-
-	public RegisterOrderDispatched ( long orderId ) {
-		this.orderId = orderId;
+	@Override
+	public EventQuery eventQuery ( ) {
+		return EventQuery.forTypes(OrderDispatched.class);
 	}
 
 	@Override
-	public void execute(
-			OutboundCommandContext<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> context) {
-		// the idempotency key comes from the caller — publishAndRecord derives it from the todo item
-		context.noDecisionModels()
-				.requireIdempotencyKey()
-				.raiseEvent(new OrderProcessed(orderId), Tags.none());
+	public void publish ( Event<OrderProcessingDomainEvent> event, PublisherContext<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> context ) {
+		if ( event.data() instanceof OrderDispatched dispatched ) {
+			context.publish(new OrderProcessed(dispatched.orderId()), Tags.none());
+		}
 	}
 
 }

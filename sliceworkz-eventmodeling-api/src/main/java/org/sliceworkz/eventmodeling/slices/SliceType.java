@@ -44,8 +44,12 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.SliceMemb
  * <li>an automation is a command raised from a read model — the to-do list it works, which it counts
  *     as whether or not the same slice registers it</li>
  * <li>a translator is an inbound event and the command it is turned into</li>
- * <li>a dispatcher is an outbound event</li>
+ * <li>a publisher is a domain event mapped into an outbound event, and a dispatcher an outbound event</li>
  * </ul>
+ * A slice that publishes is therefore of the type its other parts give it: a state change or an automation
+ * with an integration event linked to it stays one. A slice that <em>only</em> publishes — no command, no
+ * inbound event, the domain events it publishes for and the outbound event — is an automation: the
+ * separate publishing slice several slices share when they publish the same integration event.
  * What the code cannot say is which events a command raises, so every command is taken to raise one.
  * <p>
  * Two consequences worth knowing:
@@ -75,7 +79,10 @@ public enum SliceType {
 	/** A read model projected from events: events → read model → UI/API. */
 	STATE_READ,
 
-	/** A processor working a to-do list by issuing commands: events → to-do list → processor → command → event. */
+	/**
+	 * A processor working a to-do list by issuing commands: events → to-do list → processor → command → event.
+	 * Also a slice that only publishes: domain events mapped into an outbound event, with no command of its own.
+	 */
 	AUTOMATION,
 
 	/** An external event turned into a command: inbound event → processor → command → event. */
@@ -93,7 +100,7 @@ public enum SliceType {
 	 * @param members what the slice registered; {@code null} or empty is {@link #UNDEFINED}
 	 */
 	public static SliceType of ( Collection<SliceMember> members ) {
-		int commands = 0, readModels = 0, inbound = 0, outbound = 0;
+		int commands = 0, readModels = 0, domainEvents = 0, inbound = 0, outbound = 0;
 		if ( members != null ) {
 			for ( SliceMember member : members ) {
 				MemberKind kind = member.kind();
@@ -101,15 +108,18 @@ public enum SliceType {
 					continue;
 				}
 				switch ( kind ) {
-					case COMMAND, AGGREGATE -> commands++;
+					case COMMAND, AGGREGATE -> { commands++; domainEvents++; }
 					case READ_MODEL -> readModels++;
-					case AUTOMATION -> { commands++; readModels++; }
-					case TRANSLATOR -> { commands++; inbound++; }
+					case AUTOMATION -> { commands++; domainEvents++; readModels++; }
+					case TRANSLATOR -> { commands++; domainEvents++; inbound++; }
+					// a publisher is what the model shows as an integration event linked to the slice whose
+					// domain event it publishes: that domain event and an outbound event, whatever else the slice is
+					case PUBLISHER -> { domainEvents++; outbound++; }
 					case DISPATCHER -> outbound++;
 				}
 			}
 		}
-		return derive(commands, readModels, commands, inbound, outbound);
+		return derive(commands, readModels, domainEvents, inbound, outbound);
 	}
 
 	/**
@@ -126,12 +136,15 @@ public enum SliceType {
 		boolean stateRead = commands == 0 && readModels >= 1 && inboundEvents == 0 && outboundEvents == 0;
 		boolean automation = commands >= 1 && readModels >= 1 && inboundEvents == 0;
 		boolean translation = commands >= 1 && readModels == 0 && inboundEvents >= 1 && outboundEvents == 0;
+		// a slice that only publishes: domain events mapped into an outbound event, reading read models or not,
+		// with no command of its own -- the publishing slice several slices share for one integration event
+		boolean publication = commands == 0 && producedDomainEvents >= 1 && inboundEvents == 0 && outboundEvents >= 1;
 
 		int matchCount = 0;
 		SliceType matched = UNCLEAR;
 		if ( stateChange ) { matchCount++; matched = STATE_CHANGE; }
 		if ( stateRead ) { matchCount++; matched = STATE_READ; }
-		if ( automation ) { matchCount++; matched = AUTOMATION; }
+		if ( automation || publication ) { matchCount++; matched = AUTOMATION; }
 		if ( translation ) { matchCount++; matched = TRANSLATION; }
 
 		return matchCount == 1 ? matched : UNCLEAR;

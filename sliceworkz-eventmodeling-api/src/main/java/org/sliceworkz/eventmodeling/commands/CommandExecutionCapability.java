@@ -24,7 +24,7 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
-public interface CommandExecutionCapability<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
+public interface CommandExecutionCapability<DOMAIN_EVENT_TYPE> {
 
 	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command );
 
@@ -33,14 +33,6 @@ public interface CommandExecutionCapability<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TY
 	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey );
 
 	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing );
-
-	Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command );
-
-	Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, Tracing tracing );
-
-	Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey );
-
-	Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing );
 
 	<RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command );
 
@@ -147,43 +139,7 @@ public interface CommandExecutionCapability<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TY
 		return retryingOnConflict(retryPolicy, () -> execute(command, idempotencyKey, tracing));
 	}
 
-	/**
-	 * Executes the outbound command with {@link RetryPolicy#DEFAULT}, re-executing it on an
-	 * {@link OptimisticLockingException}. See {@link #executeWithRetry(Command, RetryPolicy)}.
-	 */
-	default Optional<EventReference> executeWithRetry ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command ) {
-		return executeWithRetry(command, RetryPolicy.DEFAULT);
-	}
-
-	/**
-	 * See {@link #executeWithRetry(Command, RetryPolicy)}.
-	 */
-	default Optional<EventReference> executeWithRetry ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, RetryPolicy retryPolicy ) {
-		return retryingOnConflict(retryPolicy, () -> execute(command));
-	}
-
-	/**
-	 * See {@link #executeWithRetry(Command, RetryPolicy)}.
-	 */
-	default Optional<EventReference> executeWithRetry ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, Tracing tracing, RetryPolicy retryPolicy ) {
-		return retryingOnConflict(retryPolicy, () -> execute(command, tracing));
-	}
-
-	/**
-	 * See {@link #executeWithRetry(Command, String, RetryPolicy)}.
-	 */
-	default Optional<EventReference> executeWithRetry ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey, RetryPolicy retryPolicy ) {
-		return retryingOnConflict(retryPolicy, () -> execute(command, idempotencyKey));
-	}
-
-	/**
-	 * See {@link #executeWithRetry(Command, String, RetryPolicy)}.
-	 */
-	default Optional<EventReference> executeWithRetry ( OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing, RetryPolicy retryPolicy ) {
-		return retryingOnConflict(retryPolicy, () -> execute(command, idempotencyKey, tracing));
-	}
-
-	/**
+     	/**
 	 * Executes the command with {@link RetryPolicy#DEFAULT}, re-executing it on an
 	 * {@link OptimisticLockingException}. See {@link #executeWithRetry(Command, RetryPolicy)}.
 	 */

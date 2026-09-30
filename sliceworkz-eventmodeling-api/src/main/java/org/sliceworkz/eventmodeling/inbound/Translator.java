@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.inbound;
 
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -45,11 +46,19 @@ public interface Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> {
 	 * Translates an inbound event into domain events or commands.
 	 * <p>
 	 * The translator processes the inbound event and uses the supplied context to execute
-	 * commands or provide domain events. Translation should be idempotent to handle retries.
+	 * commands or provide domain events. Translation should be idempotent to handle retries: derive an
+	 * idempotency key from {@code event.reference().id()} where a repeat would be wrong.
+	 * <p>
+	 * The inbound event is handed over as the {@link Event} it is, with its tags, timestamp and reference
+	 * beside its data — the same shape every other component of the framework is handed. An event that came
+	 * in through {@code incoming(...)} is the event stored on the inbound stream. One translated
+	 * interactively through {@code translate(...)} is not stored anywhere: its reference carries a freshly
+	 * minted id and a position that names no stored event, so it is fit to key what the translation raises
+	 * and for nothing else — compare nothing against it.
 	 *
 	 * @param event the inbound event to translate
 	 * @param context the translator context providing command execution and event capabilities
 	 */
-	void translate ( INBOUND_EVENT_TYPE event, TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> context );
+	void translate ( Event<INBOUND_EVENT_TYPE> event, TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> context );
 
 }

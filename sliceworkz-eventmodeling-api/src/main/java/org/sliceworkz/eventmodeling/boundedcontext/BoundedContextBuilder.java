@@ -23,15 +23,14 @@ import org.sliceworkz.eventmodeling.EventTypes; // retained for javadoc referenc
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
-import org.sliceworkz.eventmodeling.commands.AbstractCommand;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.management.ManagementInstruction;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
+import org.sliceworkz.eventmodeling.outbound.Publisher;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
@@ -202,8 +201,8 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	/**
 	 * This deployment's priority in leader election, default {@code 0}.
 	 * <p>
-	 * Leader-only processors — automations, SHARED read models' projectors, translators and
-	 * dispatchers — run on the single instance holding their lease. When a live contender with a
+	 * Leader-only processors — automations, SHARED read models' projectors, translators,
+	 * publishers and dispatchers — run on the single instance holding their lease. When a live contender with a
 	 * <b>strictly higher</b> priority appears, the current leader finishes its batch and hands the
 	 * lease over, so the preferred instance regains leadership when it comes back. Equal priorities
 	 * never preempt: whoever holds a lease keeps it, which is what keeps a symmetric deployment
@@ -311,8 +310,7 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * }</pre>
 	 * A command declared outside a slice's configuration belongs to no slice and is ignored.
 	 *
-	 * @param commandClasses the command classes; each must implement {@link AbstractCommand}
-	 *                       (so {@link Command} or {@link OutboundCommand}) or {@link CommandWithResult}
+	 * @param commandClasses the command classes; each must implement {@link Command} or {@link CommandWithResult}
 	 * @return this builder
 	 * @throws IllegalArgumentException if a class is {@code null} or is not a command
 	 */
@@ -377,7 +375,30 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	BoundedContextBuilder<C> translator(Class<? extends Translator<?,?>> translatorClass);
 
 	/**
-	 * Registers a dispatcher, the outbound stream's reader and the only thing publishing it onward.
+	 * Registers a publisher, which maps the domain events matching its query into outbound events.
+	 * <p>
+	 * A publisher is part of a slice's automation aspect: register it from
+	 * {@link org.sliceworkz.eventmodeling.slices.Slice#configureAutomation configureAutomation}, together
+	 * with the live read models it {@linkplain Publisher#reads() reads}, so it runs on the instances that
+	 * deploy automations and finds its read models there:
+	 * <pre>{@code
+	 * public void configureAutomation ( BoundedContextBuilder<Planning> builder ) {
+	 *     builder
+	 *         .readmodel(PlannedSessionReadModel.class).live()
+	 *         .publisher(new PlannedSessionPublisher())
+	 *         .dispatcher(new PlannedSessionPublishedDispatcher(builder.port(MessageBusPublisher.class)));
+	 * }
+	 * }</pre>
+	 *
+	 * @throws IllegalArgumentException from {@link #build()} when it is registered while a slice configures
+	 *         another aspect than automation, when a read model it declares is not registered {@code .live()}
+	 *         on this instance, when its name cannot key a bookmark, or when its declared domain or outbound
+	 *         event type is unrelated to this context's — see the note on wildcard-typed registration above
+	 */
+	BoundedContextBuilder<C> publisher(Publisher<?,?> publisher);
+
+	/**
+	 * Registers a dispatcher, the outbound stream's reader and the only thing sending it off the store.
 	 *
 	 * @throws IllegalArgumentException from {@link #build()} when its declared outbound event type is
 	 *         unrelated to this context's — see the note on wildcard-typed registration above

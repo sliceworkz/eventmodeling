@@ -47,6 +47,12 @@ bounded, and step 2 is for you.
 
 *Costs:* one query pass per read, proportional to the matching events.
 
+**A publisher reads live models as of a moment.** A `Publisher` mapping a domain event into outbound
+events reads through `readAsOfEvent`, `readAsOf(ref)` or `readLatest` — each projected up to an event and
+nothing after it. A read bounded at an event starts from no seed and from no snapshot past its
+boundary, so it costs the whole replay this step describes: keep a read model a publisher reads as of an
+event bounded by design, the size of a decision model.
+
 ## 2. Before escalating, bound the replay
 
 Two ways, both cheaper than anything below:

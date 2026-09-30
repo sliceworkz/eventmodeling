@@ -33,7 +33,10 @@ public enum ProcessorKind {
 	/** A translator's processor, reading the inbound stream. */
 	TRANSLATOR,
 
-	/** A dispatcher's processor, publishing the outbound stream. */
-	DISPATCHER
+	/** A dispatcher's processor, sending the outbound stream to the outside world. */
+	DISPATCHER,
+
+	/** A publisher's processor, mapping the domain stream into the outbound stream. */
+	PUBLISHER
 
 }

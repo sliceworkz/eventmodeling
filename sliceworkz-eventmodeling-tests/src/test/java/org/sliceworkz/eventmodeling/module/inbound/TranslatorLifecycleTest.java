@@ -185,11 +185,11 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+		public void translate ( Event<MockInboundEvent> event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
 			if ( failing.get() ) {
 				throw new IllegalStateException("this translator's dependency is down");
 			}
-			switch ( event ) {
+			switch ( event.data() ) {
 				case SomeInboundEvent e -> context.event(new FirstDomainEvent(e.someValue()), "translated-" + e.someValue());
 				default -> { } // this test only ever sends SomeInboundEvent
 			}

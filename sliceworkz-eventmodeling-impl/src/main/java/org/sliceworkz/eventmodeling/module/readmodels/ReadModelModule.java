@@ -121,9 +121,21 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		for ( LMSI spec : liveModelSpecs ) {
 			@SuppressWarnings("unchecked")
 			Class<? extends ReadModel<DOMAIN_EVENT_TYPE>> readModelClass = (Class<? extends ReadModel<DOMAIN_EVENT_TYPE>>) (Class<?>) spec.readModelClass();
-			if ( this.liveModels.containsKey(readModelClass) ) {
-				LOGGER.error("multiple live readmodels of type '%s' registered".formatted(readModelClass));
-				throw new IllegalArgumentException("duplicate live readmodel %s".formatted(readModelClass));
+			// One slice may register the same live read model from two aspects -- configureQuery for the
+			// endpoint that reads it, configureAutomation for the publisher that reads it -- and an instance
+			// deploying both runs both registrations. A live model is projected per read and holds nothing
+			// between reads, so two registrations that agree are one; two that disagree on how it is
+			// snapshotted would have to pick one, and are refused instead.
+			LiveModelInfo<DOMAIN_EVENT_TYPE> registered = this.liveModels.get(readModelClass);
+			if ( registered != null ) {
+				if ( registered.snapshotStorage() == spec.snapshotStorage()
+						&& registered.readSnapshots() == spec.readSnapshots()
+						&& registered.writeSnapshots() == spec.writeSnapshots()
+						&& registered.snapshotEventCountThreshold() == spec.snapshotEventCountThreshold() ) {
+					continue;
+				}
+				LOGGER.error("live readmodel '%s' registered twice, with different snapshot settings".formatted(readModelClass));
+				throw new IllegalArgumentException("duplicate live readmodel %s, registered twice with different snapshot settings".formatted(readModelClass));
 			}
 
 			ObservedSnapshots snapshots = new ObservedSnapshots(observer, boundedContext, Observation.SnapshotOwner.LIVE_MODEL, readModelClass.getSimpleName());
@@ -307,9 +319,23 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	 * unchecked one to whatever the caller assigns.
 	 */
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL liveModel ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... constructorParams ) {
+		return liveModelUntil(readModelClass, null, tracing, constructorParams);
+	}
+
+	/**
+	 * Projects a live read model up to and including {@code until}, and nothing after it: the read model as
+	 * it was at that event. {@code null} reads everything there is, which is {@link #liveModel}.
+	 * <p>
+	 * A bounded read cannot start from a base that lies past its boundary, and it cannot tell whether a
+	 * seed does without loading it — {@code seed()} loads the state and answers its position in one call —
+	 * so a bounded read of a {@link SeededReadModel} is never seeded, and replays from the beginning. A
+	 * snapshot is used only when it reflects no event after the boundary, which its reference says before
+	 * anything is restored. Nor does a bounded read save a snapshot: what it holds is not the latest state.
+	 */
+	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL liveModelUntil ( Class<READ_MODEL> readModelClass, EventReference until, Tracing tracing, Object... constructorParams ) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
-			return readModelClass.cast(observedLiveModel(domainEventStream, readModelClass, false, info, tracing, constructorParams));
+			return readModelClass.cast(observedLiveModel(domainEventStream, readModelClass, false, until, info, tracing, constructorParams));
 
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
@@ -319,18 +345,18 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL liveModelUnbounded ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... constructorParams ) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
 		if ( info != null ) {
-			return readModelClass.cast(observedLiveModel(allInStorageEventStream, readModelClass, true, info, tracing, constructorParams));
+			return readModelClass.cast(observedLiveModel(allInStorageEventStream, readModelClass, true, null, info, tracing, constructorParams));
 		} else {
 			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
 		}
 	}
 
 	@SuppressWarnings("rawtypes")
-	private ReadModel<DOMAIN_EVENT_TYPE> observedLiveModel ( EventSource eventSource, Class<?> readModelClass, boolean unbounded, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams ) {
-		try ( Observation.Scope<Outcome.LiveModelProjected> scope = observer.start(new Observation.LiveModelRead(boundedContext, readModelClass.getSimpleName(), readModelClass, unbounded, tracing));
+	private ReadModel<DOMAIN_EVENT_TYPE> observedLiveModel ( EventSource eventSource, Class<?> readModelClass, boolean unbounded, EventReference until, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams ) {
+		try ( Observation.Scope<Outcome.LiveModelProjected> scope = observer.start(new Observation.LiveModelRead(boundedContext, readModelClass.getSimpleName(), readModelClass, unbounded, until, tracing));
 				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.readModel(readModelClass.getSimpleName()), readModelClass, tracing) ) {
 			try {
-				return projectLiveModel(eventSource, readModelClass, info, tracing, constructorParams, scope);
+				return projectLiveModel(eventSource, readModelClass, until, info, tracing, constructorParams, scope);
 			} catch ( RuntimeException e ) {
 				scope.failed(e);
 				throw e;
@@ -339,7 +365,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private ReadModel<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams, Observation.Scope<Outcome.LiveModelProjected> scope ) {
+	private ReadModel<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, EventReference until, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams, Observation.Scope<Outcome.LiveModelProjected> scope ) {
 		long start = Elapsed.start();
 		try {
 			ReadModel<DOMAIN_EVENT_TYPE> readModel = (ReadModel<DOMAIN_EVENT_TYPE>) LiveModelConstructors.select(readModelClass, constructorParams).newInstance(constructorParams);
@@ -350,7 +376,9 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			// projector fills, or out of an in-memory read model -- and is projected only over what has
 			// not reached that base yet. It is registered like any other live model, because the seed is
 			// a property of the class: unlike a snapshot there is nothing external to configure.
-			if ( readModel instanceof SeededReadModel<?> seeded ) {
+			// A read bounded at an event is never seeded: seed() loads the state as it answers where it
+			// reflects, and a base past the boundary cannot be unprojected.
+			if ( until == null && readModel instanceof SeededReadModel<?> seeded ) {
 				lastEventReference = seeded.seed().orElse(null);
 			}
 
@@ -360,7 +388,10 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				String key = snapshotCapable.key(readModel.readmodelName(), constructorParams);
 				String version = snapshotCapable.version();
 				var loadedSnapshot = info.snapshots().load(info.snapshotStorage(), key, version);
-				if ( loadedSnapshot.isPresent() ) {
+				// a snapshot reflecting an event past a bounded read's boundary is of no use to it: the
+				// reference says so before anything is restored
+				if ( loadedSnapshot.isPresent() && ( until == null || loadedSnapshot.get().lastEventReference() == null
+						|| !loadedSnapshot.get().lastEventReference().storedEventHappenedAfter(until) ) ) {
 					((SnapshotCapable<Object>) snapshotCapable).fromSnapshot(loadedSnapshot.get().snapshot());
 					lastEventReference = loadedSnapshot.get().lastEventReference();
 				}
@@ -373,10 +404,13 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 			// Replay events — starting after the base a seed or a snapshot supplied, if any
 			Projector projector = Projector.from(eventSource).into(readModel).startingAfter(lastEventReference).build();
-			ProjectorMetrics projectorMetrics = projector.run();
+			ProjectorMetrics projectorMetrics = ( until == null ) ? projector.run() : projector.runUntil(until);
 
-			// Save snapshot if configured and threshold met
-			saveSnapshotIfNeeded(readModel, info, projectorMetrics, constructorParams);
+			// Save snapshot if configured and threshold met -- never for a bounded read, which does not
+			// hold the latest state
+			if ( until == null ) {
+				saveSnapshotIfNeeded(readModel, info, projectorMetrics, constructorParams);
+			}
 
 			if ( eventEmitter.enabled() ) {
 				BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(Elapsed.microsSince(start), projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());

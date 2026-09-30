@@ -146,9 +146,7 @@ kernel rejects on is a `BusinessException` too (`RuleViolationException`), so al
 declaration that this command's append needs no guard, and it is what hands the command the
 `CommandResult` to raise its events on. A command that calls neither `decisionModels(...)` nor
 `noDecisionModels()` is taken to have decided on nothing — it has no result to raise events on, so it
-raised none, and its execution appends nothing (a command that reads, finds nothing to do and returns). An `OutboundCommand` is not even offered
-decision models — they cannot guard an append to the outbound stream, and a boundary that guards
-nothing, silently, is worse than none; its correctness comes from idempotency keys (step 5).
+raised none, and its execution appends nothing (a command that reads, finds nothing to do and returns).
 
 *Costs:* one projection per execution, bounded the same way a live read model is — by tags and a
 savepoint (`initQuery()`), per the read-model ladder's step 2. Bound the *replay* that way, never the
@@ -218,8 +216,11 @@ inverts: **what has arrived can only be accepted; what you do about it is where 
   cannot be validated by reading first — the duplicate can land between the read and the append. Give
   the raised event a key derived from the request (never from the attempt) and the storage silently
   ignores the repeat; an empty result means the work was already done, which for an at-least-once
-  caller is success. Outbound events *must* carry one — the append is rejected otherwise — and
-  `forbidIdempotencyKey()` is the greppable opt-out that costs exactly what it says.
+  caller is success. Outbound events need no key of yours: a publisher's are keyed by the domain event
+  they are published for, so a redelivered event publishes nothing twice.
+- **A publisher validates nothing.** It maps a fact a command already decided on into the published
+  language; anything that needs deciding — whether to publish at all, what to publish — is a command's
+  decision, recorded as a domain event the publisher then maps.
 
 ## 6. Evolving a rule without breaking history
 
@@ -258,9 +259,9 @@ projection that meets an event it considers impossible should record or skip it,
 model clothing — correct in every test, wrong under concurrency. The empty boundary (step 4) is what
 holds; the sequential check on top of it is just the better error message.
 
-**`forbidIdempotencyKey()` on an at-least-once path.** An automation retries whatever did not
-complete; a command it executes without a key publishes twice on exactly the retries the design
-promises will happen.
+**An unkeyed effect on an at-least-once path.** An automation retries whatever did not complete; a
+command it executes without a key derived from the todo item records the same fact twice on exactly the
+retries the design promises will happen.
 
 **Rules in an upcaster.** Converting is its job; judging is a poison-event factory. See step 6.
 

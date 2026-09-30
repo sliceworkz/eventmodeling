@@ -33,7 +33,6 @@ import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
@@ -57,7 +56,7 @@ import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
-public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
+public class DCBModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(DCBModule.class);
 	
@@ -66,36 +65,26 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 
 	private ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule;
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
-	private EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream;
 
 	private final BoundedContextObserver observer;
 
 	private final BoundedContextEventEmitter eventEmitter;
 
-	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
+	public DCBModule ( String boundedContext, Instance instance, ReadModelModule<DOMAIN_EVENT_TYPE> readModelModule, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.instance = instance;
 		this.readModelModule = readModelModule;
 		this.domainEventStream = domainEventStream;
-		this.outboundEventStream = outboundEventStream;
 		this.observer = observer;
 		this.eventEmitter = eventEmitter;
 	}
 	
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, overridesOf(command), tracing, domainEventStream, false, null);
+		return executeCommand(command, overridesOf(command), tracing, null);
 	}
 
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, overridesOf(command), tracing, domainEventStream, false, idempotencyKey);
-	}
-
-	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, Tracing tracing ) {
-		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, Overrides.none(), tracing, outboundEventStream, true, null);
-	}
-
-	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return executeAbstractCommand(command.commandName(), command.getClass(), command::execute, Overrides.none(), tracing, outboundEventStream, true, idempotencyKey);
+		return executeCommand(command, overridesOf(command), tracing, idempotencyKey);
 	}
 
 	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing ) {
@@ -106,28 +95,21 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		return executeCommandWithResult(command, tracing, idempotencyKey);
 	}
 
-	/**
-	 * Shared execution path for both command shapes. The command body arrives as a consumer of the
-	 * context implementation rather than as the command itself, because since the two permits were
-	 * given different context types ({@code CommandContext} vs the narrower
-	 * {@code OutboundCommandContext}), there is no common {@code execute} left on
-	 * {@code AbstractCommand} to call — {@code DCBCommandContextImpl} implements both, so a method
-	 * reference to either shape's {@code execute} fits here.
-	 */
-	private <PRODUCED_EVENT_TYPE> Optional<EventReference> executeAbstractCommand ( String commandName, Class<?> commandClass, Consumer<DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE>> commandBody, Overrides overrides, Tracing tracing, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, boolean outboundTarget, String idempotencyKey ) {
+	private Optional<EventReference> executeCommand ( Command<DOMAIN_EVENT_TYPE> command, Overrides overrides, Tracing tracing, String idempotencyKey ) {
+		String commandName = command.commandName();
+		Class<?> commandClass = command.getClass();
 		Tracing tracingWithCommand = tracing.command(commandName);
-		Observation.Target target = outboundTarget ? Observation.Target.OUTBOUND : Observation.Target.DOMAIN;
-		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, commandClass, target, tracingWithCommand));
+		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, commandClass, tracingWithCommand));
 				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.command(commandName), commandClass, tracingWithCommand) ) {
 			long start = Elapsed.start();
 
-			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, targetEventStream, tracingWithCommand, overrides);
+			DCBCommandContextImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandContext = new DCBCommandContextImpl<>(boundedContext, readModelModule, domainEventStream, domainEventStream, tracingWithCommand, overrides);
 			try {
-				commandBody.accept(commandContext);
-				CommandResultImpl<DOMAIN_EVENT_TYPE,PRODUCED_EVENT_TYPE> commandResult = commandContext.getCommandResult();
+				command.execute(commandContext);
+				CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 				enforceBusinessRules(commandContext, commandResult);
 
-				List<EventReference> eventReferences = persist(commandResult, targetEventStream, commandName, idempotencyKey, outboundTarget);
+				List<EventReference> eventReferences = persist(commandResult, commandName, idempotencyKey);
 
 				emitCommandExecuted(commandContext, commandName, commandClass, start, eventReferences);
 				scope.completed(new Outcome.Executed(raisedPerType(commandResult), eventReferences));
@@ -152,7 +134,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 	private <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> executeCommandWithResult ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing, String idempotencyKey ) {
 		String commandName = command.commandName();
 		Tracing tracingWithCommand = tracing.command(commandName);
-		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, command.getClass(), Observation.Target.DOMAIN, tracingWithCommand));
+		try ( Observation.Scope<Outcome.CommandOutcome> scope = observer.start(new Observation.CommandExecution(boundedContext, commandName, command.getClass(), tracingWithCommand));
 				PortCallerScope.Scope caller = PortCallerScope.enter(PortCaller.command(commandName), command.getClass(), tracingWithCommand) ) {
 			long start = Elapsed.start();
 
@@ -162,7 +144,7 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 				CommandResultImpl<DOMAIN_EVENT_TYPE,DOMAIN_EVENT_TYPE> commandResult = commandContext.getCommandResult();
 				enforceBusinessRules(commandContext, commandResult);
 
-				List<EventReference> eventReferences = persist(commandResult, domainEventStream, commandName, idempotencyKey, false);
+				List<EventReference> eventReferences = persist(commandResult, commandName, idempotencyKey);
 
 				emitCommandExecuted(commandContext, commandName, command.getClass(), start, eventReferences);
 				scope.completed(new Outcome.Executed(raisedPerType(commandResult), eventReferences));
@@ -264,25 +246,17 @@ public class DCBModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements Lifecyc
 		return Overrides.none();
 	}
 
-	private <PRODUCED_EVENT_TYPE> List<EventReference> persist ( CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> commandResult, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, String commandName, String idempotencyKey, boolean outboundTarget ) {
+	private List<EventReference> persist ( CommandResultImpl<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> commandResult, String commandName, String idempotencyKey ) {
 		// resolve and apply idempotency key (internal strategy vs external key)
 		String resolvedKey = commandResult.resolveIdempotencyKey(idempotencyKey);
 		if ( resolvedKey != null ) {
 			commandResult.applyIdempotencyKey(resolvedKey);
 		}
 
-		// an outbound event without an idempotency key is a duplicate publication waiting for its
-		// first at-least-once retry, so it is rejected here, before anything is stored — after the
-		// key application above, so a key from any source satisfies it. forbidIdempotencyKey() is
-		// the deliberate opt-out.
-		if ( outboundTarget ) {
-			commandResult.requireIdempotencyKeysOnOutboundEvents(commandName);
-		}
-
 		if ( !commandResult.raisedEvents().isEmpty() ) {
 			// append to the event store (with optimistic locking the DCB way)
 			// and return the last event reference produced (for bookmarking purposes etc ...)
-			return targetEventStream.append(commandResult.appendCriteria(), commandResult.raisedEvents())
+			return domainEventStream.append(commandResult.appendCriteria(), commandResult.raisedEvents())
 					.stream().map(Event::reference).toList();
 		} else {
 			LOGGER.debug("no events raised by command {}", commandName);

@@ -68,7 +68,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
  * @param <OUTBOUND_EVENT_TYPE> the bounded context's outbound event type
  */
 public interface ApplicationCapabilities<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends
-	CommandExecutionCapability<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
+	CommandExecutionCapability<DOMAIN_EVENT_TYPE>,
 	CommandEvaluationCapability<DOMAIN_EVENT_TYPE>,
 	ReadModelCapability<DOMAIN_EVENT_TYPE>,
 	AggregateCapability<DOMAIN_EVENT_TYPE> {

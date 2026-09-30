@@ -36,7 +36,7 @@ package org.sliceworkz.eventmodeling.rules;
  * org.sliceworkz.eventmodeling.commands.CommandEvaluationCapability evaluated} reports it — so a front end
  * shows the override checkbox only to an actor who may actually tick it.
  * <p>
- * The actor is {@link org.sliceworkz.eventmodeling.commands.OutboundCommandContext#actor()}, read from the
+ * The actor is {@link org.sliceworkz.eventmodeling.commands.CommandContext#actor()}, read from the
  * tracing the command was executed with — the same value the kernel stores in the {@code x-actor} tag of
  * every event it appends, so the actor the decision is taken for and the actor history records are one.
  *

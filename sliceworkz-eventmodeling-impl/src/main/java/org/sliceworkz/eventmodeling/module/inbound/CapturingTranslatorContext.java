@@ -25,7 +25,6 @@ import java.util.Optional;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -82,26 +81,6 @@ class CapturingTranslatorContext<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> implemen
 
 	@Override
 	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return capture(delegate.execute(command, idempotencyKey, tracing));
-	}
-
-	@Override
-	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> command ) {
-		return capture(delegate.execute(command));
-	}
-
-	@Override
-	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return capture(delegate.execute(command, tracing));
-	}
-
-	@Override
-	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> command, String idempotencyKey ) {
-		return capture(delegate.execute(command, idempotencyKey));
-	}
-
-	@Override
-	public Optional<EventReference> execute ( OutboundCommand<DOMAIN_EVENT_TYPE, DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
 		return capture(delegate.execute(command, idempotencyKey, tracing));
 	}
 

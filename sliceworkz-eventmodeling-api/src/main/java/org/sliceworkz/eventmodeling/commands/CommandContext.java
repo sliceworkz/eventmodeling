@@ -18,7 +18,9 @@
 package org.sliceworkz.eventmodeling.commands;
 
 import java.util.List;
+import java.util.Optional;
 
+import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.RuleCheck;
 import org.sliceworkz.eventmodeling.rules.RuleFollowUp;
@@ -28,13 +30,11 @@ import org.sliceworkz.eventstore.events.EventId;
 /**
  * The execution context handed to a {@link Command} (and to a {@link CommandWithResult}).
  * <p>
- * Extends {@link OutboundCommandContext} with the one capability an {@link OutboundCommand} must not
- * have: {@link #decisionModels(DecisionModel...)}. A domain command appends to the same stream its
- * decision models are projected from, so the boundary they produce genuinely guards the append —
- * which is exactly what does not hold for an outbound append, and why the narrower context exists.
+ * A command appends to the same stream its decision models are projected from, so the boundary
+ * {@link #decisionModels(DecisionModel...)} produces genuinely guards the append.
  * <p>
  * It is also where a command checks its {@link BusinessRule business rules}, for the same reason: a rule is
- * judged on decision models, and only a domain command has them. The shape is always the same — select
+ * judged on decision models. The shape is always the same — select
  * decision models, reject what makes no sense, check the rules, raise:
  * <pre>{@code
  * var period = new ActivePeriodDecisionModel(accountId);
@@ -49,7 +49,37 @@ import org.sliceworkz.eventstore.events.EventId;
  * }</pre>
  * See {@code BUSINESS-RULES.md} for the enforcement levels and what the kernel does with each.
  */
-public interface CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> extends OutboundCommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
+public interface CommandContext<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
+
+	/**
+	 * Projects a live read model and hands it to the command, for auxiliary lookups only.
+	 * <p>
+	 * <strong>A read done this way is not part of any consistency boundary.</strong> The events this
+	 * read model was projected from are not covered by an optimistic-locking check: one of them can be
+	 * superseded between this read and the append, and the append still succeeds. So do not decide on
+	 * what this returns: anything a raised event depends on belongs in a {@link DecisionModel}
+	 * passed to {@link #decisionModels(DecisionModel...)}.
+	 * <p>
+	 * The result is typed by the class it is asked for, as {@link org.sliceworkz.eventmodeling.readmodels.ReadModelCapability#read(Class, Object...)} is.
+	 */
+	<READ_MODEL extends ReadModel<? extends CONSUMED_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... constructorParams );
+
+	CommandResult<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> noDecisionModels ( );
+
+	/**
+	 * The actor the command is executed for: the actor of the tracing it was executed with, and so the same
+	 * value the kernel stores in the {@code x-actor} tag of every event it appends. Meant for decisions about
+	 * <em>who</em> may do something — above all whether this actor may override a business rule, see
+	 * {@link org.sliceworkz.eventmodeling.rules.RuleCheck#overridableWhen}.
+	 * <p>
+	 * Empty for an execution without an actor (no tracing given, or one naming none): a decision that needs
+	 * an actor should then say no. The framework's own actors — {@code "automation"} for an automation,
+	 * {@code "system"} for the kernel — are returned as they are, so a decision granting rights by actor
+	 * name grants them only to the names it was given.
+	 *
+	 * @return the actor, if there is one
+	 */
+	Optional<String> actor ( );
 
 	CommandResult<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> decisionModels ( @SuppressWarnings("unchecked") DecisionModel<CONSUMED_EVENT_TYPE>... decisionModels );
 

@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.ports;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * Who called a port: the component of the bounded context whose code was running on the calling thread.
  * The framework knows it at every point it hands control to user code — a command's {@code execute}, an
@@ -31,6 +33,7 @@ package org.sliceworkz.eventmodeling.ports;
  * @param name the component's name as its own events name it: a command's name, an automation's class name,
  *        a read model's {@code readmodelName()}, a slice's name
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record PortCaller ( String kind, String name ) {
 
 	public static final String KIND_COMMAND = "COMMAND";

@@ -22,6 +22,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
+import org.sliceworkz.eventmodeling.module.timing.Elapsed;
 import org.sliceworkz.eventmodeling.ports.PortMonitoring;
 
 /**
@@ -132,13 +133,13 @@ public final class MonitoredPort implements InvocationHandler {
 			return invokeAdapter(method, args);
 		}
 		PortReporter.Call call = current.start(this, method.getName(), fallback);
-		long started = System.nanoTime();
+		long started = Elapsed.start();
 		try {
 			Object result = invokeAdapter(method, args);
-			call.returned(micros(started));
+			call.returned(Elapsed.microsSince(started));
 			return result;
 		} catch ( Throwable thrown ) {
-			call.threw(thrown, micros(started));
+			call.threw(thrown, Elapsed.microsSince(started));
 			throw thrown;
 		}
 	}
@@ -157,10 +158,6 @@ public final class MonitoredPort implements InvocationHandler {
 				throw e.getCause();
 			}
 		}
-	}
-
-	private static long micros ( long startedNanos ) {
-		return Math.max(0, (System.nanoTime() - startedNanos) / 1_000);
 	}
 
 }

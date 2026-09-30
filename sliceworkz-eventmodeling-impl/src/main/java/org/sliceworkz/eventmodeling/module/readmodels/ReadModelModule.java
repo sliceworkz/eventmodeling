@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.readmodels;
 
+import org.sliceworkz.eventmodeling.module.timing.Elapsed;
 import org.sliceworkz.eventmodeling.module.ports.PortCallerScope;
 import org.sliceworkz.eventmodeling.ports.PortCaller;
 import java.lang.reflect.InvocationTargetException;
@@ -253,9 +254,9 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			}
 
 			@Override
-			public void onRun ( ProjectorMetrics metrics, long durationMs ) {
+			public void onRun ( ProjectorMetrics metrics, long durationMicros ) {
 				if ( eventEmitter.enabled() && metrics.eventsHandled() > 0 ) {
-					BoundedContextEvent.Metrics m = new BoundedContextEvent.Metrics(durationMs, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
+					BoundedContextEvent.Metrics m = new BoundedContextEvent.Metrics(durationMicros, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
 					eventEmitter.emit(new BoundedContextEvent.EventuallyConsistentReadModelUpdated(
 							boundedContext, rm.readmodelName(), storage.label(), m, eventEmitter.sliceFor(rm.getClass())));
 				}
@@ -339,7 +340,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	private ReadModel<DOMAIN_EVENT_TYPE> projectLiveModel ( EventSource eventSource, Class readModelClass, LiveModelInfo<DOMAIN_EVENT_TYPE> info, Tracing tracing, Object[] constructorParams, Observation.Scope<Outcome.LiveModelProjected> scope ) {
-		long start = System.currentTimeMillis();
+		long start = Elapsed.start();
 		try {
 			ReadModel<DOMAIN_EVENT_TYPE> readModel = (ReadModel<DOMAIN_EVENT_TYPE>) LiveModelConstructors.select(readModelClass, constructorParams).newInstance(constructorParams);
 
@@ -378,9 +379,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			saveSnapshotIfNeeded(readModel, info, projectorMetrics, constructorParams);
 
 			if ( eventEmitter.enabled() ) {
-				long finish = System.currentTimeMillis();
-				long duration = finish - start;
-				BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+				BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(Elapsed.microsSince(start), projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
 				eventEmitter.emit(new BoundedContextEvent.LiveModelProjected(boundedContext, readModel.readmodelName(), metrics, seededAt, eventEmitter.sliceFor(readModel.getClass())), tracing);
 			}
 

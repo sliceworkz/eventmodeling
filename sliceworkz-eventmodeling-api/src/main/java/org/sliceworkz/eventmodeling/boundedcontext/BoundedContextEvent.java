@@ -58,8 +58,22 @@ import com.fasterxml.jackson.annotation.Nulls;
  * A property added as a <em>primitive</em> needs one thing more: null cannot bind onto it, so the
  * stored event would be rejected despite the annotation above. Such a component carries
  * {@code @JsonSetter(nulls = Nulls.AS_EMPTY)} to read as its zero value instead — see
- * {@link BoundedContextStarted#startupDurationMs()}. Prefer a boxed type where "absent" and "zero"
+ * {@link BoundedContextStarted#startupDurationMicros()}. Prefer a boxed type where "absent" and "zero"
  * mean different things to a reader.
+ * <p>
+ * The value records nested in these events ({@link Metrics}, {@link Failure}, {@link FeatureSlice},
+ * {@link SliceMember}, {@link PortBinding}, and {@link PortCaller}, {@link AutomationStatus} and
+ * {@link ProcessorStatus} from their own packages) do not implement this interface, so the annotation does not
+ * reach them through inheritance: each carries it itself, since a property a nested record does not
+ * know fails the whole event exactly as one on the event itself would.
+ *
+ * <h2>Durations</h2>
+ * Every duration these events carry is a {@code long} in microseconds, measured on a monotonic clock
+ * ({@link System#nanoTime()}), and named for its unit ({@code durationMicros}, {@code totalMicros},
+ * {@code startupDurationMicros}). One unit for commands, decision models, read models, automations and
+ * port calls alike is what lets a reader compare them directly: a port call nested in a command is
+ * never reported longer than the command that made it, and a sub-millisecond command does not read as
+ * taking no time at all.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public sealed interface BoundedContextEvent {
@@ -126,7 +140,7 @@ public sealed interface BoundedContextEvent {
 	 * Emitted when a bounded context has started: its modules are running and its ephemeral read
 	 * models have been projected, so it is effectively available.
 	 * <p>
-	 * {@code startupDurationMs} is the wall-clock time spent in {@code start()}, i.e. the delay
+	 * {@code startupDurationMicros} is the time spent in {@code start()}, in microseconds, i.e. the delay
 	 * between the preceding {@link BoundedContextStarting} and this event. Note that startup
 	 * continues (with a warning) when an ephemeral read model does not finish projecting within its
 	 * timeout, so a large duration paired with such a warning means the context came up before all of
@@ -144,7 +158,7 @@ public sealed interface BoundedContextEvent {
 			String logical,
 			String physical,
 			String process,
-			@JsonSetter(nulls = Nulls.AS_EMPTY) long startupDurationMs ) implements BoundedContextEvent { }
+			@JsonSetter(nulls = Nulls.AS_EMPTY) long startupDurationMicros ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted when a bounded context begins shutting down, before its modules are stopped (while the
@@ -804,6 +818,7 @@ public sealed interface BoundedContextEvent {
 	 * An event stored before this property existed reads it as {@code null}; the compact constructor
 	 * normalizes that to an empty set so readers never have to null-check it.
 	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	record FeatureSlice ( String name, Type type, String context, String chapter, Set<String> tags, Set<SliceMember> members ) {
 
 		public FeatureSlice {
@@ -823,6 +838,7 @@ public sealed interface BoundedContextEvent {
 	 * members that happen to share a name. It is {@code null} on an event written before members
 	 * carried their aspect.
 	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	record SliceMember ( String name, MemberKind kind, Aspect aspect ) { }
 
 	/** What a {@link SliceMember} is. */
@@ -926,6 +942,7 @@ public sealed interface BoundedContextEvent {
 	 * @param slices the feature slices that asked for the port while being configured; a port handed out
 	 *        outside a slice's configuration names none
 	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	record PortBinding ( String port, String portType, String qualification, String adapter,
 			boolean monitored, String monitoring, Set<String> summarizedMethods, Set<String> slices ) {
 
@@ -942,6 +959,7 @@ public sealed interface BoundedContextEvent {
 	 * @param message    the exception message (may be {@code null})
 	 * @param stackTrace the full rendered stack trace
 	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
 	record Failure ( String type, String message, String stackTrace ) {
 
 		/**
@@ -970,12 +988,14 @@ public sealed interface BoundedContextEvent {
 	/**
 	 * Performance metrics describing the work performed by an operation.
 	 *
-	 * @param durationMs     wall-clock duration of the operation in milliseconds
+	 * @param durationMicros duration of the operation in microseconds, measured on a monotonic clock; reads
+	 *                       as {@code 0} on a stored event that carries none
 	 * @param queriesDone    number of event store queries performed
 	 * @param eventsStreamed number of events streamed/replayed
 	 * @param eventsHandled  number of events handled/applied
 	 * @param until          reference of the last event reached (may be {@code null})
 	 */
-	record Metrics ( long durationMs, long queriesDone, long eventsStreamed, long eventsHandled, EventReference until ) { }
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record Metrics ( @JsonSetter(nulls = Nulls.AS_EMPTY) long durationMicros, long queriesDone, long eventsStreamed, long eventsHandled, EventReference until ) { }
 
 }

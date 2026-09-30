@@ -23,6 +23,7 @@ import java.util.function.Consumer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sliceworkz.eventmodeling.module.timing.Elapsed;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.threading.Parking;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
@@ -432,9 +433,9 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 								LOGGER.info("'{}' starting initial catch-up ...", processorIdentification);
 							}
 
-							long runStartMs = System.currentTimeMillis();
+							long runStarted = Elapsed.start();
 							ProjectorMetrics metrics = projector.run();
-							long runDurationMs = System.currentTimeMillis() - runStartMs;
+							long runDurationMicros = Elapsed.microsSince(runStarted);
 
 							if ( consecutiveFailedRuns > 0 ) {
 								LOGGER.info("'{}' recovered after {} failed run(s)", processorIdentification, consecutiveFailedRuns);
@@ -442,14 +443,14 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 							}
 
 							if ( initialRun ) {
-								LOGGER.info("'{}' initial catch-up completed in {} ms: {} events handled, {} streamed in {} queries, last reference {}",
-										processorIdentification, runDurationMs, metrics.eventsHandled(), metrics.eventsStreamed(), metrics.queriesDone(), metrics.lastEventReference());
+								LOGGER.info("'{}' initial catch-up completed in {}: {} events handled, {} streamed in {} queries, last reference {}",
+										processorIdentification, Elapsed.describe(runDurationMicros), metrics.eventsHandled(), metrics.eventsStreamed(), metrics.queriesDone(), metrics.lastEventReference());
 							}
 
 							LOGGER.debug("projector run completed: {} events streamed, {} handled, last reference {}",
 									metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
 
-							notifyListener("run", listener -> listener.onRun(metrics, runDurationMs));
+							notifyListener("run", listener -> listener.onRun(metrics, runDurationMicros));
 
 							initialProjectionDone.countDown(); // caught up at least once, projection is usable
 
@@ -674,13 +675,13 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 
 		/**
 		 * Called after each {@link Projector#run()} cycle with the metrics of that cycle (events
-		 * streamed, handled, queries done, last reference) and the wall-clock duration in milliseconds.
+		 * streamed, handled, queries done, last reference) and its duration in microseconds.
 		 * <p>
 		 * A run corresponds to a full catch-up with the stream — possibly spanning several query
 		 * batches, such as the complete rebuild of an ephemeral read model on processor start — so the
 		 * supplied metrics aggregate all queries performed during that catch-up.
 		 */
-		default void onRun ( ProjectorMetrics metrics, long durationMs ) { }
+		default void onRun ( ProjectorMetrics metrics, long durationMicros ) { }
 
 		/**
 		 * Called once per projection run that failed with something worth retrying, before the

@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sliceworkz.eventmodeling.module.timing.Elapsed;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
@@ -262,7 +263,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			lifecycleState = LifecycleState.STARTED;
 		}
 		LOGGER.info("starting bounded context '{}' ...", name);
-		long startedAt = System.currentTimeMillis();
+		long startedAt = Elapsed.start();
 		eventEmitter.emit(new BoundedContextStarting(name, instance.logical(), instance.physical(), instance.process(),
 				map(deployedFeatureSlices), map(undeployedFeatureSlices), deployedAspects(), businessRules, adapterRegistry.describe()));
 		if (summarizingPorts) {
@@ -291,9 +292,9 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			// instruction can start a stopped context again
 			managementModule.start();
 		}
-		long startupDurationMs = System.currentTimeMillis() - startedAt;
-		eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), startupDurationMs));
-		LOGGER.info("started bounded context '{}' in {} ms.", name, startupDurationMs);
+		long startupDurationMicros = Elapsed.microsSince(startedAt);
+		eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), startupDurationMicros));
+		LOGGER.info("started bounded context '{}' in {}.", name, Elapsed.describe(startupDurationMicros));
 	}
 	
 	@Override

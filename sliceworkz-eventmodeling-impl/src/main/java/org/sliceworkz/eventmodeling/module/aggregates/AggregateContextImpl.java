@@ -17,9 +17,9 @@
  */
 package org.sliceworkz.eventmodeling.module.aggregates;
 
-import java.time.Instant;
 import java.util.List;
 
+import org.sliceworkz.eventmodeling.module.timing.Elapsed;
 import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateContext;
 import org.sliceworkz.eventmodeling.aggregates.AggregateEventAppender;
@@ -129,16 +129,14 @@ public class AggregateContextImpl<DOMAIN_EVENT_TYPE> implements AggregateContext
 
 	@Override
 	public void updateFromStream() {
-		Instant start = Instant.now();
+		long start = Elapsed.start();
 		
 		ProjectorMetrics projectorMetrics = Projector.from(eventStream).into(projectionTowardsAggregate).startingAfter(lastEventReference).build().run();
 		this.lastEventReference = projectorMetrics.lastEventReference();
 		this.lastUpdate = projectorMetrics;
 		this.aggregateEventAppender = new AggregateEventAppenderImpl<>(eventStream, aggregate, identity, lastEventReference, boundedContext, aggregateName, observer, tracing);
-		Instant finish = Instant.now();
-		
-		long duration = finish.toEpochMilli() - start.toEpochMilli();
-		BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(duration, projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
+
+		BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(Elapsed.microsSince(start), projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
 
 		if ( snapshotStorage != null && metrics.eventsStreamed() >= snapshotThresholdEventCount && aggregate instanceof SnapshotCapable<?> snapshotCapable) {
 			snapshots.save(snapshotStorage, snapshotCapable.key(aggregateName, identity), snapshotCapable.version(), snapshotCapable.takeSnapshot(), metrics.until());

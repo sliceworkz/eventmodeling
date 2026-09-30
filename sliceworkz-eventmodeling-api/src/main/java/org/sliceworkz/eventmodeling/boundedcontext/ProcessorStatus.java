@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * What a projector-driven processor — a read model's projector, a translator, a dispatcher — is doing
  * on this instance, as far as an operator needs to know. The projector counterpart of
@@ -50,6 +52,7 @@ package org.sliceworkz.eventmodeling.boundedcontext;
  *        processor has usually survived failures, and the one an operator wants is the one that
  *        stopped it
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record ProcessorStatus (
 		ProcessorKind kind,
 		String name,

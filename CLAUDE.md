@@ -1757,6 +1757,22 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
 - The two processor loops have a catch-all of their own, so they degraded into an error-and-retry cycle
   rather than dying — which is exactly why containment belongs at the emitter: a loop's catch-all cannot
   tell a broken listener apart from a broken projection, and answers both by abandoning the round
+- **Every duration on a `BoundedContextEvent` is a `long` in microseconds, on a monotonic clock**, and
+  is named for its unit: `Metrics.durationMicros` (commands, decision models, live and eventually
+  consistent read models, aggregate loads, automation batches), `BoundedContextStarted.startupDurationMicros`,
+  and the port events' `durationMicros`/`totalMicros`/`maxMicros`. All of them are measured through the
+  impl's `Elapsed` (`System.nanoTime()`), so they compare directly: a port call nested in a command is
+  never reported longer than the command, and a command finishing in 40 µs does not read as taking no
+  time. The alternative — a coarser unit for the operations that are usually slower — loses because the
+  same operation is fast on one deployment and slow on another, and a reader comparing two durations
+  would have to know which unit each came in. Deadlines, timeouts and timestamps are not durations
+  reported to anyone and stay on the wall clock. A log line renders a duration with `Elapsed.describe`
+- **The value records nested in these events carry `@JsonIgnoreProperties(ignoreUnknown = true)`
+  themselves** — `Metrics`, `Failure`, `FeatureSlice`, `SliceMember`, `PortBinding`, and `PortCaller`,
+  `AutomationStatus`, `ProcessorStatus` from their own packages. The annotation on `BoundedContextEvent`
+  reaches only the records implementing it, and a property a newer writer added to a nested record
+  fails the whole event under the store's strict deserializer, which for a dashboard reading a shared
+  monitoring stream is every event of that shape. `BoundedContextListenerTest` pins it
 - **`Error` is deliberately not caught**, matching the eventstore's rule for its own append listeners:
   an exhausted heap is not a listener problem to absorb
 - **Nothing replays what a failing listener missed.** The event is dropped and the next one is delivered

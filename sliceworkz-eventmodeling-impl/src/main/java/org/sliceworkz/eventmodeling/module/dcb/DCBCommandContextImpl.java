@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.sliceworkz.eventmodeling.module.timing.Elapsed;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
@@ -66,12 +67,12 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 	/**
 	 * Per-decision-model projection result emitted as a {@code DecisionModelProjected} bounded-context
-	 * event. {@code eventsStreamed}/{@code queriesDone}/{@code durationMs}/{@code until} describe the
+	 * event. {@code eventsStreamed}/{@code queriesDone}/{@code durationMicros}/{@code until} describe the
 	 * physical read the model was projected from (shared by all models that were read together via a
 	 * single merged query); {@code eventsHandled} is the number of those events relevant to (handled by)
 	 * this particular decision model.
 	 */
-	public record DecisionModelProjection ( Class<?> decisionModelClass, long durationMs, long queriesDone, long eventsStreamed, long eventsHandled, EventReference until ) { }
+	public record DecisionModelProjection ( Class<?> decisionModelClass, long durationMicros, long queriesDone, long eventsStreamed, long eventsHandled, EventReference until ) { }
 	
 	public DCBCommandContextImpl ( String boundedContext, ReadModelModule<CONSUMED_EVENT_TYPE> readModelModule, EventStream<CONSUMED_EVENT_TYPE> queryEventStream, EventStream<PRODUCED_EVENT_TYPE> targetEventStream, Tracing tracing ) {
 		this(boundedContext, readModelModule, queryEventStream, targetEventStream, tracing, Overrides.none());
@@ -157,27 +158,27 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		for ( MergedRead<CONSUMED_EVENT_TYPE> read: mergedReads ) {
 			List<DecisionModel<CONSUMED_EVENT_TYPE>> modelsForRead = read.models();
 			CompositeDecisionModel<CONSUMED_EVENT_TYPE> composite = new CompositeDecisionModel<>(read.query(), modelsForRead);
-			long start = System.currentTimeMillis();
+			long start = Elapsed.start();
 			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).into(composite).build();
 			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
-			long durationMs = System.currentTimeMillis() - start;
+			long durationMicros = Elapsed.microsSince(start);
 			accumulatedMetrics = accumulatedMetrics.add(metrics);
 			for ( int i = 0; i < modelsForRead.size(); i++ ) {
 				decisionModelProjections.add(new DecisionModelProjection(
-						modelsForRead.get(i).getClass(), durationMs, metrics.queriesDone(),
+						modelsForRead.get(i).getClass(), durationMicros, metrics.queriesDone(),
 						metrics.eventsStreamed(), composite.handledBy(i), metrics.mostRecentEventReference()));
 			}
 		}
 
 		// project each savepoint model through its own projector so its initQuery savepoint is honoured
 		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: savepointModels ) {
-			long start = System.currentTimeMillis();
+			long start = Elapsed.start();
 			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).into(p).build();
 			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
-			long durationMs = System.currentTimeMillis() - start;
+			long durationMicros = Elapsed.microsSince(start);
 			accumulatedMetrics = accumulatedMetrics.add(metrics);
 			decisionModelProjections.add(new DecisionModelProjection(
-					p.getClass(), durationMs, metrics.queriesDone(),
+					p.getClass(), durationMicros, metrics.queriesDone(),
 					metrics.eventsStreamed(), metrics.eventsHandled(), metrics.mostRecentEventReference()));
 		}
 

@@ -1686,7 +1686,9 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   raising events; a read model is a read model; an automation is a command issued from a read model (its
   todo list, counted whether or not the same slice registers it); a publisher counts as an automation,
   since it is the publication an automation slice carries; a translator is an inbound event and
-  its command; a dispatcher is an outbound event. The code cannot say which events a command raises, so
+  its command; a dispatcher is an outbound event. The rule has a fifth shape that lands on `AUTOMATION`: a
+  publication in the model — domain events and an outbound event, no command, no inbound event — which is
+  what a publisher slice looks like there. The code cannot say which events a command raises, so
   every command is taken to raise one. Porting the rule rather than writing one for code is the point:
   a slice in the code and the same slice in the model come out as the same type, which is what makes
   comparing the two meaningful. The modeler's `SliceTypeDerivation` delegates to `SliceType.derive`, so the

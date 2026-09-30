@@ -75,7 +75,11 @@ public enum SliceType {
 	/** A read model projected from events: events → read model → UI/API. */
 	STATE_READ,
 
-	/** A processor working a to-do list by issuing commands: events → to-do list → processor → command → event. */
+	/**
+	 * A processor working a to-do list by issuing commands: events → to-do list → processor → command → event.
+	 * Also a publication — domain events mapped into an outbound event, with no command of its own — which
+	 * is the part of an automation slice that tells the world what was recorded.
+	 */
 	AUTOMATION,
 
 	/** An external event turned into a command: inbound event → processor → command → event. */
@@ -128,12 +132,15 @@ public enum SliceType {
 		boolean stateRead = commands == 0 && readModels >= 1 && inboundEvents == 0 && outboundEvents == 0;
 		boolean automation = commands >= 1 && readModels >= 1 && inboundEvents == 0;
 		boolean translation = commands >= 1 && readModels == 0 && inboundEvents >= 1 && outboundEvents == 0;
+		// a publication: domain events mapped into an outbound event, reading a read model or not, with no
+		// command of its own -- the part of an automation slice that tells the world what was recorded
+		boolean publication = commands == 0 && producedDomainEvents >= 1 && inboundEvents == 0 && outboundEvents >= 1;
 
 		int matchCount = 0;
 		SliceType matched = UNCLEAR;
 		if ( stateChange ) { matchCount++; matched = STATE_CHANGE; }
 		if ( stateRead ) { matchCount++; matched = STATE_READ; }
-		if ( automation ) { matchCount++; matched = AUTOMATION; }
+		if ( automation || publication ) { matchCount++; matched = AUTOMATION; }
 		if ( translation ) { matchCount++; matched = TRANSLATION; }
 
 		return matchCount == 1 ? matched : UNCLEAR;

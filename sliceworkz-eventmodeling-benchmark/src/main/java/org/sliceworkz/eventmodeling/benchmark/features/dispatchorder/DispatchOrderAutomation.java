@@ -27,6 +27,7 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessingOutboundEvent;
 import org.sliceworkz.eventmodeling.benchmark.features.dispatchorder.OrdersReadyToDispatch.OrderReadyToDispatch;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.Tags;
 
 public class DispatchOrderAutomation implements Automation<OrderReadyToDispatch,OrderProcessingDomainEvent,OrderProcessingOutboundEvent>{
 
@@ -44,12 +45,9 @@ public class DispatchOrderAutomation implements Automation<OrderReadyToDispatch,
 	@Override
 	public Optional<EventReference> handle(OrderReadyToDispatch todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context ) {
 
-		// publish the outbound event, then record it as a domain event — publishAndRecord composes
-		// the two in the one safe order, both de-duplicated under keys derived from the item
-		return context.publishAndRecord(
-				new RegisterOrderDispatched(todoItem.orderId()),
-				new OrderDispatched(todoItem.orderId()),
-				"order/" + todoItem.orderId());
+		// record the dispatch, keyed by the item so a re-handled item records nothing twice; the
+		// OrderDispatchedPublisher tells the world, keyed by this event
+		return context.event(new OrderDispatched(todoItem.orderId()), Tags.none(), "order/" + todoItem.orderId());
 	}
 
 }

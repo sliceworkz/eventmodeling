@@ -41,8 +41,6 @@ import org.sliceworkz.eventmodeling.rules.Evaluation;
  * <li>It promises nothing about a later execution. The facts may change in between, and the execution judges
  *     every rule again on the facts as they are then — which is also why an override is acknowledged per rule
  *     and re-judged, rather than handed out as a token.</li>
- * <li>It evaluates domain commands only. An {@code OutboundCommand} has no decision models, so no rules to
- *     judge; there is nothing to preview.</li>
  * </ul>
  * The command is run for real up to the append, so it must be free of side effects in {@code execute} —
  * which every command already is, since a command that conflicts is executed again.

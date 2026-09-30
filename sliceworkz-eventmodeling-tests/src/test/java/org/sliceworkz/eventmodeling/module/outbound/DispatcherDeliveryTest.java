@@ -23,12 +23,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 
-import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundCommand;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockCommand;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockPublisher;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
@@ -39,14 +40,14 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
- * That an outbound event actually reaches a <em>registered</em> dispatcher's {@code when()}, end to
- * end through {@code OutboundModule}: real registration, real leader-elected processor, real bookmark.
+ * That a fact a command records actually reaches a <em>registered</em> dispatcher's {@code when()},
+ * end to end: command, domain event, registered publisher, outbound event, registered dispatcher — real
+ * registrations, real leader-elected processors, real bookmarks.
  * <p>
- * This is the delivery path nothing else pins. Every other dispatcher test in the repository asserts
- * registration-time validation, and the published {@code DispatcherTest} base deliberately drives a
- * dispatcher <em>without</em> registering it — so without this test, the wiring from
- * {@code builder.dispatcher(...)} through the projector to {@code when()} could break with every
- * suite still green.
+ * This is the delivery path nothing else pins. The published {@code PublisherTest} and
+ * {@code DispatcherTest} bases deliberately drive their component <em>without</em> registering it — so
+ * without this test, the wiring from {@code builder.publisher(...)} and {@code builder.dispatcher(...)}
+ * through their projectors could break with every suite still green.
  */
 public class DispatcherDeliveryTest extends AbstractMockDomainTest {
 
@@ -77,36 +78,22 @@ public class DispatcherDeliveryTest extends AbstractMockDomainTest {
 				.name("UnitTestBoundedContext")
 				.eventStorage(eventStorage())
 				.instance(InstanceFactory.determine("unittests"));
+		builder.publisher(new MockPublisher());
 		builder.dispatcher(dispatcher);
 		return buildBoundedContext(builder);
 	}
 
 	@ForEachBackend
-	void aKeyedOutboundEventReachesTheRegisteredDispatcher ( ) {
+	void aRecordedFactIsPublishedAndReachesTheRegisteredDispatcher ( ) {
 		Mock context = startContextWithDispatcher();
 
-		context.execute(new MockOutboundCommand("first"), "order/1");
+		context.execute(new MockCommand(List.of(new FirstDomainEvent("first"))));
 		waitBecauseOfEventualConsistency(() -> dispatcher.published().size() >= 1);
 
-		context.execute(new MockOutboundCommand("second"), "order/2");
+		context.execute(new MockCommand(List.of(new FirstDomainEvent("second"))));
 		waitBecauseOfEventualConsistency(() -> dispatcher.published().size() >= 2);
 
-		assertEquals(List.of("first", "second"), dispatcher.published(), "every outbound event delivered exactly once, in order");
-	}
-
-	@Test
-	void aDuplicateExecutionUnderTheSameKeyIsNotDeliveredTwice ( ) {
-		Mock context = startContextWithDispatcher();
-
-		context.execute(new MockOutboundCommand("first"), "order/1");
-		context.execute(new MockOutboundCommand("first"), "order/1"); // the at-least-once retry
-
-		// a later event under a fresh key is the fence: once it has been delivered, everything the
-		// duplicate could have produced would already have been delivered too -- no sleep needed
-		context.execute(new MockOutboundCommand("fence"), "order/2");
-		waitBecauseOfEventualConsistency(() -> dispatcher.published().contains("fence"));
-
-		assertEquals(List.of("first", "fence"), dispatcher.published(), "the duplicate append was deduplicated by its key, so nothing was published twice");
+		assertEquals(List.of("first", "second"), dispatcher.published(), "every fact published and delivered exactly once, in order");
 	}
 
 }

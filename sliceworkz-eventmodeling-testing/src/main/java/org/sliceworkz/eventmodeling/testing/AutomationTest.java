@@ -72,7 +72,7 @@ import org.sliceworkz.eventstore.query.Limit;
  * The batch loop is not a re-implementation: {@link TestDefinition#whenBatchRuns()} runs
  * {@code AutomationBatch.handleBatch} — literally the code {@code AutomationProcessor} runs in
  * production — over a real {@link AutomationContext} on a real bounded context, so
- * {@code publishAndRecord}, idempotency keys and {@link Automation#onFailure} behave exactly as
+ * idempotency keys and {@link Automation#onFailure} behave exactly as
  * deployed. Around that loop, the harness does what the processor does, synchronously:
  * <ol>
  * <li><b>Catch up the todo list</b> — the seeded events (and everything earlier batches appended) are
@@ -244,7 +244,6 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 			}
 
 			EventReference domainBookmark = domainStream().head().orElse(null);
-			EventReference outboundBookmark = outboundStream().head().orElse(null);
 
 			AutomationBatch.Outcome outcome = AutomationBatch.handleBatch(
 					automation, automationContexts(), AutomationBatch.batchSizeOf(automation),
@@ -255,14 +254,13 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 			}
 
 			List<Event<DOMAIN_EVENT_TYPE>> newDomainEvents = domainStream().query(EventQuery.matchAll(), domainBookmark);
-			List<Event<OUTBOUND_EVENT_TYPE>> newOutboundEvents = outboundStream().query(EventQuery.matchAll(), outboundBookmark);
-			return new BatchResult(this, outcome, newDomainEvents, newOutboundEvents);
+			return new BatchResult(this, outcome, newDomainEvents);
 		}
 
 	}
 
 	/**
-	 * What one batch did: the events it durably appended (to the domain and outbound streams), the
+	 * What one batch did: the domain events it durably appended, the
 	 * item counts, and whether it asked to stop. Chainable; {@link #and()} continues with the next
 	 * round.
 	 */
@@ -271,13 +269,11 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 		private final TestDefinition definition;
 		private final AutomationBatch.Outcome outcome;
 		private final List<Event<DOMAIN_EVENT_TYPE>> newDomainEvents;
-		private final List<Event<OUTBOUND_EVENT_TYPE>> newOutboundEvents;
 
-		private BatchResult ( TestDefinition definition, AutomationBatch.Outcome outcome, List<Event<DOMAIN_EVENT_TYPE>> newDomainEvents, List<Event<OUTBOUND_EVENT_TYPE>> newOutboundEvents ) {
+		private BatchResult ( TestDefinition definition, AutomationBatch.Outcome outcome, List<Event<DOMAIN_EVENT_TYPE>> newDomainEvents ) {
 			this.definition = definition;
 			this.outcome = outcome;
 			this.newDomainEvents = newDomainEvents;
-			this.newOutboundEvents = newOutboundEvents;
 		}
 
 		/** Asserts this batch appended exactly {@code expected} to the domain stream, in that order. */
@@ -309,21 +305,6 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 		 */
 		public BatchResult noEvents ( ) {
 			assertEquals(0, newDomainEvents.size(), "no domain events expected from this batch, was " + newDomainEvents);
-			return this;
-		}
-
-		/** Asserts this batch appended exactly {@code expected} to the outbound stream, in that order. */
-		public BatchResult outboundEvents ( @SuppressWarnings("unchecked") OUTBOUND_EVENT_TYPE... expected ) {
-			assertEquals(expected.length, newOutboundEvents.size(), "number of outbound events appended by this batch not as expected, was " + newOutboundEvents);
-			for ( int i = 0; i < expected.length; i++ ) {
-				assertCompareObjects(expected[i], newOutboundEvents.get(i).data(), "outbound event #%d".formatted(i));
-			}
-			return this;
-		}
-
-		/** Asserts this batch published nothing — the outbound half of a dedup proof. */
-		public BatchResult noOutboundEvents ( ) {
-			assertEquals(0, newOutboundEvents.size(), "no outbound events expected from this batch, was " + newOutboundEvents);
 			return this;
 		}
 

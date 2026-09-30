@@ -103,7 +103,9 @@ public enum SliceType {
 				switch ( kind ) {
 					case COMMAND, AGGREGATE -> commands++;
 					case READ_MODEL -> readModels++;
-					case AUTOMATION -> { commands++; readModels++; }
+					// a publisher maps what a command recorded, on the automation aspect: the publication an
+					// automation slice carries, so it counts as the automation's pair
+					case AUTOMATION, PUBLISHER -> { commands++; readModels++; }
 					case TRANSLATOR -> { commands++; inbound++; }
 					case DISPATCHER -> outbound++;
 				}

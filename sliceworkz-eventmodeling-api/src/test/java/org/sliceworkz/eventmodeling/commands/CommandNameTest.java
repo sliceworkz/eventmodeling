@@ -39,16 +39,6 @@ public class CommandNameTest {
 	}
 
 	@Test
-	void outboundCommandSuffixIsStripped() {
-		assertEquals("PublishOutbound", new PublishOutboundCommand().commandName());
-	}
-
-	@Test
-	void outboundWithoutCommandSuffixIsReturnedAsIs() {
-		assertEquals("PublishOutbound", new PublishOutbound().commandName());
-	}
-
-	@Test
 	void commandWithResultSuffixIsStripped() {
 		assertEquals("CreateThing", new CreateThingCommand().commandName());
 	}
@@ -93,18 +83,6 @@ public class CommandNameTest {
 	static class DoStuffCommandCommand implements Command<Object> {
 		@Override
 		public void execute(CommandContext<Object, Object> context) {
-		}
-	}
-
-	static class PublishOutboundCommand implements OutboundCommand<Object, Object> {
-		@Override
-		public void execute(OutboundCommandContext<Object, Object> context) {
-		}
-	}
-
-	static class PublishOutbound implements OutboundCommand<Object, Object> {
-		@Override
-		public void execute(OutboundCommandContext<Object, Object> context) {
 		}
 	}
 

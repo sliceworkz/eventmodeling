@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.testing;
 
+import org.sliceworkz.eventstore.events.Event;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -59,8 +61,8 @@ public class TranslatorTestRunsOnEveryBackendTest extends TranslatorTest<MockDom
 		}
 
 		@Override
-		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
-			if ( event instanceof SomeInboundEvent some ) {
+		public void translate ( Event<MockInboundEvent> event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+			if ( event.data() instanceof SomeInboundEvent some ) {
 				switch ( some.someValue() ) {
 					case "ignore" -> { }
 					case "boom" -> throw new IllegalStateException("translator failure on boom");

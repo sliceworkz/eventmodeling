@@ -389,41 +389,29 @@ ACCOUNT.idsIn(transfer.tags());                                         // an ev
   which is purely declarative — it only adds them to the slice's `members` on `BoundedContextStarting`,
   so an observer (the dashboard) shows them from startup instead of after their first execution
 
-**A command appends to exactly one stream — no command raises a domain event and an outbound event
-together:**
-- `AbstractCommand` is sealed with exactly two permits. `Command<D>` decides on domain events and
-  raises domain events; `OutboundCommand<D,O>` decides on domain events and raises **outbound** events
-  — the shape that feeds the outbound stream, and the only writer that stream has (there is no
-  `ProvidedEventCapability` for outbound events; dispatchers only consume). The produced type fixes the
-  target stream in `DCBModule`, and everything a command raises goes out in **one** `append` on that one
-  stream. There is no third command shape, and no cross-stream atomic append in the eventstore SPI to
-  build one on: domain and outbound are separate streams (purposes `domain` and `outbound`) whose
-  appends commit independently
-- **"Record the fact and publish it" is therefore an automation pattern, not a command shape — and
-  `AutomationContext.publishAndRecord(outboundCommand, domainEvent, itemKey)` is how to write it.**
-  The helper composes the two halves the one safe way, so the composition cannot be hand-rolled wrong:
-  it executes the `OutboundCommand` under `<itemKey>/outbound`, then provides the domain event under
-  `<itemKey>/domain`, and returns the domain event's reference — which is what `handle` should return.
-  `itemKey` must be stable per todo item (derived from the item, never from the attempt) and is
-  rejected when null or blank. Why that exact shape:
-  - **Outbound first, domain second.** Only the domain event makes the todo list drop the item, so a
-    crash between the two leaves the item outstanding and the retry re-runs both halves — the outbound
-    half dedups on its key, and the domain event then lands. The other order loses the publication for
-    good: the domain event completes the item, and nothing ever retries the outbound append
-  - **Both events keyed, both keys derived from the todo item.** The outbound key is what turns the
-    crash-window retry into a no-op; the domain key is what keeps a re-handled item (a crash between
-    append and bookmark, or a failover overlap) from recording the fact twice. Two keys, because they
-    are scoped per stream and guard two different appends. A repeat surfaces as `Optional.empty()`,
-    which for an at-least-once caller is success — the work was already done
-- **An `OutboundCommand` is not offered decision models, because they cannot guard its append.** The
-  models would be projected from the domain stream, but the `AppendCriteria` they produce travels with
-  the append — which runs against the *outbound* stream, where domain event types never occur, so the
-  optimistic-locking check would match nothing and admit everything: a boundary that guards nothing,
-  silently. This is enforced at the type level: `execute` moved off the sealed `AbstractCommand` onto
-  the permits, and an `OutboundCommand` receives `OutboundCommandContext` — `read(...)` and
-  `noDecisionModels()` only — while `CommandContext` extends it adding `decisionModels(...)` for the
-  domain command, whose boundary genuinely guards its stream. (Making the models real instead would
-  need a cross-stream conditional append the storage SPI does not have)
+**A command raises domain events, and a `Publisher` tells the world — there is one command shape:**
+- `Command<D>` (and `CommandWithResult<D,R>`, for a caller that needs what it decided) decides on
+  decision models projected from the domain stream and raises domain events, appended to that same
+  stream in one append guarded by the boundary the models were read within. Nothing but a publisher
+  writes the outbound stream
+- **"Record the fact and publish it" is a command and a publisher.** The command records its
+  conclusion as a domain event — a best practice anyway, since the conclusion is a fact of the domain —
+  and a `Publisher` registered on the context maps that event into outbound events after it is stored.
+  A dispatcher then sends them. Command → domain event → publisher → outbound event → dispatcher: every
+  hop bookmarked and at-least-once, and every outbound event traces back to the domain event it was
+  published for. A publication that needs a decision made later (waiting on other facts, on time, on an
+  external answer) is a todo list and an automation executing a command, whose domain event the
+  publisher then maps
+- **Why not a command that raises both, or an outbound command.** The two streams commit independently
+  (purposes `domain` and `outbound`), and the eventstore SPI appends to one stream per call, so a
+  command raising into both could not be atomic. A command raising outbound events only — deciding on
+  domain events, appending to the outbound stream — loses because its decision models cannot guard its
+  append: the `AppendCriteria` they produce travel with an append against a stream where domain event
+  types never occur, so the check matches nothing and admits everything, silently. It would also need
+  a helper composing its append with a domain event in the one safe order, keys derived per stream,
+  which is exactly the shape that is easy to hand-roll wrong. A publisher needs none of it: it decides
+  nothing, and its keys come from the domain event, so there is nothing to order and nothing to
+  forget. The cost is one bookmarked hop between the fact and its publication
 - **A command that calls neither `decisionModels(...)` nor `noDecisionModels()` has decided on
   nothing.** Those two calls are the only way to obtain the `CommandResult` events are raised on, so
   silence can only mean nothing was raised; `DCBCommandContextImpl.getCommandResult()` then does what
@@ -431,14 +419,7 @@ together:**
   execution reports `CommandExecuted` with no events. The alternative — rejecting the silence with an
   `IllegalStateException` — loses because it fails an execution whose outcome is already fully
   determined (a command that reads, finds nothing to do and returns early), for a call that would
-  change nothing about it. `CommandWithoutDecisionModelsTest` pins it for both command shapes
-- **Every outbound event must carry an idempotency key, and an append without one is rejected** —
-  `IllegalStateException` from `execute`, before anything is stored. The check runs in `DCBModule`
-  after key resolution, so a key from any source satisfies it: per event
-  (`raiseEvent(event, tags, key)`), command-level (`CommandResult.idempotencyKey(...)` and friends), or
-  externally provided (`execute(command, key)` — what `publishAndRecord` does). The deliberate opt-out
-  is `forbidIdempotencyKey()`, which declares the command publishes without de-duplication on purpose
-  — greppable, and it costs exactly that: an at-least-once caller may publish twice
+  change nothing about it. `CommandWithoutDecisionModelsTest` pins it
 - **A command-level key on a command raising several events becomes a key per event.** The store
   holds a key per event, scoped to the stream, and refuses a batch repeating one — so
   `CommandResultImpl.applyIdempotencyKey` leaves a single event's key as it is (what every key on
@@ -451,16 +432,6 @@ together:**
   decision. Derivation by position is stable only for a command raising the same events in the same
   order each time; a command whose event count varies under one key keys its events itself, from what
   each is about. `DCBCommandIdempotencyTest` pins the derivation, the swallowed retry and the refusal
-- **Where latency permits, prefer not needing the pair at all**: keep the command domain-only and derive
-  the publication — a todo list projects the domain event and an automation executes the
-  `OutboundCommand`. Command → domain event → todo list → automation → outbound event → dispatcher:
-  every hop bookmarked, at-least-once and dedup-able, at the price of the dispatch lagging the fact
-- `DispatchOrderAutomation` in the benchmark module is the in-tree example to copy: one
-  `publishAndRecord` call, with its `RegisterOrderDispatched` declaring `requireIdempotencyKey()` so
-  the item-derived key from the helper is mandatory rather than incidental. `OutboundCommandGuardsTest`
-  pins the runtime guards down — the rejection stores nothing, each key source satisfies it, the
-  opt-out really does forgo dedup, and `publishAndRecord` orders the appends, dedups a re-handled item
-  and rejects a missing item key. The context narrowing is compile-time and needs no runtime pin
 
 **A command's consistency boundary is pinned at the domain stream's head before its decision models
 are read:**
@@ -598,7 +569,7 @@ and, for a savepoint model, its `initQuery` — each stripped of its own `until`
   conflict cleared in-handle never reaches `onFailure` and never abandons the batch
 - `ExecuteWithRetryTest` pins all of it (success after a conflict, exhaustion with suppressed
   conflicts, the default policy, the `BusinessException` outcome, non-conflicts never retried, the key
-  surviving the retry, the `CommandWithResult` and `OutboundCommand` twins);
+  surviving the retry, the `CommandWithResult` twins);
   `AutomationExecuteWithRetryTest` pins the in-handle use end to end; `RetryPolicyTest` pins the
   validation
 
@@ -607,7 +578,7 @@ opposite responses:**
 - `DCBModule` reports every outcome of a command execution as its own `BoundedContextEvent`:
   `CommandExecuted`, `CommandFailedOnOptimisticLocking` for the conflict, `CommandRejected` for a
   `BusinessException`, and `CommandFailed` for everything else. The catch clauses are ordered from the
-  most specific outcome to the catch-all, on both execution paths (`Command`/`OutboundCommand` and
+  most specific outcome to the catch-all, on both execution paths (`Command` and
   `CommandWithResult`), and the exception is rethrown unchanged in every case
 - **`CommandRejected` carries the reason and no `Failure`.** The rule's message is the whole account
   of a rejection: the exception type is always the business exception, and a stack trace would only
@@ -679,7 +650,7 @@ framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook
   the payload; a violation that stops the execution becomes a `RuleViolationException`, so the events
   are never stored. A `check` or `overridableWhen` after `ruleViolations()` was read is an
   `IllegalStateException` (a bug, `CommandFailed`): the recorded violations must be the judged ones.
-  `check` is on `CommandContext` only — an `OutboundCommand` has no decision models to judge a rule on
+  `check` is on `CommandContext`, where the decision models are read
 - **`RuleViolationException extends BusinessException`**, so everything that tells a rejection from a
   bug keeps doing so: `CommandRejected`, `executeWithRetry` leaving it alone, `businessError()` in the
   harness. It carries the `Evaluation` a preview would have answered, so an HTTP binding answers a
@@ -691,7 +662,7 @@ framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook
   override policy on the builder — loses because it reads no history, sits outside the boundary and
   escapes the command's tests. Defaults: a pre-authorized override authorizes nobody unless the command
   says so; post-justified and with-explanation are open to whoever asks unless narrowed. The actor is
-  `OutboundCommandContext.actor()`, read from the `Tracing` — the same value as the `x-actor` tag
+  `CommandContext.actor()`, read from the `Tracing` — the same value as the `x-actor` tag
 - **Overrides are an input of the command** (`Overrides`, exposed by `implements Overriding`; a record
   component `Overrides overrides` suffices), not an `execute` parameter and not a field of `Tracing`.
   No `execute`/`executeWithRetry` overload changes, and whatever builds a command without a user
@@ -779,7 +750,7 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
 - Can be queried via `boundedContext.read(ReadModelClass.class, ...)`
 - **A read is typed by the class it asks for.** `read` is declared
   `<R extends ReadModel<? extends D>> R read(Class<R>, Object...)`, on `ReadModelCapability`,
-  `UnboundedReadModelCapability` and the command's `OutboundCommandContext` alike, so
+  `UnboundedReadModelCapability` and the command's `CommandContext` alike, so
   `read(AccountDetails.class, id)` *is* an `AccountDetails`: assignable, chainable
   (`read(X.class, id).details()`) and `var`-able without a cast, and assigned to an unrelated type a
   compile error. The bound keeps the class argument constrained to the context's own read models, as it
@@ -1526,6 +1497,12 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
 **Translators:**
 - Implement `Translator<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>`
 - Convert external events to domain events
+- `translate(Event<I>, TranslatorContext)` is handed the inbound `Event`, not its payload — the one-`when`
+  rule every component follows, and what a translator needs to key what it raises from
+  `event.reference().id()` and to read the flow with `Tracing.readFrom(event)`. On the interactive path
+  the inbound event is stored nowhere, so it is handed an `Event` built for the call: the caller's
+  tracing as its tags, and a reference with a freshly minted id under a position that names no stored
+  event, fit to key a translation and for nothing else. `TranslateTest` pins it
 - Registered with the bounded context from a feature slice (`builder.translator(...)`), which is what makes that slice a `TRANSLATION`
 - Two ways to run a translation, both reusing the same registered `Translator` implementations:
   - `boundedContext.incoming(inboundEvent)`: eventually-consistent. Appends the inbound event to the inbound stream; matching translators run asynchronously via projectors. Supports idempotency keys.
@@ -1537,17 +1514,69 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
 - Registered with the bounded context via `builder.dispatcher(...)`, and subject to the naming rule below.
   This is the registry where getting a name wrong costs the most, since the bookmark records what has
   already been published to an external system
-- `DispatcherDeliveryTest` pins the delivery path end to end — a keyed `OutboundCommand`'s event reaching
-  a registered dispatcher's `when()` exactly once through a real `OutboundModule` processor. It is the
-  only test that does: the other dispatcher tests assert registration-time validation, and the published
-  `DispatcherTest` base deliberately drives a dispatcher without registering it, so without this test the
-  wiring from `builder.dispatcher(...)` to `when()` could break with every suite still green
+- `DispatcherDeliveryTest` pins the delivery path end to end — a fact a command records, published by a
+  registered publisher and reaching a registered dispatcher's `when()` exactly once, through real
+  processors. It is the only test that does: the published `PublisherTest` and `DispatcherTest` bases
+  deliberately drive their component without registering it, so without this test the wiring from
+  `builder.publisher(...)` and `builder.dispatcher(...)` could break with every suite still green
+
+**Publishers:**
+- Implement `Publisher<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>`: `eventQuery()` over the domain stream,
+  `reads()` declaring the live read models it reads, and `publish(Event<D>, PublisherContext<D,O>)`,
+  which publishes zero or more outbound events. The only writer of the outbound stream
+- **It decides nothing, writes no domain events and calls out to nothing.** Its context offers reads
+  and `publish` and nothing else: whatever needs deciding is a command's decision recorded as a domain
+  event first, and sending is a dispatcher's job. That is what makes a publisher's output a pure
+  function of history, and so safe to redeliver
+- **Every read is bounded, and the publisher says where** — the choice between the state as it was
+  when the fact was recorded and the state as it is now is one every consumer lives with, so there is
+  no read that leaves it unsaid (the same reasoning as `.live()`/`.eventuallyConsistent()`):
+  `readAsOfEvent` (up to and including the event being published — the usual choice: a burst of changes
+  publishes the sequence of states it went through), `readAsOf(ref)` (up to an event it names, the one
+  that recorded the decision when that is not the one being published) and `readLatest` (up to the
+  domain stream's head, pinned once per publication so several reads see one moment). The bound is
+  `ReadModelModule.liveModelUntil` — `Projector.runUntil` on the live path. A bounded read is never
+  seeded (`seed()` loads the state and answers its position in one call, and a base past the boundary
+  cannot be unprojected), uses a snapshot only when its reference is at or before the boundary, and
+  saves none, since it does not hold the latest state. So a read model a publisher reads as of an event
+  is best kept to a decision model's size; `LiveModelProjected.seededAt` shows the fallback
+- **The first publication stands.** `Publication` (impl, `module.outbound`) appends everything one
+  domain event was mapped into together, keyed `<event id>/<n>` in `publish` order and tagged
+  `x-published-from:<event id>` (`Publisher.TAG_PUBLISHED_FROM`) plus the source event's correlation
+  id. A redelivered event (a crash between append and bookmark, a failover overlap) mapped the same way
+  again is a retry the store swallows; mapped another way — possible only through `readLatest` — it mixes
+  stored keys with new ones, which the store refuses with `IdempotencyKeyConflictException`. Every key
+  derives from the one event, so that refusal can only mean it was published before: it is answered
+  `Outcome.AlreadyPublished` and nothing is stored. Everywhere else that exception retires a processor;
+  here it is the expected answer, caught before the projector sees it
+- **Part of a slice's automation aspect.** Registered from `configureAutomation` with
+  `builder.publisher(...)`, it runs on the instances deploying automations, leader-only, one lease per
+  publisher named by its `ProcessorIdentification` (type `publisher`), bookmarked on the domain stream.
+  `build()` rejects one a slice registered from another aspect's hook, naming the slice and the hook
+  (`rejectPublishersOutsideTheAutomationAspect`); one registered straight on the builder runs wherever
+  the builder puts it, as every other component registered that way does
+- **Its reads are declared, and checked at `build()`.** `rejectPublishersWhoseReadModelsAreNotLiveHere`
+  names every declared read model not registered `.live()` on this instance — above all one registered
+  only from `configureQuery`, which does not exist on an instance running automations alone — and a
+  read of an undeclared class is an `IllegalArgumentException` at the read. A slice therefore registers
+  the read model beside the publisher, and may also register it from `configureQuery` for its endpoint:
+  **two identical live registrations of one class are one** (`ReadModelModule` collapses them), and two
+  that disagree on snapshots are refused
+- Operated like the other projector-driven processors: `ProcessorKind.PUBLISHER` in
+  `ProcessorAdminCapability` and the management instructions, `PublisherStarted`/`PublisherFailed`/
+  `PublisherStopped`, `MemberKind.PUBLISHER`, and `Observation.Publication` completing with
+  `Published` or `AlreadyPublished`, its live reads nested beneath it
+- `PublisherModuleTest` pins the append (the causation tag, the flow, the tags given), stop and restart,
+  and every build rejection; `PublisherTestRunsOnEveryBackendTest` pins the three read modes, a second
+  round publishing only what is new, the swallowed retry and the first publication standing, per
+  backend; `ForeignEventTypeRegistrationTest` the foreign-type rejection
 
 ### Registration is wildcard-typed, and `build()` is where the event types are checked
 
 **Every registration on `BoundedContextBuilder` takes a wildcard** — `readmodel(Class<? extends
 ReadModel<?>>)`, `readmodel(ReadModel<?>)`, `aggregate(Class<? extends Aggregate<?>>)`,
-`automation(Automation<?,?,?>)`, `translator(Translator<?,?>)`, `dispatcher(Dispatcher<?>)` — so the
+`automation(Automation<?,?,?>)`, `translator(Translator<?,?>)`, `publisher(Publisher<?,?>)`,
+`dispatcher(Dispatcher<?>)` — so the
 compiler admits a payments read model on the banking context. The builder knows the three event types
 (`newBuilder` resolves them off the context interface and calls `eventTypes(...)`), but only at
 runtime: it is typed `BoundedContextBuilder<C>`, and Java offers no way to project `D`, `I` and `O`
@@ -1966,7 +1995,7 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 
 **Base Classes:**
 - `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves. The release *terminates* the context rather than stopping it, because terminating is what closes the `EventStore` the context built and drains its processor threads — see "Shutdown — who closes what" below
-- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `TranslatorTest`, `DispatcherTest`, `SqlReadModelTest`)
+- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `TranslatorTest`, `PublisherTest`, `DispatcherTest`, `SqlReadModelTest`)
 - `CommandTest` tests business rules with `as(actor)` (seeded events and the execution carry the actor),
   `whenEvaluated(command).thenEvaluation()` (fails if anything was appended) and
   `then().rulesViolated()`, both handing out `EvaluationAssertions`
@@ -1986,9 +2015,14 @@ bases, all synchronous and deterministic:**
 - `TranslatorTest` registers the translators and rides the synchronous `translate()` path; every test
   additionally asserts the inbound event was not persisted, which is that path's contract. The async
   `incoming()` path stays with `InboundModuleTest`
+- `PublisherTest` drives a publisher over seeded domain events through `Publication`, the code a
+  deployed publisher's processor runs, reading its live read models bounded as a deployment bounds them
+  (constructed with `LiveModelConstructors`, projected with `runUntil`, no registration needed).
+  `whenPublished()` hands over what it has not seen yet; `whenRepublished()` hands everything over again
+  — the redelivery case, where a correct publisher appends nothing. Never registered either; the
+  registered path is `PublisherModuleTest`'s and `DispatcherDeliveryTest`'s
 - `DispatcherTest` drives a dispatcher as the projection it is, over the outbound stream — `given(...)`
-  seeds raw outbound events, `givenExecuted(command, key)` seeds through the real command path, and the
-  two dispatch verbs make redelivery first-class: `whenDispatched()` keeps its cursor (a second round
+  seeds outbound events as fixture data, and the two dispatch verbs make redelivery first-class: `whenDispatched()` keeps its cursor (a second round
   delivers only what is new), `whenRedeliveredFromTheStart()` is the lost-bookmark case. The dispatcher
   is never registered either; the registered path is `DispatcherDeliveryTest`'s
 - Worked examples to point users at: `ExecutePaymentAutomationTest` and `PaymentsToExecuteTodoListTest`
@@ -1996,7 +2030,7 @@ bases, all synchronous and deterministic:**
   automation deterministically — no Awaitility, no sleeps; deferred retries are tested by seeding the
   `PaymentAttemptFailed` history with an already-elapsed due time rather than waiting one out
 - Each base has its own `...RunsOnEveryBackendTest` in `sliceworkz-eventmodeling-tests`
-  (`AutomationTestRunsOnEveryBackendTest`, `TranslatorTestRunsOnEveryBackendTest`,
+  (`AutomationTestRunsOnEveryBackendTest`, `TranslatorTestRunsOnEveryBackendTest`, `PublisherTestRunsOnEveryBackendTest`,
   `DispatcherTestRunsOnEveryBackendTest`), same rationale as the command/live-model ones below — and they
   also pin that the streams behind `inboundEventStreamId()`/`outboundEventStreamId()` are the ones the
   context writes to. Those helpers derive the ids from `BoundedContextStreams`, as the builder does
@@ -2229,8 +2263,7 @@ what it answered, which is what an observation is.
   `close()` in a `finally`, all on that thread — so a span made current in `start` has the event store's
   own observations (and the framework's nested ones) beneath it with nothing propagated. The durations
   are the observer's to measure; no outcome carries one
-- **The operations** (`Observation` is sealed): `CommandExecution` (with its `Target`, DOMAIN or
-  OUTBOUND, and the caller's `Tracing`), `CommandEvaluation` (a preview, nothing appended), `ProvidedEvent`, `IncomingEvent`, `Translation` (the
+- **The operations** (`Observation` is sealed): `CommandExecution` (with the caller's `Tracing`), `CommandEvaluation` (a preview, nothing appended), `ProvidedEvent`, `IncomingEvent`, `Translation` (the
   interactive `translate`) with a `TranslatorInvocation` per translator nested inside, the async
   `TranslatorInvocation` on the processor thread, `Dispatch`, `ReadModelBatch` with a `ReadModelUpdate`
   per event nested inside, `LiveModelRead`, `AggregateLoad`, `AggregateAppend`, `SnapshotLoad`/

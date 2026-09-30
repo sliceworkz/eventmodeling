@@ -145,7 +145,7 @@ final class OperatorTestComponents {
 		}
 
 		@Override
-		public void translate ( MockInboundEvent event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
+		public void translate ( Event<MockInboundEvent> event, TranslatorContext<MockInboundEvent,MockDomainEvent> context ) {
 			// nothing to translate in these tests
 		}
 	}

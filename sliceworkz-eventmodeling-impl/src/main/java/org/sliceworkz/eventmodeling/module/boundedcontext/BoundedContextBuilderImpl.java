@@ -42,7 +42,7 @@ import org.sliceworkz.eventmodeling.aggregates.Aggregate;
 import org.sliceworkz.eventmodeling.aggregates.AggregateSpecification;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
-import org.sliceworkz.eventmodeling.commands.AbstractCommand;
+import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.boundedcontext.AdapterBinding;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
@@ -73,6 +73,8 @@ import org.sliceworkz.eventmodeling.module.readmodels.LiveModelSpecificationAcce
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.module.snapshots.LiveModelSnapshotSpecificationImpl;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
+import org.sliceworkz.eventmodeling.outbound.Publisher;
+import org.sliceworkz.eventmodeling.module.outbound.PublisherModule;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
@@ -131,6 +133,14 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private List<EventuallyConsistentReadModelSpecificationImpl> eventuallyConsistentReadModelSpecs = new ArrayList<>();
 	private List<Translator> translatorSpecs = new ArrayList<>();
 	private List<Dispatcher> dispatcherSpecs = new ArrayList<>();
+	private List<PublisherRegistration> publisherSpecs = new ArrayList<>();
+
+	/**
+	 * A publisher, with where it was registered: the aspect a slice was configuring then ({@code null}
+	 * for a registration made straight on the builder), so {@link #rejectPublishersOutsideTheAutomationAspect}
+	 * can name the slice and the aspect it was registered from.
+	 */
+	private record PublisherRegistration ( Publisher<?,?> publisher, Aspect aspect, String slice ) { }
 	private List<Automation> automations = new ArrayList<>();
 	private List<AggregateSpecificationImpl> aggregateSpecifications = new ArrayList<>();
 
@@ -360,6 +370,16 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	@Override
+	public BoundedContextBuilder<C> publisher ( Publisher<?,?> publisher ) {
+		if ( publisher == null ) {
+			throw new IllegalArgumentException("publisher must not be null");
+		}
+		publisherSpecs.add(new PublisherRegistration(publisher, configuringAspect, configuringSlice == null ? null : configuringSlice.name()));
+		recordSliceMember(publisher.getClass().getSimpleName(), BoundedContextEvent.MemberKind.PUBLISHER);
+		return this;
+	}
+
+	@Override
 	public BoundedContextBuilder<C> dispatcher ( Dispatcher<?> dispatcher ) {
 		dispatcherSpecs.add(dispatcher);
 		recordSliceMember(dispatcher.getClass().getSimpleName(), BoundedContextEvent.MemberKind.DISPATCHER);
@@ -417,13 +437,13 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			if ( commandClass == null ) {
 				throw new IllegalArgumentException("command class must not be null");
 			}
-			if ( !AbstractCommand.class.isAssignableFrom(commandClass) && !CommandWithResult.class.isAssignableFrom(commandClass) ) {
+			if ( !Command.class.isAssignableFrom(commandClass) && !CommandWithResult.class.isAssignableFrom(commandClass) ) {
 				throw new IllegalArgumentException("%s is not a command: it implements neither %s nor %s"
-						.formatted(commandClass.getName(), AbstractCommand.class.getSimpleName(), CommandWithResult.class.getSimpleName()));
+						.formatted(commandClass.getName(), Command.class.getSimpleName(), CommandWithResult.class.getSimpleName()));
 			}
 			// Nothing to wire: a command is instantiated by the caller and executed ad hoc. This only
 			// declares it, so its slice reports it before it has ever run.
-			recordSliceMember(AbstractCommand.commandNameOf(commandClass), BoundedContextEvent.MemberKind.COMMAND);
+			recordSliceMember(Command.commandNameOf(commandClass), BoundedContextEvent.MemberKind.COMMAND);
 		}
 		return this;
 	}
@@ -616,6 +636,66 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	/**
+	 * Rejects a publisher a slice registered while configuring another aspect than automation.
+	 * <p>
+	 * A publisher runs where automations run: it is part of a slice's automation aspect, registered from
+	 * {@code configureAutomation}, which only runs on an instance deploying automations. Registered from
+	 * {@code configureProjection} or {@code configureQuery} it would quietly run on the instances deploying
+	 * those instead -- the deployment would still publish, from the wrong processes, and a split
+	 * deployment with no automation instance for the context would publish from somewhere nobody looks.
+	 * A publisher registered straight on the builder, outside any slice, runs wherever the builder puts
+	 * it, as every other component registered that way does.
+	 */
+	private void rejectPublishersOutsideTheAutomationAspect ( ) {
+		List<String> misplaced = publisherSpecs.stream()
+				.filter(r -> r.aspect() != null && r.aspect() != Aspect.AUTOMATION)
+				.map(r -> "%s (registered by slice %s from configure%s -- register it from configureAutomation)"
+						.formatted(r.publisher().getClass().getSimpleName(), r.slice(), capitalized(r.aspect())))
+				.toList();
+		if ( !misplaced.isEmpty() ) {
+			throw new IllegalArgumentException("publisher registered outside the automation aspect: " + String.join(", ", misplaced));
+		}
+	}
+
+	private static String capitalized ( Aspect aspect ) {
+		String lower = aspect.name().toLowerCase();
+		return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+	}
+
+	/**
+	 * Rejects a publisher that declares a read model which is not registered {@code .live()} here.
+	 * <p>
+	 * A publisher reads live read models on its own processor thread, and a read model registered only
+	 * where queries are served -- from {@code configureQuery}, for the endpoint that reads it -- does not
+	 * exist on an instance that runs automations alone. Left to the first publication, that is a
+	 * publisher failing on every domain event it is handed, retrying with backoff for good; the
+	 * declaration is what lets the build say so instead, naming every offender at once.
+	 */
+	private void rejectPublishersWhoseReadModelsAreNotLiveHere ( ) {
+		Set<Class<?>> live = liveModelSpecs.stream()
+				.filter(LiveModelSpecificationImpl::modeChosen)
+				.map(LiveModelSpecificationImpl::readModelClass)
+				.collect(Collectors.toSet());
+		List<String> missing = new ArrayList<>();
+		for ( PublisherRegistration registration : publisherSpecs ) {
+			Publisher<?,?> publisher = registration.publisher();
+			Set<? extends Class<?>> reads = publisher.reads();
+			if ( reads == null ) {
+				continue;
+			}
+			for ( Class<?> readModelClass : reads ) {
+				if ( !live.contains(readModelClass) ) {
+					missing.add("%s reads %s (register it with builder.readmodel(%s.class).live() beside the publisher)"
+							.formatted(publisher.getClass().getSimpleName(), readModelClass.getSimpleName(), readModelClass.getSimpleName()));
+				}
+			}
+		}
+		if ( !missing.isEmpty() ) {
+			throw new IllegalArgumentException("publisher reads a read model that is not registered live on this instance: " + String.join(", ", missing));
+		}
+	}
+
+	/**
 	 * Whether a scanned {@code @FeatureSlice} class is a slice of <em>this</em> bounded context.
 	 * <p>
 	 * A slice declares the context it belongs to — {@code class OpenAccountFeatureSlice implements
@@ -715,6 +795,14 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 					translator.getClass(), Translator.class, 0, "inbound", inboundEventRootType);
 			checkEventType(foreign, "translator", name,
 					translator.getClass(), Translator.class, 1, "domain", domainEventRootType);
+		}
+		for ( PublisherRegistration registration : publisherSpecs ) {
+			Publisher<?,?> publisher = registration.publisher();
+			String name = publisher.getClass().getSimpleName();
+			checkEventType(foreign, "publisher", name,
+					publisher.getClass(), Publisher.class, 0, "domain", domainEventRootType);
+			checkEventType(foreign, "publisher", name,
+					publisher.getClass(), Publisher.class, 1, "outbound", outboundEventRootType);
 		}
 		for ( Dispatcher<?> dispatcher : dispatcherSpecs ) {
 			checkEventType(foreign, "dispatcher", dispatcher.getClass().getSimpleName(),
@@ -889,6 +977,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		rejectReadModelsWithoutAChosenMode();
 		rejectLiveReadModelsThatCannotBeInstantiated();
 		rejectAutomationsWhoseTodoListIsNotProjectedHere();
+		rejectPublishersOutsideTheAutomationAspect();
+		rejectPublishersWhoseReadModelsAreNotLiveHere();
 
 		// contained once, here, so no module has to: whatever the observer throws never reaches the work
 		BoundedContextObserver observer = BoundedContextObserver.contained(this.observer);
@@ -919,8 +1009,12 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentReadModels, instance, observer, eventEmitter);
 		constructed.add(rmm);
-		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, outboundEventStream, observer, eventEmitter);
+		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, observer, eventEmitter);
 		constructed.add(dcb);
+
+		Collection<Publisher> publishers = publisherSpecs.stream().map(PublisherRegistration::publisher).collect(Collectors.toCollection(ArrayList::new));
+		PublisherModule pm = new PublisherModule(name, domainEventStream, outboundEventStream, rmm, publishers, instance, observer, eventEmitter);
+		constructed.add(pm);
 
 		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, observer, eventEmitter);
 
@@ -931,6 +1025,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		List<LeaderElector.Electable> electables = new ArrayList<>();
 		im.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		om.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
+		pm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		am.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((AutomationProcessor<?,?,?>) p).identification(), (AutomationProcessor<?,?,?>) p)));
 		rmm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		LeaderElector leaderElector = new LeaderElector(name, eventStorage, instance.process(),
@@ -948,7 +1043,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
-						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, leaderElector, managementModule, instance, observer, adapterRegistry, portReporter, summarizingPorts, List.copyOf(businessRules.values()));
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, pm, leaderElector, managementModule, instance, observer, adapterRegistry, portReporter, summarizingPorts, List.copyOf(businessRules.values()));
 
 		// From here the context owns the modules, and it is the only thing that can release them
 		// completely: its constructor registered a JVM shutdown hook holding it, which only its own

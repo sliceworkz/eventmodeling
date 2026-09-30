@@ -44,7 +44,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent.SomeInboundEvent;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundCommand;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockPublisher;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
@@ -107,7 +107,6 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 		assertEquals(CONTEXT, started.boundedContext());
 		assertEquals("RaiseTwoEvents", started.command(), "the command's name, as every other report names it");
 		assertEquals(CorrelationPropagationTest.RaiseTwoEventsCommand.class, started.commandClass());
-		assertEquals(Observation.Target.DOMAIN, started.target());
 		assertEquals("alice", started.tracing().actor());
 		assertEquals("web", started.tracing().channel());
 		assertEquals(tracing.correlationId(), started.tracing().correlationId(), "the caller's flow travels with the observation");
@@ -148,15 +147,21 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 	}
 
 	@Test
-	void anOutboundCommandTargetsTheOutboundStreamAndItsDispatchIsObserved ( ) {
+	void aPublicationAndTheDispatchOfWhatItPublishedAreObserved ( ) {
 		NamedDispatcher dispatcher = new NamedDispatcher();
 		BoundedContextBuilder<Mock> builder = observedBuilder();
+		builder.publisher(new MockPublisher());
 		builder.dispatcher(dispatcher);
 		Mock domain = buildBoundedContext(builder);
 
-		domain.execute(new MockOutboundCommand("published"), "outbound/1");
+		domain.event(new FirstDomainEvent("published"));
 
-		assertEquals(Observation.Target.OUTBOUND, observer.last(Observation.CommandExecution.class).observation(Observation.CommandExecution.class).target());
+		waitBecauseOfEventualConsistency(() -> !observer.recordings(Observation.Publication.class).isEmpty()
+				&& observer.last(Observation.Publication.class).closed());
+		Recording publication = observer.last(Observation.Publication.class);
+		assertEquals("MockPublisher", publication.observation(Observation.Publication.class).publisher());
+		assertEquals(EventType.of(FirstDomainEvent.class), publication.observation(Observation.Publication.class).eventType());
+		assertEquals(Map.of(EventType.of(SomeOutboundEvent.class), 1), publication.outcome(Outcome.Published.class).publishedPerType());
 
 		waitBecauseOfEventualConsistency(() -> !observer.recordings(Observation.Dispatch.class).isEmpty()
 				&& observer.last(Observation.Dispatch.class).closed());

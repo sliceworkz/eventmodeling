@@ -17,27 +17,31 @@
  */
 package org.sliceworkz.eventmodeling.mock.boundedcontext;
 
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
-import org.sliceworkz.eventmodeling.commands.OutboundCommandContext;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
+import org.sliceworkz.eventmodeling.outbound.Publisher;
+import org.sliceworkz.eventmodeling.outbound.PublisherContext;
+import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
- * Publishes a {@link SomeOutboundEvent}, keyed by whatever idempotency key the caller executes it
- * under — the {@code publishAndRecord} shape, where the key is derived from the work item rather
- * than by the command itself.
+ * Publishes every {@link FirstDomainEvent} as a {@link SomeOutboundEvent} carrying the same value: the
+ * simplest publisher there is, for tests about what happens around a publication.
  */
-public class MockOutboundCommand implements OutboundCommand<MockDomainEvent, MockOutboundEvent> {
+public class MockPublisher implements Publisher<MockDomainEvent, MockOutboundEvent> {
 
-	private final String value;
-
-	public MockOutboundCommand ( String value ) {
-		this.value = value;
+	@Override
+	public EventQuery eventQuery ( ) {
+		return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
 	}
 
 	@Override
-	public void execute ( OutboundCommandContext<MockDomainEvent, MockOutboundEvent> context ) {
-		context.noDecisionModels().raiseEvent(new SomeOutboundEvent(value), Tags.none());
+	public void publish ( Event<MockDomainEvent> event, PublisherContext<MockDomainEvent, MockOutboundEvent> context ) {
+		if ( event.data() instanceof FirstDomainEvent first ) {
+			context.publish(new SomeOutboundEvent(first.value()), Tags.none());
+		}
 	}
 
 }

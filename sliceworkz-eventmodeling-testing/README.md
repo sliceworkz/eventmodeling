@@ -152,7 +152,7 @@ it counts, as the actor and tagged as the kernel tags an override. `WithdrawComm
 `AutomationTest` tests an `Automation` together with its `TodoListReadModel` — synchronously, on the
 test thread, with no polling and no waits. The batch loop it runs is literally the production one
 (`AutomationBatch`, shared with `AutomationProcessor`), over a real `AutomationContext` on a real
-bounded context, so `publishAndRecord`, idempotency keys and `onFailure` behave exactly as deployed.
+bounded context, so idempotency keys and `onFailure` behave exactly as deployed.
 
 ```java
 class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecute, PaymentsDomainEvent, PaymentsInboundEvent, PaymentsOutboundEvent> {
@@ -267,11 +267,9 @@ class AnnouncePaymentDispatcherTest extends DispatcherTest<PaymentsDomainEvent, 
 }
 ```
 
-Seeding: `given(...)` appends raw outbound events as fixture data (the idempotency-key requirement
-lives in the command path, not in storage, so this is legitimate); `givenExecuted(command, key)` is
-the faithful alternative — a real `OutboundCommand` through the bounded context under an externally
-provided key, exactly as an automation's `publishAndRecord` does, so executing it twice under the
-same key appends once.
+Seeding: `given(...)` appends outbound events as fixture data. In production a `Publisher` appends
+them; `PublisherTest` tests that half on its own — a dispatcher only ever sees what is on the outbound
+stream, however it got there.
 
 Redelivery is first-class, because a dispatcher is where duplicate publishing costs most: an absent
 bookmark means "publish everything again". `whenDispatched()` keeps one projector across rounds (a
@@ -280,6 +278,39 @@ from zero — the lost-bookmark or renamed-dispatcher case — and the test then
 dispatcher does with duplicates. As with the automation base, **never register the dispatcher on the
 builder**; the end-to-end delivery path through a registered dispatcher is the framework's own
 `DispatcherDeliveryTest`.
+
+## Testing a publisher
+
+`PublisherTest` drives a `Publisher` over seeded domain events and asserts on the outbound events it
+appended — through `Publication`, the same code a deployed publisher's processor runs, so the keys, the
+`x-published-from` tag, the pinned head and the first-publication-stands rule are the production ones:
+
+```java
+class PlannedSessionPublisherTest extends PublisherTest<PlanningDomainEvent, PlanningInboundEvent, PlanningOutboundEvent> {
+
+    @Override
+    public Publisher<PlanningDomainEvent, PlanningOutboundEvent> publisher ( ) {
+        return new PlannedSessionPublisher();
+    }
+
+    @Test
+    void aSessionIsPublishedAsItWasWhenItChanged ( ) {
+        given(new SessionPlanned(sessionId, ..., capacity(20)), Planning.SESSION.tags(sessionId))
+            .and(new SessionCapacityChanged(sessionId, capacity(25)), Planning.SESSION.tags(sessionId))
+        .whenPublished()
+            .published(new PlannedSessionPublished(sessionId, ..., capacity(20)),
+                       new PlannedSessionPublished(sessionId, ..., capacity(25)));
+    }
+}
+```
+
+The live read models the publisher reads are read as it asks for them — as of the event, as of another,
+or the latest — bounded exactly as a deployment bounds them, and need no registration in the test.
+`whenPublished()` hands over what the publisher has not seen yet, so a second round publishes only what
+was seeded since; `whenRepublished()` hands every event over again, the crash-or-failover redelivery,
+and a correct publisher appends nothing there (`.nothingPublished()`). **Never register the publisher on
+the builder**; the registered path, and the build-time checks on where it is registered and what it
+reads, are the framework's own tests.
 
 ## SQL read models
 

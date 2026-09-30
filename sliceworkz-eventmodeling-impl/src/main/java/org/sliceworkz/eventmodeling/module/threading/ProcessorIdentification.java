@@ -29,6 +29,7 @@ public record ProcessorIdentification ( String context, String type, String id, 
 	public static final String TYPE_READMODEL = "readmodel";
 	public static final String TYPE_TRANSLATOR = "translator";
 	public static final String TYPE_DISPATCHER = "dispatcher";
+	public static final String TYPE_PUBLISHER = "publisher";
 	public static final String TYPE_AUTOMATION = "automation";
 
 	public enum Storage {
@@ -203,6 +204,11 @@ public record ProcessorIdentification ( String context, String type, String id, 
 
 		public ProcessorIdentificationBuilder dispatcher ( ) {
 			this.type = TYPE_DISPATCHER;
+			return this;
+		}
+
+		public ProcessorIdentificationBuilder publisher ( ) {
+			this.type = TYPE_PUBLISHER;
 			return this;
 		}
 

@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 class ContainedObserverTest {
 
 	private static final Observation.CommandExecution EXECUTION =
-			new Observation.CommandExecution("context", "Command", Object.class, Observation.Target.DOMAIN, null);
+			new Observation.CommandExecution("context", "Command", Object.class, null);
 
 	@Test
 	void theNoopObserverAndAContainedOneAreReturnedAsTheyAre ( ) {

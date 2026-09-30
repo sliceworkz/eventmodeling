@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.Arrays;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
@@ -57,11 +56,9 @@ import org.sliceworkz.eventstore.stream.AppendCriteria;
  * events were delivered.
  *
  * <h2>Seeding the outbound stream</h2>
- * {@link #given} appends raw outbound events — the outbound stream's idempotency-key requirement
- * lives in the command path, not in storage, so a raw fixture seed is legitimate and keeps the base
- * usable without owning a command. {@link TestDefinition#givenExecuted} is the faithful alternative:
- * it executes a real {@link OutboundCommand} through the bounded context under an externally provided
- * idempotency key, exactly as an automation's {@code publishAndRecord} does.
+ * {@link #given} appends outbound events as fixture data. In production they are appended by a
+ * {@link org.sliceworkz.eventmodeling.outbound.Publisher}, which {@link PublisherTest} tests on its own:
+ * a dispatcher only ever sees what is on the outbound stream, however it got there.
  *
  * <h2>Redelivery is first-class, because a dispatcher is where duplicates cost most</h2>
  * A dispatcher's bookmark records what has already been published to an external system, and an
@@ -137,18 +134,6 @@ public abstract class DispatcherTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 
 		public TestDefinition event ( OUTBOUND_EVENT_TYPE outboundEvent, Tags tags ) {
 			outboundStream().append(AppendCriteria.none(), Event.of(outboundEvent, tags));
-			return this;
-		}
-
-		/**
-		 * Seeds the outbound stream through the production write path instead: a real
-		 * {@link OutboundCommand}, executed by the bounded context under {@code idempotencyKey} — so
-		 * the command's own guards (the mandatory idempotency key above all) apply exactly as they
-		 * would under an automation's {@code publishAndRecord}. Executing it twice under the same key
-		 * appends once, which makes the at-least-once retry seedable too.
-		 */
-		public TestDefinition givenExecuted ( OutboundCommand<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> command, String idempotencyKey ) {
-			kernel().execute(command, idempotencyKey);
 			return this;
 		}
 

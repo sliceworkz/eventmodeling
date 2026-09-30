@@ -15,8 +15,9 @@ Supports the 4 EM core templates:
 - Automation	(Events -> TODOList -> Processor -> Command -> Event)
 - Translation	(External Event -> Processor -> Command -> Event)
 
-And some utility facilities:
-- Dispatcher	(Outbound Event outbox pattern)
+And the two halves of telling the outside world:
+- Publisher	(Domain Event -> Publisher -> Outbound Event), part of a slice's automation aspect
+- Dispatcher	(Outbound Event -> external system, the outbox pattern)
 
 
 # Getting started

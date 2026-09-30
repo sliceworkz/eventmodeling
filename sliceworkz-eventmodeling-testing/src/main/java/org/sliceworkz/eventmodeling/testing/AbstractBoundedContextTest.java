@@ -243,6 +243,11 @@ public abstract class AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVEN
 
 	public abstract void configure ( BoundedContextBuilder<?> builder );
 
+	/** The instance the bounded context under test is built for. */
+	protected Instance instance ( ) {
+		return INSTANCE;
+	}
+
 	public BoundedContext<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> kernel ( ) {
 		return boundedContext;
 	}

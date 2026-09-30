@@ -39,7 +39,6 @@ import org.sliceworkz.eventmodeling.boundedcontext.PrivacyCapability;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
-import org.sliceworkz.eventmodeling.commands.OutboundCommand;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarted;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarting;
@@ -61,6 +60,7 @@ import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.management.ManagementModule;
 import org.sliceworkz.eventmodeling.module.ports.PortReporter;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
+import org.sliceworkz.eventmodeling.module.outbound.PublisherModule;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.UnboundedReadModelCapability;
@@ -104,11 +104,12 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 
 	private ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule;
-	private DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbDomainModule;
+	private DCBModule<DOMAIN_EVENT_TYPE> dcbDomainModule;
 	private AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule;
 	private AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule;
 	private InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule;
 	private OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule;
+	private PublisherModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> publisherModule;
 	private LeaderElector leaderElector;
 	/** The operator's channel into this instance, or {@code null} when the builder was given no instruction stream. */
 	private ManagementModule managementModule;
@@ -164,12 +165,13 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			EventStream<INBOUND_EVENT_TYPE> inboundEventStream,
 			EventStream<OUTBOUND_EVENT_TYPE> outboundEventStream,
 			BoundedContextEventEmitter eventEmitter,
-			DCBModule<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> dcbModule,
+			DCBModule<DOMAIN_EVENT_TYPE> dcbModule,
 			AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule,
 			ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule,
 			AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule,
 			InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule,
 			OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule,
+			PublisherModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> publisherModule,
 			LeaderElector leaderElector,
 			ManagementModule managementModule,
 			Instance instance,
@@ -199,6 +201,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.aggregateModule = aggregateModule;
 
 		this.outboundModule = outboundModule;
+		this.publisherModule = publisherModule;
 		this.leaderElector = leaderElector;
 		this.managementModule = managementModule;
 
@@ -284,6 +287,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.leaderElector.start();
 		this.inboundModule.start();
 		this.outboundModule.start();
+		this.publisherModule.start();
 		this.dcbDomainModule.start();
 		this.automationModule.start();
 		this.readmodelModule.start(); // blocks until the ephemeral readmodels have been projected
@@ -310,6 +314,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		LOGGER.info("stopping bounded context '{}'...", name);
 		this.inboundModule.stop();
 		this.outboundModule.stop();
+		this.publisherModule.stop();
 		this.dcbDomainModule.stop();
 		this.automationModule.stop();
 		this.readmodelModule.stop();
@@ -340,6 +345,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopping(name, instance.logical(), instance.physical(), instance.process()));
 		this.inboundModule.terminate();
 		this.outboundModule.terminate();
+		this.publisherModule.terminate();
 		this.dcbDomainModule.terminate();
 		this.automationModule.terminate();
 		this.readmodelModule.terminate();
@@ -449,6 +455,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		result.addAll(readmodelModule.processorStatuses());
 		result.addAll(inboundModule.processorStatuses());
 		result.addAll(outboundModule.processorStatuses());
+		result.addAll(publisherModule.processorStatuses());
 		return result;
 	}
 
@@ -458,6 +465,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			case READ_MODEL -> readmodelModule.restartProcessor(name);
 			case TRANSLATOR -> inboundModule.restartProcessor(name);
 			case DISPATCHER -> outboundModule.restartProcessor(name);
+			case PUBLISHER -> publisherModule.restartProcessor(name);
 		};
 	}
 
@@ -467,6 +475,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			case READ_MODEL -> readmodelModule.stopProcessor(name);
 			case TRANSLATOR -> inboundModule.stopProcessor(name);
 			case DISPATCHER -> outboundModule.stopProcessor(name);
+			case PUBLISHER -> publisherModule.stopProcessor(name);
 		};
 	}
 
@@ -636,26 +645,6 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
-	}
-
-	@Override
-	public Optional<EventReference>  execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command ) {
-		return this.execute(command, callerTracing());
-	}
-
-	@Override
-	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, Tracing tracing) {
-		return dcbDomainModule.execute(command, tracing.instance(instance));
-	}
-
-	@Override
-	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey ) {
-		return this.execute(command, idempotencyKey, callerTracing());
-	}
-
-	@Override
-	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey, Tracing tracing) {
 		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
 	}
 

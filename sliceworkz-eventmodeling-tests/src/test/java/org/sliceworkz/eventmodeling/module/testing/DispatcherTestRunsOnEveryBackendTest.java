@@ -26,7 +26,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundCommand;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
@@ -41,9 +40,7 @@ import org.sliceworkz.eventstore.testing.ForEachBackend;
  * That a test written against the <em>published</em> {@link DispatcherTest} runs against every
  * registered event storage, not only the in-memory one — the {@code CommandTestRunsOnEveryBackendTest}
  * guarantee, for the dispatcher base. The storage-sensitive halves are the cursor semantics (a second
- * round delivers only what the backend's storage appended since the first) and the
- * {@code givenExecuted} path, whose outbound append and idempotency-key dedup go through the real
- * command path against the backend.
+ * round delivers only what the backend's storage appended since the first).
  */
 public class DispatcherTestRunsOnEveryBackendTest extends DispatcherTest<MockDomainEvent, MockInboundEvent, MockOutboundEvent> {
 
@@ -113,17 +110,6 @@ public class DispatcherTestRunsOnEveryBackendTest extends DispatcherTest<MockDom
 		// this dispatcher does not de-duplicate, so the duplicate publication is visible -- which is
 		// exactly what this verb exists to make a test face up to
 		assertEquals(List.of("first", "second", "first", "second"), dispatcher.published);
-	}
-
-	@ForEachBackend
-	void givenExecutedSeedsThroughTheRealCommandPathAndDedupsOnItsKey ( ) {
-		var definition = given()
-			.givenExecuted(new MockOutboundCommand("first"), "order/1")
-			// the at-least-once retry: same command, same item-derived key, appended once
-			.givenExecuted(new MockOutboundCommand("first"), "order/1");
-
-		definition.whenDispatched().delivered(1);
-		assertEquals(List.of("first"), dispatcher.published);
 	}
 
 	@Test

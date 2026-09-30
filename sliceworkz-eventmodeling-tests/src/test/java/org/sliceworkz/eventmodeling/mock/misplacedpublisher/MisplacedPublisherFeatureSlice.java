@@ -15,21 +15,22 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.inbound;
+package org.sliceworkz.eventmodeling.mock.misplacedpublisher;
 
-import org.sliceworkz.eventmodeling.commands.CommandExecutionCapability;
-import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockPublisher;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice;
+import org.sliceworkz.eventmodeling.slices.FeatureSlice.Type;
+import org.sliceworkz.eventmodeling.slices.Slice;
 
-/**
- * Provides the execution context for translator handlers.
- * <p>
- * This interface exposes the capabilities available to a {@link Translator} when processing
- * inbound events. Translators can execute commands and provide domain events to the system
- * through this context.
- *
- * @param <INBOUND_EVENT_TYPE> the base type of inbound events received from external systems
- * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context
- */
-public interface TranslatorContext<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> extends ProvidedEventCapability<DOMAIN_EVENT_TYPE>, CommandExecutionCapability<DOMAIN_EVENT_TYPE> {
+/** Registers a publisher from the projection aspect, which the builder refuses. */
+@FeatureSlice(type = Type.AUTOMATION, context = "mock", chapter = "Publishing", tags = {"unit-test"})
+public class MisplacedPublisherFeatureSlice implements Slice<Mock> {
+
+	@Override
+	public void configureProjection ( BoundedContextBuilder<Mock> builder ) {
+		builder.publisher(new MockPublisher());
+	}
 
 }

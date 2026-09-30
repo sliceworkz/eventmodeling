@@ -54,6 +54,11 @@ public sealed interface Outcome {
 	 */
 	sealed interface SnapshotLoadResult extends Outcome { }
 
+	/**
+	 * What a publication answers.
+	 */
+	sealed interface PublicationResult extends Outcome { }
+
 	/** What a call through a monitored port answered. */
 	sealed interface PortCallOutcome extends Outcome { }
 
@@ -146,6 +151,27 @@ public sealed interface Outcome {
 			raised = List.copyOf(raised);
 		}
 	}
+
+	/**
+	 * A publisher mapped a domain event and what it published was appended.
+	 *
+	 * @param publishedPerType how many outbound events of each type the publisher published
+	 * @param appended the references of the outbound events stored — empty when the publisher published
+	 *                 nothing, and when every key was stored before: a re-publication, swallowed whole
+	 */
+	record Published ( Map<EventType, Integer> publishedPerType, List<EventReference> appended ) implements PublicationResult {
+		public Published {
+			publishedPerType = Map.copyOf(publishedPerType);
+			appended = List.copyOf(appended);
+		}
+	}
+
+	/**
+	 * A publisher mapped a domain event that had been published before, into a set of outbound events
+	 * other than what was published then: nothing was stored, since the first publication stands. Only a
+	 * publisher reading the latest state can map one event two ways.
+	 */
+	record AlreadyPublished ( ) implements PublicationResult { }
 
 	/**
 	 * A read model batch was committed.

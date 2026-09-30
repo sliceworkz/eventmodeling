@@ -1257,6 +1257,17 @@ processor:**
   loop: the `AutomationRun` observation, bookmark read/placement, the catch-up guard, backoff, leadership, the bounded-context
   events. `AutomationBatchTest` pins the loop directly; the processor end to end stays pinned by
   `AutomationFailureRecoveryTest`
+- **The catch-up guard waits for the todo list's projector to have *read* past what the batch produced,
+  not to have handled it.** It compares against the projector's bookmark read position
+  (`EventSource.findBookmark(reader)` → `Bookmark.readUpToOrReference()`, the eventstore's "readUpTo"),
+  falling back to the last event handled for a bookmark that records none. The last event handled alone
+  never reaches an event of a type the todo list does not read — an audit event, a notification, anything
+  the handler raises last that is not about the item — so the automation used to sit out its poll interval
+  after every such batch. A projector moves its read position after a run that handled nothing at most
+  once per the eventstore's idle bookmark interval (2s by default), so `ProjectorProcessor` parks no longer
+  than `Projector.deferredReadUpToDueIn()` when a move is held back (`parkingTime`), instead of the full poll
+  interval: that bounds the wait to the interval rather than to the next append.
+  `AutomationCatchUpOnReadPositionTest` pins it, and fails by timeout without it
 - **The catch-up guard compares the total `(tx, position, index)` order**, through
   `EventReference.happenedAfter` in `AutomationProcessor.hasCaughtUp`, not `position()` alone. The two are
   genuinely different orders — a position is a `bigserial` and a transaction id an `xid8`, assigned

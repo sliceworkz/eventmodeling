@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.eventdispatching;
 
+import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -399,6 +401,23 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 		}
 	}
 
+	/**
+	 * How long a caught-up processor parks: the poll interval, unless the projector holds back a move of
+	 * its bookmark's read position — the event up to which it has read the stream — that falls due sooner.
+	 * <p>
+	 * A run that handled nothing moves the read position at most once per the eventstore projector's idle
+	 * interval, and a move it holds back is only written by a later run. Parked for the whole poll interval
+	 * with no append to wake it, the read position would trail the stream that long: a dispatcher shown
+	 * behind for events it will never handle, and an automation whose produced event this todo list does
+	 * not read waiting on the todo list to have read past it. So the processor comes back when the move is
+	 * due, and the run it then makes writes it.
+	 */
+	static long parkingTime ( Optional<Duration> deferredReadUpToDueIn ) {
+		return deferredReadUpToDueIn
+				.map(due -> Math.max(1, Math.min(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS, due.toMillis() + 1)))
+				.orElse(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS);
+	}
+
 	@Override
 	public void run ( ) {
 		Thread.currentThread().setName(processorIdentification.id());
@@ -461,8 +480,9 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 							// the thread manager's grace period ends in an interrupt instead. The pending flag
 							// is consumed under the same lock, so a notification landing meanwhile is not
 							// overwritten
-							LOGGER.debug("parking for up to {} seconds unless new events are already pending", (WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS / 1000));
-							parking.park(WAIT_BEFORE_CHECKING_FOR_NEW_EVENTS_TIME_MS,
+							long parkMs = parkingTime(projector.deferredReadUpToDueIn());
+							LOGGER.debug("parking for up to {} ms unless new events are already pending", parkMs);
+							parking.park(parkMs,
 									() -> potentiallyNewEventsAppended || terminating,
 									() -> potentiallyNewEventsAppended = false);
 							LOGGER.debug("done waiting, or notified that new events could be present");

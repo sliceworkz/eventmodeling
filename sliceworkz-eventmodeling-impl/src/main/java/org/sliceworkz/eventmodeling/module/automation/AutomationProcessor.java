@@ -40,6 +40,7 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
 import org.sliceworkz.eventmodeling.observability.Outcome;
+import org.sliceworkz.eventstore.events.Bookmark;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventSource;
@@ -240,7 +241,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 						// cleared before the read, so that a move arriving from here on is one this round has
 						// not seen and is a reason to come straight back rather than park
 						monitoredBookmarkMoved = false;
-						Optional<EventReference> monitoredBookmark = eventSource.getBookmark(monitoredProcessorIdentification.toString()); // get position up until which the readmodel has been updated
+						// how far the todo list's projector has read the stream -- not only the last event it
+						// handled, which stays behind every event its query does not read, our own included
+						Optional<EventReference> monitoredBookmark = eventSource.findBookmark(monitoredProcessorIdentification.toString())
+								.map(Bookmark::readUpToOrReference);
 						
 						if ( monitoredBookmark.isPresent() && hasCaughtUp(monitoredBookmark.get(), lastReference) ) {
 							LOGGER.debug("monitoredBookmark is at {}, our own bookmark is at {}, processing can continue", monitoredBookmark.get(), lastReference.orElse(null));
@@ -412,6 +416,12 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * Whether the read model we shadow has been projected up to and including the last event we produced,
 	 * which is what makes it safe to take a fresh look at the todo list.
 	 * <p>
+	 * "Projected up to" is how far the todo list's projector has <em>read</em> the stream — its bookmark's
+	 * read position, falling back to the last event it handled for a bookmark that records none. The last
+	 * event handled alone is not enough: a todo list whose query does not read the event we produced never
+	 * handles it, so its handled position never reaches it, and this automation would sit out a poll
+	 * interval after every batch waiting for a projector that has long since read past it.
+	 * <p>
 	 * The comparison is over the total {@code (tx, position, index)} order the event store defines, not
 	 * over positions. The two are genuinely different orders: on Postgres a position is a {@code bigserial}
 	 * and a transaction id an {@code xid8}, assigned independently, so an event can carry a lower position
@@ -419,7 +429,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * projector as caught up while it is not, and the todo list is then re-read while it still holds items
 	 * this automation has already handled — a duplicate that nothing else in this loop would catch.
 	 *
-	 * @param monitoredBookmark where the read model's projector has got to
+	 * @param monitoredBookmark how far the read model's projector has read the stream
 	 * @param ourBookmark the last event we produced, empty when we have not produced one yet
 	 */
 	static boolean hasCaughtUp ( EventReference monitoredBookmark, Optional<EventReference> ourBookmark ) {

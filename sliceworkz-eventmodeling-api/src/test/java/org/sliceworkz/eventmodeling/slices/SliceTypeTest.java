@@ -75,6 +75,13 @@ class SliceTypeTest {
 	}
 
 	@Test
+	void aSliceThatOnlyPublishesIsAnAutomation ( ) {
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER));
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER, MemberKind.DISPATCHER));
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER, MemberKind.READ_MODEL, MemberKind.DISPATCHER), "reading the read model it publishes from");
+	}
+
+	@Test
 	void anAutomationCountsItsTodoListEvenWhenAnotherSliceRegistersIt ( ) {
 		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.AUTOMATION));
 	}
@@ -115,6 +122,9 @@ class SliceTypeTest {
 		assertEquals(SliceType.TRANSLATION, SliceType.derive(1, 0, 1, 1, 0));
 		assertEquals(SliceType.UNCLEAR, SliceType.derive(1, 0, 1, 1, 1), "a translation with an outbound event");
 		assertEquals(SliceType.UNCLEAR, SliceType.derive(0, 0, 1, 0, 0), "an event nothing raises");
+		assertEquals(SliceType.AUTOMATION, SliceType.derive(0, 0, 3, 0, 1), "a slice publishing what other slices record");
+		assertEquals(SliceType.AUTOMATION, SliceType.derive(0, 1, 3, 0, 1), "the same, reading a read model");
+		assertEquals(SliceType.UNCLEAR, SliceType.derive(0, 0, 1, 1, 1), "a publication with an inbound event");
 	}
 
 	private static SliceType typeOf ( MemberKind... kinds ) {

@@ -1550,8 +1550,10 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   `Outcome.AlreadyPublished` and nothing is stored. Everywhere else that exception retires a processor;
   here it is the expected answer, caught before the projector sees it
 - **Part of the automation aspect of the slice whose domain event it publishes** — a state change or an
-  automation, which in the model simply has the integration event linked to it: there is no publication
-  slice and no publisher element in the model, only the class in the code. Registered from
+  automation, which in the model simply has the integration event linked to it: there is no publisher
+  element in the model, only the class in the code. Where several slices publish the same integration
+  event, one publisher in a slice of its own holding the mapping (and the dispatcher) is usually better
+  than one per slice; such a slice derives `AUTOMATION` (see `SliceType`). Registered from
   `configureAutomation` with `builder.publisher(...)`, it runs on the instances deploying automations, leader-only, one lease per
   publisher named by its `ProcessorIdentification` (type `publisher`), bookmarked on the domain stream.
   `build()` rejects one a slice registered from another aspect's hook, naming the slice and the hook
@@ -1688,8 +1690,11 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   raising events; a read model is a read model; an automation is a command issued from a read model (its
   todo list, counted whether or not the same slice registers it); a translator is an inbound event and
   its command; a publisher and a dispatcher are an outbound event — in the model a publisher is no element
-  of its own, only the integration event linked to the slice whose domain event it publishes, so a state
-  change or an automation that also publishes keeps its type. The code cannot say which events a command raises, so
+  of its own, only the integration event linked to the slice whose domain event it publishes — so a publisher
+  counts as that domain event and an outbound event, and a state change or an automation that also
+  publishes keeps its type. A slice that *only* publishes (no command, no inbound event: the domain events
+  it publishes for and the outbound event, reading read models or not) is an automation: the separate
+  publishing slice several slices share when they publish the same integration event. The code cannot say which events a command raises, so
   every command is taken to raise one. Porting the rule rather than writing one for code is the point:
   a slice in the code and the same slice in the model come out as the same type, which is what makes
   comparing the two meaningful. The modeler's `SliceTypeDerivation` delegates to `SliceType.derive`, so the

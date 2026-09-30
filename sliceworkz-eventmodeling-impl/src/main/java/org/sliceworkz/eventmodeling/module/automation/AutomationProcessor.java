@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.module.automation;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
@@ -42,6 +43,7 @@ import org.sliceworkz.eventmodeling.observability.Observation;
 import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.events.Bookmark;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.projection.Projector;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -116,6 +118,16 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * with failures behind it is ordinary, one that has not got anywhere in the last N batches is not.
 	 */
 	private volatile int consecutiveFailedBatches;
+
+	/**
+	 * How often a round that produced nothing may move this automation's bookmark read position: the
+	 * eventstore projector's own default, for the same reason — an automation goes round every time its
+	 * todo list's bookmark moves, and each placement is a write.
+	 */
+	static final long IDLE_BOOKMARK_INTERVAL_MS = Projector.Builder.DEFAULT_IDLE_BOOKMARK_INTERVAL.toMillis();
+
+	/** When a round that produced nothing last moved the read position ({@link System#nanoTime()}), or null. */
+	private Long lastIdleBookmarkNanos = null;
 
 	private final String boundedContext;
 	private final BoundedContextObserver observer;
@@ -231,7 +243,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 						// read every round: another instance, or a restart, may have moved it, and this is one
 						// bookmark read against a batch of work
-						lastReference = eventSource.getBookmark(processorIdentification.toString()); // get last produced event from bookmark of previous run
+						// the last event we produced -- the bookmark's reference -- and how far we have seen the
+						// stream, which a round that drained the todo list moves without producing anything
+						Optional<Bookmark> ownBookmark = eventSource.findBookmark(processorIdentification.toString());
+						lastReference = ownBookmark.map(Bookmark::reference); // get last produced event from bookmark of previous run
 						if ( lastReference != null && lastReference.isPresent() ) {
 							LOGGER.debug("last produced event was {}", lastReference.get());
 						} else {
@@ -284,10 +299,14 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 										eventEmitter.emit(new BoundedContextEvent.AutomationProcessed(boundedContext, processorIdentification.id(), metrics, eventEmitter.sliceFor(automation.getClass())), tracing);
 									}
 
-									if ( outcome.lastProducedEvent() != null ) {
-										// set our position to the last event we produced, we won't do a new run until the readmodel has been updated
-										eventSource.placeBookmark(processorIdentification.toString(), outcome.lastProducedEvent(), processorIdentification.toTags(instance));
-									}
+									// A round that drained the todo list -- read it to the end, nothing failed, nothing
+									// cut it short -- has seen the stream as far as the todo list's projector had read
+									// it when the round started: every item that part of the stream put on the list has
+									// been handled. That is our read position, what our lag is counted from. A round
+									// that left work behind has only seen as far as what it produced.
+									boolean drained = !outcome.stopAutomation() && outcome.failed() == 0 && outcome.streamed() < batchSize.value()
+											&& !terminating && processorMode != ProcessorMode.STOPPED && instanceMode != ProcessorInstanceMode.STANDBY;
+									boolean readUpToHeldBack = placeBookmark(ownBookmark, outcome.lastProducedEvent(), drained ? monitoredBookmark.get() : null);
 
 									boolean batchGotNowhere = outcome.gotNowhere();
 									consecutiveFailedBatches = batchGotNowhere ? consecutiveFailedBatches + 1 : 0;
@@ -326,6 +345,11 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 											LOGGER.debug("batch failed without handling anything ({} in a row), waiting {} ms before trying again", consecutiveFailedBatches, delayMs);
 											backOff(delayMs);
 										} else {
+											if ( readUpToHeldBack ) {
+												// come back when the held-back read position may be written, rather than
+												// leave it trailing the stream until the todo list next moves
+												delayMs = Math.max(1, Math.min(delayMs, idleBookmarkDueInMs() + 1));
+											}
 											LOGGER.debug("no new todo items to handle, waiting up to {} ms", delayMs);
 											waitForNewWork(delayMs);
 										}
@@ -432,6 +456,54 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * @param monitoredBookmark how far the read model's projector has read the stream
 	 * @param ourBookmark the last event we produced, empty when we have not produced one yet
 	 */
+	/**
+	 * Places this automation's bookmark after a round: the last event it produced as the reference — what
+	 * the catch-up guard holds the next round against, unchanged — and how far it has seen the stream as
+	 * the read position, the later of what it produced and, for a round that drained the todo list, how far
+	 * the todo list's projector had read.
+	 * <p>
+	 * A round that produced something always places it. One that produced nothing moves only the read
+	 * position, when it moved, and at most once per {@link #IDLE_BOOKMARK_INTERVAL_MS}: an automation goes
+	 * round on every move of its todo list's bookmark, and each placement is a write. An automation that
+	 * has never produced anything has no bookmark, and records no read position either — the reference is
+	 * what a bookmark cannot do without.
+	 *
+	 * @param ownBookmark our bookmark as this round read it
+	 * @param produced the last event this round produced, or null
+	 * @param seen how far the todo list's projector had read, for a round that drained the list; else null
+	 * @return whether a read position move was held back by the interval
+	 */
+	private boolean placeBookmark ( Optional<Bookmark> ownBookmark, EventReference produced, EventReference seen ) {
+		EventReference reference = produced != null ? produced : ownBookmark.map(Bookmark::reference).orElse(null);
+		if ( reference == null ) {
+			return false;
+		}
+		EventReference readUpTo = seen != null && seen.happenedAfter(reference) ? seen : reference;
+		if ( produced == null ) {
+			EventReference known = ownBookmark.get().readUpToOrReference();
+			if ( !readUpTo.happenedAfter(known) ) {
+				return false;
+			}
+			long now = System.nanoTime();
+			if ( lastIdleBookmarkNanos != null && now - lastIdleBookmarkNanos < TimeUnit.MILLISECONDS.toNanos(IDLE_BOOKMARK_INTERVAL_MS) ) {
+				return true;
+			}
+			lastIdleBookmarkNanos = now;
+		}
+		// set our position to the last event we produced, we won't do a new run until the readmodel has been updated
+		eventSource.placeBookmark(processorIdentification.toString(), reference, readUpTo, processorIdentification.toTags(instance));
+		return false;
+	}
+
+	/** Milliseconds until a held-back read position may be written, zero when it is due. */
+	private long idleBookmarkDueInMs ( ) {
+		if ( lastIdleBookmarkNanos == null ) {
+			return 0;
+		}
+		long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastIdleBookmarkNanos);
+		return Math.max(0, IDLE_BOOKMARK_INTERVAL_MS - elapsedMs);
+	}
+
 	static boolean hasCaughtUp ( EventReference monitoredBookmark, Optional<EventReference> ourBookmark ) {
 		return ourBookmark.isEmpty() || !ourBookmark.get().happenedAfter(monitoredBookmark);
 	}

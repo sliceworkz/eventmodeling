@@ -35,6 +35,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.ThirdDom
 import org.sliceworkz.eventmodeling.module.automation.AutomationFailureRecoveryTest.Handled;
 import org.sliceworkz.eventmodeling.module.automation.AutomationFailureRecoveryTest.TestAutomation;
 import org.sliceworkz.eventmodeling.module.automation.AutomationFailureRecoveryTest.TodoList;
+import org.sliceworkz.eventstore.events.Bookmark;
 import org.sliceworkz.eventstore.events.EventReference;
 
 /**
@@ -77,6 +78,55 @@ public class AutomationCatchUpOnReadPositionTest extends AbstractMockDomainTest 
 		await().atMost(Duration.ofSeconds(6)).untilAsserted(
 			() -> assertEquals(List.of("item-0", "item-1"), handled.items(),
 				"the second item should not wait out the poll interval for an event the todo list does not read"));
+	}
+
+	/**
+	 * An automation's own bookmark names the last event it produced, which stays behind every event that
+	 * gives it no work. A round that drained its todo list has seen the stream as far as the todo list's
+	 * projector had read it, so that is what its read position moves to: an idle automation reads as
+	 * caught up, not as lagging until an event it has work for arrives.
+	 */
+	@Test
+	void anIdleAutomationHasSeenAsFarAsItsTodoListHasRead ( ) {
+		TodoList todoList = new TodoList("todo-idle-read-position");
+		Handled handled = new Handled();
+
+		TestAutomation automation = new TestAutomation(todoList, (item, context) -> {
+			handled.add(item);
+			return context.event(new SecondDomainEvent(item));
+		});
+
+		var builder = BoundedContext.newBuilder(Mock.class)
+				.name("UnitTestBoundedContext")
+				.eventStorage(eventStorage())
+				.instance(InstanceFactory.determine("unittests"));
+		builder.readmodel(todoList).eventuallyConsistent();
+		builder.automation(automation);
+		buildBoundedContext(builder);
+
+		boundedContext.event(new FirstDomainEvent("item-0"));
+		await().atMost(Duration.ofSeconds(6)).until(() -> automationBookmark().isPresent());
+		EventReference produced = automationBookmark().orElseThrow().reference();
+
+		// events that put nothing on the todo list
+		Optional<EventReference> head = Optional.empty();
+		for ( int i = 0; i < 3; i++ ) {
+			head = boundedContext.event(new ThirdDomainEvent("nothing to do " + i));
+		}
+		EventReference streamHead = head.orElseThrow();
+
+		await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+			Bookmark bookmark = automationBookmark().orElseThrow();
+			assertEquals(produced, bookmark.reference(), "the reference stays the last event the automation produced");
+			assertEquals(Optional.of(streamHead), bookmark.readUpTo(), "an idle automation has seen as far as its todo list has read");
+		});
+		assertEquals(List.of("item-0"), handled.items());
+	}
+
+	private Optional<Bookmark> automationBookmark ( ) {
+		return eventStorage().getBookmarks().stream()
+				.filter(b -> b.reader().contains("/automation/"))
+				.findFirst();
 	}
 
 }

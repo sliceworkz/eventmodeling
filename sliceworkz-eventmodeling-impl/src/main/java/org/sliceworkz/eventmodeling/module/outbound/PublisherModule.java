@@ -40,6 +40,7 @@ import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.outbound.Publisher;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projection;
@@ -134,6 +135,16 @@ public class PublisherModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements L
 				if ( eventEmitter.enabled() ) {
 					eventEmitter.emit(new BoundedContextEvent.PublisherStarted(
 							boundedContext, name, eventEmitter.sliceFor(publisher.getClass())));
+				}
+			}
+
+			@Override
+			public void onRun ( ProjectorMetrics metrics, long durationMicros ) {
+				// only a run that handled something: the signal that the backlog moved, as for a read model
+				if ( eventEmitter.enabled() && metrics.eventsHandled() > 0 ) {
+					BoundedContextEvent.Metrics m = new BoundedContextEvent.Metrics(durationMicros, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
+					eventEmitter.emit(new BoundedContextEvent.PublisherProcessed(
+							boundedContext, name, m, eventEmitter.sliceFor(publisher.getClass())));
 				}
 			}
 

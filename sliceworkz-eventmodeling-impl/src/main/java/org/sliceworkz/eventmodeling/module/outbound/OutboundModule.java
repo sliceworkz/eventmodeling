@@ -36,6 +36,7 @@ import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAd
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
 import org.sliceworkz.eventmodeling.observability.Outcome;
+import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.projection.ProjectorException;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorMode;
 import org.sliceworkz.eventmodeling.module.threading.ProcessorIdentification;
@@ -124,6 +125,16 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 				if ( eventEmitter.enabled() ) {
 					eventEmitter.emit(new BoundedContextEvent.DispatcherStarted(
 							boundedContext, name, eventEmitter.sliceFor(dispatcher.getClass())));
+				}
+			}
+
+			@Override
+			public void onRun ( ProjectorMetrics metrics, long durationMicros ) {
+				// only a run that handled something: the signal that the backlog moved, as for a read model
+				if ( eventEmitter.enabled() && metrics.eventsHandled() > 0 ) {
+					BoundedContextEvent.Metrics m = new BoundedContextEvent.Metrics(durationMicros, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
+					eventEmitter.emit(new BoundedContextEvent.DispatcherProcessed(
+							boundedContext, name, m, eventEmitter.sliceFor(dispatcher.getClass())));
 				}
 			}
 

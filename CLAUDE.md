@@ -1717,8 +1717,23 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   the triggering operation's correlation id onto the `BoundedContextEvent`s it emits (both branches —
   also when the tracing has no actor and the kernel actor is substituted), so a `CommandExecuted` on
   the monitoring stream is findable under the same id as the domain events the command raised
+- **An edge makes one request one flow by binding its tracing to the thread: `TracingScope`.** An HTTP
+  layer binds the request's tracing upfront (`try ( TracingScope s = TracingScope.bind(tracing) )`, or
+  a before/after handler pair) and the framework picks it up wherever it has none of its own on that
+  thread: the **no-tracing overloads** of the context's capabilities (`execute(command)`, `read`,
+  `event`, `incoming`, `translate`, `evaluate`, `aggregate`) use it instead of minting
+  (`BoundedContextImpl.callerTracing()`), and a **monitored port call** with no component tracing — a
+  REST endpoint's own call, attributed to its slice — is reported under it (`PortReporter.start`). An
+  explicit tracing always wins, a component running on the thread keeps its own, and nothing is
+  inherited by another thread; processor threads carry the tracing of the events they handle. The
+  alternative — a correlation id per call — loses because an endpoint that checks access through a
+  port, reads and then executes becomes three unrelated flows in the monitoring record. A binding
+  belongs to its thread: `close()` restores what was bound before (scopes nest), is idempotent, and
+  does nothing on another thread
 - `CorrelationPropagationTest` pins every hop; `TracingTest` pins minting, the tag round trip, and
-  that a legacy event without the tag reads back as a null id (never a minted one)
+  that a legacy event without the tag reads back as a null id (never a minted one); `TracingScopeTest`
+  the binding, and `MonitoredPortTest.aRequestsBoundTracingIsTheFlowOfItsPortCallsAndOfTheCommandItExecutes`
+  (with its two neighbours) the port call and the command picking it up, and an explicit tracing winning
 
 **BoundedContextListener — observability that cannot fail the work it observes:**
 - Register one on the builder (`.listener(...)`) to receive every `BoundedContextEvent` the kernel
@@ -1805,7 +1820,10 @@ a `DataSource` proxy would time `getConnection()`, which is pool checkout, not t
   start call, and endpoints routinely look their ports up per request. A context built on a class rather
   than an interface cannot be wrapped, so its slices get the context itself. These slices are
   deliberately not added to the `BoundedContextStarting` inventory, which is announced before any slice
-  starts; the caller is on every call instead
+  starts; the caller is on every call instead. Such a call has no component tracing, so it is reported
+  under the tracing the edge bound to the request thread (`TracingScope`, see "Correlation ids"), which
+  puts it in the same flow as the command the endpoint executes next; with none bound it is a flow of
+  its own
 - **Per call by default; summarized for a busy port.** Each per-call event is an append to the monitoring
   store on the caller's thread, so a port called per projected event would double the load.
   `PortMonitoring.summarized(interval)` condenses a port's calls into one `PortCallsSummarized` per port,

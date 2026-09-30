@@ -46,6 +46,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.events.TracingScope;
 import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.Evaluation;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
@@ -400,12 +401,12 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params ) {
-		return readmodelModule.liveModel(readModelClass, Tracing.init(instance), params);
+		return readmodelModule.liveModel(readModelClass, callerTracing(), params);
 	}
 
 	@Override
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL readUnbounded ( Class<READ_MODEL> readModelClass, Object... params ) {
-		return readmodelModule.liveModelUnbounded(readModelClass, Tracing.init(instance), params);
+		return readmodelModule.liveModelUnbounded(readModelClass, callerTracing(), params);
 	}
 
 	@Override
@@ -474,7 +475,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event) {
-		return event(event, Tracing.init(instance));
+		return event(event, callerTracing());
 	}
 
 	@Override
@@ -484,17 +485,17 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags ) {
-		return event(event, tags, Tracing.init(instance));
+		return event(event, tags, callerTracing());
 	}
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey ) {
-		return event(event, Tags.none(), idempotencyKey, Tracing.init(instance));
+		return event(event, Tags.none(), idempotencyKey, callerTracing());
 	}
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
-		return event(event, tags, idempotencyKey, Tracing.init(instance));
+		return event(event, tags, idempotencyKey, callerTracing());
 	}
 
 	@Override
@@ -531,7 +532,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public void incoming(INBOUND_EVENT_TYPE event) {
-		this.incoming ( event, Tracing.init(instance) );
+		this.incoming ( event, callerTracing() );
 	}
 
 	@Override
@@ -541,7 +542,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey ) {
-		this.incoming ( event, idempotencyKey, Tracing.init(instance) );
+		this.incoming ( event, idempotencyKey, callerTracing() );
 	}
 
 	@Override
@@ -561,7 +562,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public List<EventReference> translate(INBOUND_EVENT_TYPE event) {
-		return this.translate ( event, Tracing.init(instance) );
+		return this.translate ( event, callerTracing() );
 	}
 
 	@Override
@@ -586,7 +587,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Evaluation evaluate ( Command<DOMAIN_EVENT_TYPE> command ) {
-		return evaluate(command, Tracing.init(instance));
+		return evaluate(command, callerTracing());
 	}
 
 	@Override
@@ -596,12 +597,21 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Evaluation evaluate ( CommandWithResult<DOMAIN_EVENT_TYPE, ?> command ) {
-		return evaluate(command, Tracing.init(instance));
+		return evaluate(command, callerTracing());
 	}
 
 	@Override
 	public Evaluation evaluate ( CommandWithResult<DOMAIN_EVENT_TYPE, ?> command, Tracing tracing ) {
 		return dcbDomainModule.evaluate(command, tracing.instance(instance));
+	}
+
+	/**
+	 * The tracing of a call made without one: the one bound to this thread by the edge serving it (see
+	 * {@link TracingScope}), or a fresh one. The overloads handed a tracing set this context's instance on it,
+	 * so the bound tracing needs no instance of its own.
+	 */
+	private Tracing callerTracing ( ) {
+		return TracingScope.current().orElseGet(() -> Tracing.init(instance));
 	}
 
 	/*
@@ -610,7 +620,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command ) {
-		return execute(command, Tracing.init(instance));
+		return execute(command, callerTracing());
 	}
 
 	@Override
@@ -620,7 +630,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey ) {
-		return execute(command, idempotencyKey, Tracing.init(instance));
+		return execute(command, idempotencyKey, callerTracing());
 	}
 
 	@Override
@@ -630,7 +640,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference>  execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command ) {
-		return this.execute(command, Tracing.init(instance));
+		return this.execute(command, callerTracing());
 	}
 
 	@Override
@@ -640,7 +650,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public Optional<EventReference> execute(OutboundCommand<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> command, String idempotencyKey ) {
-		return this.execute(command, idempotencyKey, Tracing.init(instance));
+		return this.execute(command, idempotencyKey, callerTracing());
 	}
 
 	@Override
@@ -650,7 +660,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command) {
-		return execute(command, Tracing.init(instance));
+		return execute(command, callerTracing());
 	}
 
 	@Override
@@ -660,7 +670,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey) {
-		return execute(command, idempotencyKey, Tracing.init(instance));
+		return execute(command, idempotencyKey, callerTracing());
 	}
 
 	@Override
@@ -675,7 +685,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 */
 	@Override
 	public <T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate(Class<T> aggregateClass, Tags identity) {
-		return aggregate(aggregateClass, identity, Tracing.init(instance));
+		return aggregate(aggregateClass, identity, callerTracing());
 	}
 
 	@Override

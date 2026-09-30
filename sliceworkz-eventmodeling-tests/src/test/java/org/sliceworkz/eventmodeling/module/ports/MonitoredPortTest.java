@@ -55,6 +55,7 @@ import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.events.TracingScope;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
@@ -411,6 +412,71 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 
 		assertEquals(PortCaller.slice("CallGateway"), only(PortCalled.class).caller());
 		assertSame(CallGatewayFeatureSlice.startedWith, startedOn.port(GatewayPort.class), "one proxy per slice and binding");
+	}
+
+	@Test
+	void aRequestsBoundTracingIsTheFlowOfItsPortCallsAndOfTheCommandItExecutes ( ) throws InterruptedException {
+		buildBoundedContext(slicedBuilder(PortMonitoring.perCall().businessExceptions(DeclinedException.class)));
+		GatewayPort startedWith = CallGatewayFeatureSlice.startedWith;
+		Mock startedOn = CallGatewayFeatureSlice.startedOn;
+
+		// an endpoint as the modeler's are: check access through the port, then execute -- all on one request
+		// thread whose edge bound the request's tracing upfront
+		Thread request = Thread.ofVirtual().start(( ) -> {
+			try ( TracingScope scope = TracingScope.bind(Tracing.actorAndChannel("alice", "api").correlationId("request-flow")) ) {
+				startedWith.answer("may alice?");
+				try {
+					startedWith.decline("no");
+				} catch ( DeclinedException expected ) {
+					// the port's answer
+				}
+				startedOn.execute(new CallGatewayCommand(startedWith, g -> g.answer("q")));
+			}
+		});
+		request.join();
+
+		List<EphemeralEvent<BoundedContextEvent>> calls = observedOf(PortCalled.class);
+		assertEquals(2, calls.size(), "the endpoint's own call and the command's");
+		for ( EphemeralEvent<BoundedContextEvent> call : calls ) {
+			assertEquals("request-flow", tag(call, Tracing.TAG_CORRELATION_ID), "one request, one flow: " + call.data());
+			assertEquals("alice", tag(call, "x-actor"));
+		}
+		assertEquals(PortCaller.slice("CallGateway"), ((PortCalled) calls.get(0).data()).caller(), "still the slice's call");
+		assertEquals("request-flow", tag(onlyEvent(PortCallRejected.class), Tracing.TAG_CORRELATION_ID));
+		assertEquals("request-flow", tag(onlyEvent(BoundedContextEvent.CommandExecuted.class), Tracing.TAG_CORRELATION_ID),
+				"a command executed without a tracing takes the request's");
+		assertEquals("api", tag(onlyEvent(BoundedContextEvent.CommandExecuted.class), "x-channel"));
+	}
+
+	@Test
+	void anExplicitTracingWinsOverTheBoundOne ( ) {
+		Mock domain = buildBoundedContext(slicedBuilder(PortMonitoring.perCall()));
+
+		try ( TracingScope scope = TracingScope.bind(Tracing.actorAndChannel("alice", "api").correlationId("request-flow")) ) {
+			domain.execute(new CallGatewayCommand(domain.port(GatewayPort.class), g -> g.answer("q")),
+					Tracing.actorAndChannel("bob", "batch").correlationId("explicit-flow"));
+		}
+
+		EphemeralEvent<BoundedContextEvent> call = onlyEvent(PortCalled.class);
+		assertEquals("explicit-flow", tag(call, Tracing.TAG_CORRELATION_ID), "the command's own tracing");
+		assertEquals("bob", tag(call, "x-actor"));
+	}
+
+	@Test
+	void withoutABoundTracingEachEndpointCallIsAFlowOfItsOwn ( ) throws InterruptedException {
+		buildBoundedContext(slicedBuilder(PortMonitoring.perCall()));
+		GatewayPort startedWith = CallGatewayFeatureSlice.startedWith;
+
+		Thread request = Thread.ofVirtual().start(( ) -> {
+			startedWith.answer("one");
+			startedWith.answer("two");
+		});
+		request.join();
+
+		List<EphemeralEvent<BoundedContextEvent>> calls = observedOf(PortCalled.class);
+		assertEquals(2, calls.size());
+		assertNotEquals(tag(calls.get(0), Tracing.TAG_CORRELATION_ID), tag(calls.get(1), Tracing.TAG_CORRELATION_ID),
+				"nothing ties two calls together that no edge bound a tracing for");
 	}
 
 	@Test

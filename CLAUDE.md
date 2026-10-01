@@ -1257,6 +1257,30 @@ processor:**
   loop: the `AutomationRun` observation, bookmark read/placement, the catch-up guard, backoff, leadership, the bounded-context
   events. `AutomationBatchTest` pins the loop directly; the processor end to end stays pinned by
   `AutomationFailureRecoveryTest`
+- **The catch-up guard waits for the todo list's projector to have *read* past what the batch produced,
+  not to have handled it.** It compares against the projector's bookmark read position
+  (`EventSource.findBookmark(reader)` → `Bookmark.readUpToOrReference()`, the eventstore's "readUpTo"),
+  falling back to the last event handled for a bookmark that records none. The last event handled alone
+  never reaches an event of a type the todo list does not read — an audit event, a notification, anything
+  the handler raises last that is not about the item — so the automation used to sit out its poll interval
+  after every such batch. A projector moves its read position after a run that handled nothing at most
+  once per the eventstore's idle bookmark interval (2s by default), so `ProjectorProcessor` parks no longer
+  than `Projector.deferredReadUpToDueIn()` when a move is held back (`parkingTime`), instead of the full poll
+  interval: that bounds the wait to the interval rather than to the next append.
+  `AutomationCatchUpOnReadPositionTest` pins it, and fails by timeout without it
+- **An automation's own bookmark carries a read position too.** Its reference is the last event it
+  produced — what the catch-up guard holds the next round against, and unchanged — so on its own it stays
+  behind every event that gives the automation no work, and the dashboard showed an idle automation
+  lagging until an event it had work for arrived. A round that *drained* the todo list (read it to the end,
+  nothing failed, nothing cut it short) has seen the stream as far as the todo list's projector had read it
+  when the round started, so `placeBookmark` records the later of that and what it produced as `readUpTo`.
+  A round that left work behind records only what it produced, so a stalled automation shows its lag. A
+  round that produced nothing moves only the read position, and at most once per the eventstore
+  projector's idle bookmark interval (`IDLE_BOOKMARK_INTERVAL_MS`, 2s), for the same reason the projector
+  throttles it: an automation goes round on every move of its todo list's bookmark, and each placement is
+  a write; a move held back shortens the next wait so it is written when due. An automation that has never
+  produced anything has no bookmark. `AutomationCatchUpOnReadPositionTest.anIdleAutomationHasSeenAsFarAsItsTodoListHasRead`
+  pins it
 - **The catch-up guard compares the total `(tx, position, index)` order**, through
   `EventReference.happenedAfter` in `AutomationProcessor.hasCaughtUp`, not `position()` alone. The two are
   genuinely different orders — a position is a `bigserial` and a transaction id an `xid8`, assigned

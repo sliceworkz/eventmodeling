@@ -166,6 +166,8 @@ public class FailedBuildReleasesWhatItBuiltTest extends AbstractMockDomainTest {
 			wrapped.bookmark(reader, eventReference, tags);
 		}
 
+		@Override public void bookmark ( String reader, EventReference eventReference, EventReference readUpTo, Tags tags ) { wrapped.bookmark(reader, eventReference, readUpTo, tags); }
+		@Override public Optional<Bookmark> findBookmark ( String reader ) { return wrapped.findBookmark(reader); }
 		@Override public void removeBookmark ( String reader ) { wrapped.removeBookmark(reader); }
 
 		@Override public List<Bookmark> getBookmarks ( ) { return new ArrayList<>(wrapped.getBookmarks()); }

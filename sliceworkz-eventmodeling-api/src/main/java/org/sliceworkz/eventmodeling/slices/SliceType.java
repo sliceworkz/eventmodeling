@@ -45,9 +45,12 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.SliceMemb
  *     as whether or not the same slice registers it</li>
  * <li>a translator is an inbound event and the command it is turned into</li>
  * <li>a publisher is a domain event mapped into an outbound event, and a dispatcher an outbound event</li>
+ * <li>a read model registered only for a publisher of the same slice to read is part of that publication,
+ *     and counts as nothing: the model doesn't show it, and it is no to-do list</li>
  * </ul>
  * A slice that publishes is therefore of the type its other parts give it: a state change or an automation
- * with an integration event linked to it stays one. A slice that <em>only</em> publishes — no command, no
+ * with an integration event linked to it stays one, also when its publisher reads a read model to build
+ * the message. A slice that <em>only</em> publishes — no command, no
  * inbound event, the domain events it publishes for and the outbound event — is an automation: the
  * separate publishing slice several slices share when they publish the same integration event.
  * What the code cannot say is which events a command raises, so every command is taken to raise one.
@@ -116,6 +119,8 @@ public enum SliceType {
 					// domain event it publishes: that domain event and an outbound event, whatever else the slice is
 					case PUBLISHER -> { domainEvents++; outbound++; }
 					case DISPATCHER -> outbound++;
+					// what a publisher reads to build its message is code only, as in the model: no to-do list
+					case PUBLICATION_READ_MODEL -> { }
 				}
 			}
 		}

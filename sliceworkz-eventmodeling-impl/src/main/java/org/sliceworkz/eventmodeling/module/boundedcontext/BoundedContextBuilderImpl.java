@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -117,6 +118,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	 * running, which is the only window in which a registration can be attributed to a slice.
 	 */
 	private final Map<Slice<?>, Set<BoundedContextEvent.SliceMember>> sliceMembers = new IdentityHashMap<>();
+	// per slice, the simple names of the read models its publishers read: see markPublicationReadModels()
+	private final Map<Slice<?>, Set<String>> publisherReads = new IdentityHashMap<>();
 
 	/** The slice currently being configured, or {@code null} outside the configuration callbacks. */
 	private Slice<C> configuringSlice;
@@ -376,6 +379,10 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 		publisherSpecs.add(new PublisherRegistration(publisher, configuringAspect, configuringSlice == null ? null : configuringSlice.name()));
 		recordSliceMember(publisher.getClass().getSimpleName(), BoundedContextEvent.MemberKind.PUBLISHER);
+		if ( configuringSlice != null && publisher.reads() != null ) {
+			Set<String> names = publisherReads.computeIfAbsent(configuringSlice, slice -> new HashSet<>());
+			publisher.reads().forEach(readModelClass -> names.add(readModelClass.getSimpleName()));
+		}
 		return this;
 	}
 
@@ -467,6 +474,34 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		} finally {
 			configuringAspect = null;
 		}
+	}
+
+	/**
+	 * A read model a slice registers only so that a publisher of that same slice can read it is part of the
+	 * publication, not a to-do list: announced as {@code PUBLICATION_READ_MODEL}, so the slice's type comes out
+	 * as the model has it (a state change with an integration event linked to it stays a state change). A read
+	 * model the slice also registers in another aspect than the automation one (shown by a query, kept by a
+	 * projector) stays a {@code READ_MODEL}. Done once all slices are configured, since a slice may register
+	 * the read model before or after its publisher.
+	 */
+	private void markPublicationReadModels ( ) {
+		publisherReads.forEach((slice, reads) -> {
+			Set<BoundedContextEvent.SliceMember> members = sliceMembers.get(slice);
+			if ( members == null ) {
+				return;
+			}
+			Set<String> usedElsewhere = new HashSet<>();
+			members.stream()
+					.filter(m -> m.kind() == BoundedContextEvent.MemberKind.READ_MODEL && m.aspect() != Aspect.AUTOMATION)
+					.forEach(m -> usedElsewhere.add(m.name()));
+			Set<BoundedContextEvent.SliceMember> marked = new LinkedHashSet<>();
+			for ( BoundedContextEvent.SliceMember m : members ) {
+				boolean publication = m.kind() == BoundedContextEvent.MemberKind.READ_MODEL && m.aspect() == Aspect.AUTOMATION
+						&& reads.contains(m.name()) && !usedElsewhere.contains(m.name());
+				marked.add(publication ? new BoundedContextEvent.SliceMember(m.name(), BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, m.aspect()) : m);
+			}
+			sliceMembers.put(slice, marked);
+		});
 	}
 
 	/**
@@ -983,6 +1018,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		// contained once, here, so no module has to: whatever the observer throws never reaches the work
 		BoundedContextObserver observer = BoundedContextObserver.contained(this.observer);
 
+		markPublicationReadModels();
 		BoundedContextEventEmitter eventEmitter = new BoundedContextEventEmitter(boundedContextListener, instance, new SliceRegistry(deployedFeatureSlices, sliceMembers), name, observer);
 
 		// the monitored ports were handed out as proxies while the slices were configured, reporting

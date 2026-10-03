@@ -105,8 +105,9 @@ public class AutomationCatchUpOnReadPositionTest extends AbstractMockDomainTest 
 		buildBoundedContext(builder);
 
 		boundedContext.event(new FirstDomainEvent("item-0"));
-		await().atMost(Duration.ofSeconds(6)).until(() -> automationBookmark().isPresent());
-		EventReference produced = automationBookmark().orElseThrow().reference();
+		// a bookmark naming what it produced: before that, it may hold a read position alone
+		await().atMost(Duration.ofSeconds(6)).until(() -> automationBookmark().flatMap(Bookmark::reference).isPresent());
+		EventReference produced = automationBookmark().orElseThrow().reference().orElseThrow();
 
 		// events that put nothing on the todo list
 		Optional<EventReference> head = Optional.empty();
@@ -117,10 +118,43 @@ public class AutomationCatchUpOnReadPositionTest extends AbstractMockDomainTest 
 
 		await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
 			Bookmark bookmark = automationBookmark().orElseThrow();
-			assertEquals(produced, bookmark.reference(), "the reference stays the last event the automation produced");
+			assertEquals(Optional.of(produced), bookmark.reference(), "the reference stays the last event the automation produced");
 			assertEquals(Optional.of(streamHead), bookmark.readUpTo(), "an idle automation has seen as far as its todo list has read");
 		});
 		assertEquals(List.of("item-0"), handled.items());
+	}
+
+	@Test
+	void anAutomationThatHasProducedNothingRecordsHowFarItHasSeen ( ) {
+		// nothing ever lands on its todo list: it handles nothing, yet it has read the stream, and its
+		// bookmark says so -- a read position without a handled reference, so it still resumes from the start
+		TodoList todoList = new TodoList("todo-nothing-to-do");
+		Handled handled = new Handled();
+		TestAutomation automation = new TestAutomation(todoList, (item, context) -> {
+			handled.add(item);
+			return context.event(new SecondDomainEvent(item));
+		});
+
+		var builder = BoundedContext.newBuilder(Mock.class)
+				.name("UnitTestBoundedContext")
+				.eventStorage(eventStorage())
+				.instance(InstanceFactory.determine("unittests"));
+		builder.readmodel(todoList).eventuallyConsistent();
+		builder.automation(automation);
+		buildBoundedContext(builder);
+
+		EventReference streamHead = null;
+		for ( int i = 0; i < 3; i++ ) {
+			streamHead = boundedContext.event(new ThirdDomainEvent("nothing to do " + i)).orElseThrow();
+		}
+		EventReference seen = streamHead;
+
+		await().atMost(Duration.ofSeconds(8)).ignoreExceptions().untilAsserted(() -> {
+			Bookmark bookmark = automationBookmark().orElseThrow();
+			assertEquals(Optional.empty(), bookmark.reference(), "it has handled nothing");
+			assertEquals(Optional.of(seen), bookmark.readUpTo(), "it has seen as far as its todo list has read");
+		});
+		assertEquals(List.of(), handled.items());
 	}
 
 	private Optional<Bookmark> automationBookmark ( ) {

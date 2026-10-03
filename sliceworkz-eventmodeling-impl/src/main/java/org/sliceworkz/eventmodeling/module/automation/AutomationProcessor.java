@@ -225,6 +225,16 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		}
 	}
 	
+	/**
+	 * A todo list whose projector has handled nothing yet still reads the stream: when it records how far,
+	 * that is as much a reason to look as a handled event, since it is what this automation's read position
+	 * follows.
+	 */
+	@Override
+	public void readPositionUpdated ( String reader, EventReference readUpTo ) {
+		bookmarkUpdated(reader, readUpTo);
+	}
+
 	@Override
 	public void run ( ) {
 		Thread.currentThread().setName(processorIdentification.id()); // make the thread easily recognizable
@@ -246,7 +256,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 						// the last event we produced -- the bookmark's reference -- and how far we have seen the
 						// stream, which a round that drained the todo list moves without producing anything
 						Optional<Bookmark> ownBookmark = eventSource.findBookmark(processorIdentification.toString());
-						lastReference = ownBookmark.map(Bookmark::reference); // get last produced event from bookmark of previous run
+						lastReference = ownBookmark.flatMap(Bookmark::reference); // the last produced event of a previous run, empty when it has produced none
 						if ( lastReference != null && lastReference.isPresent() ) {
 							LOGGER.debug("last produced event was {}", lastReference.get());
 						} else {
@@ -465,8 +475,8 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * A round that produced something always places it. One that produced nothing moves only the read
 	 * position, when it moved, and at most once per {@link #IDLE_BOOKMARK_INTERVAL_MS}: an automation goes
 	 * round on every move of its todo list's bookmark, and each placement is a write. An automation that
-	 * has never produced anything has no bookmark, and records no read position either — the reference is
-	 * what a bookmark cannot do without.
+	 * has never produced anything records its read position alone, under the same interval: it has read the
+	 * stream, it just had nothing to do yet, and it still resumes from the beginning.
 	 *
 	 * @param ownBookmark our bookmark as this round read it
 	 * @param produced the last event this round produced, or null
@@ -474,9 +484,9 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * @return whether a read position move was held back by the interval
 	 */
 	private boolean placeBookmark ( Optional<Bookmark> ownBookmark, EventReference produced, EventReference seen ) {
-		EventReference reference = produced != null ? produced : ownBookmark.map(Bookmark::reference).orElse(null);
+		EventReference reference = produced != null ? produced : ownBookmark.flatMap(Bookmark::reference).orElse(null);
 		if ( reference == null ) {
-			return false;
+			return placeReadPositionOnly(ownBookmark, seen);
 		}
 		EventReference readUpTo = seen != null && seen.happenedAfter(reference) ? seen : reference;
 		if ( produced == null ) {
@@ -492,6 +502,29 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		}
 		// set our position to the last event we produced, we won't do a new run until the readmodel has been updated
 		eventSource.placeBookmark(processorIdentification.toString(), reference, readUpTo, processorIdentification.toTags(instance));
+		return false;
+	}
+
+	/**
+	 * Records how far an automation that has produced nothing yet has seen the stream, as a bookmark without
+	 * a handled reference: when it moved, and at most once per {@link #IDLE_BOOKMARK_INTERVAL_MS}.
+	 *
+	 * @return whether the move was held back by the interval
+	 */
+	private boolean placeReadPositionOnly ( Optional<Bookmark> ownBookmark, EventReference seen ) {
+		if ( seen == null ) {
+			return false;
+		}
+		Optional<EventReference> known = ownBookmark.flatMap(Bookmark::readUpTo);
+		if ( known.isPresent() && !seen.happenedAfter(known.get()) ) {
+			return false;
+		}
+		long now = System.nanoTime();
+		if ( lastIdleBookmarkNanos != null && now - lastIdleBookmarkNanos < TimeUnit.MILLISECONDS.toNanos(IDLE_BOOKMARK_INTERVAL_MS) ) {
+			return true;
+		}
+		lastIdleBookmarkNanos = now;
+		eventSource.placeReadPosition(processorIdentification.toString(), seen, processorIdentification.toTags(instance));
 		return false;
 	}
 

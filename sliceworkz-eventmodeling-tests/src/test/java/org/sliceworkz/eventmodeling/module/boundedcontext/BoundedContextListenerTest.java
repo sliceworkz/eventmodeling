@@ -47,6 +47,8 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.mock.sliced.SlicedCommand;
 import org.sliceworkz.eventmodeling.mock.sliced.SlicedFeatureSlice;
+import org.sliceworkz.eventmodeling.mock.publishedstatechange.PublishedStateChangeFeatureSlice;
+import org.sliceworkz.eventmodeling.mock.publishing.PublishingFeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Aspect;
 import org.sliceworkz.eventmodeling.slices.SliceType;
 import org.sliceworkz.eventstore.EventStore;
@@ -230,6 +232,48 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("expected a CommandExecuted event, got: " + received));
 		assertEquals(sliced.members().iterator().next().name(), executed.command());
+	}
+
+	@Test
+	void aReadModelOnlyAPublisherReadsIsPartOfThePublicationNotATodoList() {
+		// A state change publishing its own integration event registers, from its automation aspect, the read
+		// model its publisher reads to build the message. That lookup is no to-do list: the model doesn't show
+		// it, so the slice must not turn into an automation because of it.
+		BoundedContextEvent.FeatureSlice slice = announcedSlice(PublishedStateChangeFeatureSlice.class, "PublishedStateChange");
+		assertEquals(SliceType.STATE_CHANGE, slice.type());
+		assertTrue(slice.members().contains(new BoundedContextEvent.SliceMember("ItemReadModel", BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, Aspect.AUTOMATION)),
+				"the lookup is announced as part of the publication: " + slice.members());
+	}
+
+	@Test
+	void aReadModelAPublisherReadsAndAQueryShowsStaysAReadModel() {
+		// The publishing slice registers the same read model for its query too: then it is a read model of the
+		// slice in its own right, whatever the publisher does with it.
+		BoundedContextEvent.FeatureSlice slice = announcedSlice(PublishingFeatureSlice.class, "Publishing");
+		assertTrue(slice.members().stream().noneMatch(m -> m.kind() == BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL),
+				"shown by a query, the read model is not only the publisher's: " + slice.members());
+	}
+
+	private BoundedContextEvent.FeatureSlice announcedSlice(Class<?> sliceClass, String sliceName) {
+		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
+		var builder = BoundedContext.newBuilder(Mock.class)
+				.name(CONTEXT_NAME)
+				.eventStorage(eventStorage())
+				.instance(InstanceFactory.determine("unittests"))
+				.listener(event -> received.add(event.data()))
+				.features()
+					.rootPackage(sliceClass.getPackage())
+					.done();
+		buildBoundedContext(builder);
+		return received.stream()
+				.filter(e -> e instanceof BoundedContextEvent.BoundedContextStarting)
+				.map(e -> (BoundedContextEvent.BoundedContextStarting) e)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected a BoundedContextStarting event, got: " + received))
+				.enabledFeatures().stream()
+				.filter(s -> s.name().equals(sliceName))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("expected the " + sliceName + " feature slice"));
 	}
 
 	@Test

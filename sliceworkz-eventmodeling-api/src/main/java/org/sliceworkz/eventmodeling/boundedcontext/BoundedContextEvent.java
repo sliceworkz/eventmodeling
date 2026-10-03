@@ -926,7 +926,14 @@ public sealed interface BoundedContextEvent {
 		TRANSLATOR,
 		DISPATCHER,
 		PUBLISHER,
-		AGGREGATE
+		AGGREGATE,
+		/**
+		 * A live read model the slice registers only because a publisher of that same slice
+		 * {@linkplain org.sliceworkz.eventmodeling.outbound.Publisher#reads() reads} it to build its message:
+		 * part of the publication, code only, as the event model leaves it out. Registered for anything
+		 * else as well (a query, a projection), it is a {@link #READ_MODEL}.
+		 */
+		PUBLICATION_READ_MODEL
 	}
 
 	/**

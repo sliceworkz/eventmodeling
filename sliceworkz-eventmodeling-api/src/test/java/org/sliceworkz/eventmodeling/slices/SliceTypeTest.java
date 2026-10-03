@@ -75,6 +75,16 @@ class SliceTypeTest {
 	}
 
 	@Test
+	void whatAPublisherReadsToBuildItsMessageIsNoTodoList ( ) {
+		assertEquals(SliceType.STATE_CHANGE, typeOf(MemberKind.COMMAND, MemberKind.PUBLISHER, MemberKind.PUBLICATION_READ_MODEL, MemberKind.DISPATCHER),
+				"a state change whose publisher reads a lookup stays a state change, as in the model");
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER, MemberKind.PUBLICATION_READ_MODEL, MemberKind.DISPATCHER),
+				"a slice that only publishes stays an automation");
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.COMMAND, MemberKind.PUBLISHER, MemberKind.READ_MODEL),
+				"a read model registered for more than the publisher still counts");
+	}
+
+	@Test
 	void aSliceThatOnlyPublishesIsAnAutomation ( ) {
 		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER));
 		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.PUBLISHER, MemberKind.DISPATCHER));

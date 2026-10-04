@@ -1182,6 +1182,13 @@ processor:**
   update. Overriding it trades load on whatever is down against how late recovery is noticed, since a
   backed-off automation sits out the current delay before finding out the dependency is back. A `null` or
   negative duration falls back to the default with a WARN, and a throw is contained the same way
+- **The idle wait is `Automation.idlePollInterval()`**, which the default `delayBeforeNextBatch` returns for
+  a batch that did not fail. It paces only what the todo list cannot see coming (a port asked in
+  `streamItems` or `handle`, an item left on the list without an event) — new work wakes the automation on
+  its todo list's bookmark move regardless — and every look re-runs `streamItems` and its port calls, so
+  an automation whose list reads `Hour Has Passed` should choose an hour rather than inherit 10s. It is
+  separate from the failure backoff, which still starts at `DEFAULT_POLL_INTERVAL`: a long idle interval
+  must not delay noticing that a dependency recovered. `AutomationPacingTest` pins the split
 - **A batch that failed and handled nothing is held for that delay whatever the todo list does**, which
   is the one place the bookmark-moved fast path is deliberately not honoured: a changed todo list says
   nothing about whether the dependency the handler needs has recovered, and releasing on it would tie the

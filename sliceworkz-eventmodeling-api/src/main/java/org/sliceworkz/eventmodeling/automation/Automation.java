@@ -54,7 +54,10 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	/** The number of todo items handled in one batch when an automation does not choose one. */
 	int DEFAULT_BATCH_SIZE = 50;
 
-	/** How long an automation with nothing to do waits before looking at its todo list again. */
+	/**
+	 * How long an automation with nothing to do waits before looking at its todo list again, unless it
+	 * chooses its own {@link #idlePollInterval()}; also where the failure backoff starts.
+	 */
 	Duration DEFAULT_POLL_INTERVAL = Duration.ofSeconds(10);
 
 	/** How far the default backoff grows while an automation keeps failing to get anywhere. */
@@ -140,6 +143,28 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	}
 
 	/**
+	 * How long an automation that found nothing to do waits before looking at its todo list again.
+	 * <p>
+	 * New work does not wait for this: a move of the todo list's bookmark wakes the automation at once.
+	 * What this paces is everything the todo list cannot see coming — whatever {@link TodoListReadModel#streamItems}
+	 * or {@link #handle} asks of a port (a setting, another context's answer), and items a handler left on
+	 * the list without raising anything — so it is a business decision: how late such a change may be
+	 * noticed. Each look calls {@code streamItems}, and every port it asks, again, so the default of
+	 * {@link #DEFAULT_POLL_INTERVAL} suits a list whose items depend on nothing but its own events. An
+	 * automation whose list reads the passing of time (an {@code Hour Has Passed}) is woken by it anyway,
+	 * and an hour is the natural choice there.
+	 * <p>
+	 * Failing batches are not paced by this: they back off from {@link #DEFAULT_POLL_INTERVAL} (see
+	 * {@link #delayBeforeNextBatch}), so a long idle interval never delays noticing that a dependency
+	 * recovered.
+	 *
+	 * @return the idle interval, never null and never negative
+	 */
+	default Duration idlePollInterval ( ) {
+		return DEFAULT_POLL_INTERVAL;
+	}
+
+	/**
 	 * How long to wait before reading the todo list again, after a batch that got nowhere.
 	 * <p>
 	 * Consulted only when the processor has decided to wait at all — a batch that filled its window and
@@ -161,6 +186,9 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	 * retry puts on whatever is down — returning {@link Duration#ZERO} makes the processor come straight
 	 * back, which is only sensible when a failure is cheap to repeat.
 	 *
+	 * A batch that did not fail is paced by {@link #idlePollInterval()}, which the default returns for it;
+	 * override that rather than this to change how often an idle automation looks.
+	 *
 	 * @param consecutiveFailedBatches how many batches in a row have failed without handling anything,
 	 *        1 for the first, and 0 when the last batch did not fail (it simply found nothing to do)
 	 * @param lastFailure the throwable from the most recent failure, or {@code null} when nothing failed
@@ -169,7 +197,7 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	 */
 	default Duration delayBeforeNextBatch ( int consecutiveFailedBatches, Throwable lastFailure ) {
 		if ( consecutiveFailedBatches <= 0 ) {
-			return DEFAULT_POLL_INTERVAL;
+			return idlePollInterval();
 		}
 		int doublings = Math.min(consecutiveFailedBatches - 1, 16); // 16 is far past the cap, and cannot overflow
 		long backoffMs = DEFAULT_POLL_INTERVAL.toMillis() << doublings;

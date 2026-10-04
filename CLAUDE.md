@@ -289,7 +289,7 @@ Features are organized as vertical slices:
 3. **Types of feature slices** (`SliceType`, derived from what the slice registers, never declared):
    - `STATE_CHANGE`: a command (or aggregate) raising domain events
    - `STATE_READ`: read models and nothing else
-   - `AUTOMATION`: an automation and its todo list — or any command beside a read model
+   - `AUTOMATION`: an automation and its todo list — or any command beside a read model — or a policy
    - `TRANSLATION`: a translator
    - `UNCLEAR`: parts fitting no pattern, or several
    - `UNDEFINED`: nothing registered
@@ -1609,11 +1609,98 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   round publishing only what is new, the swallowed retry and the first publication standing, per
   backend; `ForeignEventTypeRegistrationTest` the foreign-type rejection
 
+**Policies — the other form of an automation: whenever an event happens, issue a command:**
+- Implement `Policy<DOMAIN_EVENT_TYPE>` (package `automation`): `eventQuery()` over the domain stream —
+  one triggering event type, or several variants of one fact leading to the same reaction — and
+  `Optional<Command<D>> react(Event<D>)`, answering the command to issue or nothing for an event it does
+  not act on. `policyName()` (the class' simple name by default) keys its bookmark, its lease and its
+  idempotency keys, and is overridden to survive a class rename. The event storming name, deliberately:
+  a lilac "whenever X, then Y". Not to be confused with a business rule's "level is policy" or `RetryPolicy`
+- **The gap it fills.** An automation works a to-do list, and a large share of real to-do lists hold
+  exactly one item per occurrence of one event type until the command's outcome event takes it off —
+  an artificial read model whose only job is to turn "an event happened" into "an item is outstanding".
+  A policy reacts to the event itself. The to-do list stays the answer wherever the work needs what a
+  policy deliberately has not: a deadline or the passing of time, items gathered from several facts,
+  several changes conflated into one action, a port to call, or an item put aside and retried later
+  while the work behind it goes on
+- **It maps, and nothing more.** No context is handed to `react`, so a policy has no ports, reads no read
+  models and appends nothing itself; it decides nothing either — the command decides, on its own decision
+  models, inside its own consistency boundary, exactly as for a user. The alternative — a policy handed an
+  `AutomationContext` and executing the command itself — loses because everything that makes the policy
+  safe to redeliver (the key, the trace, the tracing, the rejection handling) would then be the policy
+  author's to get right, which is exactly the hand-rolled shape `executeWithRetry` and `Publication`
+  exist to remove; and because a policy that can call a port becomes a side-effect automation with no
+  way to put an item aside, which is what a to-do list is for
+- **How it runs.** A `ProjectorProcessor` per policy over the domain stream, leader-only, one lease per
+  policy named by its `ProcessorIdentification` (type `policy`), bookmarked like a publisher, and
+  **one event at a time** (`ProjectorProcessor.inBatchesOf(1)`): a batch is the unit a failure rolls back,
+  so in a larger batch every retry of a failing event would re-execute the commands of the events before
+  it — harmless under the keys, but one reported command execution each, per retry round. `PolicyModule`
+  runs them; the bounded context is handed in after construction (`setCapabilitiesDelegate`), as for
+  automations and translators, since the module executes commands. Part of a slice's automation aspect:
+  registered from `configureAutomation`, `build()` rejects one registered from another aspect
+  (`rejectPoliciesOutsideTheAutomationAspect`), and its event type is checked like every other registration
+- **Registration makes two choices, both mandatory, neither defaulted** — `build()` names a policy that left
+  either unsaid (`rejectPoliciesWithoutTheirChoices`), the reasoning of `.live()`/`.eventuallyConsistent()`:
+  ```java
+  builder.policy(new CancelSubscriptionsOfCancelledSessionPolicy())
+         .fromNowOn()            // or .fromTheBeginning()
+         .stallOnRejection();    // or .skipRejections()
+  ```
+  - **Where it starts.** A policy has no to-do list remembering what is done, so deployed over an existing
+    history it would issue its command for every matching event ever recorded. `fromNowOn()` makes a leader
+    finding no bookmark of its own place one at the head of the stream before its first run
+    (`ProjectorProcessor.startingAtHeadWhenUnbookmarked`, checked on every promotion, a no-op once a bookmark
+    exists); `fromTheBeginning()` replays. A real bookmark, not a read position: a read position is never a
+    resume point, so it would replay everything anyway
+  - **What a business rejection does.** `stallOnRejection()`: the `BusinessException` (a rule judged as
+    violated included) escapes the reaction, so the processor retries the event with backoff while everything
+    behind it waits, reported `PolicyFailed` naming the stalled event each round. `skipRejections()`: the
+    rejection is the command's answer — `PolicyEventSkipped` (reason `REJECTED`) beside the command's own
+    `CommandRejected`, and the policy moves on. Every other failure always stalls, and a permanent one retires
+    the processor, as for any projector-driven processor. The alternative — an `onFailure` like an
+    automation's with a retry-later action — loses because a policy has nothing to put an event aside in: once
+    the bookmark passes an event, nothing remembers it
+- **A stall has a way out: `ProcessorAdminCapability.skipStalledEvent(POLICY, name, eventId)`** and its
+  remote twin `ManagementInstruction.SkipStalledEvent`. Only the event the policy is stalled on can be
+  skipped (`PolicyModule` remembers it per policy), the skip takes effect at once rather than after the
+  backoff (`ProjectorProcessor.retryNow()` cuts the backoff short), and it is reported `PolicyEventSkipped`
+  with reason `OPERATOR`. Any other kind is an `IllegalArgumentException`: a projector retries a batch, it
+  has no single event to move past
+- **A redelivered event is not reacted to again, whatever the command would decide now.** `Reaction` — the
+  one code path, shared with the published `PolicyTest` — executes the command under the policy as actor,
+  channel `policy`, the triggering event's correlation id, and `Tracing.causedBy(event id)`, so everything
+  it raises carries `x-caused-by:<event id>` (`Tracing.TAG_CAUSED_BY`) — a causation field on `Tracing` that
+  no factory mints and no step carries along unless it sets it. Before reacting it looks that trace up: one
+  event tagged with the policy as actor and the event as cause (`Reaction.raisedInReactionTo`, a two-tag
+  lookup limited to one) means the event was reacted to, answered `AlreadyReacted` without executing
+  anything. The command is also executed under the key `policy:<policy name>@<event id>`, which covers what
+  the lookup cannot — two leaders reacting at once during a failover overlap — with an
+  `IdempotencyKeyConflictException` answered `AlreadyReacted` as `Publication` answers it. The alternative —
+  the key alone, as a publisher has it — loses on a command that raises a different *number* of events the
+  second time: `CommandResultImpl.applyIdempotencyKey` keeps a single event's key bare and suffixes several
+  (`<key>/1`, `<key>/2`), so one event the first time and two the second share no key, and the second
+  reaction would be appended in full. A reaction whose command raised nothing leaves no trace and is decided
+  again after a crash, which is why a command a policy issues is idempotent by its own rules too
+- **Slice type.** A policy is `MemberKind.POLICY`, counted by `SliceType.of` as a command, the event it
+  raises and a *triggering* event; `SliceType.derive` takes the triggering events as a sixth count
+  (the five-count form delegating with none), and a command beside a triggering event is an automation the
+  way a command beside an inbound event is a translation — where a command beside a raised event is a state
+  change. The modeler holds the triggering events as a slice element of their own for the same reason
+- Operated like the other projector-driven processors: `ProcessorKind.POLICY`, `PolicyStarted` (carrying
+  both registration choices — nothing else states them), `PolicyProcessed`, `PolicyFailed`, `PolicyStopped`,
+  `PolicyEventSkipped`, and `Observation.PolicyReaction` completing with `Reacted`, `Ignored`,
+  `AlreadyReacted`, `ReactionRejected` or `ReactionSkipped`, the command execution nested beneath it
+- `PolicyModuleTest` pins the reaction end to end (the cause, the flow, the actor), both starting points, both
+  rejection handlings, the operator's skip, the admin surface and every build rejection;
+  `PolicyTestRunsOnEveryBackendTest` pins the trace lookup and the keys per backend, including a command that
+  decides otherwise on a redelivery; `SliceTypeTest` the derivation
+
 ### Registration is wildcard-typed, and `build()` is where the event types are checked
 
 **Every registration on `BoundedContextBuilder` takes a wildcard** — `readmodel(Class<? extends
 ReadModel<?>>)`, `readmodel(ReadModel<?>)`, `aggregate(Class<? extends Aggregate<?>>)`,
-`automation(Automation<?,?,?>)`, `translator(Translator<?,?>)`, `publisher(Publisher<?,?>)`,
+`automation(Automation<?,?,?>)`, `policy(Policy<?>)`, `translator(Translator<?,?>)`, `publisher(Publisher<?,?>)`,
 `dispatcher(Dispatcher<?>)` — so the
 compiler admits a payments read model on the banking context. The builder knows the three event types
 (`newBuilder` resolves them off the context interface and calls `eventTypes(...)`), but only at
@@ -1719,10 +1806,11 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   over a supertype that is the supertype, for a raw `Slice` it is `null`. The context *deploying* the
   slice is the one the surrounding event is about, so the descriptor does not repeat it.
 - **The type is `SliceType.of(members)`** — the Sliceworkz Modeler's `SliceTypeDerivation`, ported as
-  `SliceType.derive(commands, readModels, producedDomainEvents, inbound, outbound)`, over the slice's
+  `SliceType.derive(commands, readModels, producedDomainEvents, triggeringDomainEvents, inbound, outbound)`, over the slice's
   registered `SliceMember`s mapped onto the model's elements: a command or an aggregate is a command
   raising events; a read model is a read model; an automation is a command issued from a read model (its
-  todo list, counted whether or not the same slice registers it); a translator is an inbound event and
+  todo list, counted whether or not the same slice registers it); a policy is a command issued for a
+  triggering domain event, the other form of an automation; a translator is an inbound event and
   its command; a publisher and a dispatcher are an outbound event — in the model a publisher is no element
   of its own, only the integration event linked to the slice whose domain event it publishes — so a publisher
   counts as that domain event and an outbound event, and a state change or an automation that also
@@ -1838,6 +1926,10 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   the batch semantics, so the published `AutomationTest` harness exercises exactly the rule production
   runs. Items that do not implement it keep the batch-level tracing, whose id names the automation
   run. `OrdersReadyToDispatch`/`DispatchOrderAutomation` in the benchmark module is the worked example
+- **Policies continue the flow by themselves, and name the cause.** A policy reacts to the event itself,
+  so `Reaction` carries that event's correlation id onto the command it issues with nothing to opt into,
+  and tags what the command raises `x-caused-by:<event id>` — the causation link, the policy counterpart of
+  the publisher's `x-published-from` (see Policies above)
 - **Monitoring events are correlated with what they report on**: `BoundedContextEventEmitter` carries
   the triggering operation's correlation id onto the `BoundedContextEvent`s it emits (both branches —
   also when the tracing has no actor and the kernel actor is substituted), so a `CommandExecuted` on
@@ -2003,7 +2095,7 @@ The framework supports the 4 Event Modeling patterns:
 
 1. **State Change**: Trigger → Command → Event
 2. **State Read**: Events → ReadModel → UI/API
-3. **Automation**: Events → TodoList → Processor → Command → Event
+3. **Automation**: Events → TodoList → Processor → Command → Event, or as a policy: Event → Processor (Policy) → Command → Event
 4. **Translation**: External Event → Processor → Command → Event
 
 ## Naming Conventions
@@ -2011,7 +2103,7 @@ The framework supports the 4 Event Modeling patterns:
 **Classes:**
 - Commands: `*Command` (e.g., `OpenAccountCommand`)
 - ReadModels: `*ReadModel` (e.g., `AccountDetailsReadModel`)
-- Automations: `*Automation` (e.g., `ProcessPaymentAutomation`)
+- Automations: `*Automation` (e.g., `ProcessPaymentAutomation`); policies: `*Policy` (e.g., `CancelSubscriptionsOfCancelledSessionPolicy`)
 - Feature slices: `*FeatureSlice` (e.g., `OpenAccountFeatureSlice`), implementing `Slice<Context>` directly
 - Bounded context interfaces: Short names extending `BoundedContext<D,I,O>` (e.g., `Banking`, `OrderProcessing`)
 - Domain model: Often named `*Domain` (e.g., `BankingDomain`)
@@ -2045,7 +2137,7 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 
 **Base Classes:**
 - `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves. The release *terminates* the context rather than stopping it, because terminating is what closes the `EventStore` the context built and drains its processor threads — see "Shutdown — who closes what" below
-- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `TranslatorTest`, `PublisherTest`, `DispatcherTest`, `SqlReadModelTest`)
+- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `PolicyTest`, `TranslatorTest`, `PublisherTest`, `DispatcherTest`, `SqlReadModelTest`)
 - `CommandTest` tests business rules with `as(actor)` (seeded events and the execution carry the actor),
   `whenEvaluated(command).thenEvaluation()` (fails if anything was appended) and
   `then().rulesViolated()`, both handing out `EvaluationAssertions`
@@ -2062,6 +2154,12 @@ bases, all synchronous and deterministic:**
   `.whenItemsAreRedelivered().noEvents()` proves the item-derived idempotency keys. The automation and
   its todo list are **never registered on the builder** — a registered automation runs on a real
   processor thread that would race the synchronous rounds
+- `PolicyTest` drives a policy over seeded domain events through `Reaction`, the code a deployed policy's
+  processor runs, the command executed by the test's own bounded context so it decides on its decision
+  models over the seeded history. `whenReacting()` hands over what it has not seen yet, `whenRedelivered()`
+  everything again — where a correct policy raises nothing. A rejection stops the round as a stall does
+  (`.rejected(message)`), unless `onRejection()` answers `SKIP`. Never registered either; the registered path
+  is `PolicyModuleTest`'s
 - `TranslatorTest` registers the translators and rides the synchronous `translate()` path; every test
   additionally asserts the inbound event was not persisted, which is that path's contract. The async
   `incoming()` path stays with `InboundModuleTest`
@@ -2080,7 +2178,7 @@ bases, all synchronous and deterministic:**
   automation deterministically — no Awaitility, no sleeps; deferred retries are tested by seeding the
   `PaymentAttemptFailed` history with an already-elapsed due time rather than waiting one out
 - Each base has its own `...RunsOnEveryBackendTest` in `sliceworkz-eventmodeling-tests`
-  (`AutomationTestRunsOnEveryBackendTest`, `TranslatorTestRunsOnEveryBackendTest`, `PublisherTestRunsOnEveryBackendTest`,
+  (`AutomationTestRunsOnEveryBackendTest`, `PolicyTestRunsOnEveryBackendTest`, `TranslatorTestRunsOnEveryBackendTest`, `PublisherTestRunsOnEveryBackendTest`,
   `DispatcherTestRunsOnEveryBackendTest`), same rationale as the command/live-model ones below — and they
   also pin that the streams behind `inboundEventStreamId()`/`outboundEventStreamId()` are the ones the
   context writes to. Those helpers derive the ids from `BoundedContextStreams`, as the builder does

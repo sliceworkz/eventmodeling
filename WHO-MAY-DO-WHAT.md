@@ -26,7 +26,7 @@ Every capability a bounded context carries is filed under one of these. `AllCapa
 |---|---|---|
 | **application** — a controller, a job, any adapter driving the domain | `ApplicationCapabilities<D,O>` | `execute`, `executeWithRetry`, `evaluate`, `read`, `aggregate` |
 | **inbound edge** — a webhook, a consumer feeding the domain | `TranslationCapability<I>` | `incoming`, `translate` |
-| **operator** — an admin endpoint, a dashboard | `OperationsCapabilities` | `automations`, `restartAutomation`, `stopAutomation`, `processors`, `restartProcessor`, `stopProcessor` |
+| **operator** — an admin endpoint, a dashboard | `OperationsCapabilities` | `automations`, `restartAutomation`, `stopAutomation`, `processors`, `restartProcessor`, `stopProcessor`, `skipStalledEvent` |
 | **erasure requests** | `PrivacyCapability` | `erase`, `eraseCategory` |
 | **the escape hatch** | `ProvidedEventCapability<D>` | `event` |
 | **owner** — whatever built the context | `BoundedContext<D,I,O>` | all of the above, plus `start`/`stop`/`terminate`, `port`, the slice inventory |
@@ -107,7 +107,7 @@ team using one of the two simply never registers the other.
 
 **No audience opens the event log.** An application reaches its events only through what the
 framework puts in front of them — commands and aggregates to decide, read models to read, a todo list
-and an automation to react, a translator for what comes in, a dispatcher for what goes out — and each
+and an automation or a policy to react, a translator for what comes in, a dispatcher for what goes out — and each
 of those carries a bookmark, a lease and retry that a raw read or subscription gives up. A caller that
 needs something a command decided, such as the id it minted, gets it from a `CommandWithResult`
 rather than by reading the event back. Tooling and tests that do read the streams directly find

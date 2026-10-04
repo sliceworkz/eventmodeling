@@ -13,6 +13,7 @@ Supports the 4 EM core templates:
 - State change	(Trigger -> Command -> Event)
 - State read	(Events -> ReadModel -> UI/API
 - Automation	(Events -> TODOList -> Processor -> Command -> Event)
+  or, as a policy: whenever an event happens, issue a command (Event -> Policy -> Command -> Event)
 - Translation	(External Event -> Processor -> Command -> Event)
 
 And the two halves of telling the outside world:

@@ -75,6 +75,13 @@ import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.module.snapshots.LiveModelSnapshotSpecificationImpl;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.outbound.Publisher;
+import org.sliceworkz.eventmodeling.automation.Policy;
+import org.sliceworkz.eventmodeling.automation.PolicyRejectionHandling;
+import org.sliceworkz.eventmodeling.automation.PolicyRejectionSpecification;
+import org.sliceworkz.eventmodeling.automation.PolicySpecification;
+import org.sliceworkz.eventmodeling.automation.PolicyStart;
+import org.sliceworkz.eventmodeling.module.policy.PolicyModule;
+import org.sliceworkz.eventmodeling.module.policy.PolicyRegistration;
 import org.sliceworkz.eventmodeling.module.outbound.PublisherModule;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
@@ -144,6 +151,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	 * can name the slice and the aspect it was registered from.
 	 */
 	private record PublisherRegistration ( Publisher<?,?> publisher, Aspect aspect, String slice ) { }
+
+	private List<PolicySpecificationImpl> policySpecs = new ArrayList<>();
 	private List<Automation> automations = new ArrayList<>();
 	private List<AggregateSpecificationImpl> aggregateSpecifications = new ArrayList<>();
 
@@ -384,6 +393,65 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			publisher.reads().forEach(readModelClass -> names.add(readModelClass.getSimpleName()));
 		}
 		return this;
+	}
+
+	@Override
+	public PolicySpecification<C> policy ( Policy<?> policy ) {
+		if ( policy == null ) {
+			throw new IllegalArgumentException("policy must not be null");
+		}
+		PolicySpecificationImpl spec = new PolicySpecificationImpl(policy, configuringAspect, configuringSlice == null ? null : configuringSlice.name());
+		policySpecs.add(spec);
+		recordSliceMember(policy.policyName(), BoundedContextEvent.MemberKind.POLICY);
+		return spec;
+	}
+
+	/**
+	 * A policy as registered, with the two choices its registration has to make -- each {@code null} until
+	 * made, which {@link #rejectPoliciesWithoutTheirChoices} turns into a build failure -- and where it was
+	 * registered, for {@link #rejectPoliciesOutsideTheAutomationAspect}.
+	 */
+	private class PolicySpecificationImpl implements PolicySpecification<C>, PolicyRejectionSpecification<C> {
+
+		private final Policy<?> policy;
+		private final Aspect aspect;
+		private final String slice;
+		private PolicyStart start;
+		private PolicyRejectionHandling onRejection;
+
+		PolicySpecificationImpl ( Policy<?> policy, Aspect aspect, String slice ) {
+			this.policy = policy;
+			this.aspect = aspect;
+			this.slice = slice;
+		}
+
+		@Override
+		public PolicyRejectionSpecification<C> fromNowOn ( ) {
+			this.start = PolicyStart.FROM_NOW_ON;
+			return this;
+		}
+
+		@Override
+		public PolicyRejectionSpecification<C> fromTheBeginning ( ) {
+			this.start = PolicyStart.FROM_THE_BEGINNING;
+			return this;
+		}
+
+		@Override
+		public BoundedContextBuilder<C> stallOnRejection ( ) {
+			this.onRejection = PolicyRejectionHandling.STALL;
+			return BoundedContextBuilderImpl.this;
+		}
+
+		@Override
+		public BoundedContextBuilder<C> skipRejections ( ) {
+			this.onRejection = PolicyRejectionHandling.SKIP;
+			return BoundedContextBuilderImpl.this;
+		}
+
+		PolicyRegistration registration ( ) {
+			return new PolicyRegistration(policy, start, onRejection);
+		}
 	}
 
 	@Override
@@ -701,6 +769,51 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 	}
 
+	/**
+	 * Rejects a policy a slice registered while configuring another aspect than automation, for the reason
+	 * {@link #rejectPublishersOutsideTheAutomationAspect} gives for a publisher: a policy runs where
+	 * automations run.
+	 */
+	private void rejectPoliciesOutsideTheAutomationAspect ( ) {
+		List<String> misplaced = policySpecs.stream()
+				.filter(spec -> spec.aspect != null && spec.aspect != Aspect.AUTOMATION)
+				.map(spec -> "%s (registered by slice %s from configure%s -- register it from configureAutomation)"
+						.formatted(spec.policy.policyName(), spec.slice, capitalized(spec.aspect)))
+				.toList();
+		if ( !misplaced.isEmpty() ) {
+			throw new IllegalArgumentException("policy registered outside the automation aspect: " + String.join(", ", misplaced));
+		}
+	}
+
+	/**
+	 * Rejects a policy whose registration left one of its two choices unmade: where it starts when first
+	 * deployed, and what a business rejection of its command does.
+	 * <p>
+	 * Neither has a default, deliberately. A policy has no to-do list remembering what is done, so the first
+	 * is the difference between reacting to the whole history and reacting to what happens from now on; and
+	 * the second is the difference between a rejection holding everything behind it up and a rejection being
+	 * moved past. Both are decisions about the domain that a default would make silently, the same reasoning
+	 * {@link #rejectReadModelsWithoutAChosenMode} applies to how a read model is projected.
+	 */
+	private void rejectPoliciesWithoutTheirChoices ( ) {
+		List<String> incomplete = new ArrayList<>();
+		for ( PolicySpecificationImpl spec : policySpecs ) {
+			List<String> missing = new ArrayList<>();
+			if ( spec.start == null ) {
+				missing.add(".fromNowOn() or .fromTheBeginning()");
+			}
+			if ( spec.onRejection == null ) {
+				missing.add(".stallOnRejection() or .skipRejections()");
+			}
+			if ( !missing.isEmpty() ) {
+				incomplete.add("%s (say %s)".formatted(spec.policy.policyName(), String.join(" and ", missing)));
+			}
+		}
+		if ( !incomplete.isEmpty() ) {
+			throw new IllegalArgumentException("policy registered without saying where it starts and what a rejection does: " + String.join(", ", incomplete));
+		}
+	}
+
 	private static String capitalized ( Aspect aspect ) {
 		String lower = aspect.name().toLowerCase();
 		return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
@@ -847,6 +960,10 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 					publisher.getClass(), Publisher.class, 0, "domain", domainEventRootType);
 			checkEventType(foreign, "publisher", name,
 					publisher.getClass(), Publisher.class, 1, "outbound", outboundEventRootType);
+		}
+		for ( PolicySpecificationImpl spec : policySpecs ) {
+			checkEventType(foreign, "policy", spec.policy.policyName(),
+					spec.policy.getClass(), Policy.class, 0, "domain", domainEventRootType);
 		}
 		for ( Dispatcher<?> dispatcher : dispatcherSpecs ) {
 			checkEventType(foreign, "dispatcher", dispatcher.getClass().getSimpleName(),
@@ -1023,6 +1140,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		rejectAutomationsWhoseTodoListIsNotProjectedHere();
 		rejectPublishersOutsideTheAutomationAspect();
 		rejectPublishersWhoseReadModelsAreNotLiveHere();
+		rejectPoliciesOutsideTheAutomationAspect();
+		rejectPoliciesWithoutTheirChoices();
 
 		// contained once, here, so no module has to: whatever the observer throws never reaches the work
 		BoundedContextObserver observer = BoundedContextObserver.contained(this.observer);
@@ -1061,6 +1180,10 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		PublisherModule pm = new PublisherModule(name, domainEventStream, outboundEventStream, rmm, publishers, instance, observer, eventEmitter);
 		constructed.add(pm);
 
+		List<PolicyRegistration> policies = policySpecs.stream().map(PolicySpecificationImpl::registration).toList();
+		PolicyModule policyModule = new PolicyModule(name, domainEventStream, policies, instance, observer, eventEmitter);
+		constructed.add(policyModule);
+
 		AggregateModule aggregateModule = new AggregateModule(name, instance, aggregateSpecifications, domainEventStream, observer, eventEmitter);
 
 		// one lease per leader-only processor, named by its ProcessorIdentification: an instance only
@@ -1071,6 +1194,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		im.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		om.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		pm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
+		policyModule.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		am.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((AutomationProcessor<?,?,?>) p).identification(), (AutomationProcessor<?,?,?>) p)));
 		rmm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		LeaderElector leaderElector = new LeaderElector(name, eventStorage, instance.process(),
@@ -1088,7 +1212,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
-						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, pm, leaderElector, managementModule, instance, observer, adapterRegistry, portReporter, summarizingPorts, List.copyOf(businessRules.values()));
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, pm, policyModule, leaderElector, managementModule, instance, observer, adapterRegistry, portReporter, summarizingPorts, List.copyOf(businessRules.values()));
 
 		// From here the context owns the modules, and it is the only thing that can release them
 		// completely: its constructor registered a JVM shutdown hook holding it, which only its own
@@ -1100,6 +1224,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		// this is only possible after creation
 		am.setCapabilitiesDelegate(bc);
 		im.setCapabilitiesDelegate(bc);
+		policyModule.setCapabilitiesDelegate(bc);
 		if ( managementModule != null ) {
 			managementModule.attach(bc);
 		}

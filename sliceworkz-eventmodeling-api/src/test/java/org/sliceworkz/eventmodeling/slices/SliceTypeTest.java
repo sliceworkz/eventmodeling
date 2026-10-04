@@ -137,6 +137,26 @@ class SliceTypeTest {
 		assertEquals(SliceType.UNCLEAR, SliceType.derive(0, 0, 1, 1, 1), "a publication with an inbound event");
 	}
 
+	@Test
+	void aPolicyIsAnAutomationWithoutATodoList ( ) {
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.POLICY));
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.POLICY, MemberKind.COMMAND), "its command declared beside it");
+		assertEquals(SliceType.AUTOMATION, typeOf(MemberKind.POLICY, MemberKind.PUBLISHER, MemberKind.DISPATCHER), "also when it publishes");
+		assertEquals(SliceType.UNCLEAR, typeOf(MemberKind.POLICY, MemberKind.READ_MODEL), "a policy beside a to-do list is two slices");
+	}
+
+	@Test
+	void theModelersRuleOverElementCountsWithTriggeringEvents ( ) {
+		assertEquals(SliceType.AUTOMATION, SliceType.derive(1, 0, 1, 1, 0, 0), "a command issued for a triggering event: a policy");
+		assertEquals(SliceType.AUTOMATION, SliceType.derive(1, 0, 1, 3, 0, 0), "for several");
+		assertEquals(SliceType.AUTOMATION, SliceType.derive(1, 0, 2, 1, 0, 1), "and publishing what it records");
+		assertEquals(SliceType.UNCLEAR, SliceType.derive(1, 1, 1, 1, 0, 0), "a to-do list and a triggering event");
+		assertEquals(SliceType.UNCLEAR, SliceType.derive(1, 0, 1, 1, 1, 0), "a triggering event and an inbound event");
+		assertEquals(SliceType.UNCLEAR, SliceType.derive(0, 0, 0, 1, 0, 0), "a triggering event and no command");
+		assertEquals(SliceType.STATE_CHANGE, SliceType.derive(1, 0, 1, 0, 0, 0), "no triggering event: the five-count rule");
+		assertEquals(SliceType.derive(1, 0, 1, 1, 0), SliceType.derive(1, 0, 1, 0, 1, 0), "the five-count rule counts no triggering event");
+	}
+
 	private static SliceType typeOf ( MemberKind... kinds ) {
 		int[] n = { 0 };
 		return SliceType.of(Arrays.stream(kinds).map(k -> new SliceMember("m" + n[0]++, k, Aspect.COMMAND)).toList());

@@ -19,6 +19,8 @@ package org.sliceworkz.eventmodeling.boundedcontext;
 
 import java.util.List;
 
+import org.sliceworkz.eventstore.events.EventId;
+
 /**
  * Reading and restarting the projector-driven processors of a bounded context — read model
  * projectors, translators and dispatchers — for an operator rather than for the domain. The projector
@@ -93,5 +95,29 @@ public interface ProcessorAdminCapability {
 	 *         this context; the message names the ones that are
 	 */
 	boolean stopProcessor ( ProcessorKind kind, String name );
+
+	/**
+	 * Moves a stalled policy past the domain event it is stalled on, without reacting to it.
+	 * <p>
+	 * A policy stalls on an event whose reaction keeps failing — a business rejection of a policy registered
+	 * with {@code stallOnRejection()}, or any other failure — retrying it with backoff while every event
+	 * behind it waits; {@code PolicyFailed.failedAt} names the event. When an operator decides that event is
+	 * not to be reacted to after all, this is the way out: the policy skips it on its next attempt — at once,
+	 * not after the backoff — reports {@code PolicyEventSkipped} with reason {@code OPERATOR}, and goes on with
+	 * the events behind it. Nothing reacts to the skipped event again.
+	 * <p>
+	 * Only the event the policy is stalled on can be skipped, so a skip cannot be aimed at an event that has
+	 * not failed, and a skip that arrives after the stall cleared by itself does nothing. Like every method
+	 * here it addresses the instance it is called on; the stalled policy runs on the leader, so that is the
+	 * instance to reach — through a {@code ManagementInstruction.SkipStalledEvent} when it is not this one.
+	 *
+	 * @param kind the processor's kind; only {@link ProcessorKind#POLICY} stalls on an event
+	 * @param name the policy's name, from {@link ProcessorStatus#name}
+	 * @param event the id of the event the policy is stalled on, from {@code PolicyFailed.failedAt}
+	 * @return {@code true} if the policy was stalled on that event and will skip it, {@code false} otherwise
+	 * @throws IllegalArgumentException for a kind other than {@code POLICY}, or if no policy with that name
+	 *         is registered on this context; the message names the ones that are
+	 */
+	boolean skipStalledEvent ( ProcessorKind kind, String name, EventId event );
 
 }

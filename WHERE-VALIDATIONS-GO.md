@@ -200,9 +200,9 @@ the boundary serialises concurrent appends for one email — which is exactly wh
 Everything above runs inside a command, before the append. At the edges of the context the posture
 inverts: **what has arrived can only be accepted; what you do about it is where the validation goes.**
 
-- **A translator must not throw.** Translators run behind a projector, and a projector has no failure
-  containment: one throwable stops that translator's processor until the bounded context is started
-  again — every inbound event behind the bad one waits, on one log line. An inbound event that fails
+- **A translator must not throw.** Translators run behind a projector, and a projector retries a failure
+  with backoff and holds everything behind it: one inbound event that keeps throwing stalls that
+  translator, every inbound event behind the bad one waiting, reported as `TranslatorFailed` each round. An inbound event that fails
   validation is *decided about in-band*: ignore it (the `default -> { }` arm), or record the rejection
   as a domain event, which makes the dead-letter view an ordinary read model. (Through the synchronous
   `boundedContext.translate(...)` an exception propagates to the caller instead — that path may
@@ -212,6 +212,11 @@ inverts: **what has arrived can only be accepted; what you do about it is where 
   classification: retry in place, let independent work overtake, or stop for a human.
   `ExecutePaymentAutomation` in the payments example is the reference — each failure mapped to an
   action *and* an event, dead letters and retry-with-delay both being events the todo list projects.
+- **A policy validates nothing, and says up front what its command's "no" means.** It maps a domain event
+  onto the command to issue; the command validates, as it would for a user. Whether a rejection of that
+  command is an *answer* (record it and move on: `skipRejections()`) or a sign that something is wrong
+  (hold everything behind it until someone looks: `stallOnRejection()`) is decided when the policy is
+  registered — there is no default, because only the domain knows which it is.
 - **Duplicate submission is an idempotency key, not a check.** "This request was already processed"
   cannot be validated by reading first — the duplicate can land between the read and the append. Give
   the raised event a key derived from the request (never from the attempt) and the storage silently

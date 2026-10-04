@@ -59,6 +59,11 @@ public sealed interface Outcome {
 	 */
 	sealed interface PublicationResult extends Outcome { }
 
+	/**
+	 * What a policy's reaction to one domain event answers.
+	 */
+	sealed interface ReactionResult extends Outcome { }
+
 	/** What a call through a monitored port answered. */
 	sealed interface PortCallOutcome extends Outcome { }
 
@@ -172,6 +177,43 @@ public sealed interface Outcome {
 	 * publisher reading the latest state can map one event two ways.
 	 */
 	record AlreadyPublished ( ) implements PublicationResult { }
+
+	/**
+	 * A policy issued a command for a domain event and the command was executed.
+	 *
+	 * @param command the command's name
+	 * @param lastAppended the last event the command appended; empty when it raised nothing — its own rules
+	 *                     found nothing to do — or when every key was stored before: a reaction repeated,
+	 *                     swallowed whole
+	 */
+	record Reacted ( String command, java.util.Optional<EventReference> lastAppended ) implements ReactionResult { }
+
+	/**
+	 * A policy was handed a domain event it does not act on: {@code react} answered no command.
+	 */
+	record Ignored ( ) implements ReactionResult { }
+
+	/**
+	 * A policy reacted to a domain event it had reacted to before, and the command decided otherwise this
+	 * time: nothing was stored, since the first reaction stands.
+	 *
+	 * @param command the command's name
+	 */
+	record AlreadyReacted ( String command ) implements ReactionResult { }
+
+	/**
+	 * The command a policy issued was rejected, and the policy was registered to skip rejections: it moved
+	 * on. A policy registered to stall fails its scope with the rejection instead.
+	 *
+	 * @param command the command's name
+	 * @param reason the rejection's message
+	 */
+	record ReactionRejected ( String command, String reason ) implements ReactionResult { }
+
+	/**
+	 * An operator skipped the domain event the policy was stalled on: nothing was reacted.
+	 */
+	record ReactionSkipped ( ) implements ReactionResult { }
 
 	/**
 	 * A read model batch was committed.

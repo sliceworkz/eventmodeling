@@ -31,6 +31,7 @@ public record ProcessorIdentification ( String context, String type, String id, 
 	public static final String TYPE_DISPATCHER = "dispatcher";
 	public static final String TYPE_PUBLISHER = "publisher";
 	public static final String TYPE_AUTOMATION = "automation";
+	public static final String TYPE_POLICY = "policy";
 
 	public enum Storage {
 		EPHEMERAL("ephemeral"),
@@ -209,6 +210,11 @@ public record ProcessorIdentification ( String context, String type, String id, 
 
 		public ProcessorIdentificationBuilder publisher ( ) {
 			this.type = TYPE_PUBLISHER;
+			return this;
+		}
+
+		public ProcessorIdentificationBuilder policy ( ) {
+			this.type = TYPE_POLICY;
 			return this;
 		}
 

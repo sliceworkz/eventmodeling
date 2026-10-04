@@ -61,6 +61,8 @@ import org.sliceworkz.eventmodeling.module.management.ManagementModule;
 import org.sliceworkz.eventmodeling.module.ports.PortReporter;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
 import org.sliceworkz.eventmodeling.module.outbound.PublisherModule;
+import org.sliceworkz.eventmodeling.module.policy.PolicyModule;
+import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.UnboundedReadModelCapability;
@@ -110,6 +112,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule;
 	private OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule;
 	private PublisherModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> publisherModule;
+	private PolicyModule<DOMAIN_EVENT_TYPE> policyModule;
 	private LeaderElector leaderElector;
 	/** The operator's channel into this instance, or {@code null} when the builder was given no instruction stream. */
 	private ManagementModule managementModule;
@@ -172,6 +175,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule,
 			OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule,
 			PublisherModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> publisherModule,
+			PolicyModule<DOMAIN_EVENT_TYPE> policyModule,
 			LeaderElector leaderElector,
 			ManagementModule managementModule,
 			Instance instance,
@@ -202,6 +206,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 		this.outboundModule = outboundModule;
 		this.publisherModule = publisherModule;
+		this.policyModule = policyModule;
 		this.leaderElector = leaderElector;
 		this.managementModule = managementModule;
 
@@ -288,6 +293,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.inboundModule.start();
 		this.outboundModule.start();
 		this.publisherModule.start();
+		this.policyModule.start();
 		this.dcbDomainModule.start();
 		this.automationModule.start();
 		this.readmodelModule.start(); // blocks until the ephemeral readmodels have been projected
@@ -315,6 +321,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.inboundModule.stop();
 		this.outboundModule.stop();
 		this.publisherModule.stop();
+		this.policyModule.stop();
 		this.dcbDomainModule.stop();
 		this.automationModule.stop();
 		this.readmodelModule.stop();
@@ -346,6 +353,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.inboundModule.terminate();
 		this.outboundModule.terminate();
 		this.publisherModule.terminate();
+		this.policyModule.terminate();
 		this.dcbDomainModule.terminate();
 		this.automationModule.terminate();
 		this.readmodelModule.terminate();
@@ -456,6 +464,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		result.addAll(inboundModule.processorStatuses());
 		result.addAll(outboundModule.processorStatuses());
 		result.addAll(publisherModule.processorStatuses());
+		result.addAll(policyModule.processorStatuses());
 		return result;
 	}
 
@@ -466,6 +475,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			case TRANSLATOR -> inboundModule.restartProcessor(name);
 			case DISPATCHER -> outboundModule.restartProcessor(name);
 			case PUBLISHER -> publisherModule.restartProcessor(name);
+			case POLICY -> policyModule.restartProcessor(name);
 		};
 	}
 
@@ -476,7 +486,16 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			case TRANSLATOR -> inboundModule.stopProcessor(name);
 			case DISPATCHER -> outboundModule.stopProcessor(name);
 			case PUBLISHER -> publisherModule.stopProcessor(name);
+			case POLICY -> policyModule.stopProcessor(name);
 		};
+	}
+
+	@Override
+	public boolean skipStalledEvent ( ProcessorKind kind, String name, EventId event ) {
+		if ( kind != ProcessorKind.POLICY ) {
+			throw new IllegalArgumentException("only a policy stalls on a domain event it can be moved past; a %s processor retries its batch until the cause clears".formatted(kind));
+		}
+		return policyModule.skipStalledEvent(name, event);
 	}
 
 	/*

@@ -37,6 +37,9 @@ public enum ProcessorKind {
 	DISPATCHER,
 
 	/** A publisher's processor, mapping the domain stream into the outbound stream. */
-	PUBLISHER
+	PUBLISHER,
+
+	/** A policy's processor, reacting to domain events by issuing commands. */
+	POLICY
 
 }

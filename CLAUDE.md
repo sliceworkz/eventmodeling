@@ -1653,13 +1653,10 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
     position and no handled event (`ProjectorProcessor.startingAtHeadWhenUnbookmarked`, checked on every
     promotion, a no-op once a bookmark exists); `fromTheBeginning()` replays. The handled reference is only
     ever an event the policy really handled, because that is what an operator reads it as. While nothing has
-    been handled, such a processor **resumes after its read position**, where the eventstore resumes a
-    bookmark with nothing handled from the beginning — right everywhere else, and here a replay of the very
-    history the policy was deployed to skip. The eventstore's projector keeps one cursor that is also its
-    handled reference, so started after the read position it would record that position as handled on its
-    next idle move; `ReadPositionStartSource` is the source it reads through then, passing everything on
-    and turning a bookmark write that names the start point as handled into a move of the read position.
-    The alternative — the head placed as the handled reference — loses because the bookmark then names an
+    been handled, such a processor **resumes after its read position** — the eventstore projector's
+    `resumeAfterReadPosition()` — where a bookmark with nothing handled otherwise resumes from the
+    beginning: right everywhere else, and here a replay of the very history the policy was deployed to
+    skip. The alternative — the head placed as the handled reference — loses because the bookmark then names an
     event the policy never processed as the last one it did
   - **What a business rejection does.** `stallOnRejection()`: the `BusinessException` (a rule judged as
     violated included) escapes the reaction, so the processor retries the event with backoff while everything

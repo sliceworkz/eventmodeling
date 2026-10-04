@@ -129,6 +129,16 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 	// failures, and the one an operator wants is the one that stopped it
 	private volatile Throwable stoppedBy;
 
+	// set by retryNow(): cuts a backoff short, so a failing run is attempted again at once rather than after
+	// the delay -- what an operator's skip of a stalled policy event needs to take effect promptly
+	private volatile boolean retryRequested;
+
+	// how many events the projector reads per batch, 0 for the eventstore's default; see inBatchesOf
+	private volatile int batchSize;
+	// whether a leader finding no bookmark of its own places one at the head of the stream before its first
+	// run, so it projects only what is appended from then on; see startingAtHeadWhenUnbookmarked
+	private volatile boolean startAtHeadWhenUnbookmarked;
+
 	// read at construction rather than into a static, so a test can shorten the pacing per context
 	private final long retryInitialMs = Long.getLong(RETRY_INITIAL_PROPERTY, DEFAULT_RETRY_INITIAL_MS);
 	private final long retryMaxMs = Long.getLong(RETRY_MAX_PROPERTY, DEFAULT_RETRY_MAX_MS);
@@ -205,6 +215,9 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 		// named after the component, not the adapter wrapping it: the store reports this projector's
 		// batches under the name its bookmark, its ProcessorStatus and the bounded-context events use
 		Projector.Builder<EVENT_TYPE> builder = Projector.from(eventSource).into(projection).named(processorIdentification.id());
+		if ( batchSize > 0 ) {
+			builder = builder.inBatchesOf(batchSize);
+		}
 
 		if ( ownBookmark != null ) {
 			// The projection wrote its position and its state in one transaction, so its position is
@@ -232,6 +245,57 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 
 	public ProcessorIdentification identification ( ) {
 		return processorIdentification;
+	}
+
+	/**
+	 * Reads the stream in batches of {@code size} events rather than the eventstore's default, before this
+	 * processor first leads. A batch is the unit a failure rolls back and the bookmark moves by, so a
+	 * projection whose every event has an effect of its own — a policy executing a command per event —
+	 * reads one at a time: a failing event then re-offers only itself, not the events before it in its batch.
+	 *
+	 * @param size the batch size, at least 1
+	 * @return this processor
+	 */
+	public ProjectorProcessor<EVENT_TYPE> inBatchesOf ( int size ) {
+		if ( size < 1 ) {
+			throw new IllegalArgumentException("batch size must be at least 1, was " + size);
+		}
+		this.batchSize = size;
+		this.projector = createProjector();
+		return this;
+	}
+
+	/**
+	 * Makes a leader that finds no bookmark of its own — a processor deployed for the first time — place one
+	 * at the head of the stream before its first run, so it projects only what is appended from then on
+	 * instead of the whole history. Checked on every promotion, before the projector is rebuilt from the
+	 * durable position; once a bookmark exists it is the resume point and this does nothing. An empty stream
+	 * has no head, and then there is nothing to skip either.
+	 *
+	 * @return this processor
+	 */
+	public ProjectorProcessor<EVENT_TYPE> startingAtHeadWhenUnbookmarked ( ) {
+		this.startAtHeadWhenUnbookmarked = true;
+		return this;
+	}
+
+	/**
+	 * Cuts a backoff short: a processor waiting to retry a failed run attempts it again at once. Does nothing
+	 * to a processor that is not failing, beyond waking it to find nothing new.
+	 */
+	public void retryNow ( ) {
+		parking.wake(() -> retryRequested = true);
+	}
+
+	private void placeBookmarkAtHeadWhenAbsent ( ) {
+		String reader = processorIdentification.toString();
+		if ( eventSource.getBookmark(reader).isPresent() ) {
+			return;
+		}
+		eventSource.head().ifPresent(head -> {
+			LOGGER.info("'{}' has no bookmark yet and starts from now on: bookmarking it at the head of the stream, {}", processorIdentification, head);
+			eventSource.placeBookmark(reader, head, processorIdentification.toTags(instance));
+		});
 	}
 
 	/** The mode this processor was registered with — what decides whether it is leader-electable. */
@@ -436,6 +500,9 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 								// the position the previous leader durably left, not from this instance's
 								// in-memory cursor
 								LOGGER.info("'{}' promoted to leader, re-seeding projector from its durable position ...", processorIdentification);
+								if ( startAtHeadWhenUnbookmarked ) {
+									placeBookmarkAtHeadWhenAbsent();
+								}
 								this.projector = createProjector();
 								// cleared only once the rebuild succeeded: createProjector reads the durable
 								// resume position and can throw (the same dead database a failing projection
@@ -644,7 +711,7 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 	private void backOff ( long timeoutMs ) {
 		long deadline = System.currentTimeMillis() + timeoutMs;
 		try {
-			parking.parkUntil(deadline, () -> !terminating && processorMode != ProcessorMode.STOPPED && instanceMode == ProcessorInstanceMode.LEADER);
+			parking.parkUntil(deadline, () -> !terminating && !retryRequested && processorMode != ProcessorMode.STOPPED && instanceMode == ProcessorInstanceMode.LEADER);
 		} catch ( InterruptedException e ) {
 			// deliberately not restoring the flag: this loop parks again on its next pass, and a set
 			// flag would make that throw immediately and spin. An interrupt here comes from the thread

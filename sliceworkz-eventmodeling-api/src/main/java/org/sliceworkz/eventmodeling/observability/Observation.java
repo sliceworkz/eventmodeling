@@ -160,6 +160,25 @@ public sealed interface Observation<O extends Outcome> {
 	}
 
 	/**
+	 * One policy handed one domain event: the command it answers with, executed. The command execution is a
+	 * {@link CommandExecution} nested in this scope.
+	 *
+	 * @param boundedContext the bounded context
+	 * @param policy the policy's name
+	 * @param event the domain event reacted to
+	 */
+	record PolicyReaction ( String boundedContext, String policy, Event<?> event ) implements Observation<Outcome.ReactionResult> {
+
+		/**
+		 * @return the type of the domain event reacted to
+		 */
+		public EventType eventType ( ) {
+			return event.type();
+		}
+
+	}
+
+	/**
 	 * One batch of an eventually consistent read model's projector: from the batch starting to it being
 	 * committed or cancelled. Each event handed to the read model is a {@link ReadModelUpdate} nested in
 	 * this scope.

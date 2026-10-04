@@ -27,6 +27,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.Instructi
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.management.ManagementInstruction;
+import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextImpl;
 import org.sliceworkz.eventstore.events.Event;
@@ -180,6 +181,8 @@ public class ManagementModule {
 			case ManagementInstruction.StartAutomation i -> changed(context.restartAutomation(i.automation()));
 			case ManagementInstruction.StopProcessor i -> changed(context.stopProcessor(i.kind(), i.name()));
 			case ManagementInstruction.StartProcessor i -> changed(context.restartProcessor(i.kind(), i.name()));
+			case ManagementInstruction.SkipStalledEvent i -> changed(context.skipStalledEvent(i.kind(), i.name(),
+					i.eventId() == null || i.eventId().isBlank() ? null : EventId.of(i.eventId())));
 			case ManagementInstruction.StopBoundedContext i -> {
 				if ( !context.isStarted() ) {
 					yield InstructionOutcome.NO_CHANGE;
@@ -211,6 +214,7 @@ public class ManagementModule {
 			case ManagementInstruction.StartAutomation i -> i.automation();
 			case ManagementInstruction.StopProcessor i -> i.kind() + "/" + i.name();
 			case ManagementInstruction.StartProcessor i -> i.kind() + "/" + i.name();
+			case ManagementInstruction.SkipStalledEvent i -> i.kind() + "/" + i.name() + "@" + i.eventId();
 			case ManagementInstruction.StopBoundedContext i -> boundedContext;
 			case ManagementInstruction.StartBoundedContext i -> boundedContext;
 			case ManagementInstruction.ReportStatus i -> boundedContext;

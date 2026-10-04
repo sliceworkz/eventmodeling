@@ -352,6 +352,29 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	BoundedContextBuilder<C> automation(Automation<?,?,?> automation);
 
 	/**
+	 * Registers a policy, which issues a command whenever a domain event matching its query happens — the
+	 * form an automation takes when there is no to-do list between the event and the command.
+	 * <p>
+	 * A policy is part of a slice's automation aspect: register it from
+	 * {@link org.sliceworkz.eventmodeling.slices.Slice#configureAutomation configureAutomation}. Its
+	 * registration makes two choices, and both are mandatory — {@code build()} refuses a policy that left
+	 * either unsaid, naming it:
+	 * <pre>{@code
+	 * public void configureAutomation ( BoundedContextBuilder<Subscriptions> builder ) {
+	 *     builder.policy(new CancelSubscriptionsOfCancelledSessionPolicy())
+	 *            .fromNowOn()            // or .fromTheBeginning(): where it starts when first deployed
+	 *            .stallOnRejection();    // or .skipRejections(): what the command's "no" does
+	 * }
+	 * }</pre>
+	 *
+	 * @throws IllegalArgumentException from {@link #build()} when its start or its rejection handling was not
+	 *         chosen, when it is registered while a slice configures another aspect than automation, when its
+	 *         name cannot key a bookmark, or when its declared domain event type is unrelated to this
+	 *         context's — see the note on wildcard-typed registration above
+	 */
+	org.sliceworkz.eventmodeling.automation.PolicySpecification<C> policy(org.sliceworkz.eventmodeling.automation.Policy<?> policy);
+
+	/**
 	 * Registers a translator, which turns the inbound events matching its query into domain events.
 	 *
 	 * @throws IllegalArgumentException from {@link #build()} when its declared inbound or domain event type is

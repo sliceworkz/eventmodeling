@@ -89,6 +89,15 @@ public final class ProjectorProcessorAdmin {
 		return managed(name).processor().stopByOperator();
 	}
 
+	/**
+	 * The processor registered under a name.
+	 *
+	 * @throws IllegalArgumentException naming the registered ones when there is none by that name
+	 */
+	public ProjectorProcessor<?> processor ( String name ) {
+		return managed(name).processor();
+	}
+
 	private Managed managed ( String name ) {
 		Managed managed = byName.get(name);
 		if ( managed == null ) {

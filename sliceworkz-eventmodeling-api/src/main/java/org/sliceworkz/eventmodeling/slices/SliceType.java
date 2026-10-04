@@ -35,7 +35,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.SliceMemb
  * {@code BoundedContextStarting}.
  * <p>
  * The rule is the one the Sliceworkz Modeler applies to a <em>modeled</em> slice, so a slice in the
- * code and the same slice in the model come out as the same type: {@link #derive(int, int, int, int, int)}
+ * code and the same slice in the model come out as the same type: {@link #derive(int, int, int, int, int, int)}
  * is that rule over the counts of the slice's elements — the modeler calls it for its modeled slices — and {@link #of(Collection)} maps the registered
  * components onto those elements:
  * <ul>
@@ -43,6 +43,8 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.SliceMemb
  * <li>a read model is a read model</li>
  * <li>an automation is a command raised from a read model — the to-do list it works, which it counts
  *     as whether or not the same slice registers it</li>
+ * <li>a policy is a command raised from a triggering domain event: the other form of an automation, with
+ *     no to-do list between the event and the command</li>
  * <li>a translator is an inbound event and the command it is turned into</li>
  * <li>a publisher is a domain event mapped into an outbound event, and a dispatcher an outbound event</li>
  * <li>a read model registered only for a publisher of the same slice to read is part of that publication,
@@ -83,8 +85,10 @@ public enum SliceType {
 	STATE_READ,
 
 	/**
-	 * A processor working a to-do list by issuing commands: events → to-do list → processor → command → event.
-	 * Also a slice that only publishes: domain events mapped into an outbound event, with no command of its own.
+	 * A processor issuing commands, in one of three forms. Driven by a to-do list: events → to-do list →
+	 * processor → command → event. Driven by a triggering domain event, a policy: event → processor →
+	 * command → event. And a slice that only publishes: domain events mapped into an outbound event, with
+	 * no command of its own.
 	 */
 	AUTOMATION,
 
@@ -103,7 +107,7 @@ public enum SliceType {
 	 * @param members what the slice registered; {@code null} or empty is {@link #UNDEFINED}
 	 */
 	public static SliceType of ( Collection<SliceMember> members ) {
-		int commands = 0, readModels = 0, domainEvents = 0, inbound = 0, outbound = 0;
+		int commands = 0, readModels = 0, domainEvents = 0, triggering = 0, inbound = 0, outbound = 0;
 		if ( members != null ) {
 			for ( SliceMember member : members ) {
 				MemberKind kind = member.kind();
@@ -114,6 +118,8 @@ public enum SliceType {
 					case COMMAND, AGGREGATE -> { commands++; domainEvents++; }
 					case READ_MODEL -> readModels++;
 					case AUTOMATION -> { commands++; domainEvents++; readModels++; }
+					// a policy is the command it issues and the domain event that triggers it, with no to-do list
+					case POLICY -> { commands++; domainEvents++; triggering++; }
 					case TRANSLATOR -> { commands++; domainEvents++; inbound++; }
 					// a publisher is what the model shows as an integration event linked to the slice whose
 					// domain event it publishes: that domain event and an outbound event, whatever else the slice is
@@ -124,32 +130,55 @@ public enum SliceType {
 				}
 			}
 		}
-		return derive(commands, readModels, domainEvents, inbound, outbound);
+		return derive(commands, readModels, domainEvents, triggering, inbound, outbound);
+	}
+
+	/**
+	 * The Sliceworkz Modeler's rule, over the counts of a slice's elements, for a slice with no
+	 * triggering domain event: {@link #derive(int, int, int, int, int, int)} with none.
+	 */
+	public static SliceType derive ( int commands, int readModels, int producedDomainEvents, int inboundEvents, int outboundEvents ) {
+		return derive(commands, readModels, producedDomainEvents, 0, inboundEvents, outboundEvents);
 	}
 
 	/**
 	 * The Sliceworkz Modeler's rule, over the counts of a slice's elements: exactly one pattern has to
 	 * match for the slice to be of that type, none of the counts is {@link #UNDEFINED}, anything else is
 	 * {@link #UNCLEAR}.
+	 * <p>
+	 * A <em>triggering</em> domain event is one a command is issued for, without a to-do list in between —
+	 * the event of a policy. It is counted apart from the events the slice's commands raise, because the two
+	 * say opposite things: a command beside the events it raises is a state change, a command beside the
+	 * event that triggers it is an automation. A triggering event is to a policy what an inbound event is to
+	 * a translation.
+	 *
+	 * @param commands the slice's commands
+	 * @param readModels its read models (an automation's to-do list among them)
+	 * @param producedDomainEvents the domain events its commands raise, or that it publishes for
+	 * @param triggeringDomainEvents the domain events its commands are issued for: a policy's trigger
+	 * @param inboundEvents its inbound integration events
+	 * @param outboundEvents its outbound integration events
 	 */
-	public static SliceType derive ( int commands, int readModels, int producedDomainEvents, int inboundEvents, int outboundEvents ) {
-		if ( commands == 0 && readModels == 0 && inboundEvents == 0 && outboundEvents == 0 && producedDomainEvents == 0 ) {
+	public static SliceType derive ( int commands, int readModels, int producedDomainEvents, int triggeringDomainEvents, int inboundEvents, int outboundEvents ) {
+		if ( commands == 0 && readModels == 0 && inboundEvents == 0 && outboundEvents == 0 && producedDomainEvents == 0 && triggeringDomainEvents == 0 ) {
 			return UNDEFINED;
 		}
 
-		boolean stateChange = commands >= 1 && producedDomainEvents >= 1 && readModels == 0 && inboundEvents == 0;
-		boolean stateRead = commands == 0 && readModels >= 1 && inboundEvents == 0 && outboundEvents == 0;
-		boolean automation = commands >= 1 && readModels >= 1 && inboundEvents == 0;
-		boolean translation = commands >= 1 && readModels == 0 && inboundEvents >= 1 && outboundEvents == 0;
+		boolean stateChange = commands >= 1 && producedDomainEvents >= 1 && readModels == 0 && triggeringDomainEvents == 0 && inboundEvents == 0;
+		boolean stateRead = commands == 0 && readModels >= 1 && triggeringDomainEvents == 0 && inboundEvents == 0 && outboundEvents == 0;
+		boolean automation = commands >= 1 && readModels >= 1 && triggeringDomainEvents == 0 && inboundEvents == 0;
+		// a policy: a command issued for a triggering domain event, with no to-do list in between
+		boolean policy = commands >= 1 && triggeringDomainEvents >= 1 && readModels == 0 && inboundEvents == 0;
+		boolean translation = commands >= 1 && readModels == 0 && triggeringDomainEvents == 0 && inboundEvents >= 1 && outboundEvents == 0;
 		// a slice that only publishes: domain events mapped into an outbound event, reading read models or not,
 		// with no command of its own -- the publishing slice several slices share for one integration event
-		boolean publication = commands == 0 && producedDomainEvents >= 1 && inboundEvents == 0 && outboundEvents >= 1;
+		boolean publication = commands == 0 && producedDomainEvents >= 1 && triggeringDomainEvents == 0 && inboundEvents == 0 && outboundEvents >= 1;
 
 		int matchCount = 0;
 		SliceType matched = UNCLEAR;
 		if ( stateChange ) { matchCount++; matched = STATE_CHANGE; }
 		if ( stateRead ) { matchCount++; matched = STATE_READ; }
-		if ( automation || publication ) { matchCount++; matched = AUTOMATION; }
+		if ( automation || policy || publication ) { matchCount++; matched = AUTOMATION; }
 		if ( translation ) { matchCount++; matched = TRANSLATION; }
 
 		return matchCount == 1 ? matched : UNCLEAR;

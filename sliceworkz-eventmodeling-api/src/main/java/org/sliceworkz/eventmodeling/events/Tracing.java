@@ -27,7 +27,15 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
-public record Tracing ( Instance instance, String actor, String channel, String command, String agentId, String agentName, String correlationId ) {
+public record Tracing ( Instance instance, String actor, String channel, String command, String agentId, String agentName, String correlationId, String causationId ) {
+
+	/**
+	 * A tracing that names no cause: the shape every tracing had before causation was recorded, and the
+	 * one every step that is not a reaction to an event takes.
+	 */
+	public Tracing ( Instance instance, String actor, String channel, String command, String agentId, String agentName, String correlationId ) {
+		this(instance, actor, channel, command, agentId, agentName, correlationId, null);
+	}
 
 	public static final String UNKNOWN_ACTOR = null;
 	public static final String UNKNOWN_CHANNEL = null;
@@ -60,6 +68,14 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	public static final String TAG_CORRELATION_ID = "x-correlation-id";
 
 	/**
+	 * The tag naming the id of the event an event was raised in reaction to ({@code x-caused-by}): the
+	 * causation link a policy leaves on everything the command it issued raised, so "why did this happen"
+	 * and "what happened because of that" are tag queries. Public, like {@link #TAG_CORRELATION_ID}, for the
+	 * same reason. Absent on an event that was not raised in reaction to another.
+	 */
+	public static final String TAG_CAUSED_BY = "x-caused-by";
+
+	/**
 	 * The tag the actor is stored under on every event the framework appends ({@code x-actor}), for a query
 	 * selecting the events one actor caused — for instance the overrides one actor made, through
 	 * {@link org.sliceworkz.eventmodeling.rules.RuleTags#overriddenBy}. The value is stripped, exactly as
@@ -76,15 +92,15 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	}
 
 	public Tracing actor ( String actor ) {
-		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId, causationId );
 	}
 
 	public Tracing channel ( String channel ) {
-		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId, causationId );
 	}
 
 	public Tracing command ( String command ) {
-		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId, causationId );
 	}
 
 	/**
@@ -92,7 +108,7 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	 * (MCP). Both values are optional; a {@code null} pair leaves no agent tags on the event.
 	 */
 	public Tracing agent ( String agentId, String agentName ) {
-		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId, causationId );
 	}
 
 	/**
@@ -103,7 +119,17 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	 * by carrying that event's correlation id ({@link #readFrom}) onto everything it raises.
 	 */
 	public Tracing correlationId ( String correlationId ) {
-		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId );
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId, causationId );
+	}
+
+	/**
+	 * Returns a copy naming the event the events raised under it are raised in reaction to — its id, as
+	 * {@code event.reference().id().value()}. Never minted, and never carried along by a step that does not
+	 * set it: the cause of an event is the one event that made something react, not the start of the flow,
+	 * which is what the correlation id names.
+	 */
+	public Tracing causedBy ( String causationId ) {
+		return new Tracing ( instance, actor, channel, command, agentId, agentName, correlationId, causationId );
 	}
 
 	public static final Tracing init ( Instance instance ) {
@@ -111,7 +137,7 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	}
 
 	public Tracing instance ( Instance instance ) {
-		return new Tracing(instance, actor, channel, command, agentId, agentName, correlationId);
+		return new Tracing(instance, actor, channel, command, agentId, agentName, correlationId, causationId);
 	}
 
 	public static final Tracing actorAndChannel ( String actor, String channel ) {
@@ -155,8 +181,9 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 		String agentId = tagValue(event, TAG_AGENT_ID).orElse(null);
 		String agentName = tagValue(event, TAG_AGENT_NAME).orElse(null);
 		String correlationId = tagValue(event, TAG_CORRELATION_ID).orElse(null);
+		String causationId = tagValue(event, TAG_CAUSED_BY).orElse(null);
 
-		return new Tracing(instance, actor, channel, command, agentId, agentName, correlationId);
+		return new Tracing(instance, actor, channel, command, agentId, agentName, correlationId, causationId);
 	}
 
 	private static final Optional<String> tagValue ( Event<?> event, String tagName ) {
@@ -192,6 +219,7 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 		addTag(tags, TAG_AGENT_ID, agentId);
 		addTag(tags, TAG_AGENT_NAME, agentName);
 		addTag(tags, TAG_CORRELATION_ID, correlationId);
+		addTag(tags, TAG_CAUSED_BY, causationId);
 
 		Tags extraTags = new Tags(tags);
 		Tags mergedTags = event.tags().merge(extraTags);

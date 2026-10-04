@@ -597,6 +597,91 @@ public sealed interface BoundedContextEvent {
 	record PublisherProcessed ( String boundedContext, String publisher, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
 
 	/**
+	 * Emitted when a policy's processor starts reading the domain stream: once per policy when the bounded
+	 * context starts on an instance deploying automations, and again when a stopped one is restarted. The
+	 * policy counterpart of {@link PublisherStarted}, carrying the two choices its registration had to make,
+	 * since they are what decides how it behaves and nothing else states them.
+	 *
+	 * @param boundedContext the context the policy belongs to
+	 * @param policy the policy's name, the same one its bookmark and its idempotency keys use
+	 * @param start where it started reading the domain stream when it was first deployed
+	 * @param onRejection what a business rejection of the command it issues does: stall or skip
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record PolicyStarted ( String boundedContext, String policy, org.sliceworkz.eventmodeling.automation.PolicyStart start,
+			org.sliceworkz.eventmodeling.automation.PolicyRejectionHandling onRejection, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a policy's processor completes a run that failed: the policy is <em>stalled</em> on one
+	 * domain event, retrying it with backoff while every domain event behind it waits. Once per fruitless
+	 * retry round, as {@link PublisherFailed}; the retry skips nothing. A business rejection of a policy
+	 * registered to stall on one is reported here too, with the rejection as the failure.
+	 * <p>
+	 * {@code failedAt} names the event the policy is stalled on: what an operator hands to
+	 * {@code ProcessorAdminCapability.skipStalledEvent} once they have decided the event is not to be
+	 * reacted to.
+	 *
+	 * @param boundedContext the context the policy belongs to
+	 * @param policy the policy's name
+	 * @param failure what escaped the reaction on this round
+	 * @param failedAt the domain event the policy is stalled on
+	 * @param consecutiveFailedRuns how many runs in a row have now failed, 1 for the first
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record PolicyFailed ( String boundedContext, String policy, Failure failure, EventReference failedAt, int consecutiveFailedRuns, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a policy's processor has retired on a permanent failure, or an operator stopped it, and
+	 * will react to nothing further until something restarts it. Nothing is lost: the domain events sit
+	 * behind the policy's bookmark and are reacted to from there once it is restarted. Not emitted at
+	 * shutdown, the shared asymmetry.
+	 *
+	 * @param boundedContext the context the policy belongs to
+	 * @param policy the policy's name
+	 * @param failure what escaped the reaction; {@code null} for an operator's stop
+	 * @param failedAt the last domain event the policy handled
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 * @param reason whether a permanent failure retired the policy or an operator stopped it
+	 */
+	record PolicyStopped ( String boundedContext, String policy, Failure failure, EventReference failedAt, FeatureSlice slice, ProcessorStopReason reason ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted after a policy's processor has reacted to a batch of domain events — the policy counterpart
+	 * of {@link PublisherProcessed}, and the signal that its backlog moved. Only when the run handled
+	 * something. What each reaction did is the command execution's own event ({@link CommandExecuted},
+	 * {@link CommandRejected}, …), recorded under the policy as actor.
+	 *
+	 * @param boundedContext the context the policy belongs to
+	 * @param policy the policy's name
+	 * @param metrics the run: its duration, the domain events read and handled, and the last one handled
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record PolicyProcessed ( String boundedContext, String policy, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/**
+	 * Emitted when a policy moved past a domain event without having reacted to it: the command it issued
+	 * was rejected and the policy was registered to skip rejections, or an operator skipped the event the
+	 * policy was stalled on. The bookmark moves past the event, so nothing reacts to it again — this event
+	 * is the record that it was not reacted to, and why.
+	 *
+	 * @param boundedContext the context the policy belongs to
+	 * @param policy the policy's name
+	 * @param event the domain event skipped
+	 * @param reason {@code REJECTED} for a rejection skipped by registration, {@code OPERATOR} for an operator's skip
+	 * @param rejection the rejection's message; {@code null} for an operator's skip
+	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 */
+	record PolicyEventSkipped ( String boundedContext, String policy, EventReference event, PolicySkipReason reason, String rejection, FeatureSlice slice ) implements BoundedContextEvent { }
+
+	/** Why a policy moved past a domain event without reacting to it, on {@link PolicyEventSkipped}. */
+	enum PolicySkipReason {
+		/** The command was rejected, and the policy was registered with {@code skipRejections()}. */
+		REJECTED,
+		/** An operator skipped the event the policy was stalled on. */
+		OPERATOR
+	}
+
+	/**
 	 * Emitted after an automation has processed a batch of todo items.
 	 * <p>
 	 * {@code slice} identifies the originating feature slice (resolved by package convention) and may
@@ -949,6 +1034,8 @@ public sealed interface BoundedContextEvent {
 		DISPATCHER,
 		PUBLISHER,
 		AGGREGATE,
+		/** A policy: a command issued for a triggering domain event, with no to-do list in between. */
+		POLICY,
 		/**
 		 * A live read model the slice registers only because a publisher of that same slice
 		 * {@linkplain org.sliceworkz.eventmodeling.outbound.Publisher#reads() reads} it to build its message:

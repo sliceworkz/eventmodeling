@@ -126,7 +126,7 @@ public void execute ( CommandContext<BankingEvent, BankingEvent> context ) {
   execution is made on, so a `check` or an `overridableWhen` after that read is refused with an
   `IllegalStateException` — a bug, reported as `CommandFailed`.
 - **Only commands check rules.** `check` is on `CommandContext`: a rule is judged on decision models, and
-  a command is where they are read. A publisher, an automation or a translator decides nothing of its own
+  a command is where they are read. A publisher, an automation, a policy or a translator decides nothing of its own
   — whatever it needs decided, it has a command decide.
 
 ## 5. Who may override: the command decides
@@ -186,7 +186,7 @@ of the command. A command accepts them by implementing `Overriding` (for a recor
 - **A request for a rule that is not violated is ignored and records nothing**, so a front end may
   simply send back every box that is ticked.
 - **A command that does not implement `Overriding` overrides nothing.** That is the safe default for
-  everything that builds commands without a user in front of it: automations, translators, retries,
+  everything that builds commands without a user in front of it: automations, policies, translators, retries,
   tests. A retry re-executes the same command, so it carries the same overrides and re-judges them on
   the facts as they are then.
 

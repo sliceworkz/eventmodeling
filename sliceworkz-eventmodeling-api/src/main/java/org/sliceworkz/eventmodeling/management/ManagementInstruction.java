@@ -180,6 +180,19 @@ public sealed interface ManagementInstruction {
 	record StartProcessor ( Target target, ProcessorKind kind, String name ) implements ManagementInstruction { }
 
 	/**
+	 * Moves a stalled policy past the domain event it is stalled on on the targeted instances, as
+	 * {@code ProcessorAdminCapability.skipStalledEvent} does. Only the leader runs the policy, so target the
+	 * whole context and let the instance that is stalled answer {@code APPLIED}; the others answer
+	 * {@code NO_CHANGE}, since they are not stalled on it.
+	 *
+	 * @param target the instances addressed
+	 * @param kind the processor's kind, {@code POLICY}
+	 * @param name the policy's name
+	 * @param eventId the id of the event the policy is stalled on, from {@code PolicyFailed.failedAt}
+	 */
+	record SkipStalledEvent ( Target target, ProcessorKind kind, String name, String eventId ) implements ManagementInstruction { }
+
+	/**
 	 * Stops the whole bounded context on the targeted instances — every processor parked, every held
 	 * lease released so the other instances take over — without terminating it, so a
 	 * {@link StartBoundedContext} can bring it back. The way to drain one instance before taking it

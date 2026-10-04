@@ -44,6 +44,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
+import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.ThirdDomainEvent;
 import org.sliceworkz.eventmodeling.mock.misplacedpolicy.MisplacedPolicyFeatureSlice;
 import org.sliceworkz.eventmodeling.mock.policy.SecondFromFirstFeatureSlice;
 import org.sliceworkz.eventmodeling.mock.policy.SecondFromFirstPolicy;
@@ -65,6 +66,7 @@ public class PolicyModuleTest extends AbstractMockDomainTest {
 
 	private static final String CONTEXT_NAME = "PolicyBoundedContext";
 	private static final String POLICY = "SecondFromFirstPolicy";
+	private static final String READER = CONTEXT_NAME + "/policy/" + POLICY + "[shared]";
 
 	private final List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
 
@@ -198,6 +200,73 @@ public class PolicyModuleTest extends AbstractMockDomainTest {
 
 		waitBecauseOfEventualConsistency(() -> seconds().size() >= 1);
 		assertEquals(List.of("new"), secondValues(), "the history recorded before the policy was deployed is not reacted to");
+	}
+
+	/**
+	 * Starting from now on records the head as read and nothing as handled: the bookmark says the policy has
+	 * read up to there, and an operator reading its last handled event finds none until it handles one.
+	 */
+	@Test
+	void fromNowOnTheHeadIsRecordedAsReadAndNothingAsHandled ( ) {
+		EventReference old = domain().append(Event.of(new FirstDomainEvent("old"), org.sliceworkz.eventstore.events.Tags.none())).get(0).reference();
+
+		BoundedContextBuilder<Mock> builder = baseBuilder();
+		builder.policy(new SecondFromFirstPolicy()).fromNowOn().stallOnRejection();
+		buildBoundedContext(builder);
+
+		waitBecauseOfEventualConsistency(() -> domain().findBookmark(READER).isPresent());
+		var bookmark = domain().findBookmark(READER).orElseThrow();
+		assertTrue(bookmark.reference().isEmpty(), "nothing handled yet, was " + bookmark);
+		assertEquals(old.id(), bookmark.readUpTo().orElseThrow().id(), "the head is recorded as read");
+	}
+
+	/**
+	 * Reading past events it does not react to moves only the read position; the handled reference is the
+	 * first event the policy really handled.
+	 */
+	@Test
+	void fromNowOnTheHandledReferenceIsOnlyEverAnEventThePolicyHandled ( ) {
+		domain().append(Event.of(new FirstDomainEvent("old"), org.sliceworkz.eventstore.events.Tags.none()));
+
+		BoundedContextBuilder<Mock> builder = baseBuilder();
+		builder.policy(new SecondFromFirstPolicy()).fromNowOn().stallOnRejection();
+		Mock context = buildBoundedContext(builder);
+		waitBecauseOfEventualConsistency(() -> domain().findBookmark(READER).isPresent());
+
+		EventReference unrelated = context.event(new ThirdDomainEvent("not for the policy")).orElseThrow();
+		waitBecauseOfEventualConsistency(() -> domain().findBookmark(READER).flatMap(b -> b.readUpTo())
+				.map(r -> r.id().equals(unrelated.id())).orElse(false));
+		assertTrue(domain().findBookmark(READER).orElseThrow().reference().isEmpty(), "reading past an unrelated event handles nothing");
+
+		EventReference handled = context.event(new FirstDomainEvent("new")).orElseThrow();
+		waitBecauseOfEventualConsistency(() -> domain().findBookmark(READER).flatMap(b -> b.reference())
+				.map(r -> r.id().equals(handled.id())).orElse(false));
+		assertEquals(List.of("new"), secondValues());
+	}
+
+	/**
+	 * A policy deployed from now on that has handled nothing yet resumes after its read position on a restart
+	 * — a bookmark with nothing handled resumes from the beginning everywhere else, which would react to the
+	 * history it was deployed to skip.
+	 */
+	@Test
+	void fromNowOnARestartBeforeAnythingWasHandledDoesNotReactToTheHistory ( ) {
+		domain().append(Event.of(new FirstDomainEvent("old"), org.sliceworkz.eventstore.events.Tags.none()));
+
+		BoundedContextBuilder<Mock> first = baseBuilder();
+		first.policy(new SecondFromFirstPolicy()).fromNowOn().stallOnRejection();
+		Mock firstContext = buildBoundedContext(first);
+		waitBecauseOfEventualConsistency(() -> domain().findBookmark(READER).isPresent());
+		firstContext.terminate();
+
+		domain().append(Event.of(new FirstDomainEvent("while-down"), org.sliceworkz.eventstore.events.Tags.none()));
+
+		BoundedContextBuilder<Mock> second = baseBuilder();
+		second.policy(new SecondFromFirstPolicy()).fromNowOn().stallOnRejection();
+		buildBoundedContext(second);
+
+		waitBecauseOfEventualConsistency(() -> seconds().size() >= 1);
+		assertEquals(List.of("while-down"), secondValues(), "what happened while it was down is reacted to, the history before it was deployed is not");
 	}
 
 	// ── what a rejection does ────────────────────────────────────────────────

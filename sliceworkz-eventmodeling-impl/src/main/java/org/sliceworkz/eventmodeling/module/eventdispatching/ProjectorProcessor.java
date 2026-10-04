@@ -238,6 +238,12 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 					// read once, before the first run: the processor owns the bookmark it writes, and
 					// nothing else is meant to move it underneath a running processor
 					.readBookmarkOnce();
+			if ( startAtHeadWhenUnbookmarked ) {
+				// a processor reacting only to what happens from now on, that has handled nothing yet, resumes
+				// after the read position it recorded at the head -- where a bookmark with nothing handled
+				// otherwise resumes from the beginning, and would react to the history it was deployed to skip
+				builder = builder.resumeAfterReadPosition();
+			}
 		}
 
 		return builder.build();
@@ -266,16 +272,19 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 	}
 
 	/**
-	 * Makes a leader that finds no bookmark of its own — a processor deployed for the first time — place one
-	 * at the head of the stream before its first run, so it projects only what is appended from then on
+	 * Makes a leader that finds no bookmark of its own — a processor deployed for the first time — record the
+	 * head of the stream as read before its first run, so it projects only what is appended from then on
 	 * instead of the whole history. Checked on every promotion, before the projector is rebuilt from the
-	 * durable position; once a bookmark exists it is the resume point and this does nothing. An empty stream
-	 * has no head, and then there is nothing to skip either.
+	 * durable position; once a bookmark exists this places nothing. The bookmark records a read position and
+	 * no handled event, and while it handles nothing the processor resumes after that read position — the
+	 * eventstore projector's {@code resumeAfterReadPosition()}, where such a bookmark otherwise resumes from
+	 * the beginning. An empty stream has no head, and then there is nothing to skip either.
 	 *
 	 * @return this processor
 	 */
 	public ProjectorProcessor<EVENT_TYPE> startingAtHeadWhenUnbookmarked ( ) {
 		this.startAtHeadWhenUnbookmarked = true;
+		this.projector = createProjector();
 		return this;
 	}
 
@@ -289,12 +298,15 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 
 	private void placeBookmarkAtHeadWhenAbsent ( ) {
 		String reader = processorIdentification.toString();
-		if ( eventSource.getBookmark(reader).isPresent() ) {
+		if ( eventSource.findBookmark(reader).isPresent() ) {
 			return;
 		}
 		eventSource.head().ifPresent(head -> {
-			LOGGER.info("'{}' has no bookmark yet and starts from now on: bookmarking it at the head of the stream, {}", processorIdentification, head);
-			eventSource.placeBookmark(reader, head, processorIdentification.toTags(instance));
+			LOGGER.info("'{}' has no bookmark yet and starts from now on: recording the head of the stream, {}, as read", processorIdentification, head);
+			// a read position, not a handled reference: the processor has read up to the head and handled none
+			// of it, and the bookmark says exactly that -- an operator reading "last handled" finds only events it
+			// really handled. The projector resumes after it while nothing has been handled
+			eventSource.placeReadPosition(reader, head, processorIdentification.toTags(instance));
 		});
 	}
 

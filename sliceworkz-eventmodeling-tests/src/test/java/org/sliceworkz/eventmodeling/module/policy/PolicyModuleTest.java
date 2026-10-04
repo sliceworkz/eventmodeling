@@ -200,6 +200,26 @@ public class PolicyModuleTest extends AbstractMockDomainTest {
 		assertEquals(List.of("new"), secondValues(), "the history recorded before the policy was deployed is not reacted to");
 	}
 
+	/**
+	 * Starting from now on bookmarks the policy at the head of the stream as both positions: the resume point
+	 * and how far it has read. With the resume point alone, the bookmark would show no read position until
+	 * something was appended — read past, yet seemingly never read.
+	 */
+	@Test
+	void fromNowOnTheBookmarkAtTheHeadRecordsTheHeadAsReadToo ( ) {
+		EventReference old = domain().append(Event.of(new FirstDomainEvent("old"), org.sliceworkz.eventstore.events.Tags.none())).get(0).reference();
+
+		BoundedContextBuilder<Mock> builder = baseBuilder();
+		builder.policy(new SecondFromFirstPolicy()).fromNowOn().stallOnRejection();
+		buildBoundedContext(builder);
+
+		String reader = CONTEXT_NAME + "/policy/" + POLICY + "[shared]";
+		waitBecauseOfEventualConsistency(() -> domain().findBookmark(reader).isPresent());
+		var bookmark = domain().findBookmark(reader).orElseThrow();
+		assertEquals(old.id(), bookmark.reference().orElseThrow().id());
+		assertEquals(old.id(), bookmark.readUpTo().orElseThrow().id(), "the head is recorded as read, not only as handled");
+	}
+
 	// ── what a rejection does ────────────────────────────────────────────────
 
 	@Test

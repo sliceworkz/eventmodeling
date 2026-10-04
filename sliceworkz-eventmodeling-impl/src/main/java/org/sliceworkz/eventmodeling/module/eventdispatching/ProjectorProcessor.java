@@ -294,7 +294,11 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 		}
 		eventSource.head().ifPresent(head -> {
 			LOGGER.info("'{}' has no bookmark yet and starts from now on: bookmarking it at the head of the stream, {}", processorIdentification, head);
-			eventSource.placeBookmark(reader, head, processorIdentification.toTags(instance));
+			// the head as both positions: read up to it, and the resume point after it. Placed with the
+			// handled reference alone, the read position would be taken to be that same event, and an idle
+			// run reading to the same head would see nothing moved -- leaving the bookmark without a read
+			// position until something is appended to the stream
+			eventSource.placeBookmark(reader, head, head, processorIdentification.toTags(instance));
 		});
 	}
 

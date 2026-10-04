@@ -47,6 +47,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.mock.sliced.SlicedCommand;
 import org.sliceworkz.eventmodeling.mock.sliced.SlicedFeatureSlice;
+import org.sliceworkz.eventmodeling.mock.projectedmembers.ProjectedMembersFeatureSlice;
 import org.sliceworkz.eventmodeling.mock.publishedstatechange.PublishedStateChangeFeatureSlice;
 import org.sliceworkz.eventmodeling.mock.publishing.PublishingFeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Aspect;
@@ -241,7 +242,8 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		// it, so the slice must not turn into an automation because of it.
 		BoundedContextEvent.FeatureSlice slice = announcedSlice(PublishedStateChangeFeatureSlice.class, "PublishedStateChange");
 		assertEquals(SliceType.STATE_CHANGE, slice.type());
-		assertTrue(slice.members().contains(new BoundedContextEvent.SliceMember("ItemReadModel", BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, Aspect.AUTOMATION)),
+		assertTrue(slice.members().contains(new BoundedContextEvent.SliceMember("ItemReadModel", BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, Aspect.AUTOMATION,
+				BoundedContextEvent.ReadModelProjection.LIVE)),
 				"the lookup is announced as part of the publication: " + slice.members());
 	}
 
@@ -252,6 +254,22 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		BoundedContextEvent.FeatureSlice slice = announcedSlice(PublishingFeatureSlice.class, "Publishing");
 		assertTrue(slice.members().stream().noneMatch(m -> m.kind() == BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL),
 				"shown by a query, the read model is not only the publisher's: " + slice.members());
+	}
+
+	@Test
+	void eachReadModelIsAnnouncedWithTheProjectionItsRegistrationSays() {
+		// A live lookup only the command reads sits in the command aspect, where nothing about the aspect says
+		// it is live: the announcement must say so itself, so a reader does not take it for a projector that
+		// never started. A read model registered as an instance is the background one; a command is no read
+		// model and carries no projection.
+		BoundedContextEvent.FeatureSlice slice = announcedSlice(ProjectedMembersFeatureSlice.class, "ProjectedMembers");
+		assertTrue(slice.members().contains(new BoundedContextEvent.SliceMember("ItemReadModel", BoundedContextEvent.MemberKind.READ_MODEL,
+				Aspect.COMMAND, BoundedContextEvent.ReadModelProjection.LIVE)), "the command's lookup is live: " + slice.members());
+		assertTrue(slice.members().contains(new BoundedContextEvent.SliceMember("background-model", BoundedContextEvent.MemberKind.READ_MODEL,
+				Aspect.AUTOMATION, BoundedContextEvent.ReadModelProjection.EVENTUALLY_CONSISTENT)),
+				"the instance is projected in the background: " + slice.members());
+		assertTrue(slice.members().stream().filter(m -> m.kind() == BoundedContextEvent.MemberKind.COMMAND).allMatch(m -> m.projection() == null),
+				"a command has no projection: " + slice.members());
 	}
 
 	private BoundedContextEvent.FeatureSlice announcedSlice(Class<?> sliceClass, String sliceName) {
@@ -443,6 +461,33 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		assertEquals("PlaceOrder", placeOrder.name());
 		assertNotNull(placeOrder.members(), "an absent members property must read as an empty set, not null");
 		assertTrue(placeOrder.members().isEmpty());
+	}
+
+	@Test
+	void readsBackASliceMemberStoredBeforeMembersCarriedTheirProjection() {
+		// A member written before the projection existed binds with it absent, and reads as null - "not said",
+		// which a reader falls back from - rather than failing the whole inventory.
+		EventStreamId streamId = EventStreamId.forContext(CONTEXT_NAME).withPurpose("kernel-legacy-members");
+		eventStorage().append(AppendCriteria.none(), streamId, List.of(new EventToStore(streamId,
+				EventType.of(BoundedContextEvent.BoundedContextStarting.class),
+				"""
+				{"boundedContext":"orders","logical":"orders","physical":"orders-1","process":"p123",\
+				"enabledFeatures":[{"name":"PlaceOrder","type":"STATE_CHANGE","context":"orders","chapter":"checkout","tags":[],\
+				"members":[{"name":"OrderLookup","kind":"READ_MODEL","aspect":"COMMAND"},\
+				{"name":"OrdersToShip","kind":"READ_MODEL","aspect":"AUTOMATION","projection":"EVENTUALLY_CONSISTENT"}]}],\
+				"disabledFeatures":[]}""",
+				Tags.none(), null)));
+
+		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
+				.getEventStream(streamId, BoundedContextEvent.class);
+		BoundedContextEvent.BoundedContextStarting starting = (BoundedContextEvent.BoundedContextStarting)
+				kernelStream.query(EventQuery.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
+
+		Set<BoundedContextEvent.SliceMember> members = starting.enabledFeatures().iterator().next().members();
+		assertTrue(members.contains(new BoundedContextEvent.SliceMember("OrderLookup", BoundedContextEvent.MemberKind.READ_MODEL, Aspect.COMMAND)),
+				"an absent projection reads as null: " + members);
+		assertTrue(members.contains(new BoundedContextEvent.SliceMember("OrdersToShip", BoundedContextEvent.MemberKind.READ_MODEL, Aspect.AUTOMATION,
+				BoundedContextEvent.ReadModelProjection.EVENTUALLY_CONSISTENT)), "a stored projection reads back: " + members);
 	}
 
 	@Test

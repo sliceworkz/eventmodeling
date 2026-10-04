@@ -914,9 +914,31 @@ public sealed interface BoundedContextEvent {
 	 * query on one instance, kept up to date by a projector on another - and those are different
 	 * members that happen to share a name. It is {@code null} on an event written before members
 	 * carried their aspect.
+	 * <p>
+	 * {@code projection} says how a read model is kept: {@code LIVE} when registered by class (projected
+	 * per read), {@code EVENTUALLY_CONSISTENT} when registered as an instance (projected in the
+	 * background). It follows from the registration rather than from the aspect, so a reader need not
+	 * guess it from where the read model was registered - a live lookup only a command reads is
+	 * registered in the command aspect and has no projector to report on until it is first read. It is
+	 * {@code null} for every member that is not a read model, and on an event written before members
+	 * carried it.
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	record SliceMember ( String name, MemberKind kind, Aspect aspect ) { }
+	record SliceMember ( String name, MemberKind kind, Aspect aspect, ReadModelProjection projection ) {
+
+		/** A member that is not a read model, or one announced without its projection. */
+		public SliceMember ( String name, MemberKind kind, Aspect aspect ) {
+			this(name, kind, aspect, null);
+		}
+	}
+
+	/** How a read model {@link SliceMember} is projected, as its registration says. */
+	enum ReadModelProjection {
+		/** Registered by class: projected when read, into a fresh instance; no processor of its own. */
+		LIVE,
+		/** Registered as an instance: projected in the background by a processor of its own. */
+		EVENTUALLY_CONSISTENT
+	}
 
 	/** What a {@link SliceMember} is. */
 	enum MemberKind {

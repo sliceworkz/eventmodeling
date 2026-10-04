@@ -1733,6 +1733,13 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   a slice in the code and the same slice in the model come out as the same type, which is what makes
   comparing the two meaningful. The modeler's `SliceTypeDerivation` delegates to `SliceType.derive`, so the
   rule lives here, once.
+- **A read model member says how it is projected**: `SliceMember.projection` is `LIVE` for a read model
+  registered by class and `EVENTUALLY_CONSISTENT` for one registered as an instance — the overload decides
+  it, and `build()` holds the registration to it, so it is recorded with the member rather than at
+  `.live()`/`.eventuallyConsistent()`. The aspect cannot say it: a live lookup only a command reads sits in
+  the command aspect, and without the projection a reader such as the dashboard took it for a projector that
+  never started until it was first read. `null` for a member that is no read model and on events written
+  before the field existed; the three-argument constructor leaves it `null`, so existing callers compile.
 - **Two consequences of reading the type off the registrations**, both documented on `SliceType`:
   - Only what is registered counts. A slice that only wires an endpoint in `startCommand` is
     `UNDEFINED`; `builder.command(...)`, which is purely declarative, makes it a state change. A

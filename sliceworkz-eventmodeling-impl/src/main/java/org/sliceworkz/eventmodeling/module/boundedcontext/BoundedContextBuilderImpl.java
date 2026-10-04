@@ -333,7 +333,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		liveModelSpecs.add(m);
 		// A live model is instantiated per projection, so only its class is known here. That matches
 		// the name the LiveModelProjected events carry unless the read model overrides readmodelName().
-		recordSliceMember(readModelClass.getSimpleName(), BoundedContextEvent.MemberKind.READ_MODEL);
+		recordSliceMember(readModelClass.getSimpleName(), BoundedContextEvent.MemberKind.READ_MODEL, BoundedContextEvent.ReadModelProjection.LIVE);
 		return m;
 	}
 
@@ -349,7 +349,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 		var m = new EventuallyConsistentReadModelSpecificationImpl(this, readModel);
 		eventuallyConsistentReadModelSpecs.add(m);
-		recordSliceMember(readModel.readmodelName(), BoundedContextEvent.MemberKind.READ_MODEL);
+		recordSliceMember(readModel.readmodelName(), BoundedContextEvent.MemberKind.READ_MODEL, BoundedContextEvent.ReadModelProjection.EVENTUALLY_CONSISTENT);
 		return m;
 	}
 
@@ -498,7 +498,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			for ( BoundedContextEvent.SliceMember m : members ) {
 				boolean publication = m.kind() == BoundedContextEvent.MemberKind.READ_MODEL && m.aspect() == Aspect.AUTOMATION
 						&& reads.contains(m.name()) && !usedElsewhere.contains(m.name());
-				marked.add(publication ? new BoundedContextEvent.SliceMember(m.name(), BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, m.aspect()) : m);
+				marked.add(publication ? new BoundedContextEvent.SliceMember(m.name(), BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, m.aspect(), m.projection()) : m);
 			}
 			sliceMembers.put(slice, marked);
 		});
@@ -511,9 +511,18 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	 * slice's configuration (directly on the builder) belong to no slice and are ignored.
 	 */
 	private void recordSliceMember ( String name, BoundedContextEvent.MemberKind kind ) {
+		recordSliceMember(name, kind, null);
+	}
+
+	/**
+	 * As {@link #recordSliceMember(String, BoundedContextEvent.MemberKind)}, for a read model: its projection
+	 * follows from the overload it was registered with (a class can only be live, an instance only eventually
+	 * consistent), which {@code build()} holds the registration to.
+	 */
+	private void recordSliceMember ( String name, BoundedContextEvent.MemberKind kind, BoundedContextEvent.ReadModelProjection projection ) {
 		if ( configuringSlice != null && name != null ) {
 			sliceMembers.computeIfAbsent(configuringSlice, slice -> new LinkedHashSet<>())
-					.add(new BoundedContextEvent.SliceMember(name, kind, configuringAspect));
+					.add(new BoundedContextEvent.SliceMember(name, kind, configuringAspect, projection));
 		}
 	}
 

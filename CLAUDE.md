@@ -1649,10 +1649,18 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   ```
   - **Where it starts.** A policy has no to-do list remembering what is done, so deployed over an existing
     history it would issue its command for every matching event ever recorded. `fromNowOn()` makes a leader
-    finding no bookmark of its own place one at the head of the stream before its first run
-    (`ProjectorProcessor.startingAtHeadWhenUnbookmarked`, checked on every promotion, a no-op once a bookmark
-    exists); `fromTheBeginning()` replays. A real bookmark, not a read position: a read position is never a
-    resume point, so it would replay everything anyway
+    finding no bookmark of its own record the head of the stream as *read* before its first run — a read
+    position and no handled event (`ProjectorProcessor.startingAtHeadWhenUnbookmarked`, checked on every
+    promotion, a no-op once a bookmark exists); `fromTheBeginning()` replays. The handled reference is only
+    ever an event the policy really handled, because that is what an operator reads it as. While nothing has
+    been handled, such a processor **resumes after its read position**, where the eventstore resumes a
+    bookmark with nothing handled from the beginning — right everywhere else, and here a replay of the very
+    history the policy was deployed to skip. The eventstore's projector keeps one cursor that is also its
+    handled reference, so started after the read position it would record that position as handled on its
+    next idle move; `ReadPositionStartSource` is the source it reads through then, passing everything on
+    and turning a bookmark write that names the start point as handled into a move of the read position.
+    The alternative — the head placed as the handled reference — loses because the bookmark then names an
+    event the policy never processed as the last one it did
   - **What a business rejection does.** `stallOnRejection()`: the `BusinessException` (a rule judged as
     violated included) escapes the reaction, so the processor retries the event with backoff while everything
     behind it waits, reported `PolicyFailed` naming the stalled event each round. `skipRejections()`: the
@@ -1691,7 +1699,9 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   both registration choices — nothing else states them), `PolicyProcessed`, `PolicyFailed`, `PolicyStopped`,
   `PolicyEventSkipped`, and `Observation.PolicyReaction` completing with `Reacted`, `Ignored`,
   `AlreadyReacted`, `ReactionRejected` or `ReactionSkipped`, the command execution nested beneath it
-- `PolicyModuleTest` pins the reaction end to end (the cause, the flow, the actor), both starting points, both
+- `PolicyModuleTest` pins the reaction end to end (the cause, the flow, the actor), both starting points (the
+  head recorded as read and nothing as handled, the handled reference only ever an event really handled, a
+  restart before anything was handled not replaying the history), both
   rejection handlings, the operator's skip, the admin surface and every build rejection;
   `PolicyTestRunsOnEveryBackendTest` pins the trace lookup and the keys per backend, including a command that
   decides otherwise on a redelivery; `SliceTypeTest` the derivation

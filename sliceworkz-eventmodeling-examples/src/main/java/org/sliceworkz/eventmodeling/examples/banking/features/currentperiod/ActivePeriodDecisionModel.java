@@ -29,6 +29,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyWithdrawn;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthClosed;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthOpened;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountAccess;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.RulebookFollowUp;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventQuery;
@@ -136,6 +137,7 @@ public class ActivePeriodDecisionModel implements DecisionModel<BankingEvent> {
 			}
 			// not in either query: a follow-up moves no money and opens no period
 			case RulebookFollowUp followUp -> {}
+			case AccountAccess access -> {}
 		}
 	}
 

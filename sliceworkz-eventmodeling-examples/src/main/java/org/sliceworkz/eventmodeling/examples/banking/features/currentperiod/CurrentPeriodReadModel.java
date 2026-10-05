@@ -103,6 +103,7 @@ public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 				periodClosed = false;
 			}
 			case RulebookFollowUp followUp -> {}
+			case AccountAccess access -> {}
 		}
 	}
 

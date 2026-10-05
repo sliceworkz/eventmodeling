@@ -59,7 +59,8 @@ import org.sliceworkz.eventmodeling.rules.RuleViolation;
  *   <li><b>STATE_CHANGE</b>: DepositCommand, WithdrawCommand, CloseMonthCommand</li>
  *   <li><b>STATE_READ</b>: CurrentPeriodReadModel (live), MonthStatementReadModel (live)</li>
  *   <li><b>AUTOMATION</b>: MonthEndClosingAutomation (time-triggered), ReportExcessBalanceAutomation
- *       (the follow-up of a deferred enforcement)</li>
+ *       (the follow-up of a deferred enforcement), and BlockCardsOfAccountPolicy — the other form of an
+ *       automation: whenever an account is frozen or closed, block its cards</li>
  * </ul>
  *
  * <h2>The rulebook</h2>
@@ -93,10 +94,13 @@ public interface BankingDomainWithClosingTheBooks {
 	record CustomerId ( String value ) implements EntityId { }
 	/** A month is an entity here: the period being closed has an identity of its own, {@code 2025-01}, and events are tagged with it. */
 	record MonthId ( String value ) implements EntityId { }
+	/** A payment card issued on an account; blocked as a whole when its account is frozen or closed. */
+	record CardId ( String value ) implements EntityId { }
 
 	Entity<AccountId> ACCOUNT = Entity.of("account", AccountId::new);
 	Entity<CustomerId> CUSTOMER = Entity.of("customer", CustomerId::new);
 	Entity<MonthId> MONTH = Entity.of("month", MonthId::new);
+	Entity<CardId> CARD = Entity.of("card", CardId::new);
 
 	/** The id of a month, so that every tag on a month spells it the same way: {@link YearMonth#toString()}. */
 	static MonthId monthId ( YearMonth month ) {
@@ -311,6 +315,49 @@ public interface BankingDomainWithClosingTheBooks {
 				BigDecimal balance,
 				RuleFollowUp enforcement
 			) implements RulebookFollowUp {}
+		}
+
+		// ── Account access ───────────────────────────────────────────
+
+		/**
+		 * Who and what may still use an account: its cards, and whether it was frozen or closed. Like the
+		 * rulebook follow-ups these move no money, which is why the read models folding balances and periods
+		 * ignore the whole branch in one case.
+		 * <p>
+		 * {@code AccountFrozen} and {@code AccountClosed} are two variants of one fact as far as the cards are
+		 * concerned — the account may no longer be paid from — and {@code BlockCardsOfAccountPolicy} reacts to
+		 * both with the same command.
+		 */
+		sealed interface AccountAccess extends BankingEvent {
+
+			/** @return the account the fact concerns */
+			AccountId accountId();
+
+			/** A card was issued on the account. Tagged with the account and the card. */
+			record CardIssued(
+				AccountId accountId,
+				CardId cardId,
+				LocalDate issuedOn
+			) implements AccountAccess {}
+
+			/** The account was frozen: no new cards, and the cards it has are blocked. */
+			record AccountFrozen(
+				AccountId accountId,
+				String reason
+			) implements AccountAccess {}
+
+			/** The account was closed: no new cards, and the cards it has are blocked. */
+			record AccountClosed(
+				AccountId accountId,
+				LocalDate closedOn
+			) implements AccountAccess {}
+
+			/** A card was blocked, and can no longer be used. Tagged with the account and the card. */
+			record CardBlocked(
+				AccountId accountId,
+				CardId cardId,
+				String reason
+			) implements AccountAccess {}
 		}
 	}
 

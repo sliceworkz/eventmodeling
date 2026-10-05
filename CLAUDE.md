@@ -141,6 +141,16 @@ automation). The example evaluates before it executes, the way a front end would
 judgement as the widget it becomes. `WithdrawCommandTest`, `DepositCommandTest`,
 `JustifyWithdrawalCommandTest` and `ReportExcessBalanceAutomationTest` are the reference for testing it.
 
+**Policy — whenever an account is frozen or closed, block its cards.** The same context carries the
+reference policy: `blockcardsofaccount`'s `BlockCardsOfAccountPolicy` maps `AccountFrozen` and
+`AccountClosed` (two variants of one fact) onto `BlockCardsOfAccountCommand`, which finds the cards still
+usable on its own decision model and raises a `CardBlocked` per card — nothing when there is none, so a
+redelivery or a second trigger blocks nothing twice. The slice registers it
+`.fromNowOn().stallOnRejection()` and says why. `IssueCardCommand` decides on the account's standing, so a
+card issued while the account is being frozen conflicts rather than slipping past the policy.
+`BlockCardsOfAccountPolicyTest` (on the published `PolicyTest`) is the reference for testing a policy; the
+`issuecard`, `freezeaccount` and `closeaccount` slices raise the facts it reacts to.
+
 ## Architecture Patterns
 
 ### BoundedContext Pattern

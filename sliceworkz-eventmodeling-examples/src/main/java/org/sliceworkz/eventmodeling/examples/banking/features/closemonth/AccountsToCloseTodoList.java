@@ -79,8 +79,10 @@ public class AccountsToCloseTodoList implements TodoListReadModel<BankingEvent, 
 		);
 	}
 
+	// when() runs on the projector's thread and streamItems() on the automation's, so the two meet
+	// under this object's monitor: the map is never read while it is being changed
 	@Override
-	public void when(Event<BankingEvent> eventWithMetaData) {
+	public synchronized void when(Event<BankingEvent> eventWithMetaData) {
 		switch (eventWithMetaData.data()) {
 			case AccountOpened ao -> {
 				accounts.put(ao.accountId().value(), new AccountState(
@@ -103,10 +105,11 @@ public class AccountsToCloseTodoList implements TodoListReadModel<BankingEvent, 
 			case RulebookFollowUp followUp -> {}
 			case AccountAccess access -> {}
 		}
+		lastEventReference = eventWithMetaData.reference();
 	}
 
 	@Override
-	public Optional<EventReference> lastEventReference() {
+	public synchronized Optional<EventReference> lastEventReference() {
 		return Optional.ofNullable(lastEventReference);
 	}
 
@@ -115,12 +118,16 @@ public class AccountsToCloseTodoList implements TodoListReadModel<BankingEvent, 
 	 * whose books have not yet been closed.
 	 */
 	@Override
-	public Stream<AccountToClose> streamItems(Limit limit) {
+	public synchronized Stream<AccountToClose> streamItems(Limit limit) {
+		// collected before it is returned: a lazy stream over the map would be read by the automation
+		// after the monitor is released, while the projector may be changing it
 		return accounts.values().stream()
 			.filter(state -> !state.closed)
 			.filter(state -> state.activeMonth.equals(closingMonth))
 			.map(state -> new AccountToClose(state.accountId, closingMonth))
-			.limit(limit.value());
+			.limit(limit.value())
+			.toList()
+			.stream();
 	}
 
 	// ── Internal state ───────────────────────────────────────────────────

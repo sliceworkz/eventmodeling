@@ -159,9 +159,9 @@ public sealed interface ManagementInstruction {
 	/**
 	 * Stops a projector-driven processor — a read model's projector, a translator, a dispatcher — on
 	 * the targeted instances, as {@code ProcessorAdminCapability.stopProcessor} does. A leader-only
-	 * processor hands its lease back. Stopping a {@code SHARED} read model's projector everywhere is
-	 * the first step of rebuilding it: with its projector stopped, drop its tables, then start it
-	 * again and it replays from the beginning.
+	 * processor hands its lease back. Stopping an SQL read model's projector everywhere is the first
+	 * step of rebuilding it: with its projector stopped, drop its tables, then start it again — the
+	 * restarted projector recreates the tables and replays from the beginning.
 	 *
 	 * @param target the instances addressed
 	 * @param kind the processor's kind

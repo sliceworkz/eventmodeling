@@ -33,9 +33,10 @@ package org.sliceworkz.eventmodeling.readmodels;
  *   <li>{@link #SHARED}: durable storage all instances read and write (a database shared by the
  *       deployment). A single elected leader projects; the others just query.</li>
  * </ul>
- * Because storage and projection are decided by this one value, the combination that used to be
- * expressible — in-memory state projected on a single leader only, leaving every other instance
- * answering from an empty model — cannot be configured.
+ * Because storage and projection are decided by this one value, one combination cannot be
+ * configured: in-memory state projected on a single leader only, which would leave every other
+ * instance answering from an empty model. The alternative — storage and projection as two settings —
+ * loses for exactly that combination.
  */
 public enum ReadModelStorage {
 

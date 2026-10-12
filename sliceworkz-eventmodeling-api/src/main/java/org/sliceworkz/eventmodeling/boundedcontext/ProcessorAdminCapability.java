@@ -22,8 +22,9 @@ import java.util.List;
 import org.sliceworkz.eventstore.events.EventId;
 
 /**
- * Reading and restarting the projector-driven processors of a bounded context — read model
- * projectors, translators and dispatchers — for an operator rather than for the domain. The projector
+ * Reading, stopping and restarting the projector-driven processors of a bounded context — read model
+ * projectors, translators, dispatchers, publishers and policies — for an operator rather than for the
+ * domain. The projector
  * counterpart of {@code AutomationAdminCapability}, which stays the admin surface for automations.
  * <p>
  * A processor retries transient projection failures by itself, with backoff, so most failures never
@@ -44,7 +45,8 @@ public interface ProcessorAdminCapability {
 
 	/**
 	 * The projector-driven processors of this bounded context and what they are doing, in
-	 * registration order per kind: read models, then translators, then dispatchers. Automations are
+	 * registration order per kind: read models, then translators, dispatchers, publishers and
+	 * policies. Automations are
 	 * not listed here — {@code AutomationAdminCapability.automations()} is theirs.
 	 *
 	 * @return one status per processor, never null, empty when none are registered
@@ -53,7 +55,8 @@ public interface ProcessorAdminCapability {
 
 	/**
 	 * Restarts a stopped processor, so it resumes projecting from where its position durably left
-	 * off. Nothing was skipped by the stop — the retired projector's cursor was rolled back to the
+	 * off — for a read model keeping its own position (an SQL read model), the position it records
+	 * when it is restarted, so one whose tables were dropped meanwhile replays. Nothing was skipped by the stop — the retired projector's cursor was rolled back to the
 	 * start of the batch it failed on — so nothing is skipped by the restart either.
 	 * <p>
 	 * Restarting without addressing the cause replays the same batch and, for a permanent cause,
@@ -73,9 +76,10 @@ public interface ProcessorAdminCapability {
 
 	/**
 	 * Stops a running processor on this instance, so it projects nothing further until something
-	 * restarts it. What it is for: rebuilding a read model (stop its projector everywhere, drop its
-	 * tables, start it again — a {@code SHARED} SQL read model with no bookmark row replays from the
-	 * beginning), or holding a dispatcher back while the system it publishes to is down for
+	 * restarts it. What it is for: rebuilding an SQL read model (stop its projector everywhere, drop its
+	 * tables, {@link #restartProcessor restart} it — the restarted projector recreates the tables and,
+	 * with no bookmark row, replays from the beginning, whatever its storage class), or holding a
+	 * dispatcher back while the system it publishes to is down for
 	 * maintenance, without the retries piling up failure events meanwhile.
 	 * <p>
 	 * A leader-only processor stopped this way hands its lease back, exactly as one retired by a

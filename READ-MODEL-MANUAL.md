@@ -42,7 +42,8 @@ The five axes, spelled out:
   whose transaction is still in flight is withheld from everyone alike (on PostgreSQL by the
   `pg_snapshot_xmin` barrier), so nothing here is fresher than a live model — but several mechanisms
   can *prove* what they contain, by exposing the reference they reached so a caller checks its own
-  write with `writeRef.happenedBefore(result.upTo())`.
+  write with `result.includes(writeRef)` (not `writeRef.happenedBefore(result.upTo())`, which is
+  `false` exactly when the write is the newest event included).
 
 ---
 
@@ -57,18 +58,18 @@ Optional<Event<BankingEvent>> lastClose = eventStream
     .query(EventQuery.forEvents(EventTypesFilter.of(MonthClosed.class),
                                 ACCOUNT.tags(accountId))
                      .backwards().limit(1))
-    .findFirst();
+    .stream().findFirst();
 ```
 
 "Has this happened yet", "what was the last X", "give me this entity's events for the audit screen" —
 all of these are a query, not a projection. Two things to know before leaning on it:
 
-- **The returned `Stream` is already fully in memory.** Storage has finished reading by the time it
-  comes back, so `.findFirst()` or `.limit(10)` on the *stream* discards work already done — put the
-  bound in the *query* (`.limit(n)`), where it becomes a storage-level limit. An unbounded query over
-  a large stream is a heap problem, not a slow stream.
+- **`query()` returns a `List`, already fully in memory.** Storage has finished reading by the time
+  it comes back, so `.stream().findFirst()` or `subList(0, 10)` on the *result* discards work already
+  done — put the bound in the *query* (`.limit(n)`), where it becomes a storage-level limit. An
+  unbounded query over a large stream is a heap problem, not a slow one.
 - **`.limit(n)` counts stored events.** With upcasting in play one stored event can become several or
-  none, so bound the query by stored events and trim the returned stream if you need exactly n.
+  none, so bound the query by stored events and take a `subList` of the result if you need exactly n.
 
 When the question stops being "which events" and starts being "what do they add up to", you fold —
 and a fold with a name, a query and a place to be registered is a read model. That is chapter 2.
@@ -123,8 +124,10 @@ Three things to internalise here, because everything later builds on them:
   how a read model is projected is a decision its callers live with, so it is stated where it is
   made. (`ReadModelModeIsExplicitTest` pins this.)
 - **Constructor parameters are the read's parameters.** `bc.read(X.class, a, b)` picks the
-  constructor with a matching parameter count. This is what scopes the model to one entity — and
-  what scopes its `eventQuery()`.
+  constructor whose parameter types the arguments fit, by their types and not by their count — the
+  most specific one where several fit, as Java's own overload resolution does — and refuses a read
+  that fits none or is ambiguous, naming the constructors it weighed. This is what scopes the model to
+  one entity — and what scopes its `eventQuery()`.
 - **The read is typed by the class it asks for.** `bc.read(AccountDetailsReadModel.class, accountId)`
   is an `AccountDetailsReadModel`, so it chains (`bc.read(X.class, id).details()`) and fits a `var`
   without a cast, and assigning it to anything else is a compile error rather than a
@@ -271,7 +274,7 @@ What the base class does with that: it folds each batch aside and publishes **th
 together with the position it reflects**, through one volatile write, once per batch. A reader calls
 `published()` and gets both as **one observation** — a `ReadModelResult<STATE>` whose `upTo()` is
 exactly the last event folded in. That one property is what makes cross-thread reads safe, what lets
-a caller answer "is my write in this yet" (`writeRef.happenedBefore(upTo())`), and what chapter 7
+a caller answer "is my write in this yet" (`result.includes(writeRef)`), and what chapter 7
 builds on. The contract in return: **never mutate state after `apply` returns it.**
 
 Operational facts to teach alongside:
@@ -346,7 +349,9 @@ writes its last event's reference into a `<prefix>_projection_bookmark` table **
 transaction that writes the rows**, and startup resumes from that table. The event-store bookmark is
 still written — as the record operators and dashboards see, lagging by at most one batch — but never
 read. An absent bookmark row means "replay from the beginning", deliberately with no fallback: that
-is what makes *drop the tables* the complete rebuild procedure.
+is what makes *stop the projector, drop the tables, restart it* (`stopProcessor`/`restartProcessor`,
+or the `StopProcessor`/`StartProcessor` management instructions) the complete rebuild procedure — the
+restarted projector recreates the tables and replays, whatever its storage class.
 
 **`project()` must be idempotent, and the helpers are how.** Leader election (below) keeps two
 instances from projecting concurrently, but a failover window is at-least-once, so a batch can be

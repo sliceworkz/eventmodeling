@@ -194,4 +194,5 @@ you*. An event whose transaction is still in flight is withheld from every reade
 by the `pg_snapshot_xmin` barrier — so a seeded read is exactly as fresh as a live model and no
 fresher. What it can prove that a live model cannot is inclusion: expose the reference it reached, and
 a caller that has just executed a command checks its own write is in the answer with
-`writeRef.happenedBefore(result.upTo())`.
+`result.includes(writeRef)` — `upTo != null && !writeRef.storedEventHappenedAfter(upTo)`, never
+`writeRef.happenedBefore(upTo)`, which is `false` exactly when the write is the newest event included.

@@ -33,12 +33,12 @@ import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
  * <tr><th>audience</th><th>interface</th><th>what it carries</th></tr>
  * <tr><td>application — a controller, a job, an adapter driving the domain</td>
  *     <td>{@link ApplicationCapabilities}</td><td>{@code execute}, {@code executeWithRetry},
- *     {@code read}, {@code aggregate}</td></tr>
+ *     {@code evaluate}, {@code read}, {@code aggregate}</td></tr>
  * <tr><td>inbound edge — a webhook, a consumer feeding the domain</td>
  *     <td>{@link TranslationCapability}</td><td>{@code incoming}, {@code translate}</td></tr>
  * <tr><td>operator — an admin endpoint, a dashboard</td>
  *     <td>{@link OperationsCapabilities}</td><td>{@code automations}, {@code processors} and their
- *     {@code restart}/{@code stop}</td></tr>
+ *     {@code restart}/{@code stop}, and {@code skipStalledEvent} for a stalled policy</td></tr>
  * <tr><td>erasure requests</td><td>{@link PrivacyCapability}</td>
  *     <td>{@code erase}, {@code eraseCategory}</td></tr>
  * <tr><td>the escape hatch</td><td>{@link ProvidedEventCapability}</td>

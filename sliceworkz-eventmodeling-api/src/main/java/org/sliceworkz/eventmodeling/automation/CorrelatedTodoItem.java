@@ -48,8 +48,8 @@ import org.sliceworkz.eventmodeling.events.Tracing;
  * {@code Automation.handle} (and {@code onFailure}) a context whose tracing carries that id, so
  * everything raised through it — {@code execute(...)}, {@code event(...)} — is stamped with the item's flow, per item, without the automation
  * doing anything. An item that does not implement this interface, or reports {@code null} or a blank
- * id, keeps today's behaviour: the batch-level tracing, whose correlation id names the automation
- * run rather than any one flow.
+ * id, is handled under the batch-level tracing, whose correlation id names the automation run rather
+ * than any one flow.
  */
 public interface CorrelatedTodoItem {
 

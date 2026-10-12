@@ -35,12 +35,14 @@ import org.sliceworkz.eventstore.events.EventReference;
  * <p><b>The answer is to stop spanning two stores.</b> A read model that writes its position into
  * its own storage inside the same transaction that writes the rows has one atomic step instead of
  * two, and resuming from that position is exactly-once by construction. The event store bookmark
- * stays — it is written per batch and is a perfectly good record for monitoring — but it is no
- * longer consulted to decide where this read model starts.
+ * stays — it is written per batch and is a perfectly good record for monitoring — but it is not
+ * consulted to decide where this read model starts.
  *
  * <p><b>Two consequences worth knowing.</b> An empty position means <em>project from the
  * beginning</em>, and deliberately does not fall back to the event store bookmark: that is what
- * makes "drop the tables to rebuild" work, and what keeps a fresh database from being handed a
+ * makes "drop the tables to rebuild" work — the framework asks for the position again whenever it
+ * rebuilds the projector, on a promotion and on a restart of the stopped processor, so a projector
+ * restarted after its tables were dropped replays — and what keeps a fresh database from being handed a
  * bookmark describing rows it does not have. And because the position lives with the state, the two
  * cannot disagree — an ephemeral database that really did die comes back empty, position included,
  * so it replays; one that survived resumes instead of duplicating.

@@ -30,8 +30,7 @@ import org.sliceworkz.eventstore.events.Tags;
 public record Tracing ( Instance instance, String actor, String channel, String command, String agentId, String agentName, String correlationId, String causationId ) {
 
 	/**
-	 * A tracing that names no cause: the shape every tracing had before causation was recorded, and the
-	 * one every step that is not a reaction to an event takes.
+	 * A tracing that names no cause: the one every step that is not a reaction to an event takes.
 	 */
 	public Tracing ( Instance instance, String actor, String channel, String command, String agentId, String agentName, String correlationId ) {
 		this(instance, actor, channel, command, agentId, agentName, correlationId, null);

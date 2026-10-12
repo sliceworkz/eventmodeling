@@ -22,7 +22,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.sql.DataSource;
 
@@ -64,10 +63,14 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  *
  * <p>Three practical consequences:
  * <ul>
- *   <li><b>Dropping the tables rebuilds the read model.</b> The bookmark goes with them, so the next
- *       start replays the stream from the beginning. Nothing else has to be reset.</li>
- *   <li><b>The table is created for you</b>, by {@link #ensureTables()} and, failing that, on first
- *       use. It is not part of {@link #createTables()} and must not be declared there.</li>
+ *   <li><b>Dropping the tables rebuilds the read model.</b> The bookmark goes with them, so the
+ *       projector replays the stream from the beginning the next time it is built at its resume point
+ *       — a start of the bounded context, or a restart of the stopped projector through
+ *       {@code ProcessorAdminCapability}, which recreates the tables first. Nothing else has to be
+ *       reset.</li>
+ *   <li><b>The bookmark table is created for you</b>, by {@link #ensureTables()}, which
+ *       {@link #resumeFrom()} calls as well. It is not part of {@link #createTables()} and must not be
+ *       declared there.</li>
  *   <li><b>{@link #project(Event)} still ought to be idempotent</b> wherever it cheaply can be. This
  *       mechanism covers the framework's own replay, and leader election keeps a second instance from
  *       projecting a shared read model in steady state — but a failover window is at-least-once (a
@@ -102,7 +105,6 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 	// rows it selects have come. A read model may not use that name for a table of its own.
 
 	private final ReadModelStorage storage;
-	private final AtomicBoolean bookmarkTableEnsured = new AtomicBoolean();
 	private Connection batchConnection;
 	private EventReference currentEventReference;
 	// written by the leader elector's thread on promotion, read on the projector's thread by every
@@ -183,7 +185,13 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 
 	/**
 	 * Creates the read model's tables if they don't exist, the bookmark table included.
-	 * Called once during feature slice configuration.
+	 * <p>
+	 * Called during feature slice configuration, and again by {@link #resumeFrom()} every time the
+	 * projector is rebuilt at its resume point — at construction, on a promotion to leader and on a
+	 * restart. That second call is what makes "stop the projector, drop its tables, restart it" a
+	 * complete rebuild: the tables come back empty, there is no bookmark row, and the projector replays
+	 * the stream from the beginning. Every statement is a {@code CREATE ... IF NOT EXISTS}, so the
+	 * repeat costs a round trip on a path that runs a handful of times per process.
 	 */
 	public void ensureTables() {
 		ensureBookmarkTable();
@@ -198,18 +206,15 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 	}
 
 	/**
-	 * Creates the bookmark table if it is not there yet, at most once per projector.
+	 * Creates the bookmark table if it is not there yet.
 	 * <p>
-	 * Called from {@link #ensureTables()} and again from {@link #resumeFrom()}, because the order of
-	 * the two is not ours to decide: the bounded context asks a read model where to resume while it
-	 * is building its processor, which may be before the feature slice has ensured its tables. The
-	 * alternative — asking the database whether the table exists — means identifier-case rules that
-	 * differ per database, to avoid a statement that is already a no-op when it is not needed.
+	 * Not remembered per projector: an operator rebuilding the read model drops this table with the
+	 * others, and a flag saying it was created once would leave the restarted projector reading a table
+	 * that is gone. The alternative — asking the database whether the table exists — means
+	 * identifier-case rules that differ per database, to avoid a statement that is already a no-op when
+	 * it is not needed.
 	 */
 	private void ensureBookmarkTable() {
-		if (bookmarkTableEnsured.get()) {
-			return;
-		}
 		try (var conn = dataSource().getConnection();
 			 var statement = conn.createStatement()) {
 			statement.execute("""
@@ -222,7 +227,6 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 		} catch (SQLException e) {
 			throw new RuntimeException("Failed to ensure readmodel bookmark table " + table(BOOKMARK_TABLE), e);
 		}
-		bookmarkTableEnsured.set(true);
 	}
 
 	/**
@@ -282,7 +286,10 @@ public abstract class SqlReadModelProjector<T> extends SqlReadModel implements R
 		if (!tracksItsOwnBookmark()) {
 			return Optional.empty();
 		}
-		ensureBookmarkTable();
+		// all of them, not only the bookmark table: the bounded context asks where to resume while it
+		// builds its processor, which may be before the feature slice has ensured its tables, and an
+		// operator rebuilding the read model has dropped them before restarting the projector
+		ensureTables();
 		fenceOutPredecessor();
 		String sql = "SELECT last_event_id, last_event_position, last_event_tx, last_event_index FROM %s WHERE reader = ?"
 				.formatted(table(BOOKMARK_TABLE));

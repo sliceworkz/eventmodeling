@@ -17,7 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.closemonth;
 
-import java.time.YearMonth;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.automation.Automation;
@@ -52,15 +51,20 @@ import org.sliceworkz.eventstore.events.EventReference;
 public class MonthEndClosingAutomation
 		implements Automation<AccountToClose, BankingEvent, BankingOutboundEvent> {
 
-	private final YearMonth monthToClose;
+	private final AccountsToCloseTodoList todoList;
 
-	public MonthEndClosingAutomation(YearMonth monthToClose) {
-		this.monthToClose = monthToClose;
+	/**
+	 * @param todoList the todo list this automation works through — the same instance the slice
+	 *        registers with {@code builder.readmodel(todoList).eventuallyConsistent()}, since the
+	 *        automation reads the items that registered instance projects
+	 */
+	public MonthEndClosingAutomation(AccountsToCloseTodoList todoList) {
+		this.todoList = todoList;
 	}
 
 	@Override
 	public TodoListReadModel<BankingEvent, AccountToClose> getTodoList() {
-		return new AccountsToCloseTodoList(monthToClose);
+		return todoList;
 	}
 
 	@Override

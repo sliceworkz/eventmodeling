@@ -88,8 +88,11 @@ public class PaymentsToExecuteTodoList implements TodoListReadModel<PaymentsDoma
 			Tags.none());
 	}
 
+	// when() runs on the projector's thread and streamItems() on the automation's, so every access to
+	// the map is under this object's monitor: iterating a LinkedHashMap while another thread changes it
+	// is undefined, and copying the due items out is only safe if nothing changes them meanwhile
 	@Override
-	public void when ( Event<PaymentsDomainEvent> event ) {
+	public synchronized void when ( Event<PaymentsDomainEvent> event ) {
 		switch ( event.data() ) {
 			case PaymentRequested requested -> outstanding.put(requested.paymentId().value(),
 					new PaymentToExecute(requested.paymentId(), requested.iban(), requested.amountInCents(), 0, null));
@@ -111,7 +114,7 @@ public class PaymentsToExecuteTodoList implements TodoListReadModel<PaymentsDoma
 	}
 
 	@Override
-	public Stream<PaymentToExecute> streamItems ( Limit limit ) {
+	public synchronized Stream<PaymentToExecute> streamItems ( Limit limit ) {
 		Instant now = Instant.now();
 		List<PaymentToExecute> due = new ArrayList<>();
 		for ( PaymentToExecute payment : outstanding.values() ) {
@@ -122,17 +125,17 @@ public class PaymentsToExecuteTodoList implements TodoListReadModel<PaymentsDoma
 				}
 			}
 		}
-		// a copy, not a view: the automation reads this while the projector may be updating the map
+		// a copy, not a view: the automation reads the stream after the monitor is released
 		return due.stream();
 	}
 
 	@Override
-	public Optional<EventReference> lastEventReference ( ) {
+	public synchronized Optional<EventReference> lastEventReference ( ) {
 		return Optional.ofNullable(lastEventReference);
 	}
 
 	/** How much work is outstanding, due or not. */
-	public int outstandingCount ( ) {
+	public synchronized int outstandingCount ( ) {
 		return outstanding.size();
 	}
 

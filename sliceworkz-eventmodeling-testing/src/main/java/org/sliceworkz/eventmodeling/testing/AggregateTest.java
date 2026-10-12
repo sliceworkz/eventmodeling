@@ -38,7 +38,7 @@ import org.sliceworkz.eventstore.query.EventQuery;
  * <p>
  * Usage example:
  * <pre>{@code
- * class MyAggregateTest extends AggregateTest<DomainEvent, Void, Void> {
+ * class MyAggregateTest extends AggregateTest<DomainEvent, Void, Void, MyAggregate> {
  *
  *     @Override
  *     public Class<MyAggregate> getAggregateClass() {
@@ -59,6 +59,7 @@ import org.sliceworkz.eventstore.query.EventQuery;
  * @param <DOMAIN_EVENT_TYPE> the domain event type
  * @param <INBOUND_EVENT_TYPE> the inbound event type
  * @param <OUTBOUND_EVENT_TYPE> the outbound event type
+ * @param <AGGREGATE> the aggregate under test
  */
 public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE, AGGREGATE extends Aggregate<DOMAIN_EVENT_TYPE>>
 		extends AbstractBoundedContextTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {

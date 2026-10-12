@@ -23,8 +23,8 @@ import org.sliceworkz.eventstore.stream.EventStream;
 
 /**
  * A {@link BoundedContextListener} that appends every {@link BoundedContextEvent} to a supplied
- * event stream. This reproduces the framework's historical behaviour of persisting kernel events
- * to a dedicated (e.g. "observability") stream.
+ * event stream, keeping the kernel's events in a dedicated (e.g. "observability" or monitoring) stream
+ * of the store, where a dashboard or any other reader of the store finds them.
  * <p>
  * The supplied stream must be configured for {@link BoundedContextEvent} (and its serialization),
  * for example:

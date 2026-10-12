@@ -40,7 +40,7 @@ jobs:
       - name: Extract current version
         id: current_version
         run: |
-          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | grep -v '\[')
+          CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout | grep -v '\[')
           echo "Current version: $CURRENT_VERSION"
           
           # Extract major and minor from version (assumes format X.Y.Z-SNAPSHOT or X.Y.Z)
@@ -95,8 +95,8 @@ jobs:
       - name: Set next development version on develop
         run: |
           NEXT_VERSION="${{ steps.new_versions.outputs.next_major }}.${{ steps.new_versions.outputs.next_minor }}.0-SNAPSHOT"
-          mvn versions:set -DnewVersion=$NEXT_VERSION -DprocessAllModules
-          mvn versions:commit
+          ./mvnw versions:set -DnewVersion=$NEXT_VERSION -DprocessAllModules
+          ./mvnw versions:commit
       
       - name: Commit next development version
         run: |

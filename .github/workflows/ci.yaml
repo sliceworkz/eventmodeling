@@ -29,4 +29,4 @@ jobs:
     # so the first thing to execute them was a release workflow -- which is the worst
     # place to discover a javadoc error, since the tag has been cut and pushed by then.
     - name: Build with Maven
-      run: mvn -B verify --file pom.xml
+      run: ./mvnw -B verify --file pom.xml

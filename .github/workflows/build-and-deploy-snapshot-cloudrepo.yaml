@@ -51,7 +51,7 @@ jobs:
 
       - name: Verify SNAPSHOT version
         run: |
-          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "Current version: $CURRENT_VERSION"
           if [[ ! "$CURRENT_VERSION" =~ -SNAPSHOT$ ]]; then
             echo "Error: Version $CURRENT_VERSION is not a SNAPSHOT version"
@@ -62,4 +62,4 @@ jobs:
       # No -DskipTests: the SNAPSHOTs published here are what the downstream projects
       # resolve and build against, so they are tested before they are pushed.
       - name: Build and deploy to cloudrepo
-        run: mvn -B -Pcloudrepo clean deploy
+        run: ./mvnw -B -Pcloudrepo clean deploy

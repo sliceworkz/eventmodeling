@@ -50,7 +50,7 @@ jobs:
       
       - name: Get current Maven version
         run: |
-          CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          CURRENT_VERSION=$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)
           echo "Current version: $CURRENT_VERSION"
           
           # Validate version format (should be X.Y.Z-SNAPSHOT)
@@ -84,7 +84,7 @@ jobs:
       - name: Set release version
         run: |
           echo "Setting version to $RELEASE_VERSION"
-          mvn versions:set -DnewVersion=$RELEASE_VERSION -DprocessAllModules -DgenerateBackupPoms=false
+          ./mvnw versions:set -DnewVersion=$RELEASE_VERSION -DprocessAllModules -DgenerateBackupPoms=false
           
           git add .
           git commit -m "Release version $RELEASE_VERSION" || echo "No changes to commit"
@@ -103,7 +103,7 @@ jobs:
           NEXT_VERSION="$MAJOR.$MINOR.$NEXT_MICRO-SNAPSHOT"
           echo "Setting next development version to $NEXT_VERSION"
           
-          mvn versions:set -DnewVersion=$NEXT_VERSION -DprocessAllModules -DgenerateBackupPoms=false
+          ./mvnw versions:set -DnewVersion=$NEXT_VERSION -DprocessAllModules -DgenerateBackupPoms=false
           
           git add .
           git commit -m "Prepare for next development iteration: $NEXT_VERSION"

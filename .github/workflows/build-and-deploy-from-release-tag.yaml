@@ -45,14 +45,14 @@ jobs:
       # commit this builds is not one any CI run has necessarily seen -- skipping tests
       # here meant nothing ever tested what went to Maven Central.
       - name: Build and test with Maven
-        run: mvn -B clean install -Pgpg-ci
+        run: ./mvnw -B clean install -Pgpg-ci
         env:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       # Tests are skipped in THIS step only: 'deploy' re-runs the lifecycle over the
       # same workspace, and the step above already ran the suite against this tree.
       - name: Deploy to Maven Central
-        run: mvn -B -DskipTests deploy -Pgpg-ci
+        run: ./mvnw -B -DskipTests deploy -Pgpg-ci
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}

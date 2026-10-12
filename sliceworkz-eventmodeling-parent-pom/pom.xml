@@ -46,7 +46,7 @@
 		<jackson.version>3.2.3</jackson.version>
 		<jackson-annotations.version>2.22</jackson-annotations.version>
 		<junit-jupiter.version>6.1.3</junit-jupiter.version>
-		<postgresql.jdbc.version>42.7.13</postgresql.jdbc.version>
+		<postgresql.jdbc.version>42.7.14</postgresql.jdbc.version>
 		
 		<testcontainers.postgresql.version>2.0.5</testcontainers.postgresql.version>
 		<h2.version>2.5.252</h2.version>

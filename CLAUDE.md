@@ -930,8 +930,11 @@ processor:**
   `stopProcessor(kind, name)` mirrors `stopAutomation` — a leader-only processor stopped by an operator
   hands its lease back exactly as one retired by a permanent failure does, the projector's position is
   untouched, and the stop is announced as the kind's `...Stopped` event with reason `OPERATOR` and no
-  failure. What it is for: rebuilding a read model (stop its projector everywhere, drop the tables, start
-  it again) or holding a dispatcher back while the system it publishes to is down,
+  failure. What it is for: rebuilding an SQL read model (stop its projector everywhere, drop the tables,
+  start it again — `restart()` re-seeds a `SelfBookmarkingProjection`'s projector from its own position
+  as a promotion does, and `SqlReadModelProjector.resumeFrom()` runs `ensureTables()` first, so the
+  tables come back and the stream replays, for every storage class; `SqlReadModelRebuildTest` pins it)
+  or holding a dispatcher back while the system it publishes to is down,
   and a leader-only processor resumes via re-election. Restarting without fixing a permanent cause
   replays the same batch and stops again
 - `ProjectorFailureRecoveryTest` pins the recovery: a transient failure recovers with nothing
@@ -1054,7 +1057,9 @@ processor:**
   withheld from every reader alike — on PostgreSQL by the `pg_snapshot_xmin` barrier — so a seeded read
   is exactly as fresh as a live model and no fresher. What it can offer that a live model cannot is
   proof: have the read model expose the reference it reached, and a caller that just executed a command
-  checks its own write is included with `happenedBefore`
+  checks its own write is included with `ReadModelResult.includes` — `upTo != null &&
+  !write.storedEventHappenedAfter(upTo)`, never `write.happenedBefore(upTo)`, which is false exactly
+  when the write is the newest event included
 - `SeededReadModelTest` pins the property that matters — **the answer does not depend on how far the
   projector got** — from all three ends: a base that is behind, a base that is up to date, and no base
   at all. It also counts the delta, because a seed being ignored produces entirely correct answers and
@@ -1097,7 +1102,9 @@ processor:**
   answer "is my write in this row", and **not** a base to seed from: a per-row reference cannot account
   for a row that does not exist yet, which is why `SeededReadModel` seeds from `loadBaseAt` or
   `published()` instead
-- Compare it with `happenedBefore`, never on `position()` — the same total-order rule as everywhere else
+- Compare it through `includes(write)`, never on `position()` — the same total-order rule as everywhere
+  else — and never with `write.happenedBefore(upTo)`, which is strict and so misses the write that is
+  the newest event the answer reflects
 - The rename is source-breaking for anyone who imported `SqlReadModelQuery.ReadModelResult` or called
   `eventReference()`. A record cannot be aliased, so there is no deprecation path that keeps such code
   compiling; the type moved and the accessor is now `upTo()`

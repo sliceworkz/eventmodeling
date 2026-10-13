@@ -100,13 +100,25 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
 	}
 
 	/**
-	 * The reference this answer is current to. A caller that has just executed a command can check its
-	 * own write is included with {@code writeRef.happenedBefore(upTo())}.
+	 * The reference this answer is current to. A caller that has just executed a command checks its
+	 * own write is included with {@link #includes(EventReference)}.
 	 *
 	 * @return the last event reflected in this balance, base or delta
 	 */
 	public EventReference upTo ( ) {
 		return upTo;
+	}
+
+	/**
+	 * Whether this balance reflects the given write: its stored event is at or before {@link #upTo()}.
+	 * Not {@code write.happenedBefore(upTo())}, which is {@code false} exactly when the write is the
+	 * newest event folded in.
+	 *
+	 * @param write the reference of an event the caller appended
+	 * @return {@code true} if this balance includes it
+	 */
+	public boolean includes ( EventReference write ) {
+		return upTo != null && !write.storedEventHappenedAfter(upTo);
 	}
 
 	/** How many events this read had to project on top of its base — the cost of being current. */

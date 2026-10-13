@@ -104,18 +104,17 @@ mvn test -Deventstore.testing.backends=inmem,postgres:18
 Handy locally and in a pre-commit hook; leave the full set to CI. The names are the backends' own
 (`inmem`, `inmem-fs`, `postgres:16`, `postgres:17`, `postgres:18`).
 
-### One thing to know when upgrading
+### Declaring `setUp` or `tearDown` of your own
 
-`AbstractBoundedContextTest` used to build an `InMemoryEventStorage` of its own, which is why the
-matrix was out of reach from here. It now extends the eventstore's `AbstractEventStoreTest`, whose
-lifecycle hooks are `public void setUp()` and `public void tearDown()`. Existing tests need no
-change — **unless** a subclass happens to declare a method of its own called `setUp` or `tearDown`
-without `public`, which the compiler now rejects as weakening the inherited access. Either make it
-`public` and call `super`, or give it a name of its own:
+`AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, whose lifecycle hooks
+are `public void setUp()` and `public void tearDown()`. A subclass declaring a method of its own by
+either name overrides the hook, so it has to be `public` (the compiler rejects weaker access) and call
+`super`, or the storage and the bounded context are never built or released. Or give it a name of its
+own:
 
 ```java
 @BeforeEach
-public void setUp ( ) {          // was: void setUp ( )
+public void setUp ( ) {
     super.setUp();               // builds the storage and the bounded context
     ...
 }

@@ -375,6 +375,13 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 	 * Restarts this processor if it has stopped, so it resumes projecting from where its position
 	 * durably left off — the retired projector's cursor was rolled back to the start of the batch it
 	 * failed on, so nothing is skipped by the restart either.
+	 * <p>
+	 * A projection keeping its own position ({@link SelfBookmarkingProjection}) is rebuilt at that
+	 * position before its first run, as on a promotion, rather than continuing on the in-memory cursor
+	 * it was stopped with: the position may have moved while it was stopped — an operator dropping
+	 * the read model's tables to rebuild it, which is what stopping a processor is for — and only the
+	 * projection itself can say where it now stands. A processor on the shared bookmark keeps its
+	 * cursor, which nothing else moves.
 	 *
 	 * @return {@code true} if it was stopped and has been restarted, {@code false} if it was running
 	 */
@@ -385,6 +392,9 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 		}
 		LOGGER.info("restarting '{}'", processorIdentification);
 		stoppedBy = null; // it is running again; what stopped it stays available as lastFailure
+		if ( ownBookmark != null ) {
+			reseedProjector = true;
+		}
 		start();
 		return true;
 	}
@@ -508,10 +518,10 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 
 						try {
 							if ( reseedProjector ) {
-								// promoted since the last pass: rebuild the projector so it resumes from
-								// the position the previous leader durably left, not from this instance's
+								// promoted or restarted since the last pass: rebuild the projector so it
+								// resumes from the position durably recorded, not from this instance's
 								// in-memory cursor
-								LOGGER.info("'{}' promoted to leader, re-seeding projector from its durable position ...", processorIdentification);
+								LOGGER.info("'{}' re-seeding projector from its durable position ...", processorIdentification);
 								if ( startAtHeadWhenUnbookmarked ) {
 									placeBookmarkAtHeadWhenAbsent();
 								}

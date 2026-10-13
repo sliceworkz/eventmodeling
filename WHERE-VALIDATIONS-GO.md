@@ -256,9 +256,12 @@ the check never saw. [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md) opens 
 step 0); anything a raised event depends on belongs in a `DecisionModel`.
 
 **Validating in a projection's `when()` — a read model's or a translator's.** The read path again,
-with the same economics as the constructor case plus a worse blast radius: a projector's first failure
-is its last, so one unexpected event parks the whole read model or translator until restart. A
-projection that meets an event it considers impossible should record or skip it, not throw at it.
+with the same economics as the constructor case plus a worse blast radius. A projector retries a
+failing run with backoff, but a rule fails the same way on every attempt, so the retries never get past
+the event: the whole read model or translator stalls on it, everything behind it waits, and a
+`ReadModelProjectorFailed` (or `TranslatorFailed`) is reported every round until the code is changed and
+deployed. A projection that meets an event it considers impossible should record or skip it, not throw
+at it.
 
 **A uniqueness check without the boundary.** `claim.taken()` alone is the read-model race in decision
 model clothing — correct in every test, wrong under concurrency. The empty boundary (step 4) is what
@@ -286,8 +289,13 @@ retries the design promises will happen.
 | Automation `onFailure` | after an effect failed | a failing external effect | `AutomationFailureAction` + an event | per the action |
 
 **Testing the rules:** `CommandTest` speaks this page's language —
-`given(events).when(command).then().error("Insufficient balance")` for steps 2–4 (it compares the root
-cause's message, so the wrapped exception does not obscure the rule), `.event(expected, tags)` to pin
+`given(events).when(command).then().businessError("Insufficient balance")` for steps 3 and 4, which
+asserts the rejection is a `BusinessException` as well as its reason, so a rule thrown as an
+`IllegalStateException` — what a bug throws — fails the test instead of passing it. A step 2 check in
+the constructor throws before the harness is involved, so it is a plain `assertThrows(
+IllegalArgumentException.class, ...)` around the constructor; one at the top of `execute` is
+`.error(IllegalArgumentException.class, "...")`. `.error("...")` compares the root cause's message
+alone, whatever its type, and is for the cases where the type is not the point. `.event(expected, tags)` to pin
 that the claim tag really is on the raised event, and `.noEvents()` to prove a rejection stored
 nothing. For business rules with an enforcement level, `as(actor)`, `whenEvaluated(...)` and
 `then().rulesViolated()` assert what the kernel made of them (BUSINESS-RULES.md, section 11). The concurrent half of step 4 is the storage's promise, pinned per backend by the eventstore

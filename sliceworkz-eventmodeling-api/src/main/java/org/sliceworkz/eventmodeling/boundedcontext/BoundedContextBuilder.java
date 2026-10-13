@@ -110,8 +110,8 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * Left unset, the store reports to the storage's own ({@code EventStorage.observer()}), which is what a
 	 * storage builder's {@code .observer(...)} put there and {@link EventStoreObserver#NOOP} for a storage
 	 * built without one — so a storage configured with an observer needs nothing repeated here, exactly as
-	 * with the shredding codec. Bounding a high-cardinality stream purpose, which the event store's meter
-	 * options used to do, is that observer's concern now.
+	 * with the shredding codec. Bounding a high-cardinality stream purpose, such as an entity id turned
+	 * into a metrics tag, is that observer's concern.
 	 *
 	 * @param observer the event store observer; must not be null
 	 * @return this builder
@@ -137,8 +137,10 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * to know about ciphers, initialisation vectors or envelopes — pick where the keys live and the rest
 	 * follows:
 	 * <pre>{@code
-	 * // production: keys in the same PostgreSQL database as the events, so a minted key and the
-	 * // append that seals under it commit together
+	 * // production: keys in the same PostgreSQL database as the events -- one schema, one set of
+	 * // credentials, one backup carrying both. Not one transaction: a key is committed, on a
+	 * // connection of its own, before the event sealed under it is appended, so a rolled-back append
+	 * // leaves an unused key and never an event whose key was not stored
 	 * .shredding(PostgresShreddingKeyStore.on(dataSource, "acme_"))
 	 *
 	 * // a file-backed store, beside file-backed events

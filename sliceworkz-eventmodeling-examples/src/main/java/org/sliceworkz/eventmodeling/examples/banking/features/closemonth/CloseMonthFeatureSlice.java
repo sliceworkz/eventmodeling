@@ -23,18 +23,19 @@ import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
 /**
- * Feature slice for the "Closing The Books" pattern.
+ * Feature slice for the "Closing The Books" pattern: the {@link CloseMonthCommand}, which closes an
+ * account's current month and opens the next.
  * <p>
- * This is both a STATE_CHANGE (the CloseMonthCommand) and an AUTOMATION
- * (the MonthEndClosingAutomation). Using OTHER here since the feature
- * combines multiple pattern types.
- * <p>
- * Components:
- * <ul>
- *   <li>{@link CloseMonthCommand} — closes current month, opens next</li>
- *   <li>{@link AccountsToCloseTodoList} — identifies accounts needing closing</li>
- *   <li>{@link MonthEndClosingAutomation} — processes the todo list</li>
- * </ul>
+ * It registers the command only, which makes it a state change. {@link AccountsToCloseTodoList} and
+ * {@link MonthEndClosingAutomation} show the automation that would close every account's month at
+ * month end, and are not registered: which month to close comes from the passage of time, a trigger
+ * this example does not model. Registering them is
+ * <pre>{@code
+ * var todoList = new AccountsToCloseTodoList(monthToClose);
+ * builder.readmodel(todoList).eventuallyConsistent();
+ * builder.automation(new MonthEndClosingAutomation(todoList));
+ * }</pre>
+ * from {@code configureAutomation} — one todo list instance, registered and handed to the automation.
  */
 @FeatureSlice(chapter = "Closing The Books")
 public class CloseMonthFeatureSlice implements Slice<ClosingTheBooks> {

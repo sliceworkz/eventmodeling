@@ -46,13 +46,38 @@ import org.sliceworkz.eventstore.events.EventReference;
  * a per-row reference cannot account for a row that does not exist yet.
  *
  * <p><b>Checking your own write is in here</b> is what this is for at the call site:
- * {@code writeRef.happenedBefore(result.upTo())}. Compare through
- * {@link EventReference#happenedBefore} rather than on {@code position()}, which is a different
- * order — see {@code EventReference} for why the two genuinely disagree.
+ * {@link #includes(EventReference) result.includes(writeRef)}. Not
+ * {@code writeRef.happenedBefore(result.upTo())}, which is strict: it answers {@code false} when the
+ * write is the newest event the answer reflects — exactly the case of a write that has just been
+ * included. And not a comparison on {@code position()}, which is a different order — see
+ * {@code EventReference} for why the two genuinely disagree.
  *
  * @param <R> the type of the answer
  * @param data the answer
  * @param upTo the reference this answer reflects, or {@code null} when nothing has been projected
  *             into it yet
  */
-public record ReadModelResult<R> ( R data, EventReference upTo ) { }
+public record ReadModelResult<R> ( R data, EventReference upTo ) {
+
+	/**
+	 * Whether this answer reflects the given event: whether the stored event it names is at or before
+	 * {@link #upTo()}. Compared over stored events ({@link EventReference#storedEventHappenedAfter}), so
+	 * a write is included once the stored event it was appended as has been folded, whichever of the
+	 * events that stored event upcasts into {@code upTo} names.
+	 * <p>
+	 * For an answer whose {@code upTo} is a lower bound — {@code SqlReadModelQuery.queryListWithRef} —
+	 * {@code false} means "not proven", not "not in there".
+	 *
+	 * @param write the reference of the event to look for, typically one a command just appended
+	 * @return {@code true} if this answer reflects it, {@code false} if it does not or nothing has been
+	 *         projected into it yet
+	 * @throws IllegalArgumentException if {@code write} is null
+	 */
+	public boolean includes ( EventReference write ) {
+		if ( write == null ) {
+			throw new IllegalArgumentException("write is required");
+		}
+		return upTo != null && !write.storedEventHappenedAfter(upTo);
+	}
+
+}

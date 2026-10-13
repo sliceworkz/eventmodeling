@@ -74,13 +74,23 @@ public class AnnotationBasedDiscoveryAndConfiguration {
 	                consumer.accept(instantiatedAnnotatedClass);
 	                result.add(instantiatedAnnotatedClass);
                 }
+            } catch (IllegalArgumentException e) {
+                // the type a configuration failure was thrown as is kept, and its message carried into
+                // this one: a slice asking for a port nobody bound, or registering a duplicate name, is
+                // then reported by what went wrong rather than only in a cause a log may not render
+                throw new IllegalArgumentException(registrationFailure(classToBeInstantiated, e), e);
+            } catch (IllegalStateException e) {
+                throw new IllegalStateException(registrationFailure(classToBeInstantiated, e), e);
             } catch (Exception e) {
-                LOGGER.error("error registering annotated class %s".formatted(classToBeInstantiated.getCanonicalName()), e);
-                throw new RuntimeException("Failed to register annotated class: " + classToBeInstantiated.getName(), e);
+                throw new RuntimeException(registrationFailure(classToBeInstantiated, e), e);
             }
         }
         
         return result;
+    }
+
+    private static String registrationFailure(Class<?> annotatedClass, Exception cause) {
+        return "Failed to register annotated class %s: %s".formatted(annotatedClass.getName(), cause.getMessage());
     }
 
     private static List<Class<?>> findAnnotatedClasses(String basePackageName, Class<? extends java.lang.annotation.Annotation> annotation) {

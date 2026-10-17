@@ -1253,6 +1253,16 @@ processor:**
   the rule that an automation deploys together with its todo list — loses because that rule cannot be
   imposed on a deployment. `AutomationTodoListRegistrationTest` pins the rejections, the name-based
   match and the shared exemption
+- **A todo list may live in SQL, and then the projection and the automation can run apart.** One
+  class extends `SqlReadModelProjector` and implements `TodoListReadModel`, its `streamItems` reading
+  the table. It is registered `.eventuallyConsistent()` where the projection aspect runs, and handed to
+  the automation where the automation aspect runs, where only `streamItems` is called — the shared
+  exemption above is what lets that instance build. The automation wakes on the bookmark the other
+  instance places, as it does on its own. It needs a database both instances reach, so `SHARED`
+  storage; an in-memory H2 one serves only a deployment running every aspect in one process.
+  `SqlTodoListAcrossAspectsTest` pins it with two instances on one storage and one database: every item
+  handled once and in order, nothing projected on the automation's instance, and a later item picked up
+  on the bookmark rather than the poll interval
 - **An automation must be a named class, and its name must be unique** — as must a read model's, a
   translator's and a dispatcher's. See "Component names are bookmark keys" below for the shared rule; for
   an automation the same name additionally keys the metric tags and the `AutomationAdminCapability` id

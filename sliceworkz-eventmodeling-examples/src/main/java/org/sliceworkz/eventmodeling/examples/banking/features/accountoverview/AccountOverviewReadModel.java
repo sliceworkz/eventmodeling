@@ -43,16 +43,16 @@ import org.sliceworkz.eventstore.query.EventQuery;
  * <p>The cost is a copy of the set per batch. That is the trade this base class makes, and it is the
  * right one until the model is large enough to measure otherwise.
  *
+ * <p><b>Who holds the instance.</b> {@code read(...)} constructs a live model per call and hands out
+ * no eventually consistent one, so whoever reads this model has to hold the instance that is
+ * projected. That is the application: it constructs the read model, registers it on the builder and
+ * keeps the reference (see {@code BankingExample}). A static singleton would save the application
+ * that one line, at the price of every bounded context in the JVM projecting into the same object — a
+ * test building two contexts, or a restart within one process, would see the other's accounts.
+ *
  * <p>See {@code CHOOSING-A-READ-MODEL.md} for when a read belongs here rather than on a live model.
  */
 public class AccountOverviewReadModel extends PublishingReadModel<BankingDomainEvent,Set<AccountOverviewReadModel.AccountSummary>> {
-
-	/**
-	 * A feature slice registers the read model instance the framework is to project, and there is no
-	 * container here to hand it one — hence the singleton. It is safe to share now in a way it was not
-	 * before: what a reader gets back is an immutable value, not this object's insides.
-	 */
-	public static AccountOverviewReadModel INSTANCE = new AccountOverviewReadModel();
 
 	@Override
 	protected Set<AccountSummary> initialState ( ) {

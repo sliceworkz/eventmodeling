@@ -49,11 +49,22 @@ public class BankingExample {
 		 * which is the view of "what was appended" an application needs. Pass a
 		 * StreamAppendingBoundedContextListener instead to keep that record in a stream of your own.
 		 */
-		Banking bc = BoundedContext.newBuilder(Banking.class)
+		var builder = BoundedContext.newBuilder(Banking.class)
 			.name("banking")
 			.eventStorage(eventStorage)
 			.instance(instance)
-			.listener(new LoggingBoundedContextListener())
+			.listener(new LoggingBoundedContextListener());
+
+		/*
+		 * The overview is an eventually consistent read model, and those are read by holding the
+		 * instance the framework projects -- read(...) only constructs live models. So the application
+		 * constructs it, registers it, and keeps the reference for the read further down. Its feature
+		 * slice is found by the scan below like every other; it just leaves the instance to us.
+		 */
+		AccountOverviewReadModel accountOverview = new AccountOverviewReadModel();
+		builder.readmodel(accountOverview).eventuallyConsistent();
+
+		Banking bc = builder
 			.features()
 				.rootPackage(BankingExample.class.getPackage())
 				.done()
@@ -87,7 +98,7 @@ public class BankingExample {
 		 * reference the command returned is all a caller needs to tell whether its own write is in the
 		 * answer, rather than guessing. An empty position means nothing has reached it yet at all.
 		 */
-		ReadModelResult<Set<AccountSummary>> overview = AccountOverviewReadModel.INSTANCE.published();
+		ReadModelResult<Set<AccountSummary>> overview = accountOverview.published();
 		boolean includesOurAccount = overview.upTo() != null && !opened.happenedAfter(overview.upTo());
 		System.out.println(overview.data());
 		System.out.println("  (as projected up to " + overview.upTo() + "; includes the account just opened: " + includesOurAccount + ")");

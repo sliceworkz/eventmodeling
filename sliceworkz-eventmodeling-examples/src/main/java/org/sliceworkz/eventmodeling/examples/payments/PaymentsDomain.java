@@ -37,6 +37,16 @@ import org.sliceworkz.eventmodeling.domain.EntityId;
  * framework, because there does not need to be one: a todo list is projected from events, so recording
  * the failure as an event is what defers or drops the item, durably and visibly, and a read model over
  * those same events is the dead-letter view an operator looks at.
+ * <p>
+ * Around that automation sit the two edges of the context, and a read model kept in a database:
+ * <ul>
+ *   <li><b>in</b> — {@code PaymentInstructionReceived} arrives through {@code incoming(...)} and a
+ *       translator turns it into {@code PaymentRequested}</li>
+ *   <li><b>out</b> — a publisher maps every {@code PaymentExecuted} into {@code PaymentAnnounced} on the
+ *       outbound stream, and a dispatcher delivers it to the systems downstream</li>
+ *   <li><b>read</b> — {@code PaymentStatusProjector} keeps every payment's status in SQL tables, for a
+ *       read that has to survive the process or be shared between instances</li>
+ * </ul>
  */
 public interface PaymentsDomain {
 
@@ -67,15 +77,22 @@ public interface PaymentsDomain {
 
 	sealed interface PaymentsInboundEvent {
 
-		/** Not used by this example; a bounded context declares three event types even so. */
-		record PaymentInstructionReceived ( PaymentId paymentId ) implements PaymentsInboundEvent { }
+		/**
+		 * An instruction from the outside world to make a payment — a partner's system, a file upload,
+		 * a message on a queue. It is not a fact of this context until a translator says so:
+		 * {@code PaymentInstructionTranslator} turns it into {@code PaymentRequested}.
+		 */
+		record PaymentInstructionReceived ( PaymentId paymentId, String iban, long amountInCents ) implements PaymentsInboundEvent { }
 
 	}
 
 	sealed interface PaymentsOutboundEvent {
 
-		/** Not used by this example; a bounded context declares three event types even so. */
-		record PaymentAnnounced ( PaymentId paymentId ) implements PaymentsOutboundEvent { }
+		/**
+		 * Published for the systems downstream once a payment went through: {@code PaymentAnnouncedPublisher}
+		 * maps each {@code PaymentExecuted} into one, and {@code PaymentAnnouncementDispatcher} delivers it.
+		 */
+		record PaymentAnnounced ( PaymentId paymentId, String gatewayReference ) implements PaymentsOutboundEvent { }
 
 	}
 

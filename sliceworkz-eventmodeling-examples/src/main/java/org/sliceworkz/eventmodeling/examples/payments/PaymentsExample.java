@@ -21,18 +21,27 @@ import java.time.Duration;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
+import javax.sql.DataSource;
+
+import org.h2.jdbcx.JdbcDataSource;
+
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.ports.PortMonitoring;
-import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentRequested;
+import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsInboundEvent.PaymentInstructionReceived;
 import org.sliceworkz.eventmodeling.examples.payments.features.abandonedpayments.AbandonedPaymentsReadModel;
 import org.sliceworkz.eventmodeling.examples.payments.features.abandonedpayments.AbandonedPaymentsReadModel.AbandonedPayment;
+import org.sliceworkz.eventmodeling.examples.payments.features.announcepayment.InMemoryPaymentNotifications;
+import org.sliceworkz.eventmodeling.examples.payments.features.announcepayment.PaymentNotifications;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.ExecutePaymentAutomation;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentGateway;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentGateway.PaymentDeclinedException;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentGateway.PaymentRejectedException;
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.SimulatedPaymentGateway;
+import org.sliceworkz.eventmodeling.examples.payments.features.paymentstatus.PaymentStatus;
+import org.sliceworkz.eventmodeling.examples.payments.features.paymentstatus.PaymentStatusFeatureSlice;
+import org.sliceworkz.eventmodeling.examples.payments.features.paymentstatus.PaymentStatusQuery;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
@@ -55,6 +64,13 @@ import org.sliceworkz.eventstore.spi.EventStorage;
  * port on the builder, and {@code ExecutePaymentFeatureSlice} takes it from there when it wires the
  * automation. The scenario watches the same gateway to see the money move, and the live
  * {@link AbandonedPaymentsReadModel} to see a payment given up on.
+ * <p>
+ * Payments come in as {@link PaymentInstructionReceived} through {@code incoming(...)}, the way an
+ * external system's message would, and a translator turns each into {@code PaymentRequested}. Every
+ * payment that goes through is announced: a publisher maps {@code PaymentExecuted} into
+ * {@code PaymentAnnounced} on the outbound stream, and a dispatcher delivers it to
+ * {@link PaymentNotifications}, which the scenario watches too. {@link PaymentStatusQuery} reads every
+ * payment's status out of the SQL read model, kept in the {@code DataSource} the application binds.
  */
 public class PaymentsExample {
 
@@ -68,6 +84,14 @@ public class PaymentsExample {
 		// "no", an answer) or PortCallFailed (the gateway down: a problem) -- a declined payment must not
 		// make the gateway look unhealthy, which is why those two are declared business exceptions.
 		SimulatedPaymentGateway gateway = new SimulatedPaymentGateway();
+		InMemoryPaymentNotifications notifications = new InMemoryPaymentNotifications();
+
+		// The SQL read model's database. An in-memory H2 makes the read model EPHEMERAL: projected in
+		// full before start() returns, and rebuilt from the events on every start. A PostgreSQL
+		// DataSource here would make it SHARED, projected by one elected instance for all of them.
+		JdbcDataSource readModels = new JdbcDataSource();
+		readModels.setURL("jdbc:h2:mem:payments-readmodels;DB_CLOSE_DELAY=-1;MODE=PostgreSQL");
+		PaymentStatusQuery statuses = new PaymentStatusQuery(readModels);
 
 		Payments payments = BoundedContext.newBuilder(Payments.class)
 				.name("payments")
@@ -76,6 +100,8 @@ public class PaymentsExample {
 				.adapter(gateway)
 					.monitored(PortMonitoring.perCall().businessExceptions(PaymentDeclinedException.class, PaymentRejectedException.class))
 					.forPort(PaymentGateway.class)
+				.adapter(notifications).forPort(PaymentNotifications.class)
+				.adapter(readModels).forPort(DataSource.class, PaymentStatusFeatureSlice.READ_MODELS)
 				.features().rootPackage(PaymentsExample.class.getPackage()).done()
 				.build();
 		payments.start();
@@ -87,6 +113,10 @@ public class PaymentsExample {
 			request(payments, "p-1", "BE00000000000001", 12_500);
 			await(() -> gateway.executed("BE00000000000001"), "the first payment to go through");
 			System.out.println("1. executed");
+			await(() -> !notifications.published().isEmpty(), "the first payment to be announced downstream");
+			System.out.println("1. announced downstream: " + notifications.published());
+			await(() -> hasStatus(statuses, "p-1", PaymentStatus.Status.EXECUTED), "the SQL read model to show the first payment executed");
+			System.out.println("1. SQL read model: " + statuses.status(PaymentsDomain.PAYMENT.id("p-1")).orElseThrow().data());
 
 			// ---------------------------------------------------------------- 2. rejected for good
 			request(payments, "p-2", "XX99999999999999", 5_000);
@@ -103,6 +133,8 @@ public class PaymentsExample {
 
 			await(() -> gateway.executed("BE68539007547034"), "the declined payment to be accepted on a later attempt");
 			System.out.println("3. p-3 executed after its retries");
+			await(() -> hasStatus(statuses, "p-3", PaymentStatus.Status.EXECUTED), "the SQL read model to show p-3 executed");
+			System.out.println("3. SQL read model: " + statuses.status(PaymentsDomain.PAYMENT.id("p-3")).orElseThrow().data());
 
 			// ---------------------------------------------------------------- 4. the gateway falls over
 			gateway.available(false);
@@ -122,6 +154,10 @@ public class PaymentsExample {
 			await(() -> gateway.executed("BE00000000000003"), "the automation to catch up once the gateway is back");
 			System.out.println("4. gateway back: everything caught up without anyone restarting anything");
 
+			await(() -> notifications.published().size() == 4, "every executed payment to be announced");
+			System.out.println("announced downstream, once each: " + notifications.published().size()
+					+ " payments; abandoned according to the SQL read model: " + statuses.withStatus(PaymentStatus.Status.ABANDONED));
+
 		} finally {
 			payments.terminate();
 			eventStorage.close();
@@ -134,9 +170,19 @@ public class PaymentsExample {
 		return deadLetters.abandoned();
 	}
 
-	/** Requesting a payment. A command would be the usual way in; this keeps the example on the automation. */
+	/**
+	 * A payment instruction arriving from outside. {@code incoming} stores it on the inbound stream and
+	 * returns; {@code PaymentInstructionTranslator} turns it into {@code PaymentRequested} in the
+	 * background. The key is derived from the instruction, so one delivered twice is stored once.
+	 */
 	private static void request ( Payments payments, String id, String iban, long amountInCents ) {
-		payments.event(new PaymentRequested(PaymentsDomain.PAYMENT.id(id), iban, amountInCents));
+		payments.incoming(new PaymentInstructionReceived(PaymentsDomain.PAYMENT.id(id), iban, amountInCents), "payment-instruction:" + id);
+	}
+
+	private static boolean hasStatus ( PaymentStatusQuery statuses, String paymentId, PaymentStatus.Status status ) {
+		return statuses.status(PaymentsDomain.PAYMENT.id(paymentId))
+				.map(result -> result.data().status() == status)
+				.orElse(false);
 	}
 
 	private static void await ( BooleanSupplier condition, String what ) throws InterruptedException {

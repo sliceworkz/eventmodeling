@@ -57,27 +57,25 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 		}
 	}
 	
+	/**
+	 * What a read of this model hands back. It is built by {@link #when} and never persisted, so nothing
+	 * reconstructs it from stored JSON and a strict constructor costs nothing: the "never persisted" case
+	 * of {@code WHERE-VALIDATIONS-GO.md}, which shows this very record. A record carried <em>inside</em>
+	 * an event payload is the opposite case, and keeps a lenient canonical constructor, since Jackson
+	 * rebuilds it through that constructor on every read of history.
+	 */
 	public record AccountDetails ( String accountId, String customerId, LocalDate openDate ) {
-		
-		public AccountDetails ( String accountId, String customerId, LocalDate openDate ){
-			if ( accountId == null ) {
-				throw new IllegalArgumentException();
+
+		public AccountDetails {
+			if ( accountId == null || customerId == null || openDate == null ) {
+				throw new IllegalArgumentException("all fields are required");
 			}
-			if ( customerId == null ) {
-				throw new IllegalArgumentException();
-			}
-			if ( openDate == null ) {
-				throw new IllegalArgumentException();
-			}
-			this.accountId = accountId;
-			this.customerId = customerId;
-			this.openDate = openDate;
 		}
-		
+
 		public static AccountDetails of ( String accountId, String customerId, LocalDate openDate ) {
 			return new AccountDetails(accountId, customerId, openDate);
 		}
-		
+
 	}
 
 }

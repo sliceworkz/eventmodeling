@@ -38,7 +38,7 @@ import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
  *     <td>{@link TranslationCapability}</td><td>{@code incoming}, {@code translate}</td></tr>
  * <tr><td>operator — an admin endpoint, a dashboard</td>
  *     <td>{@link OperationsCapabilities}</td><td>{@code automations}, {@code processors} and their
- *     {@code restart}/{@code stop}, and {@code skipStalledEvent} for a stalled policy</td></tr>
+ *     {@code restart}/{@code stop}, {@code skipStalledEvent} for a stalled policy, and {@code health}</td></tr>
  * <tr><td>erasure requests</td><td>{@link PrivacyCapability}</td>
  *     <td>{@code erase}, {@code eraseCategory}</td></tr>
  * <tr><td>the escape hatch</td><td>{@link ProvidedEventCapability}</td>

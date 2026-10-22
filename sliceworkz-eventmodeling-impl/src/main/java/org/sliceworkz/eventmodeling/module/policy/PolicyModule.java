@@ -220,6 +220,11 @@ public class PolicyModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		return admin.statuses();
 	}
 
+	/** see {@link ProjectorProcessorAdmin#lagTargets()} */
+	public List<ProjectorProcessorAdmin.LagTarget> lagTargets ( ) {
+		return admin.lagTargets();
+	}
+
 	/** Restarts a stopped policy processor — see {@code ProcessorAdminCapability.restartProcessor}. */
 	public boolean restartProcessor ( String name ) {
 		return admin.restart(name);

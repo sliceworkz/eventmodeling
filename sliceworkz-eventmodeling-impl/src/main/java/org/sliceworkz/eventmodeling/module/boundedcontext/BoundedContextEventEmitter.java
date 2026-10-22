@@ -107,6 +107,16 @@ public final class BoundedContextEventEmitter {
 	}
 
 	/**
+	 * How many deliveries in a row the listener has failed, {@code 0} once one succeeds: each of them is an
+	 * event the listener lost. Read by the context's health.
+	 *
+	 * @return the current streak of failed deliveries
+	 */
+	public long consecutiveListenerFailures ( ) {
+		return consecutiveFailures;
+	}
+
+	/**
 	 * Resolves the feature slice owning the given component class (by package convention), or
 	 * {@code null} when the component is not located within a known slice package.
 	 */

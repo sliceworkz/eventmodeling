@@ -1421,6 +1421,55 @@ because the framework has no network and no discovery, and the dashboard would n
   instruction; `ReportStatus` answers with the local statuses; and the new event shapes survive a
   monitoring stream round trip
 
+### Health — what a probe asks of an instance
+
+**`HealthCapability`, filed on `OperationsCapabilities`, answers how a bounded context is doing on the
+instance it is called on.** `state()` is the lifecycle, read locally (`BoundedContextState`: `BUILT`,
+`STARTING`, `RUNNING`, `STOPPED`, `TERMINATED`); `health()` / `health(Duration)` a `BoundedContextHealth`:
+the event storage's own report (`EventStorage.health`, see the eventstore's "Health") beside the checks
+only the framework can make, in the eventstore's `HealthCheck`/`HealthStatus` vocabulary so an endpoint
+renders one shape, and a `status()` derived as the worst of both. `HealthReporter` (impl, `module.health`)
+assembles it.
+
+- **`STARTING` is a state of its own.** `start()` marks the context started before it blocks on the
+  in-memory read models' first projection, which on a long history is minutes; `RUNNING` is set when it
+  returns, unless a `stop()`/`terminate()` came in meanwhile. `stop()`/`terminate()` treat `STARTING` as
+  started. A readiness probe waits for `RUNNING`; a startup probe is the same question with a longer
+  patience
+- **The checks**, each present only where it applies (constants on `BoundedContextHealth`):
+  `lifecycle` (`DOWN` unless `RUNNING`), `inMemoryReadModels` (`DEGRADED` while a context that stopped
+  waiting at the startup timeout still has some catching up), one per processor kind deployed here
+  (`readModels`, `automations`, `translators`, `dispatchers`, `publishers`, `policies`), `processorLag`,
+  `leadership` and `monitoringListener` (only with a listener)
+- **The processor kinds share one rule, judged only while `RUNNING`**: retired on a failure (`stoppedBy`)
+  and retrying (consecutive failed runs or batches) are `DEGRADED` and named in the message; stopped by
+  an operator is counted and `UP` — it was asked for, and alerting on it pages whoever asked
+- **`processorLag` is the age of the oldest unread event**, per projector-driven processor running here
+  (running, and leading where leader-only — a standby's shared bookmark is the leader's to keep): the
+  first stored event after its bookmark's read position, against this instance's clock, `DEGRADED`
+  beyond the builder's `processorLagTolerance` (default 1 minute). Raw SPI reads — one head per stream,
+  one bookmark per processor, one event for a processor that is behind — so a poison event is not a lag.
+  The alternative — counting events past the bookmark, as the dashboard does — loses for a probe: a
+  capped count says nothing about time, which is what a tolerance is set in. Automations are not
+  measured: their bookmark moves only when they produce, and their todo list's projector, which is
+  measured, is their input
+- **`leadership`** reports leases contended and held, and is `DEGRADED` once the storage has left lease
+  requests unanswered for longer than the ttl (`LeaderElector.leadership()`, read without the
+  election's lock); a lease-less storage is `UP` with a message saying a second instance would duplicate
+  work
+- **Bounded like the storage's report, never thrown, never observed or cached.** The lag measurement is
+  started first on a virtual thread, the storage's report (which bounds itself) is asked next, and the
+  lag is waited on for what is left of the one timeout, answering `UNKNOWN` when it runs out. A
+  measurement still in flight is waited on again, never joined by a second, so a storage that stopped
+  answering is asked once. A terminated context answers `TERMINATED` with the storage's report
+- **What a status means is the caller's decision**, as in the eventstore: `DEGRADED` serves while
+  something it relies on does not work, and a restart fixes none of it. A liveness probe has rarely a
+  reason to look here at all
+- `BoundedContextHealthTest` pins every check end to end — the lifecycle states including `STARTING`, a
+  retired, a retrying and an operator-stopped projector, lag beyond the tolerance and its recovery, a
+  failing listener, and a storage that stops answering costing the timeout and one measurement;
+  `CapabilitySurfaceTest`/`CapabilityAudienceTest` that health is the operator's and not the application's
+
 ### Leader election — one instance per leader-only processor
 
 **Every leader-only processor — an automation, a SHARED read model's projector, a translator, a

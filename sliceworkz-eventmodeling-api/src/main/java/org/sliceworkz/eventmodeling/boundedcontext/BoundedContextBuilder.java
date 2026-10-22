@@ -232,6 +232,23 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 */
 	BoundedContextBuilder<C> leadershipIntervals ( Duration heartbeat, Duration ttl );
 
+	/**
+	 * How long a projector-driven processor running here may leave an event unread before
+	 * {@link HealthCapability#health()} reports it behind, default 1 minute.
+	 * <p>
+	 * Judged on the oldest event of its stream the processor has not read yet — what its bookmark's read
+	 * position says it has not reached — against this instance's clock, so a processor that has merely
+	 * not run since an event arrived is not behind until the event has waited this long. Read models,
+	 * translators, dispatchers, publishers and policies are judged; automations are not, their own
+	 * bookmark moving only when they produce, and their input is their todo list's projector, which is.
+	 * Set it above the longest catch-up a healthy deployment does, and above any clock skew between this
+	 * instance and the database.
+	 *
+	 * @param tolerance how long an event may wait unread; must be positive
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> processorLagTolerance ( Duration tolerance );
+
 	FeaturesSpecification<C> features ( );
 
 	/**

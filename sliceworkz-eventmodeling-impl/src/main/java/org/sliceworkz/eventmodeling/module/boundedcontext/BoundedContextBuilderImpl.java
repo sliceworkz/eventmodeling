@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -33,6 +34,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -57,7 +59,11 @@ import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
 import org.sliceworkz.eventmodeling.module.automation.AutomationProcessor;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
+import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
+import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAdmin;
+import org.sliceworkz.eventmodeling.module.health.HealthReporter;
 import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.management.ManagementModule;
 import org.sliceworkz.eventmodeling.module.ports.PortReporter;
@@ -184,6 +190,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private final Map<String, BusinessRule> businessRules = new LinkedHashMap<>();
 	private Duration leadershipHeartbeat = Duration.ofSeconds(5);
 	private Duration leadershipTtl = Duration.ofSeconds(20);
+	private Duration processorLagTolerance = HealthReporter.DEFAULT_PROCESSOR_LAG_TOLERANCE;
 
 	private final AdapterRegistry adapterRegistry = new AdapterRegistry();
 
@@ -333,6 +340,15 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 		this.leadershipHeartbeat = heartbeat;
 		this.leadershipTtl = ttl;
+		return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<C> processorLagTolerance ( Duration tolerance ) {
+		if ( tolerance == null || tolerance.isNegative() || tolerance.isZero() ) {
+			throw new IllegalArgumentException("processor lag tolerance must be positive, but was " + tolerance);
+		}
+		this.processorLagTolerance = tolerance;
 		return this;
 	}
 
@@ -1205,6 +1221,22 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 				? null
 				: new ManagementModule(name, instance, managementInstructions, eventEmitter);
 
+		Map<ProcessorKind, Supplier<List<ProcessorStatus>>> processorStatuses = new EnumMap<>(ProcessorKind.class);
+		processorStatuses.put(ProcessorKind.READ_MODEL, rmm::processorStatuses);
+		processorStatuses.put(ProcessorKind.TRANSLATOR, im::processorStatuses);
+		processorStatuses.put(ProcessorKind.DISPATCHER, om::processorStatuses);
+		processorStatuses.put(ProcessorKind.PUBLISHER, pm::processorStatuses);
+		processorStatuses.put(ProcessorKind.POLICY, policyModule::processorStatuses);
+		Map<ProcessorKind, Supplier<List<ProjectorProcessorAdmin.LagTarget>>> lagTargets = new EnumMap<>(ProcessorKind.class);
+		lagTargets.put(ProcessorKind.READ_MODEL, rmm::lagTargets);
+		lagTargets.put(ProcessorKind.TRANSLATOR, im::lagTargets);
+		lagTargets.put(ProcessorKind.DISPATCHER, om::lagTargets);
+		lagTargets.put(ProcessorKind.PUBLISHER, pm::lagTargets);
+		lagTargets.put(ProcessorKind.POLICY, policyModule::lagTargets);
+		HealthReporter healthReporter = new HealthReporter(name, eventStorage, processorLagTolerance, processorStatuses, lagTargets,
+				am::automations, rmm::inMemoryReadModelsProjected, leaderElector::leadership,
+				eventEmitter.enabled(), eventEmitter::consecutiveListenerFailures);
+
 		BoundedContextImpl bc =
 				new BoundedContextImpl(name, deployedFeatureSlices, undeployedFeatureSlices,
 						featuresSpecification.mustDeployCommands(),
@@ -1212,7 +1244,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
-						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, pm, policyModule, leaderElector, managementModule, instance, observer, adapterRegistry, portReporter, summarizingPorts, List.copyOf(businessRules.values()));
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, pm, policyModule, leaderElector, managementModule, instance, observer, adapterRegistry, portReporter, summarizingPorts, List.copyOf(businessRules.values()), healthReporter);
 
 		// From here the context owns the modules, and it is the only thing that can release them
 		// completely: its constructor registered a JVM shutdown hook holding it, which only its own

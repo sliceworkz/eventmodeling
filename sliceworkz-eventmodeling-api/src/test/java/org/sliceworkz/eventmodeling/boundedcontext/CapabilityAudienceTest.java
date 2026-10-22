@@ -68,6 +68,8 @@ public class CapabilityAudienceTest {
 			import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 			import org.sliceworkz.eventmodeling.boundedcontext.ApplicationCapabilities;
 			import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
+			import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextHealth;
+			import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextState;
 			import org.sliceworkz.eventmodeling.boundedcontext.OperationsCapabilities;
 			import org.sliceworkz.eventmodeling.boundedcontext.PrivacyCapability;
 			import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
@@ -180,6 +182,15 @@ public class CapabilityAudienceTest {
 		assertAccepted("operations.processors();");
 		assertAccepted("operations.restartProcessor(ProcessorKind.READ_MODEL, \"SomeReadModel\");");
 		assertAccepted("operations.stopProcessor(ProcessorKind.READ_MODEL, \"SomeReadModel\");");
+	}
+
+	@Test
+	void anOperatorAsksHowTheContextIsDoingAndTheApplicationDoesNot ( ) {
+		assertAccepted("BoundedContextHealth h = operations.health();");
+		assertAccepted("BoundedContextHealth h = operations.health(java.time.Duration.ofSeconds(1));");
+		assertAccepted("BoundedContextState s = operations.state();");
+		assertRejected("application.health();", NO_SUCH_METHOD);
+		assertRejected("application.state();", NO_SUCH_METHOD);
 	}
 
 	@Test

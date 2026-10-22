@@ -72,6 +72,31 @@ public final class ProjectorProcessorAdmin {
 	}
 
 	/**
+	 * The processors whose lag the context's health measures: the ones running <em>here</em> — running,
+	 * and leading where they are leader-only — with the reader their bookmark is kept under. A standby's
+	 * shared bookmark is the leader's to keep, and a stopped one is reported as stopped.
+	 */
+	public List<LagTarget> lagTargets ( ) {
+		List<LagTarget> result = new ArrayList<>();
+		byName.forEach((name, managed) -> {
+			ProjectorProcessor.ProcessorSnapshot snapshot = managed.processor().snapshot();
+			if ( snapshot.running() && snapshot.leader() ) {
+				result.add(new LagTarget(kind, name, managed.processor().identification().toString()));
+			}
+		});
+		return result;
+	}
+
+	/**
+	 * A processor whose lag can be measured, and the bookmark reader that says how far it has read.
+	 *
+	 * @param kind what it processes, which says which of the context's streams it reads
+	 * @param name its name, as its status reports it
+	 * @param reader the reader its bookmark is kept under
+	 */
+	public record LagTarget ( ProcessorKind kind, String name, String reader ) { }
+
+	/**
 	 * Restarts the named processor if it is stopped.
 	 *
 	 * @see ProcessorAdminCapability#restartProcessor(ProcessorKind, String)

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Java-based Event Modeling framework implementing event-sourcing patterns with a focus on vertical slice architecture. The project is organized as a Maven multi-module build using Java 21.
+This is a Java-based Event Modeling framework implementing event-sourcing patterns with a focus on vertical slice architecture. The project is organized as a Maven multi-module build. It is built on JDK 25 (CI and releases) and compiled with `--release 21`, so a consumer still runs it on Java 21; keep `maven.compiler.release` at 21 and use no API newer than 21.
 
 **Core Modules:**
 - `sliceworkz-eventmodeling-api`: Public API defining interfaces and abstractions

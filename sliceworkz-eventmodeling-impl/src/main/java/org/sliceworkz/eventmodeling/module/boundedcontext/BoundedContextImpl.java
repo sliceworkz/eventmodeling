@@ -420,17 +420,17 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	}
 
 	/*
-	 * LIVE MODEL CONSULTATION
+	 * READ MODEL CONSULTATION: a live projection, or the registered instance of an eventually consistent one
 	 */
 
 	@Override
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params ) {
-		return readmodelModule.liveModel(readModelClass, tracing.instance(instance), params);
+		return readmodelModule.read(readModelClass, tracing.instance(instance), params);
 	}
 
 	@Override
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params ) {
-		return readmodelModule.liveModel(readModelClass, callerTracing(), params);
+		return readmodelModule.read(readModelClass, callerTracing(), params);
 	}
 
 	@Override

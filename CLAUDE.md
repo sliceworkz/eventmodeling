@@ -758,6 +758,26 @@ time for one that surfaces as a failing read. `ReadModelModeIsExplicitTest` pins
   ever wanted, gets a distinct method name, never an overload of `when`; the reasoning is on the
   eventstore's `EventHandler`
 - Can be queried via `boundedContext.read(ReadModelClass.class, ...)`
+- **`read(X.class)` with no parameters answers the registered instance of an eventually consistent read
+  model**, so the slices of a context share one read model that one of them registers: the others read
+  it by its class, and get the instance its projector keeps current rather than a projection made for
+  the read. Nothing is projected or observed — it is handing out a reference, which a caller may keep.
+  `ReadModelModule.read` decides it on the exact class, the way a live registration is keyed, and
+  refuses rather than guesses where the call cannot say which answer is meant: a class registered
+  eventually consistent under several `readmodelName()`s, read by its class alone; parameters for a class
+  registered only eventually consistent (parameters select a live constructor); and no parameters for a
+  class registered both live and eventually consistent. Registering a class both ways stays allowed,
+  read live with parameters as it always was — the alternative, refusing that at `build()`, loses because
+  it breaks registrations that never read the instance by its class. **One instance registered twice is
+  one read model**: a slice registers the read model its endpoints read from `configureCommand` *and*
+  `configureQuery`, so it exists wherever either aspect runs, and an instance running both makes both
+  registrations — `build()` keeps one by identity, so it is one projector and no duplicate bookmark name.
+  Two different instances under one name stay refused by `ProcessorNames`. The alternative to the read —
+  a slice handing its instance to the others through an unmonitored port binding or a static holder —
+  loses because a port names something outside the context and a holder is plumbing the framework
+  should own. Commands (`CommandContext.read`), publishers and `readUnbounded` stay live-only: an
+  eventually consistent read model is no decision input and no bounded read. `EventuallyConsistentReadTest`
+  pins it
 - **A read is typed by the class it asks for.** `read` is declared
   `<R extends ReadModel<? extends D>> R read(Class<R>, Object...)`, on `ReadModelCapability`,
   `UnboundedReadModelCapability` and the command's `CommandContext` alike, so

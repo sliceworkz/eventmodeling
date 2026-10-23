@@ -91,6 +91,12 @@ Extend `PublishingReadModel`: you write a state type, a starting value and a fol
 state together with the position it reflects, atomically, once per batch. That is what makes it safe to
 read from another thread, and what lets step 5 build on it.
 
+The slice that registers it can hand the instance to its own endpoints; any other slice of the context
+reads it with `read(AccountBalances.class)` — no parameters, and you get the registered instance, not a
+projection made for the read. That is how several slices share one read model that one of them keeps
+current. Put such a read model where shared code lives rather than in the registering slice's package,
+and say in its javadoc which slice registers it.
+
 *Costs:* the answer lags by up to the poll interval; the whole stream is replayed at every process
 start (`start()` waits for it, so it is start-up latency, not background).
 

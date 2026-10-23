@@ -320,6 +320,53 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	}
 
 	/**
+	 * Answers a read of the bounded context: the registered instance of an eventually consistent read
+	 * model when {@code readModelClass} is registered that way and no parameters are passed, and a live
+	 * projection otherwise.
+	 * <p>
+	 * An eventually consistent read model is one instance for the life of the context, kept current by its
+	 * projector, so reading it is handing that instance out: nothing is projected, nothing is observed, and
+	 * a caller may keep the reference. Which instance is meant is decided by the exact class, the way a live
+	 * registration is keyed. Parameters select a live model's constructor and mean nothing to an instance
+	 * that already exists, so a read passing them is a live read, as it always was.
+	 * <p>
+	 * Three reads are refused rather than answered with a guess, each naming what it could not decide: a
+	 * class registered eventually consistent under several {@code readmodelName()}s, read by its class
+	 * alone; a class registered only eventually consistent, read with parameters; and a class registered
+	 * both live and eventually consistent, read without parameters — one answer would be a projection made
+	 * for the read and the other the instance its projector keeps, each with its own freshness. Registering
+	 * one class both ways stays allowed: a read with parameters projects it live.
+	 */
+	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... constructorParams ) {
+		List<ReadModel<DOMAIN_EVENT_TYPE>> registered = eventuallyConsistentReadModels.stream()
+				.filter(rm -> rm.getClass() == readModelClass)
+				.toList();
+		if ( registered.isEmpty() ) {
+			return liveModel(readModelClass, tracing, constructorParams);
+		}
+		boolean withParameters = constructorParams != null && constructorParams.length > 0;
+		boolean alsoLive = liveModels.containsKey(readModelClass);
+		if ( withParameters ) {
+			if ( alsoLive ) {
+				return liveModel(readModelClass, tracing, constructorParams);
+			}
+			throw new IllegalArgumentException(("eventually consistent readmodel %s is one registered instance and is read without "
+					+ "parameters, but was read with %d").formatted(readModelClass.getSimpleName(), constructorParams.length));
+		}
+		if ( alsoLive ) {
+			throw new IllegalArgumentException(("readmodel %s is registered both live and eventually consistent, so a read without "
+					+ "parameters could mean a projection made for the read or the registered instance: read it live with its "
+					+ "parameters, or register it one way").formatted(readModelClass.getSimpleName()));
+		}
+		if ( registered.size() > 1 ) {
+			throw new IllegalArgumentException(("eventually consistent readmodel %s is registered under several names (%s): "
+					+ "a read by its class alone cannot say which one is meant")
+					.formatted(readModelClass.getSimpleName(), registered.stream().map(ReadModel::readmodelName).collect(Collectors.joining(", "))));
+		}
+		return readModelClass.cast(registered.get(0));
+	}
+
+	/**
 	 * Projects a live read model and answers it as the class it was asked for: {@code projectLiveModel}
 	 * instantiates that very class, so the cast is a checked one through the class itself, not an
 	 * unchecked one to whatever the caller assigns.

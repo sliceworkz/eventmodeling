@@ -1171,8 +1171,17 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		boolean summarizingPorts = adapterRegistry.attach(portReporter);
 
 		// how each of these is projected (every instance or a single leader) follows from the read
-		// model's own storage class, see ReadModelModule.createProjectorProcessors
-		Collection<ReadModel> eventuallyConsistentReadModels = eventuallyConsistentReadModelSpecs.stream().map(EventuallyConsistentReadModelSpecificationImpl::readModel).collect(Collectors.toCollection(ArrayList::new));
+		// model's own storage class, see ReadModelModule.createProjectorProcessors. One instance registered
+		// twice is one read model: a slice registers the read model its endpoints read from both
+		// configureCommand and configureQuery, so it exists wherever either aspect runs, and an instance
+		// running both makes both registrations. Two *different* instances under one name stay two, and
+		// ProcessorNames refuses them, since they would share one bookmark.
+		Collection<ReadModel> eventuallyConsistentReadModels = new ArrayList<>();
+		for ( EventuallyConsistentReadModelSpecificationImpl spec : eventuallyConsistentReadModelSpecs ) {
+			if ( eventuallyConsistentReadModels.stream().noneMatch(registered -> registered == spec.readModel()) ) {
+				eventuallyConsistentReadModels.add(spec.readModel());
+			}
+		}
 
 		// each module is recorded as soon as it exists, so a failure in the next one still finds it --
 		// see releasePartiallyBuilt

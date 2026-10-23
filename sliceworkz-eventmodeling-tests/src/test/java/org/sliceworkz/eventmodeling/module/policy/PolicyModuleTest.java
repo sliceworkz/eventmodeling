@@ -155,6 +155,10 @@ public class PolicyModuleTest extends AbstractMockDomainTest {
 
 	@Test
 	void aPolicyIsAProcessorAnnouncedWithItsChoicesThatAnOperatorCanStopAndRestart ( ) {
+		// a history to start from now on after: on an empty stream the policy records no head, and nothing says
+		// when its first pass is done
+		domain().append(Event.of(new FirstDomainEvent("old"), org.sliceworkz.eventstore.events.Tags.none()));
+
 		BoundedContextBuilder<Mock> builder = baseBuilder();
 		builder.policy(new SecondFromFirstPolicy()).fromNowOn().skipRejections();
 		Mock context = buildBoundedContext(builder);
@@ -167,6 +171,9 @@ public class PolicyModuleTest extends AbstractMockDomainTest {
 		ProcessorStatus status = context.processors().stream().filter(p -> p.kind() == ProcessorKind.POLICY).findFirst().orElseThrow();
 		assertEquals(POLICY, status.name());
 
+		// stopped before its first pass, the policy would record the head only on restart -- and "while-stopped"
+		// would be the head it records as read: wait for "now" to be decided, as an operator stop comes later
+		waitBecauseOfEventualConsistency(() -> domain().findBookmark(READER).isPresent());
 		assertTrue(context.stopProcessor(ProcessorKind.POLICY, POLICY));
 		context.event(new FirstDomainEvent("while-stopped"));
 		assertTrue(context.restartProcessor(ProcessorKind.POLICY, POLICY));

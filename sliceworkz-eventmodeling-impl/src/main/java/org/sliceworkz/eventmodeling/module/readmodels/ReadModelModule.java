@@ -24,6 +24,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -203,6 +204,11 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	/** The admin view over this module's processors, for {@code ProcessorAdminCapability}. */
 	public List<ProcessorStatus> processorStatuses ( ) {
 		return admin.statuses();
+	}
+
+	/** see {@link ProjectorProcessorAdmin#lagTargets()} */
+	public List<ProjectorProcessorAdmin.LagTarget> lagTargets ( ) {
+		return admin.lagTargets();
 	}
 
 	/** Restarts a stopped read model projector — see {@code ProcessorAdminCapability.restartProcessor}. */
@@ -513,6 +519,20 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		}
 
 		LOGGER.info("all {} ephemeral readmodel(s) projected in {} ms", ephemeralProcessors.size(), System.currentTimeMillis() - start);
+	}
+
+	/**
+	 * The in-memory ({@code EPHEMERAL}) read models registered here, each with whether its first catch-up
+	 * is over — what {@code start()} waits for, and what a context that stopped waiting still has to finish.
+	 *
+	 * @return read model name to whether it has been projected once, in registration order
+	 */
+	public Map<String, Boolean> inMemoryReadModelsProjected ( ) {
+		Map<String, Boolean> result = new LinkedHashMap<>();
+		projectorProcessors.stream()
+				.filter(p -> p.identification().storage() == Storage.EPHEMERAL)
+				.forEach(p -> result.put(p.identification().id(), p.initialProjectionDone()));
+		return result;
 	}
 
 	private String names ( Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> processors ) {

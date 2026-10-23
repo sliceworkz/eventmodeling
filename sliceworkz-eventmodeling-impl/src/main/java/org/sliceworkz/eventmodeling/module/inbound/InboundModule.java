@@ -193,6 +193,11 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		return admin.statuses();
 	}
 
+	/** see {@link ProjectorProcessorAdmin#lagTargets()} */
+	public List<ProjectorProcessorAdmin.LagTarget> lagTargets ( ) {
+		return admin.lagTargets();
+	}
+
 	/** Restarts a stopped translator processor — see {@code ProcessorAdminCapability.restartProcessor}. */
 	public boolean restartProcessor ( String name ) {
 		return admin.restart(name);

@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import java.time.Duration;
+
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -42,6 +44,8 @@ import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarted;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarting;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextHealth;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextState;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -55,6 +59,7 @@ import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
 import org.sliceworkz.eventmodeling.module.automation.AutomationModule;
 import org.sliceworkz.eventmodeling.module.dcb.DCBModule;
+import org.sliceworkz.eventmodeling.module.health.HealthReporter;
 import org.sliceworkz.eventmodeling.module.inbound.InboundModule;
 import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.management.ManagementModule;
@@ -135,14 +140,15 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private BoundedContextEventEmitter eventEmitter;
 
 	/**
-	 * BUILT → STARTED ⇄ STOPPED → TERMINATED. The stop() → start() restart path is supported;
-	 * TERMINATED is terminal. Transitions are decided under this object's monitor, but the module
-	 * work of start() and stop() runs outside it: start() blocks until the ephemeral read models are
-	 * projected (minutes, worst case), and terminate() runs from a JVM shutdown hook — a lock held
-	 * across that wait would park the shutdown behind it.
+	 * BUILT → STARTING → RUNNING ⇄ STOPPED → TERMINATED. The stop() → start() restart path is
+	 * supported; TERMINATED is terminal. Transitions are decided under this object's monitor, but the
+	 * module work of start() and stop() runs outside it: start() blocks until the ephemeral read models
+	 * are projected (minutes, worst case), and terminate() runs from a JVM shutdown hook — a lock held
+	 * across that wait would park the shutdown behind it. STARTING is that wait, a state of its own so a
+	 * readiness probe can tell it from RUNNING; stop() and terminate() treat it as started.
 	 */
-	private enum LifecycleState { BUILT, STARTED, STOPPED, TERMINATED }
-	private volatile LifecycleState lifecycleState = LifecycleState.BUILT;
+	private volatile BoundedContextState lifecycleState = BoundedContextState.BUILT;
+	private final HealthReporter healthReporter;
 	private final Thread shutdownHook;
 
 	private BoundedContextObserver observer;
@@ -183,7 +189,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			AdapterRegistry adapterRegistry,
 			PortReporter portReporter,
 			boolean summarizingPorts,
-			List<BusinessRule> businessRules ) {
+			List<BusinessRule> businessRules,
+			HealthReporter healthReporter ) {
 		this.name = name;
 		this.instance = instance;
 		this.observer = observer;
@@ -214,6 +221,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.portReporter = portReporter;
 		this.summarizingPorts = summarizingPorts;
 		this.businessRules = List.copyOf(businessRules);
+		this.healthReporter = healthReporter;
 		this.instance = instance;
 		this.eventEmitter = eventEmitter;
 
@@ -255,20 +263,20 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public void start ( ) {
 		synchronized (this) {
-			if (lifecycleState == LifecycleState.TERMINATED) {
+			if (lifecycleState == BoundedContextState.TERMINATED) {
 				// same rule as the eventstore's "start() on a closed storage throws": a terminated
 				// context has closed its EventStore and its processor threads are gone for good, so
 				// starting it would hand back a context that looks started and does nothing
 				throw new IllegalStateException("bounded context '" + name + "' has been terminated; terminate() is terminal - build a new context instead");
 			}
-			if (lifecycleState == LifecycleState.STARTED) {
+			if (lifecycleState == BoundedContextState.STARTING || lifecycleState == BoundedContextState.RUNNING) {
 				// idempotent, matching terminate()'s tolerance: a second start would re-emit the
 				// starting/started events, re-run every slice's wiring and block on the ephemeral
 				// projection wait again, for a context that is already running
 				LOGGER.warn("bounded context '{}' is already started - ignoring this start()", name);
 				return;
 			}
-			lifecycleState = LifecycleState.STARTED;
+			lifecycleState = BoundedContextState.STARTING;
 		}
 		LOGGER.info("starting bounded context '{}' ...", name);
 		long startedAt = Elapsed.start();
@@ -302,6 +310,12 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			// instruction can start a stopped context again
 			managementModule.start();
 		}
+		synchronized (this) {
+			// unless a stop() or terminate() came in during the wait, which has the last word
+			if (lifecycleState == BoundedContextState.STARTING) {
+				lifecycleState = BoundedContextState.RUNNING;
+			}
+		}
 		long startupDurationMicros = Elapsed.microsSince(startedAt);
 		eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), startupDurationMicros));
 		LOGGER.info("started bounded context '{}' in {}.", name, Elapsed.describe(startupDurationMicros));
@@ -310,12 +324,12 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	@Override
 	public void stop ( ) {
 		synchronized (this) {
-			if (lifecycleState != LifecycleState.STARTED) {
+			if (lifecycleState != BoundedContextState.STARTING && lifecycleState != BoundedContextState.RUNNING) {
 				// never started, already stopped, or terminated (which stopped everything): nothing to do
 				LOGGER.debug("bounded context '{}' is not started ({}) - ignoring this stop()", name, lifecycleState);
 				return;
 			}
-			lifecycleState = LifecycleState.STOPPED;
+			lifecycleState = BoundedContextState.STOPPED;
 		}
 		LOGGER.info("stopping bounded context '{}'...", name);
 		this.inboundModule.stop();
@@ -336,10 +350,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	
 	@Override
 	public synchronized void terminate ( ) {
-		if (lifecycleState == LifecycleState.TERMINATED) {
+		if (lifecycleState == BoundedContextState.TERMINATED) {
 			return;
 		}
-		lifecycleState = LifecycleState.TERMINATED;
+		lifecycleState = BoundedContextState.TERMINATED;
 		// Deregister the hook now that we are shutting down by hand: it holds a reference to this
 		// context, so a JVM that builds contexts and terminates them -- a test suite, above all --
 		// would keep every one of them, and everything it reaches, alive until it exits.
@@ -450,7 +464,21 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	/** Whether {@link #start()} has been called and neither {@link #stop()} nor {@link #terminate()} since. */
 	public boolean isStarted ( ) {
-		return lifecycleState == LifecycleState.STARTED;
+		return lifecycleState == BoundedContextState.STARTING || lifecycleState == BoundedContextState.RUNNING;
+	}
+
+	/*
+	 * HEALTH
+	 */
+
+	@Override
+	public BoundedContextState state ( ) {
+		return lifecycleState;
+	}
+
+	@Override
+	public BoundedContextHealth health ( Duration timeout ) {
+		return healthReporter.health(lifecycleState, timeout);
 	}
 
 	/*

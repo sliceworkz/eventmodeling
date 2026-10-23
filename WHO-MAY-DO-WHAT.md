@@ -26,7 +26,7 @@ Every capability a bounded context carries is filed under one of these. `AllCapa
 |---|---|---|
 | **application** — a controller, a job, any adapter driving the domain | `ApplicationCapabilities<D,O>` | `execute`, `executeWithRetry`, `evaluate`, `read`, `aggregate` |
 | **inbound edge** — a webhook, a consumer feeding the domain | `TranslationCapability<I>` | `incoming`, `translate` |
-| **operator** — an admin endpoint, a dashboard | `OperationsCapabilities` | `automations`, `restartAutomation`, `stopAutomation`, `processors`, `restartProcessor`, `stopProcessor`, `skipStalledEvent` |
+| **operator** — an admin endpoint, a dashboard | `OperationsCapabilities` | `automations`, `restartAutomation`, `stopAutomation`, `processors`, `restartProcessor`, `stopProcessor`, `skipStalledEvent`, `state`, `health` |
 | **erasure requests** | `PrivacyCapability` | `erase`, `eraseCategory` |
 | **the escape hatch** | `ProvidedEventCapability<D>` | `event` |
 | **owner** — whatever built the context | `BoundedContext<D,I,O>` | all of the above, plus `start`/`stop`/`terminate`, `port`, the slice inventory |

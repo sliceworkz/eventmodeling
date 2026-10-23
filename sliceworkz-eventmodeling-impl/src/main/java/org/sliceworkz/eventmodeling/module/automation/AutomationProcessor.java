@@ -417,7 +417,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 				} else {
 					LOGGER.debug("not running, waiting for further instructions, checking back in {} seconds", (WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS/1000));
-					waitForWork(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
+					waitWhileStopped(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS);
 					LOGGER.debug("done waiting or notified, checking new instructions");
 				}
 			} catch ( Throwable t ) {
@@ -589,6 +589,21 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 * have woken us while nothing was parked to hear it, and parking anyway makes shutdown sit out the
 	 * whole timeout. A zero or negative delay asks for no wait, and gets none.
 	 */
+	/**
+	 * Parks a stopped processor until it is started again, terminated, or the timeout passes. Re-checks
+	 * both under the lock: a {@code start()} or {@code restartAutomation} landing between the loop's mode
+	 * check and this park signals nobody, and parking anyway leaves a restarted automation stopped for the
+	 * whole interval.
+	 */
+	private void waitWhileStopped ( long timeoutMs ) {
+		try {
+			parking.park(timeoutMs, () -> terminating || processorMode != ProcessorMode.STOPPED);
+		} catch (InterruptedException e) {
+			// not restoring the flag, for the reason waitForWork gives
+			LOGGER.debug("interrupted while waiting in stopped state");
+		}
+	}
+
 	private void waitForWork ( long timeoutMs ) {
 		try {
 			parking.park(timeoutMs, () -> terminating);

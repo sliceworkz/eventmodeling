@@ -638,7 +638,11 @@ public class ProjectorProcessor<EVENT_TYPE> implements AppendListener, Processor
 				} else {
 					LOGGER.debug("not running, waiting for further instructions, checking back in {} seconds", (WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS / 1000));
 					try {
-						parking.park(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS, () -> terminating); // same lost-wake race as above
+						// the same lost-wake race as above: a start() or restart() landing between the mode check and
+						// this park signals nobody, so it is re-checked under the lock, or the processor sits out the
+						// whole interval stopped while it is meant to be running again
+						parking.park(WAIT_BEFORE_CHECKING_NEW_INSTRUCTIONS_WHILE_STOPPED_TIME_MS,
+								() -> terminating || processorMode != ProcessorMode.STOPPED);
 						LOGGER.debug("done waiting or notified, checking new instructions");
 					} catch (InterruptedException e) {
 						LOGGER.debug("interrupted while waiting in stopped state");

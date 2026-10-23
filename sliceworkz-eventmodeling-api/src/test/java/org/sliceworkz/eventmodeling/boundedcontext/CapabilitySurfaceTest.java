@@ -67,6 +67,7 @@ public class CapabilitySurfaceTest {
 			// the operator
 			AutomationAdminCapability.class,
 			ProcessorAdminCapability.class,
+			HealthCapability.class,
 			// audiences of their own
 			ProvidedEventCapability.class,
 			PrivacyCapability.class,
@@ -102,9 +103,9 @@ public class CapabilitySurfaceTest {
 	}
 
 	@Test
-	void theOperatorSurfaceIsTheTwoAdminCapabilities ( ) {
+	void theOperatorSurfaceIsTheTwoAdminCapabilitiesAndHealth ( ) {
 		assertEquals(
-				Set.of(AutomationAdminCapability.class, ProcessorAdminCapability.class),
+				Set.of(AutomationAdminCapability.class, ProcessorAdminCapability.class, HealthCapability.class),
 				Set.of(OperationsCapabilities.class.getInterfaces()));
 		assertEquals(List.of(), names(OperationsCapabilities.class.getDeclaredMethods()));
 	}

@@ -20,7 +20,8 @@ package org.sliceworkz.eventmodeling.boundedcontext;
 import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
 
 /**
- * What an operator may do with a bounded context: see the moving parts, and stop or restart them.
+ * What an operator may do with a bounded context: see the moving parts and how healthy they are, and stop
+ * or restart them.
  * <p>
  * This is the surface an admin endpoint or a dashboard should hold — the automations and the
  * projectors of this instance, their status and their lifecycle, and nothing about the domain. It
@@ -46,6 +47,7 @@ import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
  */
 public interface OperationsCapabilities extends
 	AutomationAdminCapability,
-	ProcessorAdminCapability {
+	ProcessorAdminCapability,
+	HealthCapability {
 
 }

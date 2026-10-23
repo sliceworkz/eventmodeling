@@ -142,9 +142,16 @@ public class LeaderElector implements Runnable {
 	private volatile boolean leasesUnsupported;
 	private boolean threadStarted; // guarded by synchronized(this)
 
+	/**
+	 * Since when lease requests have gone unanswered — timed out or failed — with nothing answered in
+	 * between; {@code 0} while the storage answers. Read by {@link #leadership()} from another thread.
+	 */
+	private volatile long unansweredSinceMs;
+
 	private static final class LeaseState {
 		final Electable electable;
-		boolean leader;
+		// volatile so leadership() reads it from a health probe's thread; written by the election rounds only
+		volatile boolean leader;
 		long lastConfirmedMs;
 		boolean releaseNextRound;
 		// set when this instance yielded the lease of a processor that kept failing here: it stands
@@ -321,6 +328,7 @@ public class LeaderElector implements Runnable {
 				}
 
 				LeaseResponse response = requestLease(state, budgetEndsAtMs);
+				noteAnswered(response != null);
 				if ( response == null ) {
 					// the storage has not answered within this round's budget, so this round confirms
 					// nothing: the request stays in flight for a later round to pick up, and the deadline
@@ -360,6 +368,7 @@ public class LeaderElector implements Runnable {
 				fallBackToAlwaysLeader();
 				return;
 			} catch ( RuntimeException e ) {
+				noteAnswered(false);
 				// A failed round confirms nothing either, and the deadline is judged the same way it is
 				// for one that never answered.
 				if ( !demoteIfUnconfirmed(state, e.getMessage()) ) {
@@ -368,6 +377,42 @@ public class LeaderElector implements Runnable {
 			}
 		}
 	}
+
+	/** keeps {@link #unansweredSinceMs}: cleared by an answer, started by the first request left without one */
+	private void noteAnswered ( boolean answered ) {
+		if ( answered ) {
+			unansweredSinceMs = 0;
+		} else if ( unansweredSinceMs == 0 ) {
+			unansweredSinceMs = System.currentTimeMillis();
+		}
+	}
+
+	/**
+	 * What a health probe reports of this elector, read without taking the election's lock so a round
+	 * waiting on the storage never holds a probe up.
+	 *
+	 * @return the leases contended, held, and how long the storage has left lease requests unanswered
+	 */
+	public Leadership leadership ( ) {
+		long since = unansweredSinceMs;
+		return new Leadership(
+				!leasesUnsupported,
+				leases.size(),
+				(int) leases.stream().filter(state -> state.leader).count(),
+				since == 0 ? 0 : System.currentTimeMillis() - since,
+				ttl);
+	}
+
+	/**
+	 * This instance's part in leader election, for its health.
+	 *
+	 * @param leasesSupported whether the storage holds leases; without them every leader-only processor runs here
+	 * @param leases the leases contended, one per leader-only processor deployed here
+	 * @param held how many of them this instance holds
+	 * @param unansweredForMillis how long lease requests have gone unanswered, {@code 0} while the storage answers
+	 * @param ttl how long an unrenewed lease survives
+	 */
+	public record Leadership ( boolean leasesSupported, int leases, int held, long unansweredForMillis, Duration ttl ) { }
 
 	/**
 	 * Gives up a leadership that has not been re-confirmed within the local deadline — one heartbeat

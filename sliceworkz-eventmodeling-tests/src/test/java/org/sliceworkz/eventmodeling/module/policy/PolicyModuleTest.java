@@ -196,6 +196,9 @@ public class PolicyModuleTest extends AbstractMockDomainTest {
 		BoundedContextBuilder<Mock> builder = baseBuilder();
 		builder.policy(new SecondFromFirstPolicy()).fromNowOn().stallOnRejection();
 		Mock context = buildBoundedContext(builder);
+		// "now" is when the policy first leads, on its own thread, which can be after start() returned: wait
+		// for it to have recorded the head, or "new" may already be the head it records as read
+		waitBecauseOfEventualConsistency(() -> domain().findBookmark(READER).isPresent());
 		context.event(new FirstDomainEvent("new"));
 
 		waitBecauseOfEventualConsistency(() -> seconds().size() >= 1);

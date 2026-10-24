@@ -11,7 +11,7 @@ The goal is to have a very lightweight implementation of all core techniques.
 
 Supports the 4 EM core templates:
 - State change	(Trigger -> Command -> Event)
-- State read	(Events -> ReadModel -> UI/API
+- State view	(Events -> ReadModel -> UI/API
 - Automation	(Events -> TODOList -> Processor -> Command -> Event)
   or, as a policy: whenever an event happens, issue a command (Event -> Policy -> Command -> Event)
 - Translation	(External Event -> Processor -> Command -> Event)

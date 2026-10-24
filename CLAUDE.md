@@ -298,7 +298,7 @@ Features are organized as vertical slices:
 2. **Slice interface**: Feature slices implement `Slice<C>` where `C` is the bounded context type (e.g., `Slice<Banking>`). That declaration is what decides which context deploys the slice when several share a root package — see "A feature slice is scanned for the bounded context it declares" below
 3. **Types of feature slices** (`SliceType`, derived from what the slice registers, never declared):
    - `STATE_CHANGE`: a command (or aggregate) raising domain events
-   - `STATE_READ`: read models and nothing else
+   - `STATE_VIEW`: read models and nothing else
    - `AUTOMATION`: an automation and its todo list — or any command beside a read model — or a policy
    - `TRANSLATION`: a translator
    - `UNCLEAR`: parts fitting no pattern, or several
@@ -1935,7 +1935,7 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   - Only what is registered counts. A slice that only wires an endpoint in `startCommand` is
     `UNDEFINED`; `builder.command(...)`, which is purely declarative, makes it a state change. A
     scheduler executing a command is a state change by its parts. And a command beside a read model is
-    an automation, exactly as the model reads it — a slice that is a state change and a state read at
+    an automation, exactly as the model reads it — a slice that is a state change and a state view at
     once is two slices in Event Modeling.
   - Only what is deployed is registered. A slice is configured for the aspects its instance runs, so the
     type on the descriptor is the type of what *this instance* deployed of it (an undeployed slice is
@@ -2197,7 +2197,7 @@ a `DataSource` proxy would time `getConnection()`, which is pool checkout, not t
 The framework supports the 4 Event Modeling patterns:
 
 1. **State Change**: Trigger → Command → Event
-2. **State Read**: Events → ReadModel → UI/API
+2. **State View**: Events → ReadModel → UI/API
 3. **Automation**: Events → TodoList → Processor → Command → Event, or as a policy: Event → Processor (Policy) → Command → Event
 4. **Translation**: External Event → Processor → Command → Event
 

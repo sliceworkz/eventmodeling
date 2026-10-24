@@ -27,7 +27,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.SliceMemb
  * than declared.
  * <p>
  * A slice's type is a statement about its parts: a command raising events is a state change, a read
- * model on its own is a state read, a to-do list worked by a processor is an automation, an external
+ * model on its own is a state view, a to-do list worked by a processor is an automation, an external
  * event turned into a command is a translation. Declared by hand, that statement is one nobody checks,
  * and it drifts from the code the moment a slice gains or loses a part. So there is nothing to declare:
  * {@link #of(Collection)} reads the type off the components a slice registers on the builder in its
@@ -66,7 +66,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.SliceMemb
  *     change as well: nothing registered says a processor issues it.</li>
  * <li><b>A command beside a read model is an automation</b>, whether or not an {@code Automation} is
  *     registered, exactly as in the model: the read model is taken for the to-do list the command is
- *     issued from. A slice that is a state change and a state read at once — a command and the live
+ *     issued from. A slice that is a state change and a state view at once — a command and the live
  *     read model its screen shows — is two slices in Event Modeling, and splitting it is what makes its
  *     type come out right.</li>
  * <li><b>Only what is deployed is registered.</b> A slice is configured only for the aspects its
@@ -82,7 +82,7 @@ public enum SliceType {
 	STATE_CHANGE,
 
 	/** A read model projected from events: events → read model → UI/API. */
-	STATE_READ,
+	STATE_VIEW,
 
 	/**
 	 * A processor issuing commands, in one of three forms. Driven by a to-do list: events → to-do list →
@@ -165,7 +165,7 @@ public enum SliceType {
 		}
 
 		boolean stateChange = commands >= 1 && producedDomainEvents >= 1 && readModels == 0 && triggeringDomainEvents == 0 && inboundEvents == 0;
-		boolean stateRead = commands == 0 && readModels >= 1 && triggeringDomainEvents == 0 && inboundEvents == 0 && outboundEvents == 0;
+		boolean stateView = commands == 0 && readModels >= 1 && triggeringDomainEvents == 0 && inboundEvents == 0 && outboundEvents == 0;
 		boolean automation = commands >= 1 && readModels >= 1 && triggeringDomainEvents == 0 && inboundEvents == 0;
 		// a policy: a command issued for a triggering domain event, with no to-do list in between
 		boolean policy = commands >= 1 && triggeringDomainEvents >= 1 && readModels == 0 && inboundEvents == 0;
@@ -177,7 +177,7 @@ public enum SliceType {
 		int matchCount = 0;
 		SliceType matched = UNCLEAR;
 		if ( stateChange ) { matchCount++; matched = STATE_CHANGE; }
-		if ( stateRead ) { matchCount++; matched = STATE_READ; }
+		if ( stateView ) { matchCount++; matched = STATE_VIEW; }
 		if ( automation || policy || publication ) { matchCount++; matched = AUTOMATION; }
 		if ( translation ) { matchCount++; matched = TRANSLATION; }
 

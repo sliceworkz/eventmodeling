@@ -35,7 +35,7 @@ import java.lang.annotation.Target;
  *     {@code Slice} is kept by every context.</li>
  * <li><b>The name</b> is the class' simple name without its {@code FeatureSlice} suffix
  *     ({@link Slice#name()}).</li>
- * <li><b>The type</b> — state change, state read, automation, translation — is derived from the
+ * <li><b>The type</b> — state change, state view, automation, translation — is derived from the
  *     components the slice registers in its {@code configure...} methods, by the rule the Sliceworkz
  *     Modeler applies to a modeled slice; see {@link SliceType}.</li>
  * </ul>

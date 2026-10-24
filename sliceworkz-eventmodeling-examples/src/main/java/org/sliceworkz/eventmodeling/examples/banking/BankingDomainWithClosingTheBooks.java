@@ -57,7 +57,7 @@ import org.sliceworkz.eventmodeling.rules.RuleViolation;
  * <h2>Event Modeling patterns used</h2>
  * <ul>
  *   <li><b>STATE_CHANGE</b>: DepositCommand, WithdrawCommand, CloseMonthCommand</li>
- *   <li><b>STATE_READ</b>: CurrentPeriodReadModel (live), MonthStatementReadModel (live)</li>
+ *   <li><b>STATE_VIEW</b>: CurrentPeriodReadModel (live), MonthStatementReadModel (live)</li>
  *   <li><b>AUTOMATION</b>: MonthEndClosingAutomation (time-triggered), ReportExcessBalanceAutomation
  *       (the follow-up of a deferred enforcement), and BlockCardsOfAccountPolicy — the other form of an
  *       automation: whenever an account is frozen or closed, block its cards</li>

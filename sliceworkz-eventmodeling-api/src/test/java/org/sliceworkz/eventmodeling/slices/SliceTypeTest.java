@@ -56,9 +56,9 @@ class SliceTypeTest {
 	}
 
 	@Test
-	void aReadModelIsAStateRead ( ) {
-		assertEquals(SliceType.STATE_READ, typeOf(MemberKind.READ_MODEL));
-		assertEquals(SliceType.STATE_READ, typeOf(MemberKind.READ_MODEL, MemberKind.READ_MODEL));
+	void aReadModelIsAStateView ( ) {
+		assertEquals(SliceType.STATE_VIEW, typeOf(MemberKind.READ_MODEL));
+		assertEquals(SliceType.STATE_VIEW, typeOf(MemberKind.READ_MODEL, MemberKind.READ_MODEL));
 	}
 
 	@Test
@@ -126,7 +126,7 @@ class SliceTypeTest {
 		assertEquals(SliceType.STATE_CHANGE, SliceType.derive(1, 0, 1, 0, 0));
 		assertEquals(SliceType.STATE_CHANGE, SliceType.derive(1, 0, 2, 0, 1));
 		assertEquals(SliceType.UNCLEAR, SliceType.derive(1, 0, 0, 0, 0), "a command raising nothing");
-		assertEquals(SliceType.STATE_READ, SliceType.derive(0, 2, 0, 0, 0));
+		assertEquals(SliceType.STATE_VIEW, SliceType.derive(0, 2, 0, 0, 0));
 		assertEquals(SliceType.UNCLEAR, SliceType.derive(0, 1, 0, 0, 1), "a read model with an outbound event");
 		assertEquals(SliceType.AUTOMATION, SliceType.derive(1, 1, 1, 0, 1));
 		assertEquals(SliceType.TRANSLATION, SliceType.derive(1, 0, 1, 1, 0));

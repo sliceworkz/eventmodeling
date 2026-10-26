@@ -17,10 +17,12 @@
  */
 package org.sliceworkz.eventmodeling.module.aggregates;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -53,6 +55,8 @@ import org.sliceworkz.eventstore.testing.ForEachBackend;
 public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 
 	private MockSnapshotStorage snapshotStorage = new MockSnapshotStorage();
+
+	private EventStream<MockDomainEvent> readBack;
 
 	@ForEachBackend
 	void testAggregate ( ) {
@@ -150,9 +154,9 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 			a.doSomething(i);
 
 			assertEquals(i+1,a.getCounter());
+			awaitReadable(i+1);
 			a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
 
-			System.err.println(a.getCounterOnTopOfSnapshot());
 			assertEquals((i+1)%5, a.getCounterOnTopOfSnapshot()); // we expect only 1 to 4 events to be loaded each time on top of the snapshot, 1 with the first event (as there is no snapshot then)
 			
 			assertEquals(i+1,a.getCounter());
@@ -195,6 +199,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 			assertEquals(i+1,a.getCounter());
 
 			MockAggregate.VERSION = "v" + UUID.randomUUID().toString();  // change version before load, so the saved snapshot cannot be used 
+			awaitReadable(i+1);
 			a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
 
 			assertEquals(i+1, a.getCounterOnTopOfSnapshot()); // since the version of the aggregate data changes each time, no reuse is possible
@@ -207,6 +212,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		assertEquals(500, a.getCounterOnTopOfSnapshot());
 		
 		a.doSomething(500); // one more time, without changing the version
+		awaitReadable(501);
 		a = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
 		assertEquals(1, a.getCounterOnTopOfSnapshot()); // since the version didn't change now, we can load the latest one and reuse that
 		assertEquals(501,a.getCounter());
@@ -227,6 +233,20 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, ()->domainWithAggregate(List.of(MockAggregate.class, MockAggregate.class), 0));
 		assertEquals("duplicate aggregate registration for 'class org.sliceworkz.eventmodeling.module.aggregates.MockAggregate'", e.getMessage());
 	}		
+
+	/**
+	 * Waits until a query sees the events the aggregate appended, before a test re-loads it. On PostgreSQL a
+	 * committed event can sit behind the {@code pg_snapshot_xmin} barrier for a moment while another writing
+	 * transaction is open, so a load straight after an append may miss it — the eventstore promises no
+	 * read-your-own-writes beyond what {@code append()} returns. A load is a query behind the same barrier,
+	 * which only ever advances, so once this sees the events the load does too.
+	 */
+	private void awaitReadable ( int eventCount ) {
+		if ( readBack == null ) {
+			readBack = EventStore.on(eventStorage()).build().getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"), MockDomainEvent.class);
+		}
+		await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(10)).until(() -> readBack.query(EventQuery.matchAll()).size() >= eventCount);
+	}
 
 	Mock domainWithAggregate ( 
 			List<Class<? extends Aggregate<MockDomainEvent>>> aggregateClasses, int snapshotAfterEventCount ) { 

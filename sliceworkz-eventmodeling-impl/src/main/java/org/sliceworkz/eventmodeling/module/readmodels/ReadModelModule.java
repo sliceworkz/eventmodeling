@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -72,6 +73,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	static final long DEFAULT_EPHEMERAL_PROJECTION_TIMEOUT_MS = 300000; // 5 minutes
 	private static final long EPHEMERAL_PROJECTION_TIMEOUT_MS = Long.getLong(EPHEMERAL_PROJECTION_TIMEOUT_PROPERTY, DEFAULT_EPHEMERAL_PROJECTION_TIMEOUT_MS);
 	private static final long PROGRESS_LOG_INTERVAL_MS = 10000;
+	private static final long WAIT_SLICE_MS = 200;
 
 	private Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> projectorProcessors;
 	private ProcessorThreadManager<DOMAIN_EVENT_TYPE> processorThreadManager;
@@ -511,8 +513,13 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	 */
 	@Override
 	public void start ( ) {
+		startProcessors();
+		awaitEphemeralReadModelsProjected(() -> true);
+	}
+
+	/** Starts the processors and returns: the first half of {@link #start()}, for a start that waits elsewhere. */
+	public void startProcessors ( ) {
 		this.processorThreadManager.start();
-		awaitEphemeralReadModelsProjected();
 	}
 
 	/**
@@ -522,9 +529,10 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	 * The deadline is shared over all of them and defaults to {@value #DEFAULT_EPHEMERAL_PROJECTION_TIMEOUT_MS}
 	 * ms; it can be changed with the {@code sliceworkz.eventmodeling.readmodel.ephemeral.projection.timeout.ms}
 	 * system property. When it expires the startup continues (with a warning) rather than blocking
-	 * the process forever — the read models involved keep catching up in the background.
+	 * the process forever — the read models involved keep catching up in the background. It also ends as
+	 * soon as {@code stillWanted} answers false, asked between short waits.
 	 */
-	private void awaitEphemeralReadModelsProjected ( ) {
+	public void awaitEphemeralReadModelsProjected ( BooleanSupplier stillWanted ) {
 		List<ProjectorProcessor<DOMAIN_EVENT_TYPE>> ephemeralProcessors = projectorProcessors.stream()
 				.filter(p -> p.identification().storage() == Storage.EPHEMERAL)
 				.toList();
@@ -537,8 +545,14 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		long start = System.currentTimeMillis();
 		long deadline = start + EPHEMERAL_PROJECTION_TIMEOUT_MS;
 
+		long nextProgressLog = start + PROGRESS_LOG_INTERVAL_MS;
 		List<ProjectorProcessor<DOMAIN_EVENT_TYPE>> outstanding = new ArrayList<>(ephemeralProcessors);
 		while ( !outstanding.isEmpty() ) {
+			if ( !stillWanted.getAsBoolean() ) {
+				// a stop() or terminate() during a background start: nobody is waiting for this any more
+				LOGGER.info("no longer waiting for ephemeral readmodel(s) to be projected: {}", names(outstanding));
+				return;
+			}
 			long remainingMs = deadline - System.currentTimeMillis();
 			if ( remainingMs <= 0 ) {
 				LOGGER.warn("{} ephemeral readmodel(s) not projected completely within {} ms, continuing startup - they keep catching up in the background: {}",
@@ -548,9 +562,9 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 			boolean caughtUp;
 			try {
-				// wait on one of them at a time, but never longer than the progress interval, so the
-				// readmodels still outstanding are reported while a long catch-up is going on
-				caughtUp = outstanding.get(0).awaitInitialProjection(Math.min(PROGRESS_LOG_INTERVAL_MS, remainingMs), TimeUnit.MILLISECONDS);
+				// wait on one of them at a time, in short slices so a start nobody waits for any more is
+				// let go promptly; the readmodels still outstanding are reported every progress interval
+				caughtUp = outstanding.get(0).awaitInitialProjection(Math.min(WAIT_SLICE_MS, remainingMs), TimeUnit.MILLISECONDS);
 			} catch ( InterruptedException e ) {
 				Thread.currentThread().interrupt();
 				LOGGER.warn("interrupted while waiting for ephemeral readmodels to be projected, still outstanding: {}", names(outstanding));
@@ -559,7 +573,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 			outstanding.removeIf(ProjectorProcessor::initialProjectionDone);
 
-			if ( !caughtUp && !outstanding.isEmpty() ) {
+			if ( !caughtUp && !outstanding.isEmpty() && System.currentTimeMillis() >= nextProgressLog ) {
+				nextProgressLog += PROGRESS_LOG_INTERVAL_MS;
 				LOGGER.info("after {} ms, still waiting for {} ephemeral readmodel(s) to be projected: {}",
 						System.currentTimeMillis() - start, outstanding.size(), names(outstanding));
 			}

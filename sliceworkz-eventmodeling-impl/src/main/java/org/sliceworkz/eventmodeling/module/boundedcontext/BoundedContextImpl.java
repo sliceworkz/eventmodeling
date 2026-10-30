@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -148,6 +149,15 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 * readiness probe can tell it from RUNNING; stop() and terminate() treat it as started.
 	 */
 	private volatile BoundedContextState lifecycleState = BoundedContextState.BUILT;
+
+	/**
+	 * The start in progress, from the moment a start sets STARTING until it is over: what a second start()
+	 * or startInBackground() waits on instead of beginning one of its own. Guarded by this object's monitor,
+	 * as is startGeneration, which tells a start that a stop() and a new start came in during its wait, so
+	 * that it leaves the new start's state alone.
+	 */
+	private CompletableFuture<Void> startInProgress;
+	private long startGeneration;
 	private final HealthReporter healthReporter;
 	private final Thread shutdownHook;
 
@@ -259,9 +269,47 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		return aspects;
 	}
 
-	@SuppressWarnings({"unchecked", "rawtypes"})
 	@Override
 	public void start ( ) {
+		Starting starting = beginStart();
+		if ( starting.alreadyStarting() != null ) {
+			starting.alreadyStarting().join(); // a background start is under way: this caller waits for it
+			return;
+		}
+		if ( starting.generation() >= 0 ) {
+			finishStart(starting);
+		}
+	}
+
+	@Override
+	public CompletableFuture<Void> startInBackground ( ) {
+		Starting starting = beginStart();
+		if ( starting.alreadyStarting() != null ) {
+			return starting.alreadyStarting();
+		}
+		if ( starting.generation() < 0 ) {
+			return CompletableFuture.completedFuture(null); // already running
+		}
+		Thread.ofVirtual().name("starting/" + name).start(() -> finishStart(starting));
+		return starting.done();
+	}
+
+	/**
+	 * A start under way: which one ({@code generation}, negative when this call began none), the moment it
+	 * began, and the future it completes -- or the future of another start this call found in progress.
+	 */
+	private record Starting ( long generation, long startedAt, CompletableFuture<Void> done, CompletableFuture<Void> alreadyStarting ) { }
+
+	/**
+	 * Everything a start does but wait for the in-memory read models: the transition to STARTING, the
+	 * announcement, every slice's wiring, one election round and every processor running. On return the
+	 * processors are working and the context can be reached; it is not yet fit to serve an eventually
+	 * consistent read.
+	 */
+	@SuppressWarnings({"unchecked", "rawtypes"})
+	private Starting beginStart ( ) {
+		long generation;
+		CompletableFuture<Void> done = new CompletableFuture<>();
 		synchronized (this) {
 			if (lifecycleState == BoundedContextState.TERMINATED) {
 				// same rule as the eventstore's "start() on a closed storage throws": a terminated
@@ -269,58 +317,99 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 				// starting it would hand back a context that looks started and does nothing
 				throw new IllegalStateException("bounded context '" + name + "' has been terminated; terminate() is terminal - build a new context instead");
 			}
-			if (lifecycleState == BoundedContextState.STARTING || lifecycleState == BoundedContextState.RUNNING) {
+			if (lifecycleState == BoundedContextState.STARTING) {
+				// a start is under way -- in the background, most likely: wait for that one rather than
+				// re-emitting the starting events and re-running every slice's wiring
+				LOGGER.debug("bounded context '{}' is already starting - waiting for that start", name);
+				return new Starting(-1, 0, null, startInProgress);
+			}
+			if (lifecycleState == BoundedContextState.RUNNING) {
 				// idempotent, matching terminate()'s tolerance: a second start would re-emit the
 				// starting/started events, re-run every slice's wiring and block on the ephemeral
 				// projection wait again, for a context that is already running
 				LOGGER.warn("bounded context '{}' is already started - ignoring this start()", name);
-				return;
+				return new Starting(-1, 0, null, null);
 			}
 			lifecycleState = BoundedContextState.STARTING;
+			generation = ++startGeneration;
+			startInProgress = done;
 		}
 		LOGGER.info("starting bounded context '{}' ...", name);
 		long startedAt = Elapsed.start();
-		eventEmitter.emit(new BoundedContextStarting(name, instance.logical(), instance.physical(), instance.process(),
-				map(deployedFeatureSlices), map(undeployedFeatureSlices), deployedAspects(), businessRules, adapterRegistry.describe()));
-		if (summarizingPorts) {
-			portReporter.start();
-		}
-		for (var slice : deployedFeatureSlices) {
-			Slice raw = (Slice) slice;
-			BoundedContext<?,?,?> view = sliceView(raw);
-			if (startCommands) raw.startCommand(view);
-			if (startQueries) raw.startQuery(view);
-			if (startAutomations) raw.startAutomation(view);
-			if (startProjections) raw.startProjection(view);
-		}
-		// one synchronous election round before any processor takes its first loop pass, so a single
-		// instance -- or the preferred one on a quiet deployment -- leads from the start instead of a
-		// heartbeat interval later. Renewals continue on the elector's own thread, never on any
-		// processing path.
-		this.leaderElector.start();
-		this.inboundModule.start();
-		this.outboundModule.start();
-		this.publisherModule.start();
-		this.policyModule.start();
-		this.dcbDomainModule.start();
-		this.automationModule.start();
-		this.readmodelModule.start(); // blocks until the ephemeral readmodels have been projected
-		if (managementModule != null) {
-			// idempotent: subscribed once, at the stream's head, and kept across stop()/start() so an
-			// instruction can start a stopped context again
-			managementModule.start();
-		}
-		synchronized (this) {
-			// unless a stop() or terminate() came in during the wait, which has the last word
-			if (lifecycleState == BoundedContextState.STARTING) {
-				lifecycleState = BoundedContextState.RUNNING;
+		try {
+			eventEmitter.emit(new BoundedContextStarting(name, instance.logical(), instance.physical(), instance.process(),
+					map(deployedFeatureSlices), map(undeployedFeatureSlices), deployedAspects(), businessRules, adapterRegistry.describe()));
+			if (summarizingPorts) {
+				portReporter.start();
 			}
+			for (var slice : deployedFeatureSlices) {
+				Slice raw = (Slice) slice;
+				BoundedContext<?,?,?> view = sliceView(raw);
+				if (startCommands) raw.startCommand(view);
+				if (startQueries) raw.startQuery(view);
+				if (startAutomations) raw.startAutomation(view);
+				if (startProjections) raw.startProjection(view);
+			}
+			// one synchronous election round before any processor takes its first loop pass, so a single
+			// instance -- or the preferred one on a quiet deployment -- leads from the start instead of a
+			// heartbeat interval later. Renewals continue on the elector's own thread, never on any
+			// processing path.
+			this.leaderElector.start();
+			this.inboundModule.start();
+			this.outboundModule.start();
+			this.publisherModule.start();
+			this.policyModule.start();
+			this.dcbDomainModule.start();
+			this.automationModule.start();
+			// the read models' processors run from here; finishStart waits for the ephemeral ones
+			this.readmodelModule.startProcessors();
+			if (managementModule != null) {
+				// idempotent: subscribed once, at the stream's head, and kept across stop()/start() so an
+				// instruction can start a stopped context again -- or stop one that is still starting
+				managementModule.start();
+			}
+		} catch ( RuntimeException | Error e ) {
+			// a slice's wiring threw: the start is over, and whoever waits for it hears why
+			done.completeExceptionally(e);
+			throw e;
 		}
-		long startupDurationMicros = Elapsed.microsSince(startedAt);
-		eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), startupDurationMicros));
-		LOGGER.info("started bounded context '{}' in {}.", name, Elapsed.describe(startupDurationMicros));
+		return new Starting(generation, startedAt, done, null);
 	}
-	
+
+	/**
+	 * The rest of a start: waits for the ephemeral read models -- unless a stop() or terminate() ends the
+	 * start first -- and then sets RUNNING and announces it. Runs on the caller's thread for start(), on a
+	 * virtual thread of its own for startInBackground().
+	 */
+	private void finishStart ( Starting starting ) {
+		try {
+			this.readmodelModule.awaitEphemeralReadModelsProjected(() -> isStillStarting(starting.generation()));
+			boolean reachedRunning;
+			synchronized (this) {
+				// unless a stop() or terminate() came in during the wait, which has the last word
+				reachedRunning = lifecycleState == BoundedContextState.STARTING && startGeneration == starting.generation();
+				if (reachedRunning) {
+					lifecycleState = BoundedContextState.RUNNING;
+				}
+			}
+			if (reachedRunning) {
+				long startupDurationMicros = Elapsed.microsSince(starting.startedAt());
+				eventEmitter.emit(new BoundedContextStarted(name, instance.logical(), instance.physical(), instance.process(), startupDurationMicros));
+				LOGGER.info("started bounded context '{}' in {}.", name, Elapsed.describe(startupDurationMicros));
+			} else {
+				LOGGER.info("start of bounded context '{}' ended before it was running: it is {}", name, lifecycleState);
+			}
+			starting.done().complete(null);
+		} catch ( RuntimeException | Error e ) {
+			starting.done().completeExceptionally(e);
+			throw e;
+		}
+	}
+
+	private synchronized boolean isStillStarting ( long generation ) {
+		return lifecycleState == BoundedContextState.STARTING && startGeneration == generation;
+	}
+
 	@Override
 	public void stop ( ) {
 		synchronized (this) {

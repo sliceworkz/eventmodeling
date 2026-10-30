@@ -17,9 +17,11 @@
  */
 package org.sliceworkz.eventmodeling.module.automation;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -57,8 +59,8 @@ import org.sliceworkz.eventstore.stream.EventStream;
  * todo list before that list has been projected up to the head of the stream?
  * <p>
  * The history puts {@code item-x} on the list, then holds a long tail of events, and ends with
- * {@code item-x} being resolved by someone else. A todo list projected to the end holds nothing, so
- * the automation must handle nothing.
+ * {@code item-x} being resolved by someone else, and {@code item-y} put on the list. A todo list projected
+ * to the end holds {@code item-y} alone, so that is the one item the automation may handle -- and must.
  */
 public class AutomationDuringStartupTest extends AbstractMockDomainTest {
 
@@ -66,6 +68,15 @@ public class AutomationDuringStartupTest extends AbstractMockDomainTest {
 
 	@Test
 	void anAutomationDoesNotActOnATodoListStillCatchingUp ( ) {
+		runOverALongHistory(false);
+	}
+
+	@Test
+	void anAutomationDoesNotActOnATodoListStillCatchingUpDuringABackgroundStart ( ) {
+		runOverALongHistory(true);
+	}
+
+	private void runOverALongHistory ( boolean inBackground ) {
 		EventStream<MockDomainEvent> domainStream = EventStore.on(eventStorage()).build()
 				.getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"), MockDomainEvent.class);
 
@@ -79,6 +90,7 @@ public class AutomationDuringStartupTest extends AbstractMockDomainTest {
 			}
 		}
 		domainStream.append(Event.of(new SecondDomainEvent("item-x"), Tags.none())); // resolved elsewhere
+		domainStream.append(Event.of(new FirstDomainEvent("item-y"), Tags.none()));  // still open at the head
 
 		OpenItems todoList = new OpenItems();
 		List<String> handled = Collections.synchronizedList(new ArrayList<>());
@@ -89,9 +101,16 @@ public class AutomationDuringStartupTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"));
 		builder.readmodel(todoList).eventuallyConsistent();
 		builder.automation(new RecordingAutomation(todoList, handled));
-		buildBoundedContext(builder); // starts, and returns once the EPHEMERAL todo list is projected
+		Mock domain = (Mock) builder.build();
+		boundedContext = domain;
+		if ( inBackground ) {
+			domain.startInBackground(); // returns while the todo list is still catching up
+		} else {
+			domain.start(); // returns once the EPHEMERAL todo list is projected
+		}
 
-		assertEquals(Set.of(), todoList.open(), "projected to the end, the todo list holds nothing");
+		await().atMost(Duration.ofSeconds(30)).until(() -> handled.contains("item-y"));
+		assertEquals(Set.of("item-y"), todoList.open(), "projected to the end, the todo list holds the open item only");
 		assertFalse(handled.contains("item-x"),
 				"the automation handled an item resolved later in the history, on a todo list that had not caught up yet: " + handled);
 	}

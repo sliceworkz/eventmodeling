@@ -185,6 +185,11 @@ public final class HealthReporter {
 		}
 		List<String> outstanding = projected.entrySet().stream().filter(e -> !e.getValue()).map(Map.Entry::getKey).toList();
 		Map<String, Object> details = Map.of("total", projected.size(), "projected", projected.size() - outstanding.size());
+		if ( state == BoundedContextState.STARTING && !outstanding.isEmpty() ) {
+			// what the start is waiting for; the lifecycle check already says the context is not ready
+			return Optional.of(HealthCheck.of(BoundedContextHealth.IN_MEMORY_READ_MODELS, HealthStatus.UP,
+				"projecting: " + String.join(", ", outstanding), details));
+		}
 		if ( state != BoundedContextState.RUNNING || outstanding.isEmpty() ) {
 			return Optional.of(HealthCheck.up(BoundedContextHealth.IN_MEMORY_READ_MODELS, details));
 		}

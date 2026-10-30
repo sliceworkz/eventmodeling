@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.boundedcontext;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * The lifecycle of a bounded context: built → started ⇄ stopped → terminated.
  * <p>
@@ -26,9 +28,10 @@ package org.sliceworkz.eventmodeling.boundedcontext;
  * <p>
  * The guards a bounded context holds these methods to:
  * <ul>
- * <li>{@code start()} on a context that is already started is a no-op, logged at WARN — it does
+ * <li>{@code start()} on a context that is already running is a no-op, logged at WARN — it does
  *     <em>not</em> re-emit the starting/started events, re-run the slice wiring, or block on the
- *     ephemeral read-model projection wait a real start does.</li>
+ *     ephemeral read-model projection wait a real start does. On a context still starting it waits
+ *     for that start to be over, and begins nothing of its own.</li>
  * <li>{@code start()} on a terminated context throws {@link IllegalStateException}: its
  *     {@code EventStore} is closed and its processor threads drained, so a context that "started"
  *     anyway would look alive and do nothing.</li>
@@ -42,10 +45,33 @@ public interface LifecycleCapability {
 	/**
 	 * Starts the processors and announces the context: emits the starting/started events, runs every
 	 * deployed slice's wiring, holds one leader-election round, and blocks until the ephemeral read
-	 * models have been projected. No-op with a WARN when already started; throws
+	 * models have been projected. Called while a {@link #startInBackground() background start} is in
+	 * progress, waits for that one. No-op with a WARN when already running; throws
 	 * {@link IllegalStateException} after {@link #terminate()}.
 	 */
 	void start ( );
+
+	/**
+	 * Starts as {@link #start()} does, without waiting for the in-memory read models: returns once the
+	 * slices are wired and the processors run, with the context {@link BoundedContextState#STARTING}, and
+	 * completes the returned future when the start is over — {@link BoundedContextState#RUNNING} reached,
+	 * or the start cut short by {@link #stop()} or {@link #terminate()}; read {@code state()} to tell which.
+	 * <p>
+	 * For a process that must answer its probes while a long history is projected: build every context,
+	 * start them in the background, open the probes, and let readiness follow {@code RUNNING}. Nothing the
+	 * context runs acts on a read model that is still catching up — commands, policies and publishers read
+	 * live models, and an automation waits for its todo list to reach the stream head — but an eventually
+	 * consistent read model read from outside (a request, a port) is partial until {@code RUNNING}, so an
+	 * endpoint serving one answers 503 until then.
+	 * <p>
+	 * Called on a context already starting, returns the future of that start; already running, a completed
+	 * future, with the WARN {@code start()} logs. Throws {@link IllegalStateException} after
+	 * {@link #terminate()}. The default starts in the foreground and returns a completed future.
+	 */
+	default CompletableFuture<Void> startInBackground ( ) {
+		start();
+		return CompletableFuture.completedFuture(null);
+	}
 
 	/**
 	 * Parks the processors and releases the held leases, so a standby instance takes over promptly.

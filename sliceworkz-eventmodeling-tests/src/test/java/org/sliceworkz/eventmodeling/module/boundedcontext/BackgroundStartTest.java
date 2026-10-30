@@ -1,5 +1,5 @@
 /*
- * Sliceworkz Eventmodeling - a lightweight Event Modeling implementation in Java
+ * Sliceworkz Event Modeling - an opinionated Event Modeling framework in Java
  * Copyright © 2025-2026 Sliceworkz / XTi (info@sliceworkz.org)
  *
  * This program is free software: you can redistribute it and/or modify

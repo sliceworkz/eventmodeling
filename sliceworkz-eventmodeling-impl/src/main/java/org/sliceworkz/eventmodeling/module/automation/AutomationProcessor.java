@@ -94,6 +94,25 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	 */
 	private volatile boolean monitoredBookmarkMoved = false;
 
+	/**
+	 * Set whenever this automation begins working -- started, restarted, promoted to leader -- and
+	 * answered by the next round with the stream's head at that moment, the {@link #catchUpBarrier}.
+	 */
+	private volatile boolean catchUpBarrierToTake = true;
+
+	/**
+	 * The head of the stream when this automation began working, which its todo list's projector must
+	 * have read up to before a round may run; null once it has, or when the stream was empty.
+	 * <p>
+	 * The guard on our own bookmark is not enough on its own: it holds a round back until the todo list
+	 * has seen what <em>this automation</em> produced, but says nothing about the rest of the history. A
+	 * todo list rebuilt from the beginning -- an EPHEMERAL one at every start, bookmarking every batch of
+	 * its catch-up -- or a durable one catching up after downtime would otherwise be worked as it stood
+	 * part-way, and an item resolved later in the history by anyone else would be handled anyway. Only
+	 * this loop's thread reads and writes it.
+	 */
+	private EventReference catchUpBarrier;
+
 	/** The most recent throwable out of a handler, and the one that stopped us, for {@link #status()}. */
 	private volatile Throwable lastFailure;
 	private volatile Throwable stoppedBy;
@@ -160,6 +179,10 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 	@Override
 	public void instanceMode ( ProcessorInstanceMode mode ) {
+		if ( mode == ProcessorInstanceMode.LEADER && this.instanceMode != ProcessorInstanceMode.LEADER ) {
+			// a standby's todo list may be behind what the previous leader worked from
+			this.catchUpBarrierToTake = true;
+		}
 		this.instanceMode = mode;
 		parking.wake(); // wake a parked standby immediately on promotion, and a backOff on demotion
 	}
@@ -183,6 +206,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 
 	private void start ( BoundedContextEvent.AutomationStartReason reason ) {
 		this.stoppedItself = false;
+		this.catchUpBarrierToTake = true;
 		this.processorMode = originalProcessorMode;
 		parking.wake(); // escape the parked state if needed
 		eventEmitter.emit(new BoundedContextEvent.AutomationStarted(boundedContext, processorIdentification.id(), reason, eventEmitter.sliceFor(automation.getClass())));
@@ -266,12 +290,21 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 						// cleared before the read, so that a move arriving from here on is one this round has
 						// not seen and is a reason to come straight back rather than park
 						monitoredBookmarkMoved = false;
+						if ( catchUpBarrierToTake ) {
+							// cleared before the head is read: a later start or promotion takes a barrier of its own
+							catchUpBarrierToTake = false;
+							catchUpBarrier = eventSource.head().orElse(null);
+							LOGGER.debug("todo list must have read up to {} before the first round", catchUpBarrier);
+						}
 						// how far the todo list's projector has read the stream -- not only the last event it
 						// handled, which stays behind every event its query does not read, our own included
 						Optional<EventReference> monitoredBookmark = eventSource.findBookmark(monitoredProcessorIdentification.toString())
 								.map(Bookmark::readUpToOrReference);
-						
-						if ( monitoredBookmark.isPresent() && hasCaughtUp(monitoredBookmark.get(), lastReference) ) {
+						if ( monitoredBookmark.isPresent() && hasReached(monitoredBookmark.get(), catchUpBarrier) ) {
+							catchUpBarrier = null; // reached once is reached: from here on the todo list only lags as it always may
+						}
+
+						if ( monitoredBookmark.isPresent() && catchUpBarrier == null && hasCaughtUp(monitoredBookmark.get(), lastReference) ) {
 							LOGGER.debug("monitoredBookmark is at {}, our own bookmark is at {}, processing can continue", monitoredBookmark.get(), lastReference.orElse(null));
 							monitoredBookmarkMissingWarned = false; // monitored projector is alive — re-arm the warning for any future disappearance
 							
@@ -398,6 +431,8 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 								} else {
 									LOGGER.debug("monitoredBookmark still absent for {}, waiting", monitoredProcessorIdentification);
 								}
+							} else if ( catchUpBarrier != null ) {
+								LOGGER.debug("monitoredBookmark is {}, the todo list is still catching up to {}", monitoredBookmark, catchUpBarrier);
 							} else {
 								LOGGER.debug("monitoredBookmark is {}, our own bookmark is {}, processing cannot continue until readmodel has kept up", monitoredBookmark, lastReference);
 							}
@@ -535,6 +570,15 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 		}
 		long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastIdleBookmarkNanos);
 		return Math.max(0, IDLE_BOOKMARK_INTERVAL_MS - elapsedMs);
+	}
+
+	/**
+	 * Whether the todo list's projector has read up to the barrier. The barrier is a stream head, which
+	 * names a whole stored event, so it is compared on stored events: a read position on an event upcast
+	 * into several is at the barrier whatever its index.
+	 */
+	static boolean hasReached ( EventReference monitoredBookmark, EventReference barrier ) {
+		return barrier == null || !barrier.storedEventHappenedAfter(monitoredBookmark);
 	}
 
 	static boolean hasCaughtUp ( EventReference monitoredBookmark, Optional<EventReference> ourBookmark ) {

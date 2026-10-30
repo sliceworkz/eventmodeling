@@ -1335,6 +1335,19 @@ processor:**
   a write; a move held back shortens the next wait so it is written when due. An automation that has never
   produced anything has no bookmark. `AutomationCatchUpOnReadPositionTest.anIdleAutomationHasSeenAsFarAsItsTodoListHasRead`
   pins it
+- **An automation that begins working waits for its todo list to reach the stream head of that moment.**
+  Started, restarted or promoted to leader, it reads `head()` once and runs no round until the todo
+  list's projector has read up to it (`AutomationProcessor.catchUpBarrier`, compared on stored events
+  since a head names a whole stored event). The guard on its own bookmark only holds a round back until
+  the todo list has seen what *this automation* produced, and an `EPHEMERAL` todo list is rebuilt from
+  the beginning at every start, bookmarking every batch of its catch-up: without the barrier the
+  automation worked the list as it stood part-way, and an item resolved later in the history by anyone
+  else was handled anyway — an external call made for nothing, which no command re-check undoes. A
+  durable todo list catching up after downtime is the same shape, smaller. The barrier is taken once per
+  start and dropped once reached, so from there on the todo list lags only as it always may. The
+  alternative — waiting for the todo list processor's own "initial projection done" — loses because it
+  covers only the in-memory case and only this instance's projector, where the head covers every storage
+  class and a todo list projected elsewhere. `AutomationDuringStartupTest` pins it
 - **The catch-up guard compares the total `(tx, position, index)` order**, through
   `EventReference.happenedAfter` in `AutomationProcessor.hasCaughtUp`, not `position()` alone. The two are
   genuinely different orders — a position is a `bigserial` and a transaction id an `xid8`, assigned
@@ -1455,7 +1468,28 @@ assembles it.
   in-memory read models' first projection, which on a long history is minutes; `RUNNING` is set when it
   returns, unless a `stop()`/`terminate()` came in meanwhile. `stop()`/`terminate()` treat `STARTING` as
   started. A readiness probe waits for `RUNNING`; a startup probe is the same question with a longer
-  patience
+  patience. While `STARTING`, `inMemoryReadModels` names the read models still projecting
+- **`startInBackground()` returns into `STARTING`, so a process can answer its probes during it.**
+  `BoundedContextImpl` splits a start in two: `beginStart` (the transition, the announcement, every
+  slice's wiring, the election round, every processor running, the management subscription) and
+  `finishStart` (the wait, then `RUNNING` and `BoundedContextStarted`). `start()` runs both on the
+  caller's thread; `startInBackground()` runs the second on a virtual thread and hands back a future
+  completed when the start is over. The pattern it is for: build every context, start them in the
+  background, open the HTTP server with its probes, and let readiness follow `RUNNING` — the routes are
+  all registered before the server starts, so nothing touches a live router. The alternative — the
+  actuator on a management port of its own, started first — loses on the second port every deployment
+  then has to expose and configure; the other alternative — adding routes to a running Javalin through
+  `unsafe` — races the requests already being matched (`ConcurrentModificationException` in its
+  `PathMatcher`, measured) on an API Javalin documents as unsafe. A start already under way is joined by
+  a second `start()`/`startInBackground()` rather than begun again; a `stop()` or `terminate()` during
+  the wait ends it (the wait is sliced and asks `isStillStarting`, with a generation so a stop and a new
+  start meanwhile leave the new one alone), and a start cut short emits no `BoundedContextStarted`.
+  **What may run during it**: everything the context runs itself — commands, policies, publishers read
+  live models, and an automation waits for its todo list to reach the stream head (see Automations) —
+  but an eventually consistent read model read from outside, by a request or through a port, is partial
+  until `RUNNING`, so an edge serving one answers 503 until then. `LifecycleCapability.startInBackground`
+  defaults to a foreground `start()` and a completed future, since the modules implement the interface
+  too. `BackgroundStartTest` pins it, `AutomationDuringStartupTest` the automation during it
 - **The checks**, each present only where it applies (constants on `BoundedContextHealth`):
   `lifecycle` (`DOWN` unless `RUNNING`), `inMemoryReadModels` (`DEGRADED` while a context that stopped
   waiting at the startup timeout still has some catching up), one per processor kind deployed here

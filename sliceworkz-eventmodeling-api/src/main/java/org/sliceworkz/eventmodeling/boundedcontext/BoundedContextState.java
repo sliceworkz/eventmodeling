@@ -20,20 +20,22 @@ package org.sliceworkz.eventmodeling.boundedcontext;
 /**
  * Where a bounded context is in its lifecycle, as {@link HealthCapability#state()} answers it.
  * <p>
- * {@code BUILT → STARTING → RUNNING ⇄ STOPPED → TERMINATED}. {@link #STARTING} is its own state because
- * {@link LifecycleCapability#start()} does not return until every in-memory read model has been projected,
- * which on a long history takes minutes: a context in that window has its slices wired and its processors
- * running, and is not yet fit to serve a read. A readiness probe waits for {@link #RUNNING}.
+ * {@code BUILT → STARTING → RUNNING ⇄ STOPPED → TERMINATED}. {@link #STARTING} is its own state because a
+ * start is not over until every in-memory read model has been projected, which on a long history takes
+ * minutes: a context in that window has its slices wired and its processors running, and is not yet fit to
+ * serve an eventually consistent read. {@link LifecycleCapability#start()} waits it out;
+ * {@link LifecycleCapability#startInBackground()} returns into it, so a process can answer its probes while
+ * it lasts. A readiness probe waits for {@link #RUNNING}; liveness holds throughout.
  */
 public enum BoundedContextState {
 
 	/** Built, never started: nothing runs. */
 	BUILT,
 
-	/** {@code start()} is in progress, waiting for the in-memory read models to be projected. */
+	/** A start is in progress, waiting for the in-memory read models to be projected. */
 	STARTING,
 
-	/** {@code start()} has returned, and neither {@code stop()} nor {@code terminate()} has been called since. */
+	/** Started, its in-memory read models projected (or the wait for them timed out), and neither {@code stop()} nor {@code terminate()} called since. */
 	RUNNING,
 
 	/** Stopped: its processors are parked and its leases released; {@code start()} brings it back. */

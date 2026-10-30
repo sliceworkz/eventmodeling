@@ -1335,6 +1335,19 @@ processor:**
   a write; a move held back shortens the next wait so it is written when due. An automation that has never
   produced anything has no bookmark. `AutomationCatchUpOnReadPositionTest.anIdleAutomationHasSeenAsFarAsItsTodoListHasRead`
   pins it
+- **An automation that begins working waits for its todo list to reach the stream head of that moment.**
+  Started, restarted or promoted to leader, it reads `head()` once and runs no round until the todo
+  list's projector has read up to it (`AutomationProcessor.catchUpBarrier`, compared on stored events
+  since a head names a whole stored event). The guard on its own bookmark only holds a round back until
+  the todo list has seen what *this automation* produced, and an `EPHEMERAL` todo list is rebuilt from
+  the beginning at every start, bookmarking every batch of its catch-up: without the barrier the
+  automation worked the list as it stood part-way, and an item resolved later in the history by anyone
+  else was handled anyway — an external call made for nothing, which no command re-check undoes. A
+  durable todo list catching up after downtime is the same shape, smaller. The barrier is taken once per
+  start and dropped once reached, so from there on the todo list lags only as it always may. The
+  alternative — waiting for the todo list processor's own "initial projection done" — loses because it
+  covers only the in-memory case and only this instance's projector, where the head covers every storage
+  class and a todo list projected elsewhere. `AutomationDuringStartupTest` pins it
 - **The catch-up guard compares the total `(tx, position, index)` order**, through
   `EventReference.happenedAfter` in `AutomationProcessor.hasCaughtUp`, not `position()` alone. The two are
   genuinely different orders — a position is a `bigserial` and a transaction id an `xid8`, assigned

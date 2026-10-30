@@ -28,7 +28,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
@@ -66,7 +65,6 @@ public class AutomationDuringStartupTest extends AbstractMockDomainTest {
 	private static final int TAIL = 20_000;
 
 	@Test
-	@Disabled("reproduces an automation acting on an EPHEMERAL todo list still catching up at startup; enabled with the fix")
 	void anAutomationDoesNotActOnATodoListStillCatchingUp ( ) {
 		EventStream<MockDomainEvent> domainStream = EventStore.on(eventStorage()).build()
 				.getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"), MockDomainEvent.class);

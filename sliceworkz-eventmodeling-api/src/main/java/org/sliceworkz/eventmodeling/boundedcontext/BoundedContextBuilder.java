@@ -206,14 +206,55 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * Leader-only processors — automations, SHARED read models' projectors, translators,
 	 * publishers and dispatchers — run on the single instance holding their lease. When a live contender with a
 	 * <b>strictly higher</b> priority appears, the current leader finishes its batch and hands the
-	 * lease over, so the preferred instance regains leadership when it comes back. Equal priorities
-	 * never preempt: whoever holds a lease keeps it, which is what keeps a symmetric deployment
-	 * stable.
+	 * lease over, so the preferred instance regains leadership when it comes back. Among instances of
+	 * equal priority, the {@link #leadershipDistribution(LeadershipDistribution) distribution} decides
+	 * who leads what.
+	 * <p>
+	 * Under {@link LeadershipDistribution#BALANCED}, the default, the priority must lie within the
+	 * range of an {@code int}: it is combined with a 32-bit weight per lease into the priority the
+	 * storage compares, and {@code build()} refuses one outside that range.
 	 *
-	 * @param priority higher wins leadership back; equal never preempts
+	 * @param priority higher wins leadership back
 	 * @return this builder
 	 */
 	BoundedContextBuilder<C> leadershipPriority ( long priority );
+
+	/**
+	 * How the leader-only processors are spread over the instances of equal priority, default
+	 * {@link LeadershipDistribution#BALANCED}: each lease goes to the instance that weighs most for
+	 * it, a hash of the instance's logical and physical name and the lease, so the processors spread
+	 * evenly and an instance restarting under the same name gets back what it had.
+	 * {@link LeadershipDistribution#FIRST_COME} leaves every lease with whoever asked first.
+	 * <p>
+	 * A balanced distribution is only stable across restarts when every instance has a physical name
+	 * of its own ({@code InstanceFactory.determine(logical, physical)}); without one the weight is
+	 * taken from the process id, which spreads the leases just as evenly but anew on every restart.
+	 *
+	 * @param distribution how leases spread over instances of equal priority
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> leadershipDistribution ( LeadershipDistribution distribution );
+
+	/**
+	 * How long a starting instance holds the leases it won before it runs their processors, under a
+	 * {@link LeadershipDistribution#BALANCED} distribution only; default {@link Duration#ZERO}, which
+	 * runs them at once.
+	 * <p>
+	 * Instances starting at about the same time each find every lease free, and whichever asks first
+	 * wins it, whether or not it weighs most for it. Held back, a lease won by the wrong instance is
+	 * handed to the right one before any processor ran on it, so instances starting within the
+	 * hold-back of each other move no work. One heartbeat covers instances starting within about a
+	 * heartbeat of each other, which is what a deployment starting its replicas together wants.
+	 * <p>
+	 * What it costs is that every start runs its leader-only processors this much later, a single
+	 * instance's included, which is why it is not on by default: a development run or an integration
+	 * test would wait for it on every start. An instance joining after the others have started is not
+	 * helped by it: those leases are held and running, and move through an ordinary hand-over.
+	 *
+	 * @param holdBack how long a start holds its won leases back; zero or positive
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> leadershipStartupHoldBack ( Duration holdBack );
 
 	/**
 	 * The pacing of leader election, defaults 5 seconds heartbeat and 20 seconds time-to-live.

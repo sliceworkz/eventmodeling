@@ -17,6 +17,9 @@
  */
 package org.sliceworkz.eventmodeling.module.leadership;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -33,6 +36,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.LeadershipReleaseReason;
+import org.sliceworkz.eventmodeling.boundedcontext.LeadershipDistribution;
+import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.threading.Parking;
 import org.sliceworkz.eventmodeling.module.threading.Processor;
@@ -51,9 +56,33 @@ import org.sliceworkz.eventstore.spi.EventStorage.LeaseResponse;
  * its bookmark, so the lease guards exactly that bookmark's writer. Instances contend only for the
  * processors they have deployed: a deployment that puts automation X on one instance and automation Y
  * on another simply has each instance win the leases nobody else wants, where a single per-context
- * lease would strand every processor the winning instance does not carry. With equal priorities and
- * identical deployments, whoever starts first wins everything; a priority makes the preferred
- * instance win everything back.
+ * lease would strand every processor the winning instance does not carry.
+ *
+ * <h2>Who wins a lease among equal priorities</h2>
+ * Under {@link LeadershipDistribution#FIRST_COME} nobody preempts an equal priority, so whoever asked
+ * first keeps a lease, and in practice the instance that started first leads everything. Under
+ * {@link LeadershipDistribution#BALANCED} the priority sent with each lease request is the configured
+ * priority in the high 32 bits and a weight in the low 32: a hash of this instance's stable identity
+ * (logical and physical name) and the lease name. That is rendezvous hashing over the storage's
+ * existing step-down protocol: for every lease the live contender weighing most wins, every instance
+ * computes the same assignment without knowing how many others there are, each wins about an equal
+ * share, and a change in membership moves only the leases whose winner changed. Nothing moves while
+ * the membership stays the same, because the weights do not change.
+ * <p>
+ * Two refinements keep it from moving work it need not:
+ * <ul>
+ *   <li><b>A startup hold-back.</b> Instances that start together each find every lease free and win
+ *       whichever they ask for first. For a while after {@link #start()} a won lease is held but its
+ *       processor is not promoted, so a heavier contender showing up in that window gets it handed
+ *       over (the step-down of a lease nobody was told about is released at once) before anything
+ *       ran on the lighter one.</li>
+ *   <li><b>No weight after a yield.</b> A processor that keeps failing here yields its lease. Coming
+ *       back with its full weight it would step the healthy instance down again and fail again, a
+ *       hand-over per ttl for as long as the cause lasts. So after a yield this instance contends
+ *       with its configured priority alone until it holds the lease again, which it then only does
+ *       when nobody else wants it.</li>
+ * </ul>
+ * docs/design/leader-election.md holds the reasoning and the alternatives.
  *
  * <h2>Election is never on the processing path</h2>
  * Leadership is a {@code volatile} field on each processor, flipped through
@@ -123,7 +152,7 @@ public class LeaderElector implements Runnable {
 	private final String boundedContext;
 	private final EventStorage eventStorage;
 	private final String owner;
-	private final long priority;
+	private final Distribution distribution;
 	private final Duration heartbeatInterval;
 	private final Duration ttl;
 	private final List<LeaseState> leases;
@@ -141,6 +170,9 @@ public class LeaderElector implements Runnable {
 	private volatile boolean paused;
 	private volatile boolean leasesUnsupported;
 	private boolean threadStarted; // guarded by synchronized(this)
+	// until when a won lease is held without promoting its processor: the startup hold-back, set by
+	// start(); 0 for no hold-back. Guarded by synchronized(this), as are the election rounds
+	private long promoteFromMs;
 
 	/**
 	 * Since when lease requests have gone unanswered — timed out or failed — with nothing answered in
@@ -162,9 +194,18 @@ public class LeaderElector implements Runnable {
 		// later rounds instead of being re-issued, and dated from when it was issued
 		Future<LeaseResponse> inFlight;
 		long requestedAtMs;
+		// the low 32 bits of this lease's priority under a balanced distribution, fixed for the life of
+		// the elector so the assignment does not move while the membership stays the same
+		final long weight;
+		// set by a yield: contend without the weight until this instance holds the lease again
+		boolean weightWithheld;
+		// won during the startup hold-back, renewed, but the processor not told: released rather than
+		// left to expire when a heavier contender asks for it or this instance stops
+		boolean heldBack;
 
-		LeaseState ( Electable electable ) {
+		LeaseState ( Electable electable, long weight ) {
 			this.electable = electable;
+			this.weight = weight;
 		}
 
 		String leaseName ( ) {
@@ -172,7 +213,7 @@ public class LeaderElector implements Runnable {
 		}
 	}
 
-	public LeaderElector ( String boundedContext, EventStorage eventStorage, String ownerBase, long priority,
+	public LeaderElector ( String boundedContext, EventStorage eventStorage, String ownerBase, Distribution distribution,
 			Duration heartbeatInterval, Duration ttl, List<Electable> electables, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.eventStorage = eventStorage;
@@ -183,10 +224,12 @@ public class LeaderElector implements Runnable {
 		// fresh contender identity per elector is wanted anyway, since fail-back rides on priority and
 		// never on owner identity, and a terminated elector's leases are released or expire.
 		this.owner = ownerBase + "-" + Long.toHexString(ThreadLocalRandom.current().nextLong() | Long.MIN_VALUE);
-		this.priority = priority;
+		this.distribution = distribution;
 		this.heartbeatInterval = heartbeatInterval;
 		this.ttl = ttl;
-		this.leases = electables.stream().map(LeaseState::new).toList();
+		this.leases = electables.stream()
+				.map(electable -> new LeaseState(electable, weight(distribution.identity(), electable.identification().toString())))
+				.toList();
 		this.eventEmitter = eventEmitter;
 		this.storageCalls = Executors.newThreadPerTaskExecutor(
 				Thread.ofVirtual().name("leader-elector-storage/" + boundedContext + "/", 0).factory());
@@ -196,11 +239,20 @@ public class LeaderElector implements Runnable {
 	 * Runs one synchronous election round and starts the heartbeat thread (once). Called from the
 	 * bounded context's own {@code start()}, so a single instance — or the preferred one on a quiet
 	 * deployment — is already leader before its processors take their first loop pass, instead of a
-	 * heartbeat interval later. The round is bounded like any other, so a storage that is not
-	 * answering delays the start by half a heartbeat rather than by a connection timeout per lease.
+	 * heartbeat interval later. Under a balanced distribution with a startup hold-back the leases this
+	 * round wins are held but not acted on until the hold-back has passed, so instances starting
+	 * together settle who leads what before any of them runs anything. The round is bounded like any
+	 * other, so a storage that is not answering delays the start by half a heartbeat rather than by a
+	 * connection timeout per lease.
 	 */
 	public synchronized void start ( ) {
 		paused = false;
+		long holdBackMs = distribution.startupHoldBack().toMillis();
+		promoteFromMs = holdBackMs > 0 ? System.currentTimeMillis() + holdBackMs : 0;
+		if ( holdBackMs > 0 && !leases.isEmpty() ) {
+			LOGGER.info("'{}' holds the leases it wins back for {} before running their processors, so instances starting together settle who leads what first",
+					boundedContext, distribution.startupHoldBack());
+		}
 		electOnce();
 		if ( !threadStarted && !leasesUnsupported && !leases.isEmpty() ) {
 			threadStarted = true;
@@ -299,6 +351,9 @@ public class LeaderElector implements Runnable {
 						// a throw here lands in the catch below and is retried next heartbeat; state.leader
 						// is already false by then, so worst case the lease expires on the storage's ttl
 						releaseLease(state, budgetEndsAtMs);
+					} else if ( state.heldBack ) {
+						state.heldBack = false;
+						releaseLease(state, budgetEndsAtMs);
 					}
 					continue;
 				}
@@ -315,6 +370,9 @@ public class LeaderElector implements Runnable {
 					LOGGER.warn("'{}' keeps failing on this instance, yielding its lease so an instance whose dependencies may be healthy can take over", state.leaseName());
 					demote(state, LeadershipReleaseReason.PROCESSOR_FAILING);
 					state.contendAgainAtMs = System.currentTimeMillis() + ttl.toMillis();
+					// and when contending again, without the weight: with it, this instance would step
+					// the healthy one down again the moment it is back, and fail again
+					state.weightWithheld = true;
 					// a throw here lands in the catch below; state.leader is already false, so worst
 					// case the lease expires on the storage's ttl instead of being handed over promptly
 					releaseLease(state, budgetEndsAtMs);
@@ -341,7 +399,13 @@ public class LeaderElector implements Runnable {
 					case LEADER -> {
 						state.lastConfirmedMs = state.requestedAtMs;
 						if ( !state.leader ) {
-							promote(state, response.fencingToken());
+							if ( System.currentTimeMillis() < promoteFromMs ) {
+								// the startup hold-back: keep the lease, tell the processor nothing yet,
+								// so a heavier contender starting about now takes it over before anything ran
+								state.heldBack = true;
+							} else {
+								promote(state, response.fencingToken());
+							}
 						}
 					}
 					case LEADER_STEP_DOWN_REQUESTED -> {
@@ -351,12 +415,15 @@ public class LeaderElector implements Runnable {
 							demote(state, LeadershipReleaseReason.STEPPED_DOWN);
 							state.releaseNextRound = true;
 						} else {
-							// asked to step down from a lease we never told the processor about
-							// (promotion and step-down in between rounds): nothing ran, release at once
+							// asked to step down from a lease we never told the processor about (held
+							// back at startup, or won and asked for in between rounds): nothing ran on
+							// it, so it is released at once
+							state.heldBack = false;
 							releaseLease(state, budgetEndsAtMs);
 						}
 					}
 					case STANDBY -> {
+						state.heldBack = false;
 						if ( state.leader ) {
 							// somebody else holds it, so ours lapsed without us noticing in time
 							demote(state, LeadershipReleaseReason.LOST);
@@ -444,7 +511,7 @@ public class LeaderElector implements Runnable {
 	 */
 	private LeaseResponse requestLease ( LeaseState state, long budgetEndsAtMs ) {
 		if ( state.inFlight == null ) {
-			LeaseRequest request = new LeaseRequest(state.leaseName(), owner, priority, ttl);
+			LeaseRequest request = new LeaseRequest(state.leaseName(), owner, priorityOf(state), ttl);
 			state.requestedAtMs = System.currentTimeMillis();
 			state.inFlight = call(() -> eventStorage.requestLease(request));
 		}
@@ -508,6 +575,75 @@ public class LeaderElector implements Runnable {
 		return Math.max(1, heartbeatInterval.toMillis() / 2);
 	}
 
+	/**
+	 * The priority this lease is requested with: the configured one under a first-come distribution;
+	 * under a balanced one the configured priority in the high 32 bits and this instance's weight for
+	 * the lease in the low 32, so a configured priority still decides first and the weight breaks the
+	 * tie among equals. Without the weight after a yield, see {@link LeaseState#weightWithheld}.
+	 */
+	private long priorityOf ( LeaseState state ) {
+		if ( distribution.mode() == LeadershipDistribution.FIRST_COME ) {
+			return distribution.priority();
+		}
+		return ( distribution.priority() << 32 ) | ( state.weightWithheld ? 0 : state.weight );
+	}
+
+	/**
+	 * The weight of an instance for a lease under a balanced distribution: the first 32 bits of the
+	 * SHA-256 of its identity and the lease name, unsigned. A cryptographic hash rather than
+	 * {@code String.hashCode()}, whose values for names differing in their last characters lie close
+	 * together and would hand runs of similarly named processors to one instance; it is computed once
+	 * per lease and elector, so the cost is irrelevant. Package-private so a test can predict the
+	 * assignment.
+	 */
+	static long weight ( String identity, String leaseName ) {
+		try {
+			byte[] digest = MessageDigest.getInstance("SHA-256")
+					.digest((identity + "\n" + leaseName).getBytes(StandardCharsets.UTF_8));
+			return ( ( digest[0] & 0xFFL ) << 24 ) | ( ( digest[1] & 0xFFL ) << 16 ) | ( ( digest[2] & 0xFFL ) << 8 ) | ( digest[3] & 0xFFL );
+		} catch ( NoSuchAlgorithmException e ) {
+			// every Java platform is required to provide SHA-256
+			throw new IllegalStateException(e);
+		}
+	}
+
+	/**
+	 * How this elector spreads leases: the mode, the identity its weights are computed from, the
+	 * configured priority and the startup hold-back (zero under first-come, which needs none).
+	 *
+	 * @param mode balanced or first-come
+	 * @param identity what the weights are a hash of: stable across restarts when the instance has a physical name
+	 * @param priority the configured leadership priority
+	 * @param startupHoldBack how long a start holds its won leases back before promoting
+	 */
+	public record Distribution ( LeadershipDistribution mode, String identity, long priority, Duration startupHoldBack ) {
+
+		/** the physical name {@code InstanceFactory} gives an instance that was not given one */
+		private static final String UNNAMED_PHYSICAL = "default";
+
+		/**
+		 * The distribution for this instance. Its identity is its logical and physical name, which an
+		 * instance restarting under the same name keeps, so it wins back the leases it had. An
+		 * instance without a physical name of its own has nothing stable to tell it from its peers —
+		 * they would all weigh the same, which is first-come again — so its process id is used: as
+		 * even a spread, but a new one on every restart.
+		 */
+		public static Distribution of ( LeadershipDistribution mode, Instance instance, long priority, Duration startupHoldBack ) {
+			if ( mode == LeadershipDistribution.FIRST_COME ) {
+				return new Distribution(mode, instance.process(), priority, Duration.ZERO);
+			}
+			String physical = instance.physical();
+			String identity = physical == null || physical.isBlank() || UNNAMED_PHYSICAL.equals(physical)
+					? instance.process()
+					: instance.logical() + "/" + physical;
+			if ( identity.equals(instance.process()) ) {
+				LOGGER.info("instance of '{}' has no physical name: leader-only processors are spread by process id, evenly but anew on every restart",
+						instance.logical());
+			}
+			return new Distribution(mode, identity, priority, startupHoldBack);
+		}
+	}
+
 	/** One heartbeat before the storage's ttl, which is the earliest a challenger may acquire. */
 	private long localDeadlineMs ( ) {
 		return Math.max(heartbeatInterval.toMillis(), ttl.toMillis() - heartbeatInterval.toMillis());
@@ -515,6 +651,9 @@ public class LeaderElector implements Runnable {
 
 	private void promote ( LeaseState state, long fencingToken ) {
 		state.leader = true;
+		state.heldBack = false;
+		// holding the lease again: from here on it is kept with the full weight, like any other
+		state.weightWithheld = false;
 		// the token travels with the promotion, so a fencing-aware processor writes under it from its
 		// very first batch as leader (the fallback path promotes with 0, which means "unfenced")
 		state.electable.processor().instanceMode(ProcessorInstanceMode.LEADER, fencingToken);
@@ -559,6 +698,14 @@ public class LeaderElector implements Runnable {
 		long budgetEndsAtMs = System.currentTimeMillis() + roundBudgetMs();
 		for ( LeaseState state : leases ) {
 			state.releaseNextRound = false;
+			if ( state.heldBack ) {
+				state.heldBack = false;
+				try {
+					releaseLease(state, budgetEndsAtMs);
+				} catch ( RuntimeException e ) {
+					LOGGER.debug("could not release held-back lease '{}', it will expire on its own: {}", state.leaseName(), e.getMessage());
+				}
+			}
 			if ( state.leader ) {
 				state.leader = false;
 				state.electable.processor().instanceMode(ProcessorInstanceMode.STANDBY);

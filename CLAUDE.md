@@ -1548,7 +1548,34 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   `.leadershipIntervals(heartbeat, ttl)` (defaults 5s/20s, `ttl >= 2×heartbeat` enforced). A live
   contender with a **strictly higher** priority makes the current leader finish its batch, park, and
   hand the lease over one heartbeat later — the fail-back path when a preferred instance returns.
-  Equal priorities never preempt, which keeps a symmetric deployment stable
+  Who wins among equal priorities is `.leadershipDistribution(...)`, below
+- **Leases spread over the instances by rendezvous hashing on the priority**
+  (`LeadershipDistribution.BALANCED`, the default). Each lease is requested with the configured
+  priority in the high 32 bits and `LeaderElector.weight(identity, lease name)` — 32 bits of
+  SHA-256 — in the low 32, so through the storage's own step-down the heaviest live contender wins
+  each lease: about 1/N per instance, nothing moves while the membership stays the same, and a
+  change moves only the leases whose winner changed. No SPI change: the priority is per lease
+  request. Read `docs/design/leader-election.md` before changing any of it; it holds the reasoning,
+  the costs per event and the rejected alternatives. The rules:
+  - **The identity is `logical/physical`**, stable across restarts, so an instance restarting under
+    its name wins back exactly what it had and the survivors keep theirs. An instance with the
+    `default` physical name has nothing stable and uses its process id (logged). The lease
+    **owner** stays the per-elector random token: the owner says who holds a lease, the weight who
+    should
+  - **A configured priority must fit an `int`** under `BALANCED` (`build()` refuses one that does
+    not), since it sits above the weight in one long
+  - **After a yield the weight is withheld** (`LeaseState.weightWithheld`) until the instance holds
+    the lease again, or it would step the healthy instance down each ttl and fail again
+  - **`.leadershipStartupHoldBack(Duration)`, default zero**: for that long after `start()` a won
+    lease is held and renewed but its processor not promoted, so a heavier peer starting meanwhile
+    is handed it before anything ran (the step-down of a lease nobody was told about releases at
+    once). Off by default because it delays every start, a single instance's included
+  - `LeadershipDistribution.FIRST_COME` keeps every lease with whoever asked first; equal
+    priorities then never preempt. `LeaderElectionTest` runs first-come, since its scenarios are
+    written around "the first-started instance leads"; `BalancedLeaderElectionTest` pins the
+    balanced half: the predicted split (per backend), nothing moving afterwards, the restart under
+    the same name, the hold-back with its control, the configured priority winning, the yield not
+    taken back, the priority range and the evenness of the weights
 - **The safety rule is demote-before-takeover.** Expiry is judged on the storage's clock only; the
   elector measures durations on its own clock only. A leadership that cannot be *confirmed* is given up
   at `ttl - heartbeat` since the last successful renewal, while a challenger acquires no earlier than

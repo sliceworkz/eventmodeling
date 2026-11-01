@@ -51,7 +51,8 @@ import org.sliceworkz.eventstore.stream.EventStream;
  * Next to the events, the listener keeps a {@linkplain InstanceHeartbeat heartbeat} for every bounded
  * context it reports on: from its {@code BoundedContextStarting} until its {@code BoundedContextStopping}
  * it places a read position at the head of the stream every interval ({@link InstanceHeartbeat#DEFAULT_INTERVAL}
- * unless the constructor says otherwise), and terminating the context removes it. It is what lets a reader of the
+ * unless the constructor says otherwise), and terminating the context removes it - a {@code stop()},
+ * which leaves the process up, keeps it beating. It is what lets a reader of the
  * stream tell a context that is idle from one whose process was killed and so never said it stopped, at
  * the cost of one bookmark row per deployed copy of a context rather than an event per beat.
  * <ul>
@@ -107,7 +108,8 @@ public class StreamAppendingBoundedContextListener implements BoundedContextList
 		}
 		switch ( event.data() ) {
 			case BoundedContextEvent.BoundedContextStarting x -> startBeating(new Beating(x.boundedContext(), x.logical(), x.physical(), x.process()));
-			case BoundedContextEvent.BoundedContextStopping x -> stopBeating(new Beating(x.boundedContext(), x.logical(), x.physical(), x.process()));
+			// a stop that can be undone keeps beating: the process is up, which is all a heartbeat says
+			case BoundedContextEvent.BoundedContextStopping x when !x.restartable() -> stopBeating(new Beating(x.boundedContext(), x.logical(), x.physical(), x.process()));
 			default -> { }
 		}
 	}

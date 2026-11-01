@@ -50,11 +50,12 @@ import org.sliceworkz.eventstore.events.Tags;
  *       its logical and physical instance; the process is a tag. A restart under the same name takes the
  *       row over rather than adding one, so the rows are bounded by the instance names a deployment ever
  *       used.</li>
- *   <li><b>Placed from {@code BoundedContextStarting} until {@code BoundedContextStopping}</b>, the
+ *   <li><b>Placed from {@code BoundedContextStarting} until a {@code BoundedContextStopping} that is not
+ *       {@code restartable}</b>, the
  *       starting phase included - a context projecting a long history into memory is alive. It says the
  *       <em>process</em> is alive, not what the context is doing: a context taken out of service with
  *       {@code stop()} keeps its process up, listening for the instruction to start again, and keeps
- *       beating. Terminating it - which a JVM shutdown hook does on an ordinary stop of the process -
+ *       beating; its stop is reported as a {@code restartable} one. Terminating it - which a JVM shutdown hook does on an ordinary stop of the process -
  *       removes the row, since the stop events already say what became of it; a row left behind with an
  *       ageing {@code updatedAt} is exactly a context that went away without saying so.</li>
  *   <li><b>Judged by the reader</b>: a context whose newest beat is more than

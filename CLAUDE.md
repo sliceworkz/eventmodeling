@@ -1439,6 +1439,17 @@ because the framework has no network and no discovery, and the dashboard would n
 - **Applied one at a time, in stream order, on a thread of the module's own.** The store serialises
   deliveries to a subscriber, so the projector never races itself, but starting a context blocks on
   its ephemeral read models and that is not a wait to impose on the store's notification machinery
+- **A stop is reported, and says whether it can be undone.** `stop()` emits `BoundedContextStopping` and
+  `BoundedContextStopped` with `restartable = true`, `terminate()` the same pair with `false`; a later
+  `start()` announces itself with `BoundedContextStarting` as ever. Without the pair a context stopped by
+  instruction read as running to every reader of the monitoring stream, the `InstructionHandled` answer
+  being the only trace. The flag rather than events of their own, because the shutdown asymmetry every
+  processor event keeps ("`BoundedContextStopping` already says it for everything at once") holds for both
+  ways down, and because a reader that predates the flag still learns the context stopped, where an unknown
+  event type would fail its typed read of the stream outright. It reads `false` on an event stored before
+  it existed (`@JsonSetter(nulls = AS_EMPTY)`), which is what such an event meant; the four-argument
+  constructors build a termination. The heartbeat keeps beating through a `restartable` stop, and the
+  dashboard shows the context stopped while its process stays current. `BoundedContextStopEventsTest` pins it
 - **Survives `stop()`, ends at `terminate()`**, which closes the stream — a stopped context that
   stopped listening could never be told to start again, which is why the builder asks for a stream of
   the context's own (`ManagementModule` in the impl module)
@@ -2127,8 +2138,8 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   sets it, `Duration.ZERO` turns it off), under `InstanceHeartbeat.reader(context, logical, physical)`
   with the instance, the process and the interval as tags. Terminating removes it, so a row left with an
   ageing `updatedAt` is a context that went away without saying so. `stop()` keeps beating — the process
-  is up, listening for the instruction to start again — and emits no lifecycle event, so the heartbeat
-  says the *process* lives, not what the context does
+  is up, listening for the instruction to start again, and its stop is reported `restartable` (see
+  "Management") — so the heartbeat says the *process* lives, not what the context does
 - **A bookmark, not an event**: one row per deployed copy of a context, overwritten by every placement,
   whose `updatedAt` every placement refreshes (Postgres upserts `updated_at = CURRENT_TIMESTAMP`, the
   in-memory store stamps each placement). The alternative — a heartbeat event — loses on volume: a

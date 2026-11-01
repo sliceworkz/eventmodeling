@@ -2116,6 +2116,36 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   the binding, and `MonitoredPortTest.aRequestsBoundTracingIsTheFlowOfItsPortCallsAndOfTheCommandItExecutes`
   (with its two neighbours) the port call and the command picking it up, and an explicit tracing winning
 
+**An instance heartbeat — a killed process says nothing, so liveness is a bookmark, not an event:**
+- **The problem.** A reader of the monitoring stream learns a process is gone when it reports
+  `BoundedContextStopping`/`Stopped` (a JVM shutdown hook terminates the context) or a later process
+  takes over its instance. A SIGKILL, an OOM kill or a lost machine does neither, so an idle context on a
+  dead process reads as running for as long as the stream is kept — while its leases have long moved on
+- **`StreamAppendingBoundedContextListener` keeps a heartbeat per context it reports on**: from
+  `BoundedContextStarting` until `BoundedContextStopping` it places a read position at the monitoring
+  stream's head every interval (`InstanceHeartbeat.DEFAULT_INTERVAL`, 30s; the two-argument constructor
+  sets it, `Duration.ZERO` turns it off), under `InstanceHeartbeat.reader(context, logical, physical)`
+  with the instance, the process and the interval as tags. Terminating removes it, so a row left with an
+  ageing `updatedAt` is a context that went away without saying so. `stop()` keeps beating — the process
+  is up, listening for the instruction to start again — and emits no lifecycle event, so the heartbeat
+  says the *process* lives, not what the context does
+- **A bookmark, not an event**: one row per deployed copy of a context, overwritten by every placement,
+  whose `updatedAt` every placement refreshes (Postgres upserts `updated_at = CURRENT_TIMESTAMP`, the
+  in-memory store stamps each placement). The alternative — a heartbeat event — loses on volume: a
+  million events a year per instance at 30s, kept for nothing. A read position rather than a handled
+  reference, so a heartbeat at the head reads as a reader fully caught up and never as one lagging
+- **One virtual thread per listener beats for every context it serves**, created on the first
+  `Starting`, ended when the last context terminates, parked on a `Condition` between beats. A beat and
+  the removal at termination take one lock, so a beat in flight cannot resurrect a removed row. A failing
+  beat logs WARN once and DEBUG until one succeeds; a closed monitoring store ends the beats
+- **`InstanceHeartbeat` is the wire format and the reader's helper**: the reader prefix, the tag keys,
+  `of(Bookmark)` → `Beat`, and `MISSED_BEATS_BEFORE_UNRESPONSIVE` (3): a beat older than three intervals
+  belongs to a process presumed gone. The stamp is on the storage's clock; a reader on another machine
+  allows for skew (the dashboard judges against its own clock unless the newest beat is later)
+- `InstanceHeartbeatTest` pins it per backend: the beat at the head with its tags, an idle context's beat
+  refreshed, termination removing it with no beat in flight putting it back, `stop()` beating on, no
+  heartbeat at a zero interval, and the overdue rule
+
 **BoundedContextListener — observability that cannot fail the work it observes:**
 - Register one on the builder (`.listener(...)`) to receive every `BoundedContextEvent` the kernel
   produces. `StreamAppendingBoundedContextListener` appends them to a stream, which means the listener

@@ -41,6 +41,7 @@ import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
+import org.sliceworkz.eventmodeling.boundedcontext.LeadershipDistribution;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -90,12 +91,18 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		contexts.clear();
 	}
 
+	/**
+	 * These scenarios are about the mechanics of election and failover, which a balanced distribution
+	 * shares: they are written around "the first-started instance leads", so they run first-come.
+	 * {@code BalancedLeaderElectionTest} covers who wins what under the default.
+	 */
 	private BoundedContextBuilder<Mock> newInstanceBuilder ( String node, long priority ) {
 		return BoundedContext.newBuilder(Mock.class)
 				.name("LeaderElectionContext")
 				.eventStorage(eventStorage())
 				.instance(InstanceFactory.determine("election", node))
 				.leadershipPriority(priority)
+				.leadershipDistribution(LeadershipDistribution.FIRST_COME)
 				.leadershipIntervals(HEARTBEAT, TTL);
 	}
 
@@ -381,6 +388,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 				.name("LeaderElectionContext")
 				.eventStorage(new LeaselessStorage(eventStorage()))
 				.instance(InstanceFactory.determine("election", "node-a"))
+				.leadershipDistribution(LeadershipDistribution.FIRST_COME)
 				.leadershipIntervals(HEARTBEAT, TTL);
 		builder.readmodel(automation.todoList()).eventuallyConsistent();
 		builder.automation(automation);

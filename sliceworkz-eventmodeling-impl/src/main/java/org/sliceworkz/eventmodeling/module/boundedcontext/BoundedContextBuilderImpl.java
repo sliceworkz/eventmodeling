@@ -64,6 +64,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAdmin;
 import org.sliceworkz.eventmodeling.module.health.HealthReporter;
+import org.sliceworkz.eventmodeling.boundedcontext.LeadershipDistribution;
 import org.sliceworkz.eventmodeling.module.leadership.LeaderElector;
 import org.sliceworkz.eventmodeling.module.management.ManagementModule;
 import org.sliceworkz.eventmodeling.module.ports.PortReporter;
@@ -190,6 +191,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private final Map<String, BusinessRule> businessRules = new LinkedHashMap<>();
 	private Duration leadershipHeartbeat = Duration.ofSeconds(5);
 	private Duration leadershipTtl = Duration.ofSeconds(20);
+	private LeadershipDistribution leadershipDistribution = LeadershipDistribution.BALANCED;
+	private Duration leadershipStartupHoldBack = Duration.ZERO;
 	private Duration processorLagTolerance = HealthReporter.DEFAULT_PROCESSOR_LAG_TOLERANCE;
 
 	private final AdapterRegistry adapterRegistry = new AdapterRegistry();
@@ -340,6 +343,24 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 		this.leadershipHeartbeat = heartbeat;
 		this.leadershipTtl = ttl;
+		return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<C> leadershipDistribution ( LeadershipDistribution distribution ) {
+		if ( distribution == null ) {
+			throw new IllegalArgumentException("leadership distribution is required");
+		}
+		this.leadershipDistribution = distribution;
+		return this;
+	}
+
+	@Override
+	public BoundedContextBuilder<C> leadershipStartupHoldBack ( Duration holdBack ) {
+		if ( holdBack == null || holdBack.isNegative() ) {
+			throw new IllegalArgumentException("leadership startup hold-back must be zero or positive, but was " + holdBack);
+		}
+		this.leadershipStartupHoldBack = holdBack;
 		return this;
 	}
 
@@ -1022,6 +1043,13 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		if (  name == null ) {
 			throw new IllegalArgumentException("name not set");
 		}
+		if ( leadershipDistribution == LeadershipDistribution.BALANCED
+				&& ( leadershipPriority < Integer.MIN_VALUE || leadershipPriority > Integer.MAX_VALUE ) ) {
+			// the configured priority sits above a 32-bit weight per lease in the one long the storage
+			// compares; a priority wider than an int would overflow into a different order
+			throw new IllegalArgumentException(("leadership priority %d does not fit a balanced distribution, which needs it within the range "
+					+ "of an int; choose a smaller priority or leadershipDistribution(FIRST_COME)").formatted(leadershipPriority));
+		}
 
 		logEventTypes("DOMAIN", domainEventRootType);
 		logEventTypes("INBOUND", inboundEventRootType);
@@ -1223,7 +1251,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		am.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((AutomationProcessor<?,?,?>) p).identification(), (AutomationProcessor<?,?,?>) p)));
 		rmm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		LeaderElector leaderElector = new LeaderElector(name, eventStorage, instance.process(),
-				leadershipPriority, leadershipHeartbeat, leadershipTtl, electables, eventEmitter);
+				LeaderElector.Distribution.of(leadershipDistribution, instance, leadershipPriority, leadershipStartupHoldBack),
+				leadershipHeartbeat, leadershipTtl, electables, eventEmitter);
 
 		// the operator's channel in, if one was given: subscribed by start(), released by terminate()
 		ManagementModule managementModule = managementInstructions == null

@@ -40,6 +40,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.Leadershi
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.ProcessorStopReason;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
+import org.sliceworkz.eventmodeling.boundedcontext.LeadershipDistribution;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -171,8 +172,14 @@ public class OperatorStopTest extends AbstractMockDomainTest {
 	void anOperatorStoppedLeaderHandsItsLeaseToTheOtherInstance ( ) {
 		RecordingAutomation onA = new RecordingAutomation("op-lease-todo");
 		RecordingAutomation onB = new RecordingAutomation("op-lease-todo");
-		Mock nodeA = start(builder("node-a").with(onA));
-		Mock nodeB = start(builder("node-b").with(onB));
+		// first-come, because the end of the scenario is a first-come rule: under a balanced distribution
+		// the restarted instance takes the lease back when it weighs more for it (BalancedLeaderElectionTest)
+		ContextSetup setupA = builder("node-a").with(onA);
+		setupA.builder.leadershipDistribution(LeadershipDistribution.FIRST_COME);
+		ContextSetup setupB = builder("node-b").with(onB);
+		setupB.builder.leadershipDistribution(LeadershipDistribution.FIRST_COME);
+		Mock nodeA = start(setupA);
+		Mock nodeB = start(setupB);
 
 		await().atMost(Duration.ofSeconds(10)).until(() -> nodeA.automations().get(0).leader() || nodeB.automations().get(0).leader());
 		boolean aLeads = nodeA.automations().get(0).leader();

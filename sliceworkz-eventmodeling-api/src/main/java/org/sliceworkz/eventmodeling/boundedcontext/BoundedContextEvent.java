@@ -163,21 +163,45 @@ public sealed interface BoundedContextEvent {
 	/**
 	 * Emitted when a bounded context begins shutting down, before its modules are stopped (while the
 	 * context and its listener are still fully operational).
+	 * <p>
+	 * {@code restartable} tells the two ways a context goes down apart. {@code true} is {@code stop()} -
+	 * in code, or by an operator's {@code StopBoundedContext} instruction: the context is taken out of
+	 * service while its process lives on, still listening for the instruction to start again, and a
+	 * {@code BoundedContextStarting} follows if it is. {@code false} is {@code terminate()}, which a JVM
+	 * shutdown hook does when the process goes away: nothing of this context runs here again. An event
+	 * stored before the property existed reads as {@code false}, which is what it then meant: only a
+	 * termination reported anything.
 	 */
 	record BoundedContextStopping (
 			String boundedContext,
 			String logical,
 			String physical,
-			String process ) implements BoundedContextEvent { }
+			String process,
+			@JsonSetter(nulls = Nulls.AS_EMPTY) boolean restartable ) implements BoundedContextEvent {
+
+		/** A termination: the context goes away with its process. */
+		public BoundedContextStopping ( String boundedContext, String logical, String physical, String process ) {
+			this(boundedContext, logical, physical, process, false);
+		}
+	}
 
 	/**
 	 * Emitted when a bounded context has shut down: its modules and processor threads have stopped.
+	 * {@code restartable} as on {@link BoundedContextStopping}: {@code true} when it was stopped and may be
+	 * started again on this process, {@code false} when it was terminated.
 	 */
 	record BoundedContextStopped (
 			String boundedContext,
 			String logical,
 			String physical,
-			String process ) implements BoundedContextEvent { }
+			String process,
+			@JsonSetter(nulls = Nulls.AS_EMPTY) boolean restartable ) implements BoundedContextEvent {
+
+		/** A termination: the context went away with its process. */
+		public BoundedContextStopped ( String boundedContext, String logical, String physical, String process ) {
+			this(boundedContext, logical, physical, process, false);
+		}
+	}
 
 	/**
 	 * Emitted after a command has been executed successfully and its events persisted.

@@ -421,6 +421,9 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			lifecycleState = BoundedContextState.STOPPED;
 		}
 		LOGGER.info("stopping bounded context '{}'...", name);
+		// said as a stop that can be undone: the process lives on, still listening for the instruction to
+		// start again, and a reader of the monitoring stream must not take it for a process going away
+		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopping(name, instance.logical(), instance.physical(), instance.process(), true));
 		this.inboundModule.stop();
 		this.outboundModule.stop();
 		this.publisherModule.stop();
@@ -434,6 +437,7 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		// the windows counted so far, the unfinished ones included: a stopped context may not be started
 		// again, and a window kept for a start that never comes is a window lost
 		portReporter.flush();
+		eventEmitter.emit(new BoundedContextEvent.BoundedContextStopped(name, instance.logical(), instance.physical(), instance.process(), true));
 		LOGGER.info("stopped bounded context '{}'.", name);
 	}
 	

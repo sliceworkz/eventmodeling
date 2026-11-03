@@ -13,7 +13,7 @@ jobs:
     permissions:
       contents: write
       packages: write
-      # to sign the SBOM's build provenance (GitHub artifact attestations)
+      # to sign the SBOM's build provenance and attest the SBOM to the jars (GitHub artifact attestations)
       id-token: write
       attestations: write
     
@@ -85,6 +85,25 @@ jobs:
         uses: actions/attest-build-provenance@v3
         with:
           subject-path: sbom/*.cdx.json
+
+      # The SBOM attested to the jars it describes, so a consumer holding a jar from Maven
+      # Central can verify which SBOM belongs to it and that this workflow run produced both:
+      #   gh attestation verify <jar> --repo sliceworkz/eventmodeling \
+      #     --predicate-type https://cyclonedx.org/bom
+      # The library's aggregate goes to the library's jars, the test kit's SBOM to its own.
+      - name: Attest the SBOM to the library's jars
+        uses: actions/attest@v4
+        with:
+          sbom-path: sbom/sliceworkz-eventmodeling-${{ steps.get_version.outputs.VERSION }}.cdx.json
+          subject-path: |
+            sliceworkz-eventmodeling-api/target/sliceworkz-eventmodeling-api-${{ steps.get_version.outputs.VERSION }}.jar
+            sliceworkz-eventmodeling-impl/target/sliceworkz-eventmodeling-impl-${{ steps.get_version.outputs.VERSION }}.jar
+
+      - name: Attest the test kit's SBOM to its jar
+        uses: actions/attest@v4
+        with:
+          sbom-path: sbom/sliceworkz-eventmodeling-testing-${{ steps.get_version.outputs.VERSION }}.cdx.json
+          subject-path: sliceworkz-eventmodeling-testing/target/sliceworkz-eventmodeling-testing-${{ steps.get_version.outputs.VERSION }}.jar
 
       - name: Attach the SBOM to the GitHub release
         run: gh release upload ${{ github.ref_name }} sbom/*.cdx.json

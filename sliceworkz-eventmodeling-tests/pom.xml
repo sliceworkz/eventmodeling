@@ -36,6 +36,10 @@
 	<artifactId>sliceworkz-eventmodeling-tests</artifactId>
 	<packaging>jar</packaging>
 
+	<properties>
+		<automatic.module.name>org.sliceworkz.eventmodeling.tests</automatic.module.name>
+	</properties>
+
 	<!--
 		The framework's integration tests, run against every event storage the eventstore ships.
 
@@ -49,6 +53,11 @@
 		Skip the containers in a local run with -Deventstore.testing.backends=inmem.
 	-->
 	<dependencies>
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.sliceworkz</groupId>
 			<artifactId>sliceworkz-eventmodeling-impl</artifactId>

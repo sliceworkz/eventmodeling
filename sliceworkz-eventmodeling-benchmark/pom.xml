@@ -34,10 +34,15 @@
 	<packaging>jar</packaging>
 	
 	<properties>
+		<automatic.module.name>org.sliceworkz.eventmodeling.benchmark</automatic.module.name>
 		<logback.version>1.6.6</logback.version>
 	</properties>
 
 	<dependencies>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.sliceworkz</groupId>
 			<artifactId>sliceworkz-eventmodeling-impl</artifactId>

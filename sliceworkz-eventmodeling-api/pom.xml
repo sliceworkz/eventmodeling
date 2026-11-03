@@ -30,6 +30,7 @@
 	</parent>
 
 	<properties>
+		<automatic.module.name>org.sliceworkz.eventmodeling</automatic.module.name>
 		<!-- client-facing: publish to the configured repository -->
 		<maven.deploy.skip>false</maven.deploy.skip>
 	</properties>
@@ -41,6 +42,10 @@
 	<packaging>jar</packaging>
 	
 	<dependencies>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.sliceworkz</groupId>
 			<artifactId>sliceworkz-eventstore-api</artifactId>

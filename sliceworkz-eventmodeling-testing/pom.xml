@@ -28,6 +28,7 @@
 	</parent>
 
 	<properties>
+		<automatic.module.name>org.sliceworkz.eventmodeling.testing</automatic.module.name>
 		<!-- client-facing: publish to the configured repository -->
 		<maven.deploy.skip>false</maven.deploy.skip>
 	</properties>

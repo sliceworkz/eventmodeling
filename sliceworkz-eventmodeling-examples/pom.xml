@@ -33,6 +33,10 @@
 	<artifactId>sliceworkz-eventmodeling-examples</artifactId>
 	<packaging>jar</packaging>
 
+	<properties>
+		<automatic.module.name>org.sliceworkz.eventmodeling.examples</automatic.module.name>
+	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.sliceworkz</groupId>

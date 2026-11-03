@@ -35,6 +35,15 @@
 	
 	<properties>
 		<automatic.module.name>org.sliceworkz.eventmodeling.benchmark</automatic.module.name>
+		<!--
+			No javadoc jar: the module is never deployed, so nothing would consume one. It also
+			cannot be built as the parent binds it. The shade plugin below replaces this module's
+			artifact with the runnable jar at `package`, and the javadoc plugin, running at `verify`,
+			takes that artifact as the module's own classes: the manifest names the module, so it
+			goes on javadoc's module path, where every Logback package shaded into it is also
+			exported by the real Logback modules — a split package, and a hard error.
+		-->
+		<maven.javadoc.skip>true</maven.javadoc.skip>
 		<logback.version>1.6.6</logback.version>
 	</properties>
 

@@ -1,5 +1,5 @@
 [![ci build - mvn package](https://github.com/sliceworkz/eventmodeling/actions/workflows/ci.yaml/badge.svg)](https://github.com/sliceworkz/eventmodeling/actions/workflows/ci.yaml)
-[![Status: Experimental](https://img.shields.io/badge/status-experimental-red)](#project-status)
+[![Status: Release Candidate](https://img.shields.io/badge/status-release%20candidate-yellowgreen)](#project-status)
 [![Maven Central](https://img.shields.io/maven-central/v/org.sliceworkz/sliceworkz-eventmodeling-bom)](https://central.sonatype.com/search?q=g:org.sliceworkz)
 [![Quickstart](https://img.shields.io/badge/Event%20Modeling%20Quickstart%20Guide-0b5fff)](https://sliceworkz.github.io/posts/eventmodeling-quickstart/)
 [![License: LGPL-3.0](https://img.shields.io/badge/license-LGPL--3.0-green)](LICENSE)
@@ -314,9 +314,8 @@ Every jar declares an `Automatic-Module-Name` equal to its root package (`org.sl
 
 # Project status
 
-Experimental. The framework is moving quickly and its API changes between minor versions; every change is
-listed in the [release notes](https://github.com/sliceworkz/eventmodeling/releases). The event store
-underneath is a release candidate.
+Release candidate, on the way to a first stable release, as is the event store underneath. Every change is
+listed in the [release notes](https://github.com/sliceworkz/eventmodeling/releases).
 
 ## Supply chain and security
 

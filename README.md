@@ -336,4 +336,5 @@ privately, as described in [SECURITY.md](SECURITY.md).
 ## Contributing and license
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under the
-[LGPL-3.0](LICENSE); third-party components are listed in [NOTICE](NOTICE).
+[LGPL-3.0](LICENSE); the third-party components it depends on, and their licenses, are listed in
+[NOTICE](NOTICE).

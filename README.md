@@ -316,7 +316,7 @@ Every jar declares an `Automatic-Module-Name` equal to its root package (`org.sl
 
 Experimental. The framework is moving quickly and its API changes between minor versions; every change is
 listed in the [release notes](https://github.com/sliceworkz/eventmodeling/releases). The event store
-underneath is in beta.
+underneath is a release candidate.
 
 ## Supply chain and security
 

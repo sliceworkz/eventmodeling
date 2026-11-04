@@ -19,7 +19,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
       
       # Grype, the vulnerability scanner, with its database (about 3 GB unpacked) downloading in the
       # background while the build runs; scan.sh waits for it (.github/vulnerability-scan/scan.sh)
@@ -29,7 +29,7 @@ jobs:
         run: .github/vulnerability-scan/scan.sh prefetch
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           java-version: '25'
           distribution: 'temurin'
@@ -89,7 +89,7 @@ jobs:
       # Signed build provenance for the SBOM: binds it to this commit and this workflow
       # run, verifiable with 'gh attestation verify <file> --repo sliceworkz/eventmodeling'.
       - name: Attest the SBOM's provenance
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: sbom/*.cdx.json
 
@@ -123,7 +123,7 @@ jobs:
           done
       - name: Keep the vulnerability reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vulnerability-reports
           path: ${{ runner.temp }}/vulnerability-scan/reports/

@@ -218,7 +218,7 @@ shutdown or stopping an automation no longer compile there. See [Who may do what
 - **Java 21** or later at runtime
 - An event storage from the [Sliceworkz EventStore](https://github.com/sliceworkz/eventstore):
   PostgreSQL 16+ in production, in-memory for development and tests
-- To build from source: JDK 25 and Maven 3.6.3+ (the build still targets release 21)
+- To build from source: JDK 21 and Maven 3.6.3+ (the build targets release 21)
 
 ## Add the dependency
 

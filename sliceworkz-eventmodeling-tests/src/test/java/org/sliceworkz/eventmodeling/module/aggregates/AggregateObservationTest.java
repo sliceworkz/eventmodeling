@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.aggregates;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -56,7 +57,7 @@ public class AggregateObservationTest extends AbstractMockDomainTest {
 		domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123")).doSomething();
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("alice").channel("web");
-		domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"), tracing);
+		BoundTracing.call(tracing, ( ) -> domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123")));
 
 		Recording load = observer.last(Observation.AggregateLoad.class);
 		Observation.AggregateLoad started = load.observation(Observation.AggregateLoad.class);

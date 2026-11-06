@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.commands;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
@@ -28,19 +27,11 @@ public interface CommandExecutionCapability<DOMAIN_EVENT_TYPE> {
 
 	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command );
 
-	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing );
-
 	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey );
-
-	Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing );
 
 	<RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command );
 
-	<RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing );
-
 	<RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey );
-
-	<RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing );
 
 	// ── executeWithRetry: bounded re-execution on optimistic-locking conflicts ──────────────────
 	//
@@ -117,26 +108,12 @@ public interface CommandExecutionCapability<DOMAIN_EVENT_TYPE> {
 	}
 
 	/**
-	 * See {@link #executeWithRetry(Command, RetryPolicy)}.
-	 */
-	default Optional<EventReference> executeWithRetry ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing, RetryPolicy retryPolicy ) {
-		return retryingOnConflict(retryPolicy, () -> execute(command, tracing));
-	}
-
-	/**
 	 * See {@link #executeWithRetry(Command, RetryPolicy)}. The idempotency key is carried
 	 * unchanged into every attempt; a retried append that finds the key already used
 	 * de-duplicates and returns {@code Optional.empty()}.
 	 */
 	default Optional<EventReference> executeWithRetry ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, RetryPolicy retryPolicy ) {
 		return retryingOnConflict(retryPolicy, () -> execute(command, idempotencyKey));
-	}
-
-	/**
-	 * See {@link #executeWithRetry(Command, String, RetryPolicy)}.
-	 */
-	default Optional<EventReference> executeWithRetry ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing, RetryPolicy retryPolicy ) {
-		return retryingOnConflict(retryPolicy, () -> execute(command, idempotencyKey, tracing));
 	}
 
      	/**
@@ -155,24 +132,10 @@ public interface CommandExecutionCapability<DOMAIN_EVENT_TYPE> {
 	}
 
 	/**
-	 * See {@link #executeWithRetry(Command, RetryPolicy)}.
-	 */
-	default <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> executeWithRetry ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing, RetryPolicy retryPolicy ) {
-		return retryingOnConflict(retryPolicy, () -> execute(command, tracing));
-	}
-
-	/**
 	 * See {@link #executeWithRetry(Command, String, RetryPolicy)}.
 	 */
 	default <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> executeWithRetry ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, RetryPolicy retryPolicy ) {
 		return retryingOnConflict(retryPolicy, () -> execute(command, idempotencyKey));
-	}
-
-	/**
-	 * See {@link #executeWithRetry(Command, String, RetryPolicy)}.
-	 */
-	default <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> executeWithRetry ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing, RetryPolicy retryPolicy ) {
-		return retryingOnConflict(retryPolicy, () -> execute(command, idempotencyKey, tracing));
 	}
 
 }

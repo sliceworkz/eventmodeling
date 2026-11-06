@@ -17,7 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.readmodels;
 
-import org.sliceworkz.eventmodeling.events.Tracing;
 
 /**
  * Reads a read model of this bounded context. A live read model is constructed with the parameters
@@ -49,8 +48,6 @@ import org.sliceworkz.eventmodeling.events.Tracing;
  * argument alone does not say.
  */
 public interface ReadModelCapability<DOMAIN_EVENT_TYPE> {
-
-	<READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params );
 
 	<READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params );
 

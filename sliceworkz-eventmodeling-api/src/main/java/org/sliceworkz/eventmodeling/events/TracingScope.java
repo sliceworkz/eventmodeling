@@ -35,14 +35,20 @@ import java.util.Optional;
  * <ul>
  * <li><b>The no-tracing overloads</b> of the bounded context's capabilities ({@code execute(command)},
  * {@code read(...)}, {@code event(...)}, {@code incoming(...)}, {@code translate(...)}, {@code evaluate(...)},
- * {@code aggregate(...)}) use the bound tracing where they would otherwise mint a fresh one. An overload
- * handed a tracing uses what it was handed: an explicit tracing always wins.</li>
+ * {@code aggregate(...)}) use the bound tracing where they would otherwise mint a fresh one. They are the
+ * only overloads: no capability takes a tracing as an argument, so binding one is how a caller says who it
+ * acts for, and a component's own context (an automation's, a translator's, a policy's) carries the
+ * tracing of the event it handles whatever is bound.</li>
  * <li><b>A call through a monitored port</b> made where no component supplies a tracing — a REST endpoint a
  * feature slice wires in its {@code start...} methods, whose calls run on a request thread — reports its
  * {@code PortCalled}/{@code PortCallRejected}/{@code PortCallFailed} under the bound tracing, so the
  * membership check an endpoint makes before executing a command carries the command's correlation id
  * instead of one of its own.</li>
  * </ul>
+ * The alternative — a tracing parameter on every capability beside its no-tracing form — loses because it
+ * doubles every overload set for something the edge decides once per request, and a caller passing a tracing
+ * to one call and none to the next splits its own flow without anything saying so.
+ * <p>
  * The alternative — a correlation id per call, minted by each overload and each port call — loses because a
  * request that checks access, reads and then executes becomes three unrelated flows in the monitoring record,
  * which is exactly the question a correlation id exists to answer.

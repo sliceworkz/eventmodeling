@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,12 +39,10 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOutboundEvent;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 /**
@@ -134,8 +133,7 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 	void providedEventWithExplicitTracing_doesNotAddXCommandTag() {
 		Mock domain = buildDomain();
 
-		domain.event(new FirstDomainEvent("provided"),
-				Tracing.actorAndChannel("alice", "api"));
+		BoundTracing.call(Tracing.actorAndChannel("alice", "api"), ( ) -> domain.event(new FirstDomainEvent("provided")));
 
 		var events = domainEvents();
 		assertEquals(1, events.size());
@@ -149,8 +147,8 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests"))
 				.command("SomeOuterCommand");
 
-		CounterAggregate aggregate = domain.aggregate(CounterAggregate.class,
-				Tags.of("businessObject", "abc"), tracing);
+		CounterAggregate aggregate = BoundTracing.call(tracing, ( ) -> domain.aggregate(CounterAggregate.class,
+				Tags.of("businessObject", "abc")));
 		aggregate.bump();
 
 		var events = domainEvents();

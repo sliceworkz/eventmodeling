@@ -573,7 +573,7 @@ and, for a savepoint model, its `initQuery` — with their item bounds as they a
   facts — the helper just calls it again
 - **They are `default` methods on `CommandExecutionCapability`**, so they reach the bounded context,
   `AutomationContext` and `TranslatorContext` with zero impl change, and are dispatched fine
-  through the context proxy (the impl inherits them as ordinary methods). One private loop, fifteen
+  through the context proxy (the impl inherits them as ordinary methods). One private loop, six
   one-line delegates
 - **Only `OptimisticLockingException` is ever caught.** `BusinessException`,
   `IllegalArgumentException`, `IllegalStateException` and `EventStorageException` propagate from the
@@ -718,7 +718,8 @@ framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook
   Its canonical constructor is lenient, as every payload record's must be. `RuleJudgement` does expose
   `overridable` and `explanationRequired` as JSON properties, deliberately (`@JsonProperty`), since a
   front end lays its widgets out by them; `@JsonIgnoreProperties(ignoreUnknown = true)` lets it read back
-- **`evaluate(command[, tracing])` on `CommandEvaluationCapability`, filed on `ApplicationCapabilities`**:
+- **`evaluate(command)` on `CommandEvaluationCapability`, filed on `ApplicationCapabilities`**, for the actor
+  of the bound `TracingScope`:
   the command run as an execution, judged, nothing appended, no idempotency key resolved, no
   `CommandExecuted`/`CommandRejected` emitted (a front end may evaluate per keystroke; the monitoring
   record is of what happened), a `BusinessException` the answer `REJECTED` with the judgements made
@@ -2151,14 +2152,14 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   `kernel`) — never in the canonical constructor, `readFrom` or `storeOn`. That is load-bearing: a
   tracing copied field by field or read back from a stored event reproduces the id exactly instead of
   silently starting a new flow, and all events of one append share one id. An edge that wants its own
-  id sets it with `.correlationId(id)`; a no-tracing `execute`/`incoming` gets one minted by the
-  substituted `Tracing.init(instance)`, so every flow has an id from its first event
+  id sets it with `.correlationId(id)` and binds it; an `execute`/`incoming` with no tracing bound gets
+  one minted by the substituted `Tracing.init(instance)`, so every flow has an id from its first event
 - **Translators continue the flow of what they translate.** The async path derives a per-event tracing
   in `InboundModule.TranslatorAdapter`: the inbound event's correlation id when it carries one, a fresh
   id when it does not (one inbound event is one flow). The interactive `translate(...)` path carries
   the caller's tracing through. Both wrap the translator's context in `TracingTranslatorContext`, which
-  fills the tracing into every no-tracing capability overload — before that existed, a translator's
-  raised events carried only instance tags, losing actor and channel too
+  binds the tracing around every capability call it forwards (`BoundTracing`) — without it, a
+  translator's raised events carried only instance tags, losing actor and channel too
 - **Automations are the one hop the framework cannot bridge alone**: a todo item is a user type
   projected out of history, and nothing links it to the event that put it on the list.
   `CorrelatedTodoItem` is the opt-in link — the todo list captures
@@ -2179,20 +2180,28 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
 - **An edge makes one request one flow by binding its tracing to the thread: `TracingScope`.** An HTTP
   layer binds the request's tracing upfront (`try ( TracingScope s = TracingScope.bind(tracing) )`, or
   a before/after handler pair) and the framework picks it up wherever it has none of its own on that
-  thread: the **no-tracing overloads** of the context's capabilities (`execute(command)`, `read`,
-  `event`, `incoming`, `translate`, `evaluate`, `aggregate`) use it instead of minting
-  (`BoundedContextImpl.callerTracing()`), and a **monitored port call** with no component tracing — a
-  REST endpoint's own call, attributed to its slice — is reported under it (`PortReporter.start`). An
-  explicit tracing always wins, a component running on the thread keeps its own, and nothing is
+  thread: the context's capabilities (`execute(command)`, `read`, `event`, `incoming`, `translate`,
+  `evaluate`, `aggregate`) use it instead of minting (`BoundedContextImpl.callerTracing()`), and a
+  **monitored port call** with no component tracing — a REST endpoint's own call, attributed to its
+  slice — is reported under it (`PortReporter.start`). The innermost binding wins, a component's own
+  context binds the tracing of what it handles around every call it forwards, and nothing is
   inherited by another thread; processor threads carry the tracing of the events they handle. The
   alternative — a correlation id per call — loses because an endpoint that checks access through a
   port, reads and then executes becomes three unrelated flows in the monitoring record. A binding
   belongs to its thread: `close()` restores what was bound before (scopes nest), is idempotent, and
   does nothing on another thread
+- **No capability takes a tracing as an argument; binding one is the only way to say who a call is
+  for.** The alternative — a `Tracing` parameter overload beside every capability method — loses
+  because it doubled every overload set (eighteen `execute`/`executeWithRetry` forms, seven `event`
+  forms) for something an edge decides once per request, and a caller passing a tracing to one call and
+  none to the next split its own flow with nothing to say so. Inside the framework the component
+  contexts (`AutomationContextImpl`, `TranslatorContextImpl`, `TracingTranslatorContext`, `Reaction`)
+  bind their tracing around each forwarded call with `BoundTracing` (impl), and `BoundedContextImpl`
+  keeps its traced methods private
 - `CorrelationPropagationTest` pins every hop; `TracingTest` pins minting, the tag round trip, and
   that a legacy event without the tag reads back as a null id (never a minted one); `TracingScopeTest`
   the binding, and `MonitoredPortTest.aRequestsBoundTracingIsTheFlowOfItsPortCallsAndOfTheCommandItExecutes`
-  (with its two neighbours) the port call and the command picking it up, and an explicit tracing winning
+  (with its two neighbours) the port call and the command picking it up, and an inner binding winning
 
 **An instance heartbeat — a killed process says nothing, so liveness is a bookmark, not an event:**
 - **The problem.** A reader of the monitoring stream learns a process is gone when it reports

@@ -17,13 +17,10 @@
  */
 package org.sliceworkz.eventmodeling.aggregates;
 
-import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.Tags;
 
 public interface AggregateCapability<DOMAIN_EVENT_TYPE> {
 
 	<T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate ( Class<T> aggregateClass, Tags identity );
-
-	<T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate ( Class<T> aggregateClass, Tags identity, Tracing tracing );
 
 }

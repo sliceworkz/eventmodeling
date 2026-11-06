@@ -523,11 +523,25 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 
 	@Override
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params ) {
+		rejectATracingAmong(readModelClass, params);
 		return readmodelModule.read(readModelClass, callerTracing(), params);
+	}
+
+	/**
+	 * A read takes no tracing, and a {@link Tracing} among its parameters is not one: it would be handed to the
+	 * read model's constructor, where no read model expects it. Refused with the remedy, since the call
+	 * compiles — {@code Object...} takes a {@code Tracing} as readily as an id.
+	 */
+	private static void rejectATracingAmong ( Class<?> readModelClass, Object[] params ) {
+		if ( params != null && java.util.Arrays.stream(params).anyMatch(Tracing.class::isInstance) ) {
+			throw new IllegalArgumentException(("a read of %s was handed a Tracing among its parameters; a read takes no tracing: "
+				+ "bind it around the read with TracingScope.call(tracing, () -> read(%s.class, ...))").formatted(readModelClass.getSimpleName(), readModelClass.getSimpleName()));
+		}
 	}
 
 	@Override
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL readUnbounded ( Class<READ_MODEL> readModelClass, Object... params ) {
+		rejectATracingAmong(readModelClass, params);
 		return readmodelModule.liveModelUnbounded(readModelClass, callerTracing(), params);
 	}
 

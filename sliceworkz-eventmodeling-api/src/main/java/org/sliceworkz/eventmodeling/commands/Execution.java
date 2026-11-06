@@ -30,7 +30,7 @@ package org.sliceworkz.eventmodeling.commands;
  *
  * <h2>The idempotency key</h2>
  * A key given here is the caller's: the command's {@link CommandResult} decides what becomes of it
- * ({@code idempotencyKey}, {@code fallbackIdempotencyKey}, ...). It is applied to the events the command
+ * (its {@code idempotencyKey(...)} choice). It is applied to the events the command
  * raises — a single event keeps it as it is, several get {@code <key>/1}, {@code <key>/2}, … in raise
  * order — and an execution whose every key was stored before is swallowed and answers
  * {@code Optional.empty()}.

@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.management;
 
+import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -127,7 +129,7 @@ final class OperatorTestComponents {
 		@Override
 		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
 			handled.add(todoItem);
-			return context.event(new SecondDomainEvent(todoItem), "done-" + todoItem);
+			return context.event(EphemeralEvent.of(new SecondDomainEvent(todoItem), Tags.none()).withIdempotencyKey("done-" + todoItem));
 		}
 
 		List<String> handled ( ) {

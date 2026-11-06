@@ -650,18 +650,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	}
 
 	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags ) {
-		return event(event, tags, callerTracing());
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey ) {
-		return event(event, Tags.none(), idempotencyKey, callerTracing());
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
-		return event(event, tags, idempotencyKey, callerTracing());
+	public Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event ) {
+		return event(event.data(), event.tags(), event.idempotencyKey(), callerTracing());
 	}
 
 	// traced variant: a capability takes no tracing; the no-tracing overload binds one

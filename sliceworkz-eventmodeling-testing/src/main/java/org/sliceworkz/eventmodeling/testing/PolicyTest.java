@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.testing;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -172,7 +173,7 @@ public abstract class PolicyTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_E
 
 		/** Appends a domain event with its tags — the way production tags it, so the command finds its entity. */
 		public TestDefinition and ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-			kernel().event(event, tags);
+			kernel().event(EphemeralEvent.of(event, tags));
 			return this;
 		}
 

@@ -27,8 +27,8 @@ import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 
 public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 
@@ -61,18 +61,8 @@ public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND
 	}
 
 	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags) {
-		return BoundTracing.call(tracing, ( ) -> delegate.event(event, tags));
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey) {
-		return BoundTracing.call(tracing, ( ) -> delegate.event(event, Tags.none(), idempotencyKey));
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey) {
-		return BoundTracing.call(tracing, ( ) -> delegate.event(event, tags, idempotencyKey));
+	public Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event ) {
+		return BoundTracing.call(tracing, ( ) -> delegate.event(event));
 	}
 
 }

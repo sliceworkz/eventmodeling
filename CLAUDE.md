@@ -1389,12 +1389,16 @@ processor:**
   todo list that still held items already handled. `AutomationCatchUpOrderingTest` pins it, including the
   inclusive boundary (the event we produced counts as projected) and the `index` tiebreak upcasting produces
 - **`ProvidedEventCapability.event(...)` takes an idempotency key**, so an automation raising events
-  directly has the dedup lever a command already had through `CommandResult.idempotencyKey`. The key is
+  directly has the dedup lever a command already had through `CommandResult.idempotencyKey`. There are
+  two forms: `event(data)`, and `event(EphemeralEvent)` for an event with tags or a key —
+  `event(EphemeralEvent.of(data, tags).withIdempotencyKey(key))`, the value the eventstore appends. The
+  alternative — an overload per combination of tags and key — loses because it says in four signatures
+  what the eventstore already says in one value. The key is
   scoped to the stream, and a repeat is silently ignored by storage — which surfaces as `Optional.empty()`,
   the same value as "not appended", the two being deliberately not distinguished (for an automation the
   work is done either way, and the todo list drops the item once the original event is projected). Derive
   the key from the todo item, never from the attempt, or every replay gets a fresh key and dedups nothing.
-  The overloads are on the shared capability, so translators get them too. `ProvidedEventIdempotencyTest`
+  Both forms are on the shared capability, so translators get them too. `ProvidedEventIdempotencyTest`
   covers it per backend plus end to end through an automation handed the same item twice
 - **A stopped automation is visible and restartable, through `AutomationAdminCapability` on the bounded
   context.** `automations()` returns an `AutomationStatus` each — id, class, running, items failed,

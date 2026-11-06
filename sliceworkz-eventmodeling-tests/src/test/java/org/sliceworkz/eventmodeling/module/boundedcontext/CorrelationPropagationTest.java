@@ -290,7 +290,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 
 		@Override
 		public Optional<EventReference> handle ( CorrelatedItem todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
-			return context.event(new SecondDomainEvent(todoItem.value()), "handled:" + todoItem.value());
+			return context.event(EphemeralEvent.of(new SecondDomainEvent(todoItem.value()), Tags.none()).withIdempotencyKey("handled:" + todoItem.value()));
 		}
 	}
 

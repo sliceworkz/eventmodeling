@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.testing;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -156,7 +157,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		}
 		
 		public TestDefinition event ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-			BoundTracing.call(tracing, ( ) -> kernel().event(event, tags));
+			BoundTracing.call(tracing, ( ) -> kernel().event(EphemeralEvent.of(event, tags)));
 			return this;
 		}
 

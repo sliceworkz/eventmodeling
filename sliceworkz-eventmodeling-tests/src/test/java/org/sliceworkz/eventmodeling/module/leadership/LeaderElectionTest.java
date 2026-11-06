@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.leadership;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -629,7 +630,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		@Override
 		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
 			handled.add(todoItem);
-			return context.event(new SecondDomainEvent(todoItem), "done-" + todoItem);
+			return context.event(EphemeralEvent.of(new SecondDomainEvent(todoItem), Tags.none()).withIdempotencyKey("done-" + todoItem));
 		}
 
 		List<String> handled ( ) {
@@ -668,7 +669,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 				throw new IllegalStateException("this instance cannot handle '%s'".formatted(todoItem));
 			}
 			handled.add(todoItem);
-			return context.event(new SecondDomainEvent(todoItem), "done-" + todoItem);
+			return context.event(EphemeralEvent.of(new SecondDomainEvent(todoItem), Tags.none()).withIdempotencyKey("done-" + todoItem));
 		}
 
 		@Override

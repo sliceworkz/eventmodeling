@@ -27,8 +27,8 @@ import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * A {@link TranslatorContext} decorator used by the interactive {@code translate(...)} path.
@@ -80,18 +80,8 @@ class CapturingTranslatorContext<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> implemen
 	}
 
 	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-		return capture(delegate.event(event, tags));
-	}
-
-	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, String idempotencyKey ) {
-		return capture(delegate.event(event, idempotencyKey));
-	}
-
-	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
-		return capture(delegate.event(event, tags, idempotencyKey));
+	public Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event ) {
+		return capture(delegate.event(event));
 	}
 
 }

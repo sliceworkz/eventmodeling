@@ -25,8 +25,8 @@ import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 
 // methods available to a Translator
 public class TranslatorContextImpl<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements TranslatorContext<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> {
@@ -54,18 +54,8 @@ public class TranslatorContextImpl<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE,OUTBOUN
 	}
 
 	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags) {
-		return delegate.event(event, tags);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey) {
-		return delegate.event(event, idempotencyKey);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey) {
-		return delegate.event(event, tags, idempotencyKey);
+	public Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event ) {
+		return delegate.event(event);
 	}
 
 }

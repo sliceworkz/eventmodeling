@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
 import org.sliceworkz.eventmodeling.commands.Execution;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -180,11 +181,11 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 	void aProvidedEventIsObservedAndARepeatIsProvidedAsNothing ( ) {
 		Mock domain = buildBoundedContext(observedBuilder());
 
-		Optional<EventReference> first = domain.event(new FirstDomainEvent("provided"), "provided-1");
+		Optional<EventReference> first = domain.event(EphemeralEvent.of(new FirstDomainEvent("provided"), Tags.none()).withIdempotencyKey("provided-1"));
 		assertEquals(first, observer.last(Observation.ProvidedEvent.class).outcome(Outcome.Provided.class).reference());
 		assertEquals(EventType.of(FirstDomainEvent.class), observer.last(Observation.ProvidedEvent.class).observation(Observation.ProvidedEvent.class).eventType());
 
-		domain.event(new FirstDomainEvent("provided"), "provided-1");
+		domain.event(EphemeralEvent.of(new FirstDomainEvent("provided"), Tags.none()).withIdempotencyKey("provided-1"));
 		assertEquals(Optional.empty(), observer.last(Observation.ProvidedEvent.class).outcome(Outcome.Provided.class).reference());
 	}
 

@@ -55,7 +55,6 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
@@ -95,7 +94,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 	}
 
 	private long stored(Class<? extends MockDomainEvent> type) {
-		return domainStream.query(EventFilter.of(EventTypesFilter.of(type), Tags.none())).size();
+		return domainStream.query(EventFilter.forTypes(type)).size();
 	}
 
 	// ── commands & decision models ──────────────────────────────────────────

@@ -22,10 +22,8 @@ import java.util.List;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 public class MockReadModel implements ReadModel<MockDomainEvent> {
 	
@@ -55,7 +53,7 @@ public class MockReadModel implements ReadModel<MockDomainEvent> {
 	public MockReadModel ( String name, List<Class<?>> queriedClasses, ReadModelStorage storage ) {
 		this.name = name;
 		this.storage = storage;
-		this.eventQuery = EventQuery.of(EventFilter.of(EventTypesFilter.of(queriedClasses), Tags.none()));
+		this.eventQuery = EventQuery.of(EventFilter.forTypes(queriedClasses.toArray(Class<?>[]::new)));
 	}
 
 	@Override

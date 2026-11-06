@@ -50,7 +50,6 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
@@ -140,7 +139,7 @@ public class ProvidedEventIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	private long stored ( Class<? extends MockDomainEvent> type ) {
-		return domainStream.query(EventFilter.of(EventTypesFilter.of(type), Tags.none())).size();
+		return domainStream.query(EventFilter.forTypes(type)).size();
 	}
 
 	private Mock startPlainContext ( ) {

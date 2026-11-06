@@ -49,32 +49,52 @@ public interface CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 	 */
 
 	/**
-	 * Requires that an idempotency key was externally provided by the caller.
-	 * Throws {@link IllegalStateException} if no external key was provided.
+	 * How a key the caller executes the command under relates to the command's own. Without a call to
+	 * either {@code idempotencyKey} method the caller's key, if it gives one, is the key, and the command has
+	 * none of its own.
+	 * <table>
+	 * <caption>the five choices</caption>
+	 * <tr><th>call</th><th>no key from the caller</th><th>a key from the caller</th></tr>
+	 * <tr><td>{@code idempotencyKey(CallerKey.REQUIRED)}</td><td>refused</td><td>the caller's</td></tr>
+	 * <tr><td>{@code idempotencyKey(CallerKey.REFUSED)}</td><td>none</td><td>refused</td></tr>
+	 * <tr><td>{@code idempotencyKey(key, CallerKey.PREFERRED)}</td><td>the command's</td><td>the caller's</td></tr>
+	 * <tr><td>{@code idempotencyKey(key, CallerKey.IGNORED)}</td><td>the command's</td><td>the command's</td></tr>
+	 * <tr><td>{@code idempotencyKey(key, CallerKey.REFUSED)}</td><td>the command's</td><td>refused</td></tr>
+	 * </table>
+	 * A refusal is an {@link IllegalStateException}, before anything is appended: the command and its
+	 * caller disagree about who keys the execution, which is a bug in one of them.
+	 * <p>
+	 * The alternative — a method per choice ({@code requireIdempotencyKey}, {@code fallbackIdempotencyKey},
+	 * {@code exclusiveIdempotencyKey}, …) — loses because the five read as five unrelated features, where
+	 * they are one question asked of one key.
 	 */
-	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> requireIdempotencyKey ( );
+	enum CallerKey {
+		/** The caller must give a key, and it is the key; the command has none of its own. */
+		REQUIRED,
+		/** The caller must not give a key. */
+		REFUSED,
+		/** The caller's key wins over the command's; the command's is used when the caller gives none. */
+		PREFERRED,
+		/** The command's key is the key, whatever the caller gives. */
+		IGNORED
+	}
 
 	/**
-	 * Sets an idempotency key for this command, ignoring any externally provided key.
+	 * Keys this execution with the command's own key, and says how a caller's key relates to it:
+	 * {@link CallerKey#PREFERRED}, {@link CallerKey#IGNORED} or {@link CallerKey#REFUSED}.
+	 *
+	 * @throws IllegalArgumentException for a {@code null} or blank key, or {@link CallerKey#REQUIRED}, which
+	 *         leaves no use for the command's key
 	 */
-	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> idempotencyKey ( String key );
+	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> idempotencyKey ( String key, CallerKey callerKey );
 
 	/**
-	 * Sets a fallback idempotency key for this command. If the caller also provided
-	 * an external key, the external key takes precedence.
+	 * Says what a caller's key must be for a command with no key of its own:
+	 * {@link CallerKey#REQUIRED} or {@link CallerKey#REFUSED}.
+	 *
+	 * @throws IllegalArgumentException for {@link CallerKey#PREFERRED} or {@link CallerKey#IGNORED}, which
+	 *         need a key of the command's own
 	 */
-	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> fallbackIdempotencyKey ( String key );
-
-	/**
-	 * Sets an idempotency key for this command. Throws {@link IllegalStateException}
-	 * if the caller also provided an external key.
-	 */
-	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> exclusiveIdempotencyKey ( String key );
-
-	/**
-	 * Forbids an externally provided idempotency key. Throws {@link IllegalStateException}
-	 * if the caller provided an external key.
-	 */
-	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> forbidIdempotencyKey ( );
+	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> idempotencyKey ( CallerKey callerKey );
 
 }

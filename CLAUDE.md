@@ -434,6 +434,16 @@ ACCOUNT.idsIn(transfer.tags());                                         // an ev
   `IllegalStateException` — loses because it fails an execution whose outcome is already fully
   determined (a command that reads, finds nothing to do and returns early), for a call that would
   change nothing about it. `CommandWithoutDecisionModelsTest` pins it
+- **How an execution is keyed is one choice, made by the command: `CommandResult.idempotencyKey(key,
+  CallerKey)` or `idempotencyKey(CallerKey)`.** `CallerKey` says how the caller's key relates to the
+  command's own: `REQUIRED`, `REFUSED`, `PREFERRED` (the caller's wins, the command's is the fallback) or
+  `IGNORED` (the command's wins); saying nothing leaves the caller's key, if any, as the key. A
+  combination that makes no sense (`REQUIRED` beside a key of the command's own, `PREFERRED`/`IGNORED`
+  without one) is an `IllegalArgumentException` where the command says it, and a caller breaking the
+  command's choice an `IllegalStateException` before anything is appended. The alternative — a method per
+  choice (`requireIdempotencyKey`, `fallbackIdempotencyKey`, `exclusiveIdempotencyKey`, …) — loses because
+  five unrelated-looking features hid one question asked of one key. `CommandResultCallerKeyTest` pins the
+  table
 - **A command-level key on a command raising several events becomes a key per event.** The store
   holds a key per event, scoped to the stream, and refuses a batch repeating one — so
   `CommandResultImpl.applyIdempotencyKey` leaves a single event's key as it is (what every key on

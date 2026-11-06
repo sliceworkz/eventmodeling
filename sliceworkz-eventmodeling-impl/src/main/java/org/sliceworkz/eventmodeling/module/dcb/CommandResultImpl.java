@@ -78,35 +78,28 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 	}
 
 	@Override
-	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> requireIdempotencyKey ( ) {
-		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.REQUIRE_EXTERNAL;
-		return this;
-	}
-
-	@Override
-	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> idempotencyKey ( String key ) {
-		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.OVERRIDE;
+	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> idempotencyKey ( String key, CallerKey callerKey ) {
+		if ( key == null || key.isBlank() ) {
+			throw new IllegalArgumentException("a command's idempotency key needs a value; idempotencyKey(CallerKey) says what a caller's key must be without one");
+		}
+		this.idempotencyKeyStrategy = switch ( callerKey ) {
+			case PREFERRED -> IdempotencyKeyStrategy.FALLBACK;
+			case IGNORED -> IdempotencyKeyStrategy.OVERRIDE;
+			case REFUSED -> IdempotencyKeyStrategy.EXCLUSIVE;
+			case REQUIRED -> throw new IllegalArgumentException("a caller's key that is required is the key; the command's own key would never be used");
+		};
 		this.internalIdempotencyKey = key;
 		return this;
 	}
 
 	@Override
-	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> fallbackIdempotencyKey ( String key ) {
-		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.FALLBACK;
-		this.internalIdempotencyKey = key;
-		return this;
-	}
-
-	@Override
-	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> exclusiveIdempotencyKey ( String key ) {
-		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.EXCLUSIVE;
-		this.internalIdempotencyKey = key;
-		return this;
-	}
-
-	@Override
-	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> forbidIdempotencyKey ( ) {
-		this.idempotencyKeyStrategy = IdempotencyKeyStrategy.FORBID_EXTERNAL;
+	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> idempotencyKey ( CallerKey callerKey ) {
+		this.idempotencyKeyStrategy = switch ( callerKey ) {
+			case REQUIRED -> IdempotencyKeyStrategy.REQUIRE_EXTERNAL;
+			case REFUSED -> IdempotencyKeyStrategy.FORBID_EXTERNAL;
+			case PREFERRED, IGNORED -> throw new IllegalArgumentException(callerKey + " weighs a caller's key against the command's own; give the command's key with idempotencyKey(key, " + callerKey + ")");
+		};
+		this.internalIdempotencyKey = null;
 		return this;
 	}
 

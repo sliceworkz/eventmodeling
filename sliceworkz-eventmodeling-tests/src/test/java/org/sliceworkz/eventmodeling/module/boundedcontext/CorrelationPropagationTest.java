@@ -59,6 +59,7 @@ import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
@@ -185,11 +186,11 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 	}
 
 	private List<? extends Event<MockDomainEvent>> domainEvents ( ) {
-		return domainStream.query(EventQuery.matchAll());
+		return domainStream.query(EventFilter.matchAll());
 	}
 
 	private List<? extends Event<MockDomainEvent>> stored ( Class<? extends MockDomainEvent> type ) {
-		return domainStream.query(EventQuery.forEvents(EventTypesFilter.of(type), Tags.none()));
+		return domainStream.query(EventFilter.of(EventTypesFilter.of(type), Tags.none()));
 	}
 
 	private BoundedContextBuilder<Mock> baseBuilder ( ) {
@@ -220,8 +221,8 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 	static class SomeInboundTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeInboundEvent.class), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeInboundEvent.class);
 		}
 
 		@Override
@@ -253,7 +254,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class, SecondDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class));
 		}
 
 		@Override

@@ -37,6 +37,7 @@ import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsOut
 import org.sliceworkz.eventmodeling.examples.payments.features.executepayment.PaymentsToExecuteTodoList.PaymentToExecute;
 import org.sliceworkz.eventmodeling.testing.AutomationTest;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -213,7 +214,7 @@ public class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecut
 	}
 
 	private List<PaymentsDomainEvent> domainEvents ( ) {
-		return domainStream().query(EventQuery.matchAll()).stream().map(Event::data).toList();
+		return domainStream().query(EventFilter.matchAll()).stream().map(Event::data).toList();
 	}
 
 	/** Guards the deterministic gateway reference the assertions above rely on. */

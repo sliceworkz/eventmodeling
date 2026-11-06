@@ -277,7 +277,7 @@ public class PolicyModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return policy.eventQuery();
+			return EventQuery.of(policy.eventFilter());
 		}
 
 		@Override

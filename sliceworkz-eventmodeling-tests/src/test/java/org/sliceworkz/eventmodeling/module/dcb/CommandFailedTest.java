@@ -49,6 +49,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -90,7 +91,7 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 	static class FirstDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
 		public EventQuery eventQuery() {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override
@@ -145,7 +146,7 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 	static class JudgingDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
 		public EventQuery eventQuery() {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override
@@ -287,7 +288,7 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 
 		assertThrows(BusinessException.class, () -> domain.execute(new RejectingCommand()));
 
-		EventQuery outcomes = EventQuery.forEvents(EventTypesFilter.of(CommandRejected.class, CommandFailed.class), Tags.none());
+		EventQuery outcomes = EventQuery.of(EventFilter.forTypes(CommandRejected.class, CommandFailed.class));
 		List<Event<BoundedContextEvent>> persisted = kernelStream.query(outcomes);
 		assertEquals(1, persisted.size(), "expected exactly the rejection to be persisted, got: " + persisted);
 		CommandRejected rejected = (CommandRejected) persisted.get(0).data();

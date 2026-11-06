@@ -34,6 +34,7 @@ import javax.sql.DataSource;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -118,7 +119,7 @@ class SqlReadModelProjectorBatchConnectionTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.matchAll();
+			return EventQuery.of(EventFilter.matchAll());
 		}
 
 		@Override

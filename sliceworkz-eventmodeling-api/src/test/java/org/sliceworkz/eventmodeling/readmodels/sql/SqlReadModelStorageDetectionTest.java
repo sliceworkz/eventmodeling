@@ -32,6 +32,7 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -106,7 +107,7 @@ class SqlReadModelStorageDetectionTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.matchAll();
+			return EventQuery.of(EventFilter.matchAll());
 		}
 
 		@Override

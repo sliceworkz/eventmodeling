@@ -23,7 +23,7 @@ import org.sliceworkz.eventmodeling.outbound.Publisher;
 import org.sliceworkz.eventmodeling.outbound.PublisherContext;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
@@ -33,8 +33,8 @@ import org.sliceworkz.eventstore.query.EventTypesFilter;
 public class MockPublisher implements Publisher<MockDomainEvent, MockOutboundEvent> {
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+	public EventFilter eventFilter ( ) {
+		return EventFilter.forTypes(FirstDomainEvent.class);
 	}
 
 	@Override

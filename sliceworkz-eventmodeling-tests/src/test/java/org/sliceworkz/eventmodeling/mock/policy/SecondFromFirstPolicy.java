@@ -24,7 +24,7 @@ import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
  * Whenever a {@link FirstDomainEvent} happens, record its value as a second one — except for a value
@@ -33,8 +33,8 @@ import org.sliceworkz.eventstore.query.EventQuery;
 public class SecondFromFirstPolicy implements Policy<MockDomainEvent> {
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.forTypes(FirstDomainEvent.class);
+	public EventFilter eventFilter ( ) {
+		return EventFilter.forTypes(FirstDomainEvent.class);
 	}
 
 	@Override

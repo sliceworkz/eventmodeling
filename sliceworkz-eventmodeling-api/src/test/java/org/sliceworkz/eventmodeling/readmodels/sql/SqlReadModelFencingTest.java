@@ -37,6 +37,7 @@ import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
@@ -302,7 +303,7 @@ class SqlReadModelFencingTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.matchAll();
+			return EventQuery.of(EventFilter.matchAll());
 		}
 
 		@Override

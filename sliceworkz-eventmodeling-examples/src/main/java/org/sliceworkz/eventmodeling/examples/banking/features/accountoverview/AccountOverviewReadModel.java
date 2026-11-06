@@ -26,6 +26,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomain
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.readmodels.PublishingReadModel;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -70,7 +71,7 @@ public class AccountOverviewReadModel extends PublishingReadModel<BankingDomainE
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.matchAll();
+		return EventQuery.of(EventFilter.matchAll());
 	}
 
 	/**

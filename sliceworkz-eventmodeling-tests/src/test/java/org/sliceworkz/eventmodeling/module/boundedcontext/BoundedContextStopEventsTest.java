@@ -38,6 +38,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.spi.EventStorage.EventToStore;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
@@ -134,7 +135,7 @@ public class BoundedContextStopEventsTest extends AbstractMockDomainTest {
 						"{\"boundedContext\":\"orders\",\"logical\":\"orders\",\"physical\":\"orders-1\",\"process\":\"p1\"}", Tags.none(), null)));
 
 		EventStream<BoundedContextEvent> stream = EventStore.on(eventStorage()).build().getEventStream(streamId, BoundedContextEvent.class);
-		List<BoundedContextEvent> read = stream.query(EventQuery.matchAll()).stream().map(e -> e.data()).toList();
+		List<BoundedContextEvent> read = stream.query(EventFilter.matchAll()).stream().map(e -> e.data()).toList();
 
 		assertFalse(((BoundedContextStopping) read.get(0)).restartable());
 		assertFalse(((BoundedContextStopped) read.get(1)).restartable());

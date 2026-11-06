@@ -21,7 +21,7 @@ import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
  * A policy, in the event storming sense: <em>whenever</em> a domain event happens, issue a command.
@@ -84,9 +84,9 @@ public interface Policy<DOMAIN_EVENT_TYPE> {
 	 * the variants of one fact ({@code Cost Approved}, {@code Cost Partially Approved}, {@code Cost Declined})
 	 * leading to one command.
 	 *
-	 * @return the query selecting them from the domain stream
+	 * @return the filter selecting them from the domain stream, read forward from the policy's bookmark
 	 */
-	EventQuery eventQuery ( );
+	EventFilter eventFilter ( );
 
 	/**
 	 * The command to issue for one domain event, or nothing when this event is not one the policy acts on.

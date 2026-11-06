@@ -48,6 +48,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projector;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -275,7 +276,7 @@ class Counts extends PublishingReadModel<MockDomainEvent,Integer> {
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.matchAll();
+		return EventQuery.of(EventFilter.matchAll());
 	}
 
 }
@@ -304,7 +305,7 @@ class FreshCounts implements SeededReadModel<MockDomainEvent> {
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.matchAll();
+		return EventQuery.of(EventFilter.matchAll());
 	}
 
 	@Override
@@ -331,7 +332,7 @@ class FullCounts implements ReadModel<MockDomainEvent> {
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.matchAll();
+		return EventQuery.of(EventFilter.matchAll());
 	}
 
 	@Override

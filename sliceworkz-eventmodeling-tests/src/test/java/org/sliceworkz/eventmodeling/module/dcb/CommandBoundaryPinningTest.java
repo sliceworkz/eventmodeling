@@ -80,6 +80,7 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 
 	private static final EventType FIRST = EventType.of(FirstDomainEvent.class);
 	private static final EventType SECOND = EventType.of(SecondDomainEvent.class);
+	private static final EventType THIRD = EventType.of(ThirdDomainEvent.class);
 
 	private InvocationCountingEventStorage countingStorage;
 	private EventStream<MockDomainEvent> directStream;
@@ -109,15 +110,15 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 
 	static class Firsts implements DecisionModel<MockDomainEvent> {
 		int seen;
-		@Override public EventQuery eventQuery ( ) { return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none()); }
+		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class)); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 
 	/** A savepoint model: its own physical read, so a command pairing it with a plain model reads twice. */
 	static class SecondsSinceSavepoint implements DecisionModel<MockDomainEvent> {
 		int seen;
-		@Override public EventQuery initQuery ( ) { return EventQuery.forEvents(EventTypesFilter.of(ThirdDomainEvent.class), Tags.none()).backwards().limit(1); }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.forEvents(EventTypesFilter.of(SecondDomainEvent.class), Tags.none()); }
+		@Override public EventQuery initQuery ( ) { return EventQuery.of(EventFilter.forTypes(ThirdDomainEvent.class)).backwards().limit(1); }
+		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class)); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 
@@ -202,22 +203,24 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 
 	/**
 	 * The soundness gap a shared boundary closes, on the one shape that has no boundary to pin from
-	 * the models' own reads: an empty stream. Two physical reads; between them a matching event for
-	 * the first model lands, followed by one for the second. The second read establishes a reference
-	 * past the first event, so without a pinned boundary the check walks past the fact the first model
-	 * never saw. An absent head must stay absent -- the empty-boundary check then catches both.
+	 * the models' own reads: an empty stream. Two physical reads -- the savepoint model's savepoint, then
+	 * the merged read of both models; between them a Third lands (a savepoint the first read did not
+	 * see), followed by a First and a Second the second read does. Without a pinned boundary the second
+	 * read would establish a reference past all three, and the check would walk past the savepoint the
+	 * command never saw. An absent head must stay absent -- the empty-boundary check then catches it.
 	 */
 	@ForEachBackend
 	void aConflictBetweenTwoReadsOnAnEmptyBoundaryIsCaught ( ) {
 		Mock domain = buildDomain();
 
-		countingStorage.afterQuery(CommandBoundaryPinningTest::isTheFirstsRead, () -> {
-			append(new FirstDomainEvent("between-the-reads"));
+		countingStorage.afterQuery(CommandBoundaryPinningTest::isTheSavepointRead, () -> {
+			append(new ThirdDomainEvent("between-the-reads"));
+			append(new FirstDomainEvent("seen-by-the-second-read"));
 			append(new SecondDomainEvent("seen-by-the-second-read"));
 		});
 
 		assertThrows(OptimisticLockingException.class, () -> domain.execute(decideOnFirstsAndSeconds()),
-				"an event matching the first model landed after its read and before the second's");
+				"a savepoint landed after the savepoint read and before the merged read");
 	}
 
 	@ForEachBackend
@@ -256,10 +259,10 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 
 		domain.execute(decideOnFirstsAndSeconds());
 
-		List<EventFilter> reads = countingStorage.queriesSeen().stream().filter(q -> !q.isMatchAll()).toList();
-		assertTrue(reads.size() >= 3, "expected the plain read, the savepoint read and the savepoint model's read, got " + reads);
-		for ( EventFilter read : reads ) {
-			assertEquals(head, read.until(), "a decision model read must be bounded at the pinned head: " + read);
+		List<InvocationCountingEventStorage.Read> reads = countingStorage.readsSeen().stream().filter(r -> !r.filter().isMatchAll()).toList();
+		assertTrue(reads.size() >= 2, "expected the savepoint read and the merged read of the models, got " + reads);
+		for ( InvocationCountingEventStorage.Read read : reads ) {
+			assertEquals(head, read.notAfter(), "a decision model read must be bounded at the pinned head: " + read);
 		}
 	}
 
@@ -278,9 +281,9 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 	// --- helpers ------------------------------------------------------------------------------------
 
 	/** The plain model's read: matches Firsts and nothing else (a match-all pin would match both). */
-	private static boolean isTheFirstsRead ( EventFilter query ) {
+	private static boolean isTheSavepointRead ( EventFilter query ) {
 		EventReference any = EventReference.create(1, 1);
-		return !query.isMatchAll() && query.matches(FIRST, Tags.none(), any) && !query.matches(SECOND, Tags.none(), any);
+		return !query.isMatchAll() && query.matches(THIRD, Tags.none(), any) && !query.matches(FIRST, Tags.none(), any);
 	}
 
 }

@@ -235,7 +235,7 @@ class OrderRegisteredTranslatorTest extends TranslatorTest<ShopEvent, PartnerEve
 Two properties of that path are asserted for free on every test: the inbound event is **not**
 persisted (that is `translate()`'s contract), and an inbound event no translator claims throws
 `NoTranslatorRegisteredException` rather than vanishing. One caveat: the interactive path matches
-translators on the inbound event's *type* only, so a translator whose `eventQuery()` also requires
+translators on the inbound event's *type* only, so a translator whose `eventFilter()` also requires
 tags never matches interactively. The asynchronous path — `incoming(...)`, projector-driven — is
 framework behaviour and stays with the framework's own integration tests; the translation logic is
 identical on both paths.

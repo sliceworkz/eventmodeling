@@ -36,6 +36,7 @@ import org.sliceworkz.eventmodeling.rules.RuleViolationException;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> extends AbstractBoundedContextTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
@@ -197,7 +198,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 				} else {
 					kernel().execute(command);
 				}
-				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark);
+				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventFilter.matchAll(), bookmark);
 				this.result = new TestResultImpl ( newEvents );
 			} catch (Exception exception) {
 				this.result = new TestResultImpl ( exception );
@@ -209,7 +210,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 			try {
 				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
 				CommandExecutionResult<RESPONSE_TYPE> executionResult = ( tracing != null ) ? kernel().execute(command, tracing) : kernel().execute(command);
-				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventQuery.matchAll(), bookmark);
+				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventFilter.matchAll(), bookmark);
 				this.result = new TestResultWithResponseImpl<> ( newEvents, executionResult.response() );
 			} catch (Exception exception) {
 				this.result = new TestResultImpl ( exception );

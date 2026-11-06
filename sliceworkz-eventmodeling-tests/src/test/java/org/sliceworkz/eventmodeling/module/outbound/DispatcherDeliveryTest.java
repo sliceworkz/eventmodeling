@@ -35,7 +35,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOu
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
@@ -57,8 +57,8 @@ public class DispatcherDeliveryTest extends AbstractMockDomainTest {
 		private final List<String> published = Collections.synchronizedList(new ArrayList<>());
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeOutboundEvent.class), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeOutboundEvent.class);
 		}
 
 		@Override

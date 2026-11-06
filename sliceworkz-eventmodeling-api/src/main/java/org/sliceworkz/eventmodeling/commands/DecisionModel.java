@@ -26,7 +26,7 @@ import org.sliceworkz.eventstore.projection.Projection;
  * What makes it more than a lookup is that {@code context.decisionModels(...)} puts the events it was
  * projected from inside the command's consistency boundary. Every read is bounded at the domain
  * stream's head, that head is the append's expected reference, and the optimistic-lock filter is the
- * union of <em>every</em> query the models were read with &mdash; each {@code eventQuery()}, and the
+ * union of <em>every</em> filter the models were read with &mdash; each {@code eventQuery()}, and the
  * {@code initQuery()} of a model using the savepoint pattern. So the DCB check at append time re-asks
  * exactly the question the command decided on, and an event landing in between raises
  * {@link org.sliceworkz.eventstore.stream.OptimisticLockingException}.
@@ -37,9 +37,11 @@ import org.sliceworkz.eventstore.projection.Projection;
  * two queries to name disjoint event types, or the savepoint is double-processed &mdash; and nothing
  * is given up by that: "the newest savepoint is X" is a fact the command decided on, so the framework
  * locks on {@code initQuery()} too, whether or not a savepoint was found.</li>
- * <li><b>An {@code until} on a model's own query bounds its read and nothing else.</b> It is stripped
- * from the lock filter, since a criteria filter carrying one deems no event after it a new relevant
- * fact and would admit every append without ever raising.</li>
+ * <li><b>Bounds on a model's filter are business statements, and reach the lock filter as such.</b>
+ * An item bounded {@code until} a point before the command's boundary can match nothing appended
+ * later, so it adds nothing to the check; bound a fact that is closed that way, never a replay you
+ * only want cheaper. The read bound at the head is the framework's, set as the query's
+ * {@code notAfter}, and never part of a filter.</li>
  * </ul>
  *
  * @param <DOMAIN_EVENT_TYPE> the domain event type of the bounded context

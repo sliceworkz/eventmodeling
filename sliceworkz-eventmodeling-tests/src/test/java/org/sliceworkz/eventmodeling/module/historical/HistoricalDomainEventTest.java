@@ -36,8 +36,8 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.LegacyEvent;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.events.Upcaster;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
@@ -215,7 +215,7 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 
 		@Override
 		public EventQuery eventQuery() {
-			return EventQuery.forEvents(EventTypesFilter.any(), Tags.none());
+			return EventQuery.of(EventFilter.matchAll());
 		}
 
 		@Override

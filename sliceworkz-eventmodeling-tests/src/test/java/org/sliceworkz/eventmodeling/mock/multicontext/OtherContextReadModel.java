@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.mock.multicontext;
 
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /** A read model of {@link OtherContext}, over event types the Mock context never holds. */
@@ -26,7 +27,7 @@ public class OtherContextReadModel implements ReadModel<OtherDomainEvent> {
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.matchAll();
+		return EventQuery.of(EventFilter.matchAll());
 	}
 
 	@Override

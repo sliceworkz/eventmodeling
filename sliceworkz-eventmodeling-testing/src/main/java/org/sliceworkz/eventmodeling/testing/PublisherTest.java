@@ -37,7 +37,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projector;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
  * Base for testing {@link Publisher}s: seed the domain stream, publish, and assert on the outbound events
@@ -143,8 +143,8 @@ public abstract class PublisherTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUN
 		List<Outcome.PublicationResult> outcomes = new ArrayList<>();
 		Exception failure = null;
 		try {
-			EventQuery query = publisher.eventQuery();
-			List<Event<DOMAIN_EVENT_TYPE>> toPublish = domainStream().query(query, after);
+			EventFilter filter = publisher.eventFilter();
+			List<Event<DOMAIN_EVENT_TYPE>> toPublish = domainStream().query(filter, after);
 			for ( Event<DOMAIN_EVENT_TYPE> event : toPublish ) {
 				EventReference head = domainStream().head().orElse(event.reference());
 				outcomes.add(Publication.publish(publisher, name, event, head, instance(), reader, outboundStream()));
@@ -153,7 +153,7 @@ public abstract class PublisherTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUN
 		} catch ( Exception e ) {
 			failure = e;
 		}
-		List<Event<OUTBOUND_EVENT_TYPE>> published = outboundStream().query(EventQuery.matchAll(), outboundBefore);
+		List<Event<OUTBOUND_EVENT_TYPE>> published = outboundStream().query(EventFilter.matchAll(), outboundBefore);
 		return new PublicationResult(definition, outcomes, published, failure);
 	}
 

@@ -82,7 +82,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	private long countDomainEvents() {
-		return directStream.query(EventQuery.matchAll()).size();
+		return directStream.query(EventFilter.matchAll()).size();
 	}
 
 	/** The keys as stored, in stream order: the public {@code Event} does not carry them. */

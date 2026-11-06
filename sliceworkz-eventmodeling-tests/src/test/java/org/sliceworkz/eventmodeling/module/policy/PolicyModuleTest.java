@@ -52,6 +52,7 @@ import org.sliceworkz.eventmodeling.slices.SliceType;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
@@ -106,7 +107,7 @@ public class PolicyModuleTest extends AbstractMockDomainTest {
 	}
 
 	private List<Event<MockDomainEvent>> seconds ( ) {
-		return domain().query(EventQuery.forTypes(SecondDomainEvent.class));
+		return domain().query(EventFilter.forTypes(SecondDomainEvent.class));
 	}
 
 	private List<String> secondValues ( ) {

@@ -56,6 +56,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.spi.EventStorage.EventToStore;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
@@ -100,7 +101,7 @@ public class BusinessRuleAuditTrailTest extends AbstractMockDomainTest {
 	}
 
 	private Event<MockDomainEvent> last ( ) {
-		List<Event<MockDomainEvent>> events = domainStream().query(EventQuery.matchAll());
+		List<Event<MockDomainEvent>> events = domainStream().query(EventFilter.matchAll());
 		return events.get(events.size() - 1);
 	}
 
@@ -185,7 +186,7 @@ public class BusinessRuleAuditTrailTest extends AbstractMockDomainTest {
 
 		assertTrue(refused.getMessage().contains("raised no events"), refused.getMessage());
 		assertTrue(received.stream().anyMatch(CommandFailed.class::isInstance), "a follow-up recorded nowhere is a bug: " + received);
-		assertTrue(domainStream().query(EventQuery.matchAll()).isEmpty());
+		assertTrue(domainStream().query(EventFilter.matchAll()).isEmpty());
 	}
 
 	@Test
@@ -260,7 +261,7 @@ public class BusinessRuleAuditTrailTest extends AbstractMockDomainTest {
 		Mock domain = domain(kernelStream, STRICT, DEFERRED);
 		assertThrows(BusinessException.class, () -> domain.execute(new RuledCommand(Overrides.none(), (context, command) -> context.check(STRICT, true, "over"))));
 
-		List<BoundedContextEvent> persisted = kernelStream.query(EventQuery.matchAll()).stream().map(Event::data).toList();
+		List<BoundedContextEvent> persisted = kernelStream.query(EventFilter.matchAll()).stream().map(Event::data).toList();
 		BoundedContextStarting starting = persisted.stream().filter(BoundedContextStarting.class::isInstance).map(BoundedContextStarting.class::cast).findFirst().orElseThrow();
 		assertEquals(List.of(STRICT, DEFERRED), starting.businessRules());
 		assertEquals(EnforcementLevel.DEFERRED_ENFORCEMENT, starting.businessRules().get(1).enforcementLevel());
@@ -278,7 +279,7 @@ public class BusinessRuleAuditTrailTest extends AbstractMockDomainTest {
 				new EventToStore(id, EventType.named("BoundedContextStarting"),
 						"{\"boundedContext\":\"rules\",\"logical\":\"l\",\"physical\":\"p\",\"process\":\"x\",\"enabledFeatures\":[],\"disabledFeatures\":[],\"aspects\":null}", Tags.none(), null)));
 
-		List<BoundedContextEvent> read = kernelStream().query(EventQuery.matchAll()).stream().map(Event::data).toList();
+		List<BoundedContextEvent> read = kernelStream().query(EventFilter.matchAll()).stream().map(Event::data).toList();
 
 		assertEquals(List.of(), ((CommandRejected) read.get(0)).ruleJudgements(), "a rejection from before has no judgements");
 		assertNull(((BoundedContextStarting) read.get(1)).businessRules(), "a start from before announced no rulebook, which is not an empty one");

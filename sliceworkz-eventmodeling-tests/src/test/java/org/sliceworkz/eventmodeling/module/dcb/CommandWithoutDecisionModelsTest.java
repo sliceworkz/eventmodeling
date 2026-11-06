@@ -33,6 +33,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
@@ -55,7 +56,7 @@ public class CommandWithoutDecisionModelsTest extends AbstractMockDomainTest {
 
 		assertTrue(reference.isEmpty(), "nothing was raised, so nothing was appended");
 		assertTrue(eventStore().getRawEventStream(EventStreamId.anyContext())
-				.query(EventQuery.matchAll()).isEmpty(), "the store stays empty");
+				.query(EventFilter.matchAll()).isEmpty(), "the store stays empty");
 	}
 
 	@Test

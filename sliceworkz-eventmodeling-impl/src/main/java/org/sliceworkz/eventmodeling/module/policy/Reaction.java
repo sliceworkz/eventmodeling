@@ -34,6 +34,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.IdempotencyKeyConflictException;
@@ -100,9 +101,7 @@ public final class Reaction {
 	 * @return the query, limited to one event
 	 */
 	public static EventQuery raisedInReactionTo ( String policyName, Event<?> event ) {
-		return EventQuery.forTags(Tags.of(
-				Tracing.actorTag(policyName),
-				Tag.of(Tracing.TAG_CAUSED_BY, event.reference().id().value()))).limit(1);
+		return EventQuery.of(EventFilter.forTags(Tags.of(Tracing.actorTag(policyName), Tag.of(Tracing.TAG_CAUSED_BY, event.reference().id().value())))).limit(1);
 	}
 
 	/**

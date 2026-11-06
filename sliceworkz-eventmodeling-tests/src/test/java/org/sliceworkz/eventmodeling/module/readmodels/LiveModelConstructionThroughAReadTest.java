@@ -36,6 +36,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -124,7 +125,7 @@ public class LiveModelConstructionThroughAReadTest extends AbstractMockDomainTes
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.matchAll();
+			return EventQuery.of(EventFilter.matchAll());
 		}
 
 		@Override

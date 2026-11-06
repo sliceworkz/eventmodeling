@@ -25,7 +25,7 @@ import org.sliceworkz.eventmodeling.outbound.Publisher;
 import org.sliceworkz.eventmodeling.outbound.PublisherContext;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
  * Tells the world an order is processed, once the automation has recorded that it was dispatched: the
@@ -35,8 +35,8 @@ import org.sliceworkz.eventstore.query.EventQuery;
 public class OrderDispatchedPublisher implements Publisher<OrderProcessingDomainEvent, OrderProcessingOutboundEvent> {
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.forTypes(OrderDispatched.class);
+	public EventFilter eventFilter ( ) {
+		return EventFilter.forTypes(OrderDispatched.class);
 	}
 
 	@Override

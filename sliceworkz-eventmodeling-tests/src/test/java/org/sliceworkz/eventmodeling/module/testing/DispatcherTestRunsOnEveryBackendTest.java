@@ -32,7 +32,7 @@ import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.testing.DispatcherTest;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
@@ -50,8 +50,8 @@ public class DispatcherTestRunsOnEveryBackendTest extends DispatcherTest<MockDom
 		private final List<String> published = new ArrayList<>();
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeOutboundEvent.class), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeOutboundEvent.class);
 		}
 
 		@Override

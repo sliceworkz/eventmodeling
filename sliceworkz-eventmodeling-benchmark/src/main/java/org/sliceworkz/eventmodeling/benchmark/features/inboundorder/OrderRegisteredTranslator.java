@@ -26,14 +26,14 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 public class OrderRegisteredTranslator implements Translator<OrderProcessingInboundEvent,OrderProcessingDomainEvent> {
 	
 	@Override
-	public EventQuery eventQuery() {
-		return EventQuery.forEvents(EventTypesFilter.of(OrderRegistered.class), Tags.none());
+	public EventFilter eventFilter() {
+		return EventFilter.forTypes(OrderRegistered.class);
 	}
 
 	@Override

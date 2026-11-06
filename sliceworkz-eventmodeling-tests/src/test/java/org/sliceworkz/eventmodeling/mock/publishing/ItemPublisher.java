@@ -27,7 +27,7 @@ import org.sliceworkz.eventmodeling.outbound.Publisher;
 import org.sliceworkz.eventmodeling.outbound.PublisherContext;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
  * Publishes an item's state on every {@link FirstDomainEvent} about it: as of that event, or — when built
@@ -46,8 +46,8 @@ public class ItemPublisher implements Publisher<MockDomainEvent, MockOutboundEve
 	}
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.forTypes(FirstDomainEvent.class);
+	public EventFilter eventFilter ( ) {
+		return EventFilter.forTypes(FirstDomainEvent.class);
 	}
 
 	@Override

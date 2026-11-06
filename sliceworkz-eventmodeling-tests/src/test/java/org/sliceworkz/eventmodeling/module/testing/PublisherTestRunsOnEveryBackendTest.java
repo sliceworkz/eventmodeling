@@ -39,7 +39,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.testing.PublisherTest;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -106,7 +106,7 @@ public class PublisherTestRunsOnEveryBackendTest extends PublisherTest<MockDomai
 	void anOutboundEventNamesTheDomainEventItWasPublishedFor ( ) {
 		var result = given(new FirstDomainEvent("v1"), ItemReadModel.tags("a")).whenPublished();
 		Event<MockOutboundEvent> published = result.outboundEvents().get(0);
-		Event<MockDomainEvent> source = domainStream().query(EventQuery.matchAll()).get(0);
+		Event<MockDomainEvent> source = domainStream().query(EventFilter.matchAll()).get(0);
 		assertEquals(source.reference().id().value(), published.tags().tag(Publisher.TAG_PUBLISHED_FROM).orElseThrow().value());
 		assertTrue(published.tags().containsAll(ItemReadModel.tags("a")));
 	}
@@ -154,8 +154,8 @@ public class PublisherTestRunsOnEveryBackendTest extends PublisherTest<MockDomai
 	static class OnePerValuePublisher implements Publisher<MockDomainEvent, MockOutboundEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forTypes(FirstDomainEvent.class);
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -176,8 +176,8 @@ public class PublisherTestRunsOnEveryBackendTest extends PublisherTest<MockDomai
 	static class UndeclaredReadPublisher implements Publisher<MockDomainEvent, MockOutboundEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forTypes(FirstDomainEvent.class);
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override

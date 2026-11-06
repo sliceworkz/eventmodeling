@@ -88,6 +88,7 @@ import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
@@ -807,7 +808,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		gateway.greet("summarized");
 		domain.stop();
 
-		List<BoundedContextEvent> stored = monitoring.query(EventQuery.matchAll()).stream().map(Event::data).toList();
+		List<BoundedContextEvent> stored = monitoring.query(EventFilter.matchAll()).stream().map(Event::data).toList();
 		for ( Class<? extends BoundedContextEvent> type : List.of(PortCalled.class, PortCallRejected.class, PortCallFailed.class,
 				PortCallsSummarized.class, BoundedContextEvent.BoundedContextStarting.class) ) {
 			List<? extends BoundedContextEvent> written = all(type);
@@ -929,8 +930,8 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeInboundEvent.class), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeInboundEvent.class);
 		}
 
 		@Override
@@ -960,7 +961,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class, SecondDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class));
 		}
 
 		@Override

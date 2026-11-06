@@ -25,6 +25,7 @@ import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDom
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
@@ -43,7 +44,7 @@ public class AbandonedPaymentsReadModel implements ReadModel<PaymentsDomainEvent
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.forEvents(EventTypesFilter.of(PaymentAbandoned.class), Tags.none());
+		return EventQuery.of(EventFilter.forTypes(PaymentAbandoned.class));
 	}
 
 	@Override

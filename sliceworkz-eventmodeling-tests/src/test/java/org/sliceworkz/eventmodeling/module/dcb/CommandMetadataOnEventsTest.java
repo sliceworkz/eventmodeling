@@ -42,6 +42,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent.SomeOu
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
 
@@ -77,11 +78,11 @@ public class CommandMetadataOnEventsTest extends AbstractMockDomainTest {
 	}
 
 	private List<? extends Event<MockDomainEvent>> domainEvents() {
-		return domainStream.query(EventQuery.matchAll());
+		return domainStream.query(EventFilter.matchAll());
 	}
 
 	private List<? extends Event<MockOutboundEvent>> outboundEvents() {
-		return outboundStream.query(EventQuery.matchAll());
+		return outboundStream.query(EventFilter.matchAll());
 	}
 
 	@Test

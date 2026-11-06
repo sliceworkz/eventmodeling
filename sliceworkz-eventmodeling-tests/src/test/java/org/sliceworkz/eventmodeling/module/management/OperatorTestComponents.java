@@ -40,9 +40,8 @@ import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 
 /**
@@ -77,7 +76,7 @@ final class OperatorTestComponents {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class, SecondDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class));
 		}
 
 		@Override
@@ -140,8 +139,8 @@ final class OperatorTestComponents {
 	static class NoopTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeInboundEvent.class), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeInboundEvent.class);
 		}
 
 		@Override
@@ -153,8 +152,8 @@ final class OperatorTestComponents {
 	static class NoopDispatcher implements Dispatcher<MockOutboundEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.any(), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.matchAll();
 		}
 
 		@Override

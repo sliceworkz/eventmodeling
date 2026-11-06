@@ -42,6 +42,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
@@ -50,8 +51,8 @@ import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
- * What a command locks on: the union of <em>every</em> query its decision models were read with, each
- * one stripped of its own {@code until}. {@link CommandBoundaryPinningTest} says where the criteria's
+ * What a command locks on: the union of <em>every</em> filter its decision models were read with, item
+ * bounds included. {@link CommandBoundaryPinningTest} says where the criteria's
  * reference lands; this scenario says which events that reference is compared against.
  * <p>
  * <b>A savepoint model decides on two reads, and both are facts.</b> Its {@code initQuery} answers
@@ -64,11 +65,10 @@ import org.sliceworkz.eventstore.testing.ForEachBackend;
  * two queries to name disjoint event types, so the types most able to invalidate the decision are
  * exactly the ones the {@code eventQuery} does not name.
  * <p>
- * <b>A model's own {@code until} must not reach the criteria.</b> A filter carrying one deems no
- * event after it a new relevant fact, so as an {@code AppendCriteria} it admits every append and
- * raises nothing -- the check off rather than narrowed, and silently. Stripping it costs the model
- * nothing: its <em>read</em> keeps the bound it asked for, and what the command decided on is bounded
- * by the pinned head, which the criteria presents as its expected reference.
+ * <b>A model's own bounds reach the criteria, and are pruned against the head.</b> An item bounded
+ * {@code until} a point before the head can match nothing appended later and is removed; an
+ * {@code after} before the head is dropped. So the criteria carry no bound, and the model's
+ * <em>read</em> keeps the one it asked for.
  */
 public class CommandLockFilterTest extends AbstractMockDomainTest {
 
@@ -110,8 +110,8 @@ public class CommandLockFilterTest extends AbstractMockDomainTest {
 		private final Tags tags;
 		int seen;
 		SecondsSinceSavepoint ( Tags tags ) { this.tags = tags; }
-		@Override public EventQuery initQuery ( ) { return EventQuery.forEvents(EventTypesFilter.of(ThirdDomainEvent.class), tags).backwards().limit(1); }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.forEvents(EventTypesFilter.of(SecondDomainEvent.class), tags); }
+		@Override public EventQuery initQuery ( ) { return EventQuery.of(EventFilter.forTypes(ThirdDomainEvent.class).tagged(tags)).backwards().limit(1); }
+		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class).tagged(tags)); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 
@@ -120,7 +120,7 @@ public class CommandLockFilterTest extends AbstractMockDomainTest {
 		private final EventReference until;
 		int seen;
 		FirstsUntil ( EventReference until ) { this.until = until; }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none()).until(until); }
+		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class)).notAfter(until); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 
@@ -211,8 +211,8 @@ public class CommandLockFilterTest extends AbstractMockDomainTest {
 
 		AppendCriteria criteria = countingStorage.lastAppendCriteria();
 		assertNotNull(criteria);
-		assertNull(criteria.eventFilter().until(),
-				"a criteria filter carrying an until deems nothing after it relevant, which is the check off rather than narrowed");
+		assertFalse(criteria.eventFilter().isBounded(),
+				"the model's read bound is a property of its read, not of what is relevant: " + criteria.eventFilter());
 	}
 
 	@ForEachBackend

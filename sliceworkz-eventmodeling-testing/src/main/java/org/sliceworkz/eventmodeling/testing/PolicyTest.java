@@ -35,7 +35,7 @@ import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
  * Base for testing {@link Policy policies}: seed the domain stream, let the policy react, and assert on the
@@ -142,8 +142,8 @@ public abstract class PolicyTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_E
 		List<Outcome.ReactionResult> outcomes = new ArrayList<>();
 		Exception failure = null;
 		EventReference stalledOn = null;
-		EventQuery query = policy.eventQuery();
-		for ( Event<DOMAIN_EVENT_TYPE> event : domainStream().query(query, after) ) {
+		EventFilter filter = policy.eventFilter();
+		for ( Event<DOMAIN_EVENT_TYPE> event : domainStream().query(filter, after) ) {
 			if ( domainBefore != null && event.reference().happenedAfter(domainBefore) ) {
 				break; // raised during this round: handed over in the next one, as a deployment would
 			}
@@ -157,8 +157,8 @@ public abstract class PolicyTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_E
 			}
 		}
 		List<Event<DOMAIN_EVENT_TYPE>> raised = domainBefore == null
-				? domainStream().query(EventQuery.matchAll())
-				: domainStream().query(EventQuery.matchAll(), domainBefore);
+				? domainStream().query(EventFilter.matchAll())
+				: domainStream().query(EventFilter.matchAll(), domainBefore);
 		return new ReactionResult(definition, outcomes, raised, failure, stalledOn);
 	}
 

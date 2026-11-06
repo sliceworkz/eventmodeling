@@ -36,6 +36,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
@@ -74,13 +75,9 @@ public class MonthStatementReadModel implements ReadModel<BankingEvent> {
 	 */
 	@Override
 	public EventQuery eventQuery() {
-		return EventQuery.forEvents(
-			EventTypesFilter.any(),
-			Tags.of(
+		return EventQuery.of(EventFilter.forTags(Tags.of(
 				BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
-				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(month))
-			)
-		);
+				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(month)))));
 	}
 
 	@Override

@@ -37,6 +37,7 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.infra.inmem.shredding.InMemoryShreddingKeyStore;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.shredding.DataSubject;
 import org.sliceworkz.eventstore.shredding.ErasureReason;
@@ -119,6 +120,6 @@ public class ShreddingCarriedByTheStorageTest {
 	private static ShreddingDomainEvent.TransferMade transfer ( EventStore reader ) {
 		return (ShreddingDomainEvent.TransferMade) reader
 				.getEventStream(BoundedContextStreams.domain("ShreddingFromStorage"), ShreddingDomainEvent.class)
-				.query(EventQuery.matchAll()).stream().findFirst().orElseThrow().data();
+				.query(EventFilter.matchAll()).stream().findFirst().orElseThrow().data();
 	}
 }

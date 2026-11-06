@@ -219,7 +219,7 @@ public class PublisherModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements L
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return publisher.eventQuery();
+			return EventQuery.of(publisher.eventFilter());
 		}
 
 		@Override

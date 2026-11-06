@@ -39,7 +39,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.observability.Observation;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.testing.RecordingObserver;
 
@@ -83,8 +83,8 @@ public class ProjectorBatchNamingTest extends AbstractMockDomainTest {
 
 	static class PublishingDispatcher implements Dispatcher<MockOutboundEvent> {
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeOutboundEvent.class), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeOutboundEvent.class);
 		}
 
 		@Override

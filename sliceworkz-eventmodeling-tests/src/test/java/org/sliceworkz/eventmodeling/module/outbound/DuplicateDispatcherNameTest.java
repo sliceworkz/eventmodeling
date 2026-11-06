@@ -31,9 +31,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
  * A dispatcher's name keys the bookmark recording what it has already published, so the two ways of
@@ -91,8 +89,8 @@ public class DuplicateDispatcherNameTest extends AbstractMockDomainTest {
 	static class MockDispatcher implements Dispatcher<MockOutboundEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.any(), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.matchAll();
 		}
 
 		@Override

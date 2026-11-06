@@ -34,9 +34,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
-import org.sliceworkz.eventstore.events.Tags;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 public class DuplicateTranslatorNameTest extends AbstractMockDomainTest {
 
@@ -83,8 +81,8 @@ public class DuplicateTranslatorNameTest extends AbstractMockDomainTest {
 	static class MockTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.any(), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.matchAll();
 		}
 
 		@Override

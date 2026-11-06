@@ -55,6 +55,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Lease;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.testing.EventStoreBackend.Capability;
@@ -355,7 +356,7 @@ public class BalancedLeaderElectionTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override
@@ -387,7 +388,7 @@ public class BalancedLeaderElectionTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override

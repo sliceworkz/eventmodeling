@@ -59,6 +59,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
@@ -334,7 +335,7 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 	static class CountingDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override
@@ -375,8 +376,8 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 
 	static class NamedDispatcher implements Dispatcher<MockOutboundEvent> {
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeOutboundEvent.class), Tags.none());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeOutboundEvent.class);
 		}
 
 		@Override

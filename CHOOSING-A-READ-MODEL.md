@@ -38,7 +38,7 @@ builder.readmodel(AccountDetails.class).live();
 AccountDetails details = context.read(AccountDetails.class, accountId);
 ```
 
-Projected when you read it, from the events its `eventQuery()` matches. Always current, nothing to
+Projected when you read it, from the events its `eventFilter()` matches. Always current, nothing to
 rebuild at start-up, no staleness to reason about, no infrastructure.
 
 **Correct whenever the set of events it replays is bounded by design** — scoped by tag to one entity
@@ -57,7 +57,7 @@ event bounded by design, the size of a decision model.
 
 Two ways, both cheaper than anything below:
 
-- **Narrow `eventQuery()`** by tags, so a read touches one entity's events rather than the stream.
+- **Narrow `eventFilter()`** by tags, so a read touches one entity's events rather than the stream.
 - **Introduce a savepoint event** and return it from `initQuery()` — a backwards `limit(1)` query for
   the newest summary event, after which only later events are replayed. "Closing the books" in the
   banking example is this: `MonthClosed` summarises a period and `MonthOpened` carries the balance
@@ -77,7 +77,7 @@ which is the more expensive answer to the same problem.
 public class AccountBalances extends PublishingReadModel<BankingEvent, Map<String,Balance>> {
     protected Map<String,Balance> initialState ( )                                     { return Map.of(); }
     protected Map<String,Balance> apply ( Map<String,Balance> s, Event<BankingEvent> e ) { return BalanceFold.apply(s, e); }
-    public EventQuery eventQuery ( )                                                    { return EventQuery.of(EventFilter.matchAll()); }
+    public EventFilter eventFilter ( )                                                    { return EventFilter.matchAll(); }
 }
 
 AccountBalances balances = new AccountBalances();

@@ -79,13 +79,13 @@ public class SavepointReadsMeasurement extends AbstractMockDomainTest {
 		int seen;
 		SinceSavepoint ( String entity ) { this.entity = entity; }
 		@Override public EventQuery initQuery ( ) { return EventQuery.of(EventFilter.forTypes(ThirdDomainEvent.class).tagged("entity", entity)).backwards().limit(1); }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class).tagged("entity", entity)); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class).tagged("entity", entity); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 
 	static class Plain implements DecisionModel<MockDomainEvent> {
 		int seen;
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class).tagged("account", "a1")); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.forTypes(SecondDomainEvent.class).tagged("account", "a1"); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 

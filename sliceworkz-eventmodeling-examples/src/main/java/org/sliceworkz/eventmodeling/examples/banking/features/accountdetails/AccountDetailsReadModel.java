@@ -27,8 +27,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomain
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 
@@ -44,8 +42,8 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 	}
 	
 	@Override
-	public EventQuery eventQuery() {
-		return EventQuery.of(EventFilter.forTags(BankingDomain.ACCOUNT.tags(accountId)));
+	public EventFilter eventFilter() {
+		return EventFilter.forTags(BankingDomain.ACCOUNT.tags(accountId));
 	}
 
 	@Override

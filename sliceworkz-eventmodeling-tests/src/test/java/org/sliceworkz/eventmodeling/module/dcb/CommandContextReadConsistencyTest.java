@@ -38,8 +38,6 @@ import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
@@ -77,8 +75,8 @@ public class CommandContextReadConsistencyTest extends AbstractMockDomainTest {
 	/** A decision model over SecondDomainEvent — deliberately unrelated to what the command reads. */
 	static class SecondCountingDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SecondDomainEvent.class);
 		}
 
 		@Override
@@ -147,8 +145,8 @@ public class CommandContextReadConsistencyTest extends AbstractMockDomainTest {
 
 	static class FirstCountingDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override

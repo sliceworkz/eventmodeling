@@ -44,7 +44,7 @@ public interface LiveModelSpecification<C extends BoundedContext<?,?,?>> {
 	 * with no projector to lag behind.
 	 *
 	 * <p>The default answer for a read model, and the right one whenever the set of events its
-	 * {@code eventQuery()} matches is bounded by design. Where it is not — and where narrowing the
+	 * {@code eventFilter()} matches is bounded by design. Where it is not — and where narrowing the
 	 * query or introducing a savepoint cannot make it so — the read belongs on a background projection
 	 * instead: register an instance with
 	 * {@link EventuallyConsistentReadModelSpecification#eventuallyConsistent()}.

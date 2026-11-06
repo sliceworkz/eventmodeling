@@ -28,7 +28,6 @@ import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * The balance of one account, current as of the moment it is read.
@@ -82,8 +81,8 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
 	 * rather than everything the deployment has appended since.
 	 */
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.forTags(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId)));
+	public EventFilter eventFilter ( ) {
+		return EventFilter.forTags(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
 	}
 
 	@Override

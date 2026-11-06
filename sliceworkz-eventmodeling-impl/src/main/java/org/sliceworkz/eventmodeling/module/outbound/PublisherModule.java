@@ -45,7 +45,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.projection.ProjectorException;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 /**
@@ -218,8 +218,8 @@ public class PublisherModule<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements L
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(publisher.eventFilter());
+		public EventFilter eventFilter ( ) {
+			return publisher.eventFilter();
 		}
 
 		@Override

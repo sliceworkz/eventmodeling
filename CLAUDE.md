@@ -1114,7 +1114,7 @@ processor:**
   model mutates its own fields from `when` on the projector's thread while readers call its getters
   from theirs — so a reader can observe a half-applied batch — and a reader that wants to catch it up
   needs the state and the position as one observation. `published()` is that observation
-- What a subclass writes is a state type, `initialState()`, `apply(state, event)` and `eventQuery()`.
+- What a subclass writes is a state type, `initialState()`, `apply(state, event)` and `eventFilter()`.
   `beforeBatch`/`when`/`afterBatch`/`cancelBatch` are final: a batch is folded aside into `pending` and
   becomes visible only by replacing the published pair, so a cancelled batch republishes nothing and a
   batch matching none of our events leaves the position where it was — the projector read past events
@@ -1978,11 +1978,13 @@ query where only a filter can be followed is one whose mistakes compile and then
   the last event *read*, so an event the aggregate does not read, stored after that one, conflicts every
   append and every retry: the aggregate can never append again. `AggregateFilterTest` pins the default,
   that case, and both kinds of event arriving between load and append
-- **`ReadModel`, `TodoListReadModel` and `DecisionModel` keep their `EventQuery`**, because the live path
-  uses all of it: a live model or a decision model may read the newest event backwards with a limit of
-  one, and `initQuery()` is the savepoint pattern. The alternative — a filter-only interface for
-  background read models — loses because it splits one concept in two for a read model registered both
-  ways, and moves the choice of projection from the registration into the type
+- **`ReadModel`, `TodoListReadModel` and `DecisionModel` declare `eventFilter()` and keep an overridable
+  `EventQuery`** — the eventstore's `Projection`: `eventQuery()` defaults to `EventQuery.of(eventFilter())`,
+  and is overridden only where the live path uses more of it: a live model or a decision model reading the
+  newest event backwards with a limit of one builds `EventQuery.of(eventFilter()).backwards().limit(1)`,
+  and `initQuery()` is the savepoint pattern. The alternative — a filter-only interface for background
+  read models — loses because it splits one concept in two for a read model registered both ways, and
+  moves the choice of projection from the registration into the type
 - **So an eventually consistent registration is held to a forward read at `build()`**:
   `rejectEventuallyConsistentReadModelsThatCannotBeReadForward` names every eventually consistent read
   model — a todo list included — whose `eventQuery()` reads backwards, is limited or carries a

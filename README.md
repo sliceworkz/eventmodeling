@@ -73,8 +73,8 @@ public class AccountStandingDecisionModel implements DecisionModel<BankingEvent>
 
     public AccountStandingDecisionModel ( AccountId accountId ) { this.accountId = accountId; }
 
-    @Override public EventQuery eventQuery ( ) {
-        return EventQuery.of(EventFilter.forTypes(AccountOpened.class, AccountFrozen.class, AccountClosed.class).tagged(ACCOUNT.tags(accountId)));
+    @Override public EventFilter eventFilter ( ) {
+        return EventFilter.forTypes(AccountOpened.class, AccountFrozen.class, AccountClosed.class).tagged(ACCOUNT.tags(accountId));
     }
 
     @Override public void when ( Event<BankingEvent> event ) {

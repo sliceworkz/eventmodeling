@@ -55,10 +55,8 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventFilterItem;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
 
@@ -236,8 +234,8 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 		}
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(translator.eventFilter());
+		public EventFilter eventFilter() {
+			return translator.eventFilter();
 		}
 	}
 

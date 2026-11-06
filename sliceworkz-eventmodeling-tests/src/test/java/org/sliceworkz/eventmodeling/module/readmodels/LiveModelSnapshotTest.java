@@ -37,7 +37,6 @@ import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 public class LiveModelSnapshotTest extends AbstractMockDomainTest {
@@ -212,8 +211,8 @@ class SnapshotLiveModel implements ReadModel<MockDomainEvent>, SnapshotCapable<S
 	}
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.matchAll());
+	public EventFilter eventFilter ( ) {
+		return EventFilter.matchAll();
 	}
 
 	@Override

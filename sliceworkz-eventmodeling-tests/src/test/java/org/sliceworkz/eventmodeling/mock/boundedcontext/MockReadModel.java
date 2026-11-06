@@ -23,7 +23,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 public class MockReadModel implements ReadModel<MockDomainEvent> {
 	
@@ -33,7 +32,7 @@ public class MockReadModel implements ReadModel<MockDomainEvent> {
 	private int eventCount = 0;
 	private ThreadLocal<Integer> eventCountPerThread = new ThreadLocal<>();
 
-	private EventQuery eventQuery;
+	private EventFilter eventFilter;
 	private ReadModelStorage storage;
 
 	public MockReadModel ( String name, List<Class<?>> queriedClasses ) {
@@ -47,13 +46,13 @@ public class MockReadModel implements ReadModel<MockDomainEvent> {
 	public MockReadModel ( String name, ReadModelStorage storage ) {
 		this.name = name;
 		this.storage = storage;
-		this.eventQuery = EventQuery.of(EventFilter.matchAll());
+		this.eventFilter = EventFilter.matchAll();
 	}
 
 	public MockReadModel ( String name, List<Class<?>> queriedClasses, ReadModelStorage storage ) {
 		this.name = name;
 		this.storage = storage;
-		this.eventQuery = EventQuery.of(EventFilter.forTypes(queriedClasses.toArray(Class<?>[]::new)));
+		this.eventFilter = EventFilter.forTypes(queriedClasses.toArray(Class<?>[]::new));
 	}
 
 	@Override
@@ -62,8 +61,8 @@ public class MockReadModel implements ReadModel<MockDomainEvent> {
 	}
 
 	@Override
-	public EventQuery eventQuery() {
-		return eventQuery;
+	public EventFilter eventFilter() {
+		return eventFilter;
 	}
 
 	@Override

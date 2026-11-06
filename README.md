@@ -74,7 +74,7 @@ public class AccountStandingDecisionModel implements DecisionModel<BankingEvent>
     public AccountStandingDecisionModel ( AccountId accountId ) { this.accountId = accountId; }
 
     @Override public EventFilter eventFilter ( ) {
-        return EventFilter.forTypes(AccountOpened.class, AccountFrozen.class, AccountClosed.class).tagged(ACCOUNT.tags(accountId));
+        return EventFilter.forTypes(AccountOpened.class, AccountFrozen.class, AccountClosed.class).tagged(ACCOUNT.tag(accountId));
     }
 
     @Override public void when ( Event<BankingEvent> event ) {
@@ -106,7 +106,7 @@ public record FreezeAccountCommand ( AccountId accountId, String reason ) implem
         BusinessException.when(account.closed(),  "Account " + accountId.value() + " is closed");
         BusinessException.when(account.frozen(),  "Account " + accountId.value() + " is already frozen");
 
-        result.raiseEvent(new AccountFrozen(accountId, reason.strip()), ACCOUNT.tags(accountId));
+        result.raiseEvent(new AccountFrozen(accountId, reason.strip()), ACCOUNT.tag(accountId));
     }
 }
 ```
@@ -161,8 +161,8 @@ AccountDetailsReadModel details = banking.read(AccountDetailsReadModel.class, ac
 @Test
 void anAccountIsFrozenOnce ( ) {
     given()
-        .event(opened(), ACCOUNT.tags(ACCOUNT_1))
-        .event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1))
+        .event(opened(), ACCOUNT.tag(ACCOUNT_1))
+        .event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tag(ACCOUNT_1))
         .when(new FreezeAccountCommand(ACCOUNT_1, "again"))
         .then()
         .businessError("Account acc-1 is already frozen");

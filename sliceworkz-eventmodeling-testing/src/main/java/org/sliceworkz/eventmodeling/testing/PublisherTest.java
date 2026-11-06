@@ -52,8 +52,8 @@ import org.sliceworkz.eventstore.query.EventFilter;
  *
  *     @Test
  *     void aPlannedSessionIsPublishedAsItWasPlanned ( ) {
- *         given(new SessionPlanned(...), Planning.SESSION.tags(sessionId))
- *             .and(new SessionCapacityChanged(...), Planning.SESSION.tags(sessionId))
+ *         given(new SessionPlanned(...), Planning.SESSION.tag(sessionId))
+ *             .and(new SessionCapacityChanged(...), Planning.SESSION.tag(sessionId))
  *         .whenPublished()
  *             .published(new PlannedSessionPublished(... capacity 20 ...),
  *                        new PlannedSessionPublished(... capacity 25 ...));

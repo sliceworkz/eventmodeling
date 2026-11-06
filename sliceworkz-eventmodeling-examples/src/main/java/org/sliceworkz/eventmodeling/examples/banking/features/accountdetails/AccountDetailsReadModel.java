@@ -43,7 +43,7 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 	
 	@Override
 	public EventFilter eventFilter() {
-		return EventFilter.forTags(BankingDomain.ACCOUNT.tags(accountId));
+		return EventFilter.forTags(BankingDomain.ACCOUNT.tag(accountId));
 	}
 
 	@Override

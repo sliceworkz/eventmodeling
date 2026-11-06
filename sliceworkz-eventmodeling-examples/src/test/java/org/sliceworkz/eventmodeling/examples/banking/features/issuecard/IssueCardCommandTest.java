@@ -65,7 +65,7 @@ public class IssueCardCommandTest extends CommandTest<BankingEvent, BankingInbou
 	@Test
 	void aCardIsIssuedOnAnOpenAccount ( ) {
 		given()
-			.event(opened(), ACCOUNT.tags(ACCOUNT_1))
+			.event(opened(), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.when(new IssueCardCommand(ACCOUNT_1, CARD_A, TODAY))
 			.then()
 			.event(new CardIssued(ACCOUNT_1, CARD_A, TODAY), Tags.of(ACCOUNT.tag(ACCOUNT_1), CARD.tag(CARD_A)));
@@ -82,8 +82,8 @@ public class IssueCardCommandTest extends CommandTest<BankingEvent, BankingInbou
 	@Test
 	void noCardOnAFrozenAccount ( ) {
 		given()
-			.event(opened(), ACCOUNT.tags(ACCOUNT_1))
-			.event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1))
+			.event(opened(), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
+			.event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.when(new IssueCardCommand(ACCOUNT_1, CARD_A, TODAY))
 			.then()
 			.businessError("Account acc-1 is frozen");
@@ -92,8 +92,8 @@ public class IssueCardCommandTest extends CommandTest<BankingEvent, BankingInbou
 	@Test
 	void noCardOnAClosedAccount ( ) {
 		given()
-			.event(opened(), ACCOUNT.tags(ACCOUNT_1))
-			.event(new AccountClosed(ACCOUNT_1, TODAY), ACCOUNT.tags(ACCOUNT_1))
+			.event(opened(), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
+			.event(new AccountClosed(ACCOUNT_1, TODAY), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.when(new IssueCardCommand(ACCOUNT_1, CARD_A, TODAY))
 			.then()
 			.businessError("Account acc-1 is closed");

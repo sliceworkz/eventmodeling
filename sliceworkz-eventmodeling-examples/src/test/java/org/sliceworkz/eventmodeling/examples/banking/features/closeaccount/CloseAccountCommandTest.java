@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.closeaccount;
 
+import org.sliceworkz.eventstore.events.Tags;
 import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.ACCOUNT;
 import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CUSTOMER;
 
@@ -56,27 +57,27 @@ public class CloseAccountCommandTest extends CommandTest<BankingEvent, BankingIn
 	@Test
 	void anOpenAccountIsClosed ( ) {
 		given()
-			.event(opened(), ACCOUNT.tags(ACCOUNT_1))
+			.event(opened(), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.when(new CloseAccountCommand(ACCOUNT_1, CLOSED_ON))
 			.then()
-			.event(new AccountClosed(ACCOUNT_1, CLOSED_ON), ACCOUNT.tags(ACCOUNT_1));
+			.event(new AccountClosed(ACCOUNT_1, CLOSED_ON), Tags.of(ACCOUNT.tag(ACCOUNT_1)));
 	}
 
 	@Test
 	void aFrozenAccountCanBeClosed ( ) {
 		given()
-			.event(opened(), ACCOUNT.tags(ACCOUNT_1))
-			.event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1))
+			.event(opened(), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
+			.event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.when(new CloseAccountCommand(ACCOUNT_1, CLOSED_ON))
 			.then()
-			.event(new AccountClosed(ACCOUNT_1, CLOSED_ON), ACCOUNT.tags(ACCOUNT_1));
+			.event(new AccountClosed(ACCOUNT_1, CLOSED_ON), Tags.of(ACCOUNT.tag(ACCOUNT_1)));
 	}
 
 	@Test
 	void anAccountIsClosedOnce ( ) {
 		given()
-			.event(opened(), ACCOUNT.tags(ACCOUNT_1))
-			.event(new AccountClosed(ACCOUNT_1, CLOSED_ON), ACCOUNT.tags(ACCOUNT_1))
+			.event(opened(), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
+			.event(new AccountClosed(ACCOUNT_1, CLOSED_ON), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.when(new CloseAccountCommand(ACCOUNT_1, CLOSED_ON))
 			.then()
 			.businessError("Account acc-1 is already closed");

@@ -55,7 +55,7 @@ need nothing more. An `EventStream` answers an `EventQuery` — event types, tag
 ```java
 // the newest fact of one kind about one entity: one query, one event
 Optional<Event<BankingEvent>> lastClose = eventStream
-    .query(EventQuery.of(EventFilter.forTypes(MonthClosed.class).tagged(ACCOUNT.tags(accountId)))
+    .query(EventQuery.of(EventFilter.forTypes(MonthClosed.class).tagged(ACCOUNT.tag(accountId)))
                      .backwards().limit(1))
     .stream().findFirst();
 ```
@@ -94,7 +94,7 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 
     @Override
     public EventFilter eventFilter ( ) {
-        return EventFilter.forTags(BankingDomain.ACCOUNT.tags(accountId));
+        return EventFilter.forTags(BankingDomain.ACCOUNT.tag(accountId));
     }
 
     @Override
@@ -192,12 +192,12 @@ backwards `limit(1)` query and replays only what came after:
 @Override
 public EventQuery initQuery ( ) {
     return EventQuery.of(EventFilter.forTypes(AccountOpened.class, MonthOpened.class).tagged(// the savepoints
-        ACCOUNT.tags(accountId))).backwards().limit(1);
+        ACCOUNT.tag(accountId))).backwards().limit(1);
 }
 
 @Override
 public EventFilter eventFilter ( ) {
-    return EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class).tagged(ACCOUNT.tags(accountId)               // movements only);
+    return EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class).tagged(ACCOUNT.tag(accountId)               // movements only);
 }
 ```
 
@@ -427,7 +427,7 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
 
     @Override
     public EventFilter eventFilter ( ) {          // only this account -> the delta stays tiny
-        return EventFilter.forTags(ACCOUNT.tags(accountId));
+        return EventFilter.forTags(ACCOUNT.tag(accountId));
     }
 
     @Override

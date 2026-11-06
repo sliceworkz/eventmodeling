@@ -30,7 +30,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountAccess.CardIssued;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CardId;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountstanding.AccountStandingDecisionModel;
-import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * Issues a card on an account that is open and neither frozen nor closed.
@@ -56,7 +55,7 @@ public record IssueCardCommand ( AccountId accountId, CardId cardId, LocalDate i
 		BusinessException.when(account.closed(), "Account " + accountId.value() + " is closed");
 		BusinessException.when(account.frozen(), "Account " + accountId.value() + " is frozen");
 
-		result.raiseEvent(new CardIssued(accountId, cardId, issuedOn), Tags.of(ACCOUNT.tag(accountId), CARD.tag(cardId)));
+		result.raiseEvent(new CardIssued(accountId, cardId, issuedOn), ACCOUNT.tag(accountId), CARD.tag(cardId));
 	}
 
 }

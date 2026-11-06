@@ -38,7 +38,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActivePeriodDecisionModel;
 import org.sliceworkz.eventmodeling.rules.Overrides;
 import org.sliceworkz.eventmodeling.rules.Overriding;
-import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * Withdraws money from the account's currently active period — and the worked example of a command that
@@ -134,10 +133,8 @@ public record WithdrawCommand ( AccountId accountId, BigDecimal amount, String d
 		// ── raise as if everything were allowed: the kernel stops what may not go ahead
 		result.raiseEvent(
 			new MoneyWithdrawn(accountId, period.activeMonth(), amount, description, context.ruleViolations()),
-			Tags.of(
-				BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
+			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
 				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(period.activeMonth()))
-			)
-		);
+			);
 	}
 }

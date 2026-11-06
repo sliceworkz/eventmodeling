@@ -335,8 +335,8 @@ public interface BankingDomain {
 
 AccountId accountId = ACCOUNT.newId();                                  // mint
 result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
-        Tags.of(ACCOUNT.tag(accountId), CUSTOMER.tag(customerId)));     // tag
-EventQuery.of(EventFilter.forTags(ACCOUNT.tags(accountId)));  // query
+        ACCOUNT.tag(accountId), CUSTOMER.tag(customerId));              // tag
+EventFilter.forTags(ACCOUNT.tag(accountId));                            // query
 ACCOUNT.idIn(event.tags());                                             // read back, Optional<AccountId>
 ACCOUNT.idsIn(transfer.tags());                                         // an event about two accounts, Set<AccountId>
 ```
@@ -365,9 +365,13 @@ ACCOUNT.idsIn(transfer.tags());                                         // an ev
   the payload. Renaming either changes what new events carry and none of the old ones. The record's
   *class* name is not stored — the serde uses no default typing — so the record can be renamed or
   moved freely
-- **Tags are made through the entity, never through a static factory beside it.** `tag(id)`,
-  `tags(id)` and the bare `tag()` flag are instance methods, so the id type is checked and the
-  key cannot be misspelled. Static `Tag`/`Tags` factory classes taking an entity and an id — the
+- **Tags are made through the entity, never through a static factory beside it.** `tag(id)` and the
+  bare `tag()` flag are instance methods, so the id type is checked and the key cannot be misspelled.
+  The entity makes a `Tag` and nothing else: everything that takes tags takes `Tag...` too
+  (`EventFilter.forTags`, `.tagged`, `CommandResult.raiseEvent(event, Tag...)`), and `Tags.of(...)`
+  is for the few places that take a `Tags` alone. The alternative — a `tags(id)` beside `tag(id)`
+  answering the same tag as a `Tags` — loses because it is a second spelling of one call, and the
+  one people reach for first wraps a single tag where nothing needs it wrapped. Static `Tag`/`Tags` factory classes taking an entity and an id — the
   natural alternative — lose because they would duplicate these methods under a second name and
   cannot be typed by the entity they are handed. A tag whose value is not the identity of anything
   (a region, a channel) is an ordinary `Tag.of("region", "EU")`; not every tag is an entity

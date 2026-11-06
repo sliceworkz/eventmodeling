@@ -50,7 +50,7 @@ public record CloseAccountCommand ( AccountId accountId, LocalDate closedOn ) im
 		BusinessException.when(!account.opened(), "Account " + accountId.value() + " does not exist");
 		BusinessException.when(account.closed(), "Account " + accountId.value() + " is already closed");
 
-		result.raiseEvent(new AccountClosed(accountId, closedOn), BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+		result.raiseEvent(new AccountClosed(accountId, closedOn), BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
 	}
 
 }

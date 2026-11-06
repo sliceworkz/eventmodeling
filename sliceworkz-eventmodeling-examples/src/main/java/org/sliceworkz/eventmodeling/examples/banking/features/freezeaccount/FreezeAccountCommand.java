@@ -53,7 +53,7 @@ public record FreezeAccountCommand ( AccountId accountId, String reason ) implem
 		BusinessException.when(account.closed(), "Account " + accountId.value() + " is closed");
 		BusinessException.when(account.frozen(), "Account " + accountId.value() + " is already frozen");
 
-		result.raiseEvent(new AccountFrozen(accountId, reason.strip()), BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+		result.raiseEvent(new AccountFrozen(accountId, reason.strip()), BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
 	}
 
 }

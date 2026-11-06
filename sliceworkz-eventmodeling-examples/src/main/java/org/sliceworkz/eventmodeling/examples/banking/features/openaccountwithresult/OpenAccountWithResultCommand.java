@@ -26,7 +26,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomainEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.CustomerId;
-import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * Opens a new bank account and returns the generated account ID directly to the caller.
@@ -52,11 +51,9 @@ public class OpenAccountWithResultCommand implements CommandWithResult<BankingDo
 		AccountId accountId = BankingDomain.ACCOUNT.newId();
 
 		result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
-				Tags.of(
-						BankingDomain.ACCOUNT.tag(accountId),
+				BankingDomain.ACCOUNT.tag(accountId),
 						BankingDomain.CUSTOMER.tag(customerId)
-				)
-			);
+				);
 
 		return accountId;
 	}

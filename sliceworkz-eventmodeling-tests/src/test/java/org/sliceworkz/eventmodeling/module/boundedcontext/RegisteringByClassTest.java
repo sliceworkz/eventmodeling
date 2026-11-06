@@ -36,6 +36,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
@@ -134,7 +135,7 @@ public class RegisteringByClassTest extends AbstractMockDomainTest {
 	}
 
 	private static EventQuery everything ( ) {
-		return EventQuery.forEvents(EventTypesFilter.any(), Tags.none());
+		return EventQuery.of(EventFilter.of(EventTypesFilter.any(), Tags.none()));
 	}
 
 	public static class PublicTranslator implements Translator<MockInboundEvent,MockDomainEvent> {

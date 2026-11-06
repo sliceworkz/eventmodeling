@@ -38,6 +38,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projector;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.Limit;
 
@@ -253,7 +254,7 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 				automationStopped = true;
 			}
 
-			List<Event<DOMAIN_EVENT_TYPE>> newDomainEvents = domainStream().query(EventQuery.matchAll(), domainBookmark);
+			List<Event<DOMAIN_EVENT_TYPE>> newDomainEvents = domainStream().query(EventFilter.matchAll(), domainBookmark);
 			return new BatchResult(this, outcome, newDomainEvents);
 		}
 

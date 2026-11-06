@@ -31,6 +31,7 @@ import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -191,7 +192,7 @@ public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBO
 				// Collect events raised after the action
 				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore()
 						.getEventStream(eventStreamId(), domainEventType())
-						.query(EventQuery.matchAll(), bookmark);
+						.query(EventFilter.matchAll(), bookmark);
 
 				this.result = new TestResultImpl(newEvents);
 			} catch (Exception exception) {

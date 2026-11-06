@@ -109,30 +109,6 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 	private CommandResult<CONSUMED_EVENT_TYPE,PRODUCED_EVENT_TYPE> executeDecisionModels ( ) {
 
-		// Partition the decision models. Models with a savepoint (initQuery) keep their own projector so
-		// the Projector handles their initQuery/eventQuery cursor management; their eventQuery replay must
-		// start after the savepoint and therefore cannot be merged with other reads. Plain models (no
-		// initQuery) have their eventQueries reduced to the minimal set of merged physical queries (see
-		// merge below) and are projected together through a single composite read per merged query.
-		List<DecisionModel<CONSUMED_EVENT_TYPE>> savepointModels = new ArrayList<>();
-		List<DecisionModel<CONSUMED_EVENT_TYPE>> plainModels = new ArrayList<>();
-		// The savepoint queries as they are about to be read, kept for the lock filter below. Captured
-		// here rather than asked for again after the reads, deliberately the opposite of eventQuery():
-		// this is the query the Projector is handed, so the filter that is locked on is the filter the
-		// savepoint was actually found with.
-		List<EventFilter> savepointFilters = new ArrayList<>();
-		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
-			EventQuery initQuery = p.initQuery();
-			if ( initQuery != null && !initQuery.filter().isMatchNone() ) {
-				savepointModels.add(p);
-				savepointFilters.add(initQuery.filter());
-			} else {
-				plainModels.add(p);
-			}
-		}
-
-		List<MergedRead<CONSUMED_EVENT_TYPE>> mergedReads = merge(plainModels);
-
 		// The consistency boundary, pinned BEFORE any read: the domain stream's head. Every read below is
 		// bounded at it and the append presents it as the expected reference, so however many physical
 		// reads the command makes they share one boundary. Two reads happen sequentially and are not
@@ -153,33 +129,60 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 		ProjectorMetrics accumulatedMetrics = ProjectorMetrics.empty();
 
-		// project the plain models: one composite read per merged query, dispatching each event to the
-		// plain models whose own eventQuery matches it
-		for ( MergedRead<CONSUMED_EVENT_TYPE> read: mergedReads ) {
-			List<DecisionModel<CONSUMED_EVENT_TYPE>> modelsForRead = read.models();
-			CompositeDecisionModel<CONSUMED_EVENT_TYPE> composite = new CompositeDecisionModel<>(read.query(), modelsForRead);
+		// First the savepoints. A model with an initQuery decides on the newest savepoint and on what came
+		// after it: its savepoint is read on its own (a backwards, limited read cannot be united with
+		// anything -- the newest of either is not the newest of each), handed to the model, and its
+		// eventQuery -- asked only now, since a model may learn it from its savepoint -- becomes a filter
+		// bounded after that savepoint. A forward, unlimited one then joins the merged read below like a
+		// plain model's: one physical read for every model, where each savepoint model used to page its
+		// own. The init filters are kept for the lock filter.
+		List<ModelRead<CONSUMED_EVENT_TYPE>> modelReads = new ArrayList<>();
+		List<EventFilter> savepointFilters = new ArrayList<>();
+		for ( DecisionModel<CONSUMED_EVENT_TYPE> model: decisionModels ) {
+			EventQuery initQuery = model.initQuery();
+			if ( initQuery == null || initQuery.filter().isMatchNone() ) {
+				modelReads.add(new ModelRead<>(model, model.eventQuery(), null, null));
+				continue;
+			}
+			savepointFilters.add(initQuery.filter());
+			SavepointRead<CONSUMED_EVENT_TYPE> savepoint = new SavepointRead<>(model, initQuery);
 			long start = Elapsed.start();
-			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).into(composite).build();
-			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
-			long durationMicros = Elapsed.microsSince(start);
+			ProjectorMetrics metrics = run(Projector.from(queryEventStream).into(savepoint).build(), boundary);
 			accumulatedMetrics = accumulatedMetrics.add(metrics);
-			for ( int i = 0; i < modelsForRead.size(); i++ ) {
-				decisionModelProjections.add(new DecisionModelProjection(
-						modelsForRead.get(i).getClass(), durationMicros, metrics.queriesDone(),
-						metrics.eventsStreamed(), composite.handledBy(i), metrics.mostRecentEventReference()));
+			DecisionModelProjection initProjection = new DecisionModelProjection(model.getClass(), Elapsed.microsSince(start),
+					metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.mostRecentEventReference());
+			EventQuery eventQuery = model.eventQuery();
+			if ( eventQuery.direction() == EventQuery.Direction.FORWARD && !eventQuery.limit().isSet() ) {
+				EventQuery afterSavepoint = new EventQuery(eventQuery.filter().afterIfLater(savepoint.last), EventQuery.Direction.FORWARD, null, eventQuery.notAfter());
+				modelReads.add(new ModelRead<>(model, afterSavepoint, initProjection, null));
+			} else {
+				// a backward or limited read after a savepoint is read on its own, from the savepoint on
+				modelReads.add(new ModelRead<>(model, eventQuery, initProjection, savepoint.last));
 			}
 		}
 
-		// project each savepoint model through its own projector so its initQuery savepoint is honoured
-		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: savepointModels ) {
+		// Then every model's own read, reduced to the minimal set of physical reads and each bounded at the
+		// pinned head; a model is handed the events that match its own filter within its own bounds
+		for ( MergedRead<CONSUMED_EVENT_TYPE> read: merge(modelReads) ) {
+			CompositeDecisionModel<CONSUMED_EVENT_TYPE> composite = new CompositeDecisionModel<>(read.query(), read.models());
 			long start = Elapsed.start();
-			Projector<CONSUMED_EVENT_TYPE> projector = Projector.from(queryEventStream).into(p).build();
-			ProjectorMetrics metrics = ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
+			Projector.Builder<CONSUMED_EVENT_TYPE> builder = Projector.from(queryEventStream).into(composite);
+			if ( read.startingAfter() != null ) {
+				builder = builder.startingAfter(read.startingAfter());
+			}
+			ProjectorMetrics metrics = run(builder.build(), boundary);
 			long durationMicros = Elapsed.microsSince(start);
 			accumulatedMetrics = accumulatedMetrics.add(metrics);
-			decisionModelProjections.add(new DecisionModelProjection(
-					p.getClass(), durationMicros, metrics.queriesDone(),
-					metrics.eventsStreamed(), metrics.eventsHandled(), metrics.mostRecentEventReference()));
+			for ( int i = 0; i < read.models().size(); i++ ) {
+				ModelRead<CONSUMED_EVENT_TYPE> modelRead = read.models().get(i);
+				DecisionModelProjection init = modelRead.initProjection();
+				decisionModelProjections.add(init == null
+						? new DecisionModelProjection(modelRead.model().getClass(), durationMicros, metrics.queriesDone(),
+								metrics.eventsStreamed(), composite.handledBy(i), metrics.mostRecentEventReference())
+						: new DecisionModelProjection(modelRead.model().getClass(), init.durationMicros() + durationMicros,
+								init.queriesDone() + metrics.queriesDone(), init.eventsStreamed() + metrics.eventsStreamed(),
+								init.eventsHandled() + composite.handledBy(i), metrics.mostRecentEventReference() != null ? metrics.mostRecentEventReference() : init.until()));
+			}
 		}
 
 		// the lock reference is the pinned boundary, absent for an empty stream or a command without
@@ -188,14 +191,14 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 
 		projectorMetrics = accumulatedMetrics;
 
-		// The optimistic-lock filter: the union of EVERY query the models were actually read with — each
-		// model's eventQuery, and the initQuery of a savepoint model.
-		// The eventQueries are collected here and not before the reads because a savepoint model only
-		// learns its query once its initQuery has run — the Projector calls eventQuery() after handing it
-		// those events — so a union taken up front would describe a query that was never executed. Where
-		// such a model starts out matchNone, that union is matchNone, which is precisely
-		// AppendCriteria.none(): the command would decide on facts it never locked and append with no
-		// consistency check at all.
+		// The optimistic-lock filter: the union of EVERY filter the models were read with — each model's
+		// read, and the initQuery of a savepoint model.
+		// A savepoint model's read is taken as it was made, after its savepoint: the criteria drops that
+		// lower bound (it lies at or before the head the criteria compares against), so what is locked is
+		// "no event of these types, for these tags, after the boundary". A model's own read bound
+		// (notAfter) is a property of its read and not of its filter, so it never reaches the criteria;
+		// the bounds of its items do, and the criteria leaves out an item bounded at or before the head --
+		// nothing appended later can match it.
 		// The initQueries are in it because a savepoint model decides on two reads and both are facts it
 		// relied on: "the newest savepoint is X" is as much a decision as "these are the movements after
 		// it". Locked on the eventQuery alone, an event of a savepoint type landing after the boundary
@@ -208,13 +211,10 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		// savepoint: a model that found none replayed from the beginning, and a savepoint appearing after
 		// the boundary makes that answer just as stale.
 		// Direction and limit play no part — a filter carries neither — which is what lets a
-		// backwards().limit(1) savepoint query join the union at all: the fact locked on is "no event of
-		// these types, for these tags, after the boundary", not "the newest one is still the newest".
-		// Every event matching this filter up to the boundary was read, by the same queries under the same
-		// boundary, so "nothing matching appeared after the reference" is exactly the right check.
+		// backwards().limit(1) savepoint query join the union at all.
 		List<EventFilter> readFilters = new ArrayList<>();
-		for ( DecisionModel<CONSUMED_EVENT_TYPE> p: decisionModels ) {
-			readFilters.add(p.eventQuery().filter());
+		for ( ModelRead<CONSUMED_EVENT_TYPE> modelRead: modelReads ) {
+			readFilters.add(modelRead.query().filter());
 		}
 		readFilters.addAll(savepointFilters);
 		EventFilter lockFilter = union(readFilters);
@@ -223,76 +223,118 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		return commandResult;
 	}
 
+	private static <E> ProjectorMetrics run ( Projector<E> projector, EventReference boundary ) {
+		return ( boundary == null ) ? projector.run() : projector.runUntil(boundary);
+	}
+
 	/**
-	 * The union of the given filters, or match-none when there are none to combine.
-	 * <p>
-	 * Each member is stripped of its {@code until} first. A filter carrying one deems no event after it a
-	 * new relevant fact, so as an {@code AppendCriteria} it admits every append and raises no
-	 * {@code OptimisticLockingException} — the check off rather than narrowed, and silently, since the
-	 * append reports success. A model is free to bound its own read that way; what this command decided on
-	 * is bounded by the pinned head, which the criteria presents as its expected reference, and the filter
-	 * says only which events are relevant. Stripping is also what makes the union well-formed:
-	 * {@link EventFilter#or} refuses two members that do not share an {@code until}, which an unbounded
-	 * initQuery united with a bounded eventQuery would otherwise hit.
+	 * The union of the given filters, or match-none when there are none to combine. Every member keeps
+	 * the bounds of its items, and {@link EventFilter#or} unites differently bounded items as they are.
 	 */
 	private static EventFilter union ( List<EventFilter> filters ) {
 		EventFilter combined = null;
 		for ( EventFilter filter: filters ) {
-			EventFilter unbounded = filter.until(null);
-			combined = ( combined == null ) ? unbounded : combined.or(unbounded);
+			combined = ( combined == null ) ? filter : combined.or(filter);
 		}
 		return ( combined == null ) ? EventFilter.matchNone() : combined;
 	}
 
 	/**
-	 * One physical read and the plain decision models projected from it.
+	 * One decision model and the read it is projected from: its eventQuery, bounded after its savepoint
+	 * when it has one. {@code initProjection} is what reading the savepoint cost, null for a plain model;
+	 * {@code startingAfter} is set only for a savepoint model whose read could not be bounded by its filter
+	 * (backward or limited), and is then read on its own from there.
 	 */
-	private record MergedRead<E> ( EventQuery query, List<DecisionModel<E>> models ) { }
+	private record ModelRead<E> ( DecisionModel<E> model, EventQuery query, DecisionModelProjection initProjection, EventReference startingAfter ) { }
 
 	/**
-	 * Reduces the plain models' queries to the minimal set of physical reads. Unlimited queries with
-	 * the same direction and {@code until} are folded into one query through {@link EventQuery#or},
-	 * which is the union of their filters (a match-all member makes the union match-all); a query
-	 * carrying a limit is read on its own, since a limit over a union does not mean "the newest n of
-	 * each". Direction and {@code until} are what {@code or} refuses to combine, so grouping on them
-	 * is what keeps the fold well-defined. Reads come out in the order the models were given.
+	 * One physical read and the decision models projected from it.
 	 */
-	private static <E> List<MergedRead<E>> merge ( List<DecisionModel<E>> plainModels ) {
-		record GroupKey ( EventQuery.Direction direction, EventReference until ) { }
+	private record MergedRead<E> ( EventQuery query, List<ModelRead<E>> models, EventReference startingAfter ) { }
+
+	/**
+	 * Reduces the models' reads to the minimal set of physical reads. Unlimited reads with the same
+	 * direction and read bound are folded into one, over the union of their filters (a match-all member
+	 * makes the union match-all), each item keeping its own bounds -- so the savepoint models' reads, each
+	 * bounded after its own savepoint, are one read however many there are.
+	 * <p>
+	 * A read whose items carry bounds is folded only with others that do. On PostgreSQL a union of
+	 * differently bounded items is a statement of its own, one ordered branch per item, planned on every
+	 * execution; folding an unbounded read into it costs that read the single statement and the cached plan
+	 * it has on its own, on every page. Measured on a command deciding on three savepoint models beside one
+	 * plain model that pages through ~1.400 events (PG18): one fold of everything read in 30,1 ms against
+	 * 26,6 before any merging, where keeping the two kinds apart reads in 25,7 -- the same two reads saved
+	 * either way.
+	 * <p>
+	 * A read carrying a limit is read on its own, since a limit over a union does not mean "the newest n
+	 * of each", and so is a read that has to start after a reference of its own. Reads come out in the
+	 * order the models were given.
+	 */
+	private static <E> List<MergedRead<E>> merge ( List<ModelRead<E>> modelReads ) {
+		record GroupKey ( EventQuery.Direction direction, EventReference notAfter, boolean bounded ) { }
 		List<MergedRead<E>> reads = new ArrayList<>();
 		Map<GroupKey, Integer> groupIndex = new LinkedHashMap<>();
-		for ( DecisionModel<E> model: plainModels ) {
-			EventQuery query = model.eventQuery();
-			if ( query.limit().isSet() ) {
-				reads.add(new MergedRead<>(query, new ArrayList<>(List.of(model))));
+		for ( ModelRead<E> modelRead: modelReads ) {
+			EventQuery query = modelRead.query();
+			if ( query.limit().isSet() || modelRead.startingAfter() != null ) {
+				reads.add(new MergedRead<>(query, new ArrayList<>(List.of(modelRead)), modelRead.startingAfter()));
 				continue;
 			}
-			GroupKey key = new GroupKey(query.direction(), query.filter().until());
+			GroupKey key = new GroupKey(query.direction(), query.notAfter(), query.filter().isBounded());
 			Integer index = groupIndex.get(key);
 			if ( index == null ) {
 				groupIndex.put(key, reads.size());
-				reads.add(new MergedRead<>(query, new ArrayList<>(List.of(model))));
+				reads.add(new MergedRead<>(query, new ArrayList<>(List.of(modelRead)), null));
 			} else {
 				MergedRead<E> read = reads.get(index);
-				read.models().add(model);
-				reads.set(index, new MergedRead<>(read.query().or(query), read.models()));
+				read.models().add(modelRead);
+				EventQuery united = new EventQuery(read.query().filter().or(query.filter()), query.direction(), null, query.notAfter());
+				reads.set(index, new MergedRead<>(united, read.models(), null));
 			}
 		}
 		return reads;
 	}
 
 	/**
-	 * A {@link Projection} over a merged eventQuery that dispatches each streamed event to the plain
-	 * decision models whose own eventQuery matches it, recording per-model how many events each handled.
-	 * Used to project several merged plain decision models from a single physical read.
+	 * A savepoint model's initQuery as a projection of its own: the savepoint read, handed to the model,
+	 * remembering the reference of the last event handed over -- where the model's forward read resumes,
+	 * exactly as a {@code Projector} running the initQuery itself resumes its eventQuery.
+	 */
+	private static final class SavepointRead<E> implements org.sliceworkz.eventstore.projection.Projection<E> {
+
+		private final DecisionModel<E> model;
+		private final EventQuery initQuery;
+		private EventReference last;
+
+		SavepointRead ( DecisionModel<E> model, EventQuery initQuery ) {
+			this.model = model;
+			this.initQuery = initQuery;
+		}
+
+		@Override
+		public EventQuery eventQuery ( ) {
+			return initQuery;
+		}
+
+		@Override
+		public void when ( Event<E> event ) {
+			model.when(event);
+			last = event.reference();
+		}
+	}
+
+	/**
+	 * A {@link Projection} over a merged read that dispatches each streamed event to the decision models
+	 * whose own read it belongs to -- their filter, items bounds included, and their own read bound --
+	 * recording per model how many events each handled.
 	 */
 	private static final class CompositeDecisionModel<E> implements org.sliceworkz.eventstore.projection.Projection<E> {
 
 		private final EventQuery mergedQuery;
-		private final List<DecisionModel<E>> models;
+		private final List<ModelRead<E>> models;
 		private final long[] handled;
 
-		CompositeDecisionModel ( EventQuery mergedQuery, List<DecisionModel<E>> models ) {
+		CompositeDecisionModel ( EventQuery mergedQuery, List<ModelRead<E>> models ) {
 			this.mergedQuery = mergedQuery;
 			this.models = models;
 			this.handled = new long[models.size()];
@@ -306,9 +348,10 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		@Override
 		public void when ( Event<E> event ) {
 			for ( int i = 0; i < models.size(); i++ ) {
-				DecisionModel<E> model = models.get(i);
-				if ( model.eventQuery().filter().matches(event) ) {
-					model.when(event);
+				EventQuery own = models.get(i).query();
+				EventReference notAfter = own.notAfter();
+				if ( ( notAfter == null || !event.reference().storedEventHappenedAfter(notAfter) ) && own.filter().matches(event) ) {
+					models.get(i).model().when(event);
 					handled[i]++;
 				}
 			}

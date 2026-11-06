@@ -54,7 +54,7 @@ import org.sliceworkz.eventstore.events.Tags;
  *         Tags.of(ACCOUNT.tag(accountId), CUSTOMER.tag(customerId)));
  *
  * // in a read model
- * return EventQuery.forEvents(EventTypesFilter.any(), ACCOUNT.tags(accountId));
+ * return EventQuery.of(EventFilter.forTags(ACCOUNT.tags(accountId)));
  * }</pre>
  *
  * <p>The id type is part of the entity, which is what makes the tags type-safe:

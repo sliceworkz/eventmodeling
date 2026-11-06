@@ -44,6 +44,11 @@ public class InvocationCountingEventStorage implements EventStorage {
 
 	private final List<EventFilter> queriesSeen = new ArrayList<>();
 
+	private final List<Read> readsSeen = new ArrayList<>();
+
+	/** One read as the storage was asked for it: what was relevant, and the read bound. */
+	public record Read ( EventFilter filter, EventReference notAfter ) { }
+
 	private AppendCriteria lastAppendCriteria;
 
 	private Predicate<EventFilter> afterQueryMatching;
@@ -68,6 +73,11 @@ public class InvocationCountingEventStorage implements EventStorage {
 	/** Every query issued, in order, so a test can assert on the shape a read was made with. */
 	public List<EventFilter> queriesSeen ( ) {
 		return List.copyOf(queriesSeen);
+	}
+
+	/** Every read made so far, with the read bound each was made under. */
+	public List<Read> readsSeen ( ) {
+		return List.copyOf(readsSeen);
 	}
 
 	/** The criteria the most recent append was made under, or null when nothing was appended. */
@@ -117,10 +127,11 @@ public class InvocationCountingEventStorage implements EventStorage {
 	}
 
 	@Override
-	public List<StoredEvent> query(EventFilter filter, EventStreamId stream, EventReference from, Limit limit, EventQuery.Direction queryDirection) {
+	public List<StoredEvent> query(EventFilter filter, EventStreamId stream, EventReference from, EventReference notAfter, Limit limit, EventQuery.Direction queryDirection) {
 		queries++;
 		queriesSeen.add(filter);
-		List<StoredEvent> result = wrapped.query(filter, stream, from, limit, queryDirection);
+		readsSeen.add(new Read(filter, notAfter));
+		List<StoredEvent> result = wrapped.query(filter, stream, from, notAfter, limit, queryDirection);
 		if ( afterQueryHook != null && afterQueryMatching.test(filter) ) {
 			Runnable hook = afterQueryHook;
 			afterQueryHook = null;

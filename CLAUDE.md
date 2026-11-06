@@ -336,7 +336,7 @@ public interface BankingDomain {
 AccountId accountId = ACCOUNT.newId();                                  // mint
 result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
         Tags.of(ACCOUNT.tag(accountId), CUSTOMER.tag(customerId)));     // tag
-EventQuery.forEvents(EventTypesFilter.any(), ACCOUNT.tags(accountId));  // query
+EventQuery.of(EventFilter.forTags(ACCOUNT.tags(accountId)));  // query
 ACCOUNT.idIn(event.tags());                                             // read back, Optional<AccountId>
 ACCOUNT.idsIn(transfer.tags());                                         // an event about two accounts, Set<AccountId>
 ```
@@ -446,19 +446,23 @@ ACCOUNT.idsIn(transfer.tags());                                         // an ev
 **A command's consistency boundary is pinned at the domain stream's head before its decision models
 are read:**
 - `DCBCommandContextImpl` takes `queryEventStream.head()` first, bounds every decision-model read at
-  it (`Projector.runUntil`), and presents it as the expected reference of the append. The lock
-  filter is the union of every query the models were read with — see the section below for what goes
-  into it. A command with no decision models pins nothing: its filter is match-none, so the reference
-  is moot
-- **Why pin, and why first.** The plain models' queries are merged into one physical read, but a
-  savepoint model keeps its own projector, so a command can read more than once and nothing makes
-  the group atomic. Pinned first and shared by every read, the boundary makes an event landing
-  between two reads fall *after* the reference for all of them, so the check raises it; a reference
-  taken from any one read belongs to that read alone and re-opens the window. The alternative — pin
-  only when there are several reads, from the models' own newest event — loses on the one shape that
-  has no such event to pin from, an empty boundary: the reference then falls back to whatever the
-  last read saw, and an event matching an earlier model slips under it. `CommandBoundaryPinningTest.
+  it (`EventQuery.notAfter`, `Projector.runUntil`), and presents it as the expected reference of the
+  append. The lock filter is the union of every filter the models were read with — see the section
+  below for what goes into it. A command with no decision models pins nothing: its filter is
+  match-none, so the reference is moot
+- **Why pin, and why first.** A command reads more than once whenever it has a savepoint model (one
+  read per savepoint, then the forward reads), and nothing makes the group atomic. Pinned first and
+  shared by every read, the boundary makes an event landing between two reads fall *after* the
+  reference for all of them, so the check raises it; a reference taken from any one read belongs to
+  that read alone and re-opens the window. The alternative — pin only when there are several reads,
+  from the models' own newest event — loses on the one shape that has no such event to pin from, an
+  empty boundary: the reference then falls back to whatever the last read saw, and an event matching
+  an earlier model slips under it. `CommandBoundaryPinningTest.
   aConflictBetweenTwoReadsOnAnEmptyBoundaryIsCaught` is that case
+- **The pin is a read bound, never a filter bound.** `notAfter` is technical — "read up to the moment
+  the command decides" — and stays on the query; the filter keeps only what each model declared
+  relevant, `until` and `after` included. That is what lets the filters go into the lock check as
+  they are, below
 - **An absent head stays an absent reference.** It means an empty stream, and under a real filter the
   check reads it as "I decided on an empty boundary" and rejects any matching event — which is the
   uniqueness pattern in WHERE-VALIDATIONS-GO.md, unchanged. A stream that holds *other* events pins
@@ -466,7 +470,7 @@ are read:**
   which is the same claim with a cheaper cursor
 - **What it costs, and what it buys.** One `head()` per command with decision models — three
   reference columns off the stream position index on Postgres, no payload — and every model read
-  carries an `until`. What it buys is the shape of the DCB check: on Postgres the probe walks every
+  carries a `notAfter`. What it buys is the shape of the DCB check: on Postgres the probe walks every
   *stream* event after the reference, and the framework's stream is the whole bounded context, so a
   reference at a quiet entity's own newest event walked everything the context appended since it
   (~0.2 µs each: an entity idle for five million context events cost about a second per command, and
@@ -482,15 +486,35 @@ are read:**
   decrypts, so a poison event at the stream head, a legacy event upcasting into nothing, or a sealed
   value under an unreachable key store cannot fail the command or read as an empty stream — the
   typed `backwards().limit(1)` idiom fails on all three. And the reference it returns names the
-  stored event whole: the eventstore's `until` bounds stored events, so a head that upcasts into
+  stored event whole: the eventstore's `notAfter` bounds stored events, so a head that upcasts into
   several current events is read in full (the eventstore's `HeadTest` pins all of this per backend)
 - `CommandBoundaryPinningTest` pins the framework half per backend: a matching event after the read
   conflicts whatever sits at the head and an unrelated one does not, an empty stream is an empty
   boundary, the criteria reference is the head rather than the model's newest event, every model
   read is bounded at it, one head lookup per command and none without decision models
 
-**The lock filter is the union of *every* query a decision model was read with — its `eventQuery`
-and, for a savepoint model, its `initQuery` — each stripped of its own `until`:**
+**How a command reads its decision models: each savepoint on its own, the forward reads merged:**
+- **A savepoint model's savepoint is read first, on its own** (its `initQuery`, bounded at the head),
+  because what it finds decides where the model's forward read starts. A forward, unlimited
+  `eventQuery` then becomes that model's filter narrowed with `afterIfLater(savepoint)` — an item
+  bound, so it is a plain filter again and can share a physical read with others. A model whose
+  `eventQuery` is backwards or limited keeps a read of its own, resumed after the savepoint as before
+- **Reads are merged by `(direction, notAfter, bounded)`.** The models' filters are united with
+  `EventFilter.or` — each item keeps its own bounds, so a model bounded after its savepoint and one
+  bounded `until` a closed period share one read — and every event read is handed to each model whose
+  filter matches it (`CompositeDecisionModel`). Bounded filters merge only with bounded ones and the
+  plain models keep their read: on Postgres a filter whose items differ in their bounds runs as a
+  union of per-item branches, which costs a plain model its single index walk. Measured
+  (`SavepointReadsMeasurement`, three savepoint models and one plain one over 20.000 events): nine
+  reads per command before, seven after; on PostgreSQL 18 26,6 ms per command, 30,1 ms merging every
+  read into one, 25,7 ms with the bounded and plain reads apart. In memory the bounded read scans the
+  log from its start, 6,0 against 7,1 ms
+- **Each model is handed exactly what its own read would have returned**, savepoint first, then what
+  followed it. `SavepointModelsShareOneReadTest` pins the read count, the per-model results, a model
+  without a savepoint replaying its whole history in the merged read, and the conflicts below
+
+**The lock filter is the union of *every* filter a decision model was read with — its `eventQuery`
+and, for a savepoint model, its `initQuery` — with their item bounds as they are:**
 - **The eventQueries are collected after the reads**, because a savepoint model only learns its query
   once its `initQuery` has run — the `Projector` calls `eventQuery()` after handing it those events —
   so a union taken up front would describe a query that was never executed. Where such a model starts
@@ -518,22 +542,20 @@ and, for a savepoint model, its `initQuery` — each stripped of its own `until`
   the command does not decide on, which `executeWithRetry` clears; the cost of the other way round is
   silent. There is deliberately no `lockFilter()` override to opt out — it would be a second,
   greppable way to turn the check off, for a case nobody has hit
-- **A model's own `until` never reaches the criteria.** A filter carrying one deems no event after it
-  a new relevant fact, so as an `AppendCriteria` it admits every append and raises no
-  `OptimisticLockingException` — the check off rather than narrowed, and silently, since the append
-  reports success (the eventstore documents this on `EventFilter.until`). Stripping it costs the
-  model nothing: its *read* keeps the bound it asked for, what the command decided on is bounded by
-  the pinned head, and the filter says only which events are relevant. It is also what makes the
-  union well-formed, since `EventFilter.or` refuses two members that do not share an `until` — which
-  an unbounded `initQuery` united with a bounded `eventQuery` would otherwise hit
+- **Item bounds go in as they are, and `AppendCriteria` prunes them against the head.** An item
+  bounded `until` the head or earlier can match nothing appended later and is removed; an `after` at
+  or before the head — a savepoint model's lower bound — is dropped, since every event after the head
+  is after it too. So a model bounded on a closed period adds nothing to the check, and a savepoint
+  model's forward filter locks what it names after the head. When every item is removed the append is
+  unconditional, which is correct: the decision rests on history no later append can change
 - **What it costs on Postgres** is one more OR-group per savepoint model in the DCB probe. The
   reference is the head, so the probe walks only what landed during the command — nothing like the
   or-groups cost the eventstore's notes measure on a stale cursor
 - `CommandLockFilterTest` pins it per backend: a savepoint landing after the read conflicts, and does
   so for a model that found none, another entity's savepoint does not, the filter covers both queries
-  with each keeping its own tags, and a model's own `until` neither reaches the criteria nor stops a
-  matching event after the head from conflicting. `DCBDecisionModelTest`'s
-  `optimisticLocking_*_conflictOnSavepointEventType` pair covers the same through the classic models
+  with each keeping its own tags, and the criteria carry no bound once pruned against the head.
+  `DCBDecisionModelTest`'s `optimisticLocking_*_conflictOnSavepointEventType` pair covers the same
+  through the classic models
 
 **`executeWithRetry` — the DCB retry loop, written once so it cannot be hand-rolled wrong:**
 - An `OptimisticLockingException` is the routine DCB outcome under contention, and the documented
@@ -2077,7 +2099,7 @@ eventstore's upcaster instantiation, which is the same mistake one layer down.
 alongside the other `x-*` tracing tags `Tracing.storeOn` writes. A flow is command → domain event →
 todo list → automation → raised/outbound event, across bounded contexts; the id is reused, never
 re-minted, across those steps, which is what makes "show me everything of this flow" a tag query:
-`EventQuery.forEvents(EventTypesFilter.any(), Tags.of(Tracing.TAG_CORRELATION_ID, id))`. Tag matching
+`EventQuery.of(EventFilter.forTags(Tracing.TAG_CORRELATION_ID, id))`. Tag matching
 is containment, so the extra tag changes no existing query and no DCB boundary.
 
 - **Minting happens in the `Tracing` factories only** (`init`, `actorAndChannel`, `automation`,

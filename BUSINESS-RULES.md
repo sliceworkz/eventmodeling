@@ -162,7 +162,7 @@ override carries `x-rule-overridden:<rule>`, and every event carries `x-actor`. 
 across all accounts is one tag query:
 
 ```java
-EventQuery.forEvents(EventTypesFilter.of(MoneyWithdrawn.class), RuleTags.overriddenBy(teller, NO_OVERDRAFT))
+EventQuery.of(EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.overriddenBy(teller, NO_OVERDRAFT)))
 ```
 
 ## 6. Overrides are an input of the command

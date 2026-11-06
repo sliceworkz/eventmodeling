@@ -56,6 +56,7 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.spi.EventStorage.EventToStore;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
@@ -400,7 +401,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 
 		buildDomain(new StreamAppendingBoundedContextListener(kernelStream));
 
-		List<BoundedContextEvent> persisted = kernelStream.query(EventQuery.matchAll()).stream()
+		List<BoundedContextEvent> persisted = kernelStream.query(EventFilter.matchAll()).stream()
 				.map(org.sliceworkz.eventstore.events.Event::data)
 				.toList();
 
@@ -427,7 +428,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 
 		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
 				.getEventStream(streamId, BoundedContextEvent.class);
-		List<BoundedContextEvent> persisted = kernelStream.query(EventQuery.matchAll()).stream()
+		List<BoundedContextEvent> persisted = kernelStream.query(EventFilter.matchAll()).stream()
 				.map(org.sliceworkz.eventstore.events.Event::data)
 				.toList();
 
@@ -455,7 +456,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
 				.getEventStream(streamId, BoundedContextEvent.class);
 		BoundedContextEvent.BoundedContextStarting starting = (BoundedContextEvent.BoundedContextStarting)
-				kernelStream.query(EventQuery.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
+				kernelStream.query(EventFilter.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
 
 		BoundedContextEvent.FeatureSlice placeOrder = starting.enabledFeatures().iterator().next();
 		assertEquals("PlaceOrder", placeOrder.name());
@@ -481,7 +482,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
 				.getEventStream(streamId, BoundedContextEvent.class);
 		BoundedContextEvent.BoundedContextStarting starting = (BoundedContextEvent.BoundedContextStarting)
-				kernelStream.query(EventQuery.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
+				kernelStream.query(EventFilter.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
 
 		Set<BoundedContextEvent.SliceMember> members = starting.enabledFeatures().iterator().next().members();
 		assertTrue(members.contains(new BoundedContextEvent.SliceMember("OrderLookup", BoundedContextEvent.MemberKind.READ_MODEL, Aspect.COMMAND)),
@@ -507,7 +508,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
 				.getEventStream(streamId, BoundedContextEvent.class);
 		CommandExecuted executed = (CommandExecuted)
-				kernelStream.query(EventQuery.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
+				kernelStream.query(EventFilter.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
 
 		assertEquals(42, executed.metrics().durationMicros());
 		assertEquals(3, executed.metrics().eventsStreamed());
@@ -530,7 +531,7 @@ public class BoundedContextListenerTest extends AbstractMockDomainTest {
 		EventStream<BoundedContextEvent> kernelStream = EventStore.on(eventStorage()).build()
 				.getEventStream(streamId, BoundedContextEvent.class);
 		CommandExecuted executed = (CommandExecuted)
-				kernelStream.query(EventQuery.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
+				kernelStream.query(EventFilter.matchAll()).stream().map(org.sliceworkz.eventstore.events.Event::data).toList().getFirst();
 
 		assertEquals(0, executed.metrics().durationMicros());
 		assertEquals(3, executed.metrics().eventsStreamed());

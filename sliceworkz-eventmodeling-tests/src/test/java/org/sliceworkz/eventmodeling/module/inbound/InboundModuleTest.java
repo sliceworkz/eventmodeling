@@ -56,46 +56,46 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 	@ForEachBackend
 	void testInboundEventWithoutIdempotency ( ) {
 		EventStream<MockInboundEvent> inboundEvents = EventStore.on(countingStorage).build().getEventStream(EventStreamId.anyContext().withPurpose(BoundedContextStreams.INBOUND), MockInboundEvent.class);
-		int eventsBefore = inboundEvents.query(EventQuery.matchAll()).size();
+		int eventsBefore = inboundEvents.query(EventFilter.matchAll()).size();
 		
 		var inboundEvent = new SomeInboundEvent("test");
 		
 		boundedContext().incoming(inboundEvent);
-		assertEquals(eventsBefore+1,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+1,inboundEvents.query(EventFilter.matchAll()).size());
 		
 		boundedContext().incoming(inboundEvent);
-		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+2,inboundEvents.query(EventFilter.matchAll()).size());
 	}
 
 	@ForEachBackend
 	void testInboundEventWithIdempotency ( ) {
 		EventStream<MockInboundEvent> inboundEvents = EventStore.on(countingStorage).build().getEventStream(EventStreamId.anyContext().withPurpose(BoundedContextStreams.INBOUND), MockInboundEvent.class);
-		int eventsBefore = inboundEvents.query(EventQuery.matchAll()).size();
+		int eventsBefore = inboundEvents.query(EventFilter.matchAll()).size();
 		
 		var inboundEvent = new SomeInboundEvent("test");
 		
 		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "123").toString());
-		assertEquals(eventsBefore+1,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+1,inboundEvents.query(EventFilter.matchAll()).size());
 		
 		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "456").toString());
-		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+2,inboundEvents.query(EventFilter.matchAll()).size());
 
 		// only duplicates from here, idempotency check should be applied and the events should be ignored
 		
 		// a duplicate key leads to silent ignore because of idempotency
 		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "123").toString());
-		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+2,inboundEvents.query(EventFilter.matchAll()).size());
 		
 		// a duplicate key leads to silent ignore because of idempotency
 		boundedContext().incoming(inboundEvent, Tag.of("uniqueKey", "456").toString());
-		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+2,inboundEvents.query(EventFilter.matchAll()).size());
 
 	}
 	
 	@ForEachBackend
 	void testInboundEventWithIdempotencyOnHash ( ) {
 		EventStream<MockInboundEvent> inboundEvents = EventStore.on(countingStorage).build().getEventStream(EventStreamId.anyContext().withPurpose(BoundedContextStreams.INBOUND), MockInboundEvent.class);
-		int eventsBefore = inboundEvents.query(EventQuery.matchAll()).size();
+		int eventsBefore = inboundEvents.query(EventFilter.matchAll()).size();
 		
 		var e1 = new SomeInboundEvent("test");
 		var e2 = new SomeInboundEvent("test2");
@@ -109,20 +109,20 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 		assertEquals(e2.hashCode(), e4.hashCode());
 
 		boundedContext().incoming(e1, Tag.of("hash", String.valueOf(e1.hashCode())).toString());
-		assertEquals(eventsBefore+1,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+1,inboundEvents.query(EventFilter.matchAll()).size());
 		
 		boundedContext().incoming(e2, Tag.of("hash", String.valueOf(e2.hashCode())).toString());
-		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+2,inboundEvents.query(EventFilter.matchAll()).size());
 
 		// only duplicates from here, idempotency check should be applied and the events should be ignored
 		
 		// a duplicate key leads to silent ignore because of idempotency
 		boundedContext().incoming(e3, Tag.of("hash", String.valueOf(e3.hashCode())).toString());
-		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+2,inboundEvents.query(EventFilter.matchAll()).size());
 		
 		// a duplicate key leads to silent ignore because of idempotency
 		boundedContext().incoming(e4, Tag.of("hash", String.valueOf(e4.hashCode())).toString());
-		assertEquals(eventsBefore+2,inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore+2,inboundEvents.query(EventFilter.matchAll()).size());
 
 	}
 
@@ -134,7 +134,7 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 	@ForEachBackend
 	void testAnInboundEventThatCannotBeAppendedIsReportedToTheCaller ( ) {
 		EventStream<MockInboundEvent> inboundEvents = EventStore.on(eventStorage()).build().getEventStream(EventStreamId.anyContext().withPurpose(BoundedContextStreams.INBOUND), MockInboundEvent.class);
-		int eventsBefore = inboundEvents.query(EventQuery.matchAll()).size();
+		int eventsBefore = inboundEvents.query(EventFilter.matchAll()).size();
 
 		countingStorage.failAppendsWith(new OptimisticLockingException(EventFilter.matchAll(), Optional.empty()));
 
@@ -142,7 +142,7 @@ public class InboundModuleTest  extends AbstractMockDomainTest {
 				() -> boundedContext().incoming(new SomeInboundEvent("test"), Tag.of("uniqueKey", "123").toString()));
 
 		// and it really was not stored, so treating this as "already known" would lose it
-		assertEquals(eventsBefore, inboundEvents.query(EventQuery.matchAll()).size());
+		assertEquals(eventsBefore, inboundEvents.query(EventFilter.matchAll()).size());
 	}
 
 	Mock createBoundedContext( ) {

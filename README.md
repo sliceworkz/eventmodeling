@@ -74,8 +74,7 @@ public class AccountStandingDecisionModel implements DecisionModel<BankingEvent>
     public AccountStandingDecisionModel ( AccountId accountId ) { this.accountId = accountId; }
 
     @Override public EventQuery eventQuery ( ) {
-        return EventQuery.forEvents(EventTypesFilter.of(AccountOpened.class, AccountFrozen.class, AccountClosed.class),
-                                    ACCOUNT.tags(accountId));
+        return EventQuery.of(EventFilter.forTypes(AccountOpened.class, AccountFrozen.class, AccountClosed.class).tagged(ACCOUNT.tags(accountId)));
     }
 
     @Override public void when ( Event<BankingEvent> event ) {
@@ -122,7 +121,7 @@ The framework pins the consistency boundary before the decision model is read, a
 public class BlockCardsOfAccountPolicy implements Policy<BankingEvent> {
 
     @Override public EventQuery eventQuery ( ) {
-        return EventQuery.forTypes(AccountFrozen.class, AccountClosed.class);
+        return EventQuery.of(EventFilter.forTypes(AccountFrozen.class, AccountClosed.class));
     }
 
     @Override public Optional<Command<BankingEvent>> react ( Event<BankingEvent> event ) {

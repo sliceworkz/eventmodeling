@@ -38,6 +38,7 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
@@ -111,7 +112,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery() {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override
@@ -133,7 +134,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery() {
-			return EventQuery.forEvents(EventTypesFilter.of(SecondDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class));
 		}
 
 		@Override
@@ -162,7 +163,7 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery() {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override
@@ -184,13 +185,13 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery initQuery() {
-			return EventQuery.forEvents(EventTypesFilter.of(ThirdDomainEvent.class), Tags.none())
+			return EventQuery.of(EventFilter.forTypes(ThirdDomainEvent.class))
 					.backwards().limit(1);
 		}
 
 		@Override
 		public EventQuery eventQuery() {
-			return EventQuery.forEvents(EventTypesFilter.of(SecondDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class));
 		}
 
 		@Override
@@ -221,18 +222,16 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery initQuery() {
-			return EventQuery.forEvents(EventTypesFilter.of(ThirdDomainEvent.class), Tags.none())
+			return EventQuery.of(EventFilter.forTypes(ThirdDomainEvent.class))
 					.backwards().limit(1);
 		}
 
 		@Override
 		public EventQuery eventQuery() {
 			if (watching == null) {
-				return EventQuery.matchNone();
+				return EventQuery.of(EventFilter.matchNone());
 			}
-			return EventQuery.forEvents(
-					EventTypesFilter.of("first".equals(watching) ? FirstDomainEvent.class : SecondDomainEvent.class),
-					Tags.none());
+			return EventQuery.of(EventFilter.forTypes("first".equals(watching) ? FirstDomainEvent.class : SecondDomainEvent.class));
 		}
 
 		@Override

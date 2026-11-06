@@ -54,6 +54,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventDeserializationException;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
@@ -215,7 +216,7 @@ public class ProcessorAdminTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none());
+			return EventQuery.of(EventFilter.of(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none()));
 		}
 
 		@Override
@@ -235,7 +236,7 @@ public class ProcessorAdminTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeInboundEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(SomeInboundEvent.class));
 		}
 
 		@Override
@@ -248,7 +249,7 @@ public class ProcessorAdminTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.any(), Tags.none());
+			return EventQuery.of(EventFilter.of(EventTypesFilter.any(), Tags.none()));
 		}
 
 		@Override

@@ -24,6 +24,7 @@ import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -34,7 +35,7 @@ public class SecondFromFirstPolicy implements Policy<MockDomainEvent> {
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.forTypes(FirstDomainEvent.class);
+		return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 	}
 
 	@Override

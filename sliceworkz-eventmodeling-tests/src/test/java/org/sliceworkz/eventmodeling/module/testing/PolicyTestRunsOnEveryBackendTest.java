@@ -39,6 +39,7 @@ import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.testing.PolicyTest;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
@@ -83,7 +84,7 @@ public class PolicyTestRunsOnEveryBackendTest extends PolicyTest<MockDomainEvent
 		.whenReacting()
 			.event(new SecondDomainEvent("a"), Tags.of("item", "a"));
 
-		Event<MockDomainEvent> first = domainStream().query(EventQuery.forTypes(FirstDomainEvent.class)).get(0);
+		Event<MockDomainEvent> first = domainStream().query(EventFilter.forTypes(FirstDomainEvent.class)).get(0);
 		assertTrue(result.domainEvents().get(0).tags().containsAll(causedBy(first)), "what the command raised names the event reacted to");
 		assertEquals("SecondFromFirstPolicy", Tracing.readFrom(result.domainEvents().get(0)).actor());
 	}
@@ -149,7 +150,7 @@ public class PolicyTestRunsOnEveryBackendTest extends PolicyTest<MockDomainEvent
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forTypes(FirstDomainEvent.class);
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override

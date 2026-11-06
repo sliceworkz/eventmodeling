@@ -57,6 +57,7 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
@@ -77,7 +78,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 	}
 
 	private List<Event<MockOutboundEvent>> outbound ( ) {
-		return eventStore().getEventStream(BoundedContextStreams.outbound(CONTEXT_NAME), MockOutboundEvent.class).query(EventQuery.matchAll());
+		return eventStore().getEventStream(BoundedContextStreams.outbound(CONTEXT_NAME), MockOutboundEvent.class).query(EventFilter.matchAll());
 	}
 
 	// ── what a publication appends ───────────────────────────────────────────
@@ -264,7 +265,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forTypes(FirstDomainEvent.class);
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override

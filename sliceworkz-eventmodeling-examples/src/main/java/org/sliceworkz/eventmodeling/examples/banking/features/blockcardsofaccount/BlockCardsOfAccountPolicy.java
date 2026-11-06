@@ -25,6 +25,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountAccess.AccountClosed;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountAccess.AccountFrozen;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -39,7 +40,7 @@ public class BlockCardsOfAccountPolicy implements Policy<BankingEvent> {
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.forTypes(AccountFrozen.class, AccountClosed.class);
+		return EventQuery.of(EventFilter.forTypes(AccountFrozen.class, AccountClosed.class));
 	}
 
 	@Override

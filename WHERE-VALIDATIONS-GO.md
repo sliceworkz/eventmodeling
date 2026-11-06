@@ -149,10 +149,11 @@ declaration that this command's append needs no guard, and it is what hands the 
 raised none, and its execution appends nothing (a command that reads, finds nothing to do and returns).
 
 *Costs:* one projection per execution, bounded the same way a live read model is — by tags and a
-savepoint (`initQuery()`), per the read-model ladder's step 2. Bound the *replay* that way, never the
-boundary: an `until` on a model's own `eventQuery()` bounds its read only — the framework strips it
-from the lock filter, because a criteria filter carrying one deems nothing after it a new relevant
-fact and so admits every append without ever raising.
+savepoint (`initQuery()`), per the read-model ladder's step 2. An `until` on a model's filter is a
+business statement — "only what was recorded up to the close of the period counts" — and it reaches
+the boundary as such: once that point lies before the command's own boundary, nothing appended later
+can match it, so the item adds nothing to the check. Use it for a fact that is closed, never to make
+a replay cheaper, or the check will no longer cover what the command decided on.
 
 ## 4. Uniqueness — the boundary you expect to be empty
 
@@ -162,8 +163,7 @@ class EmailNotTakenDecisionModel implements DecisionModel<CrmEvent> {
     private boolean taken = false;
 
     public EventQuery eventQuery ( ) {
-        return EventQuery.forEvents(EventTypesFilter.of(CustomerRegistered.class),
-                                    Tags.of("email", email.value()));
+        return EventQuery.of(EventFilter.forTypes(CustomerRegistered.class).tagged("email", email.value()));
     }
     public void when ( Event<CrmEvent> e ) { taken = true; }
     public boolean taken ( ) { return taken; }

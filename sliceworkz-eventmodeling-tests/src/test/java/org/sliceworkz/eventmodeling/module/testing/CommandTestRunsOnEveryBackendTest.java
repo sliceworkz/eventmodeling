@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDo
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.testing.CommandTest;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
@@ -83,7 +84,7 @@ public class CommandTestRunsOnEveryBackendTest extends CommandTest<MockDomainEve
 		// the seeded event and the raised one are both in the store the backend supplied, which is
 		// what proves the bounded context was built over it rather than over one of its own
 		assertTrue(eventStore().getEventStream(eventStreamId(), MockDomainEvent.class)
-				.query(EventQuery.matchAll()).size() >= 2);
+				.query(EventFilter.matchAll()).size() >= 2);
 	}
 
 	/**

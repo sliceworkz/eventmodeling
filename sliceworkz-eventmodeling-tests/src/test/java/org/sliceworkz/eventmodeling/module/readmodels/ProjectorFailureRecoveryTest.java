@@ -48,6 +48,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
@@ -274,7 +275,7 @@ public class ProjectorFailureRecoveryTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none());
+			return EventQuery.of(EventFilter.of(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none()));
 		}
 
 		@Override
@@ -318,7 +319,7 @@ public class ProjectorFailureRecoveryTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none());
+			return EventQuery.of(EventFilter.of(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none()));
 		}
 
 		@Override
@@ -376,7 +377,7 @@ public class ProjectorFailureRecoveryTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none());
+			return EventQuery.of(EventFilter.of(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none()));
 		}
 
 		@Override

@@ -61,6 +61,7 @@ import org.sliceworkz.eventmodeling.testing.RecordingBoundedContextObserver;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -103,7 +104,7 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 	static class AllFirstEvents implements DecisionModel<MockDomainEvent> {
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override
@@ -150,7 +151,7 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 	}
 
 	private List<Event<MockDomainEvent>> stored ( ) {
-		return domainStream().query(EventQuery.matchAll());
+		return domainStream().query(EventFilter.matchAll());
 	}
 
 	private EventStream<MockDomainEvent> domainStream ( ) {
@@ -405,7 +406,7 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.any(), RuleTags.overriddenBy(actor, PRE_AUTHORIZED));
+			return EventQuery.of(EventFilter.forTags(RuleTags.overriddenBy(actor, PRE_AUTHORIZED)));
 		}
 
 		@Override

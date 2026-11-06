@@ -55,8 +55,7 @@ need nothing more. An `EventStream` answers an `EventQuery` — event types, tag
 ```java
 // the newest fact of one kind about one entity: one query, one event
 Optional<Event<BankingEvent>> lastClose = eventStream
-    .query(EventQuery.forEvents(EventTypesFilter.of(MonthClosed.class),
-                                ACCOUNT.tags(accountId))
+    .query(EventQuery.of(EventFilter.forTypes(MonthClosed.class).tagged(ACCOUNT.tags(accountId)))
                      .backwards().limit(1))
     .stream().findFirst();
 ```
@@ -95,8 +94,7 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 
     @Override
     public EventQuery eventQuery ( ) {
-        return EventQuery.forEvents(EventTypesFilter.any(),
-                BankingDomain.ACCOUNT.tags(accountId));
+        return EventQuery.of(EventFilter.forTags(BankingDomain.ACCOUNT.tags(accountId)));
     }
 
     @Override
@@ -193,18 +191,13 @@ backwards `limit(1)` query and replays only what came after:
 // CurrentPeriodReadModel — the savepoint pattern
 @Override
 public EventQuery initQuery ( ) {
-    return EventQuery.forEvents(
-        EventTypesFilter.of(AccountOpened.class, MonthOpened.class),   // the savepoints
-        ACCOUNT.tags(accountId)
-    ).backwards().limit(1);
+    return EventQuery.of(EventFilter.forTypes(AccountOpened.class, MonthOpened.class).tagged(// the savepoints
+        ACCOUNT.tags(accountId))).backwards().limit(1);
 }
 
 @Override
 public EventQuery eventQuery ( ) {
-    return EventQuery.forEvents(
-        EventTypesFilter.of(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class),
-        ACCOUNT.tags(accountId)               // movements only
-    );
+    return EventQuery.of(EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class).tagged(ACCOUNT.tags(accountId)               // movements only));
 }
 ```
 
@@ -265,7 +258,7 @@ public class AccountBalancesReadModel
 
     @Override
     public EventQuery eventQuery ( ) {
-        return EventQuery.matchAll();
+        return EventQuery.of(EventFilter.matchAll());
     }
 }
 ```
@@ -325,7 +318,7 @@ public class OrderCountProjector extends SqlReadModelProjector<Order> {
 
     @Override
     public EventQuery eventQuery ( ) {
-        return EventQuery.matchAll();
+        return EventQuery.of(EventFilter.matchAll());
     }
 
     @Override
@@ -434,8 +427,7 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
 
     @Override
     public EventQuery eventQuery ( ) {          // only this account -> the delta stays tiny
-        return EventQuery.forEvents(EventTypesFilter.any(),
-                ACCOUNT.tags(accountId));
+        return EventQuery.of(EventFilter.forTags(ACCOUNT.tags(accountId)));
     }
 
     @Override

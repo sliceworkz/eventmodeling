@@ -35,6 +35,7 @@ import org.sliceworkz.eventmodeling.rules.RuleTags;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
@@ -64,8 +65,8 @@ public class DepositsAboveGuaranteeTodoList implements TodoListReadModel<Banking
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.forEvents(EventTypesFilter.of(MoneyDeposited.class), Tags.of(RuleTags.deferred(BALANCE_WITHIN_GUARANTEE)))
-			.or(EventQuery.forEvents(EventTypesFilter.of(ExcessBalanceReported.class), Tags.none()));
+		return EventQuery.of(EventFilter.forTypes(MoneyDeposited.class).tagged(Tags.of(RuleTags.deferred(BALANCE_WITHIN_GUARANTEE)))
+			.or(EventFilter.forTypes(ExcessBalanceReported.class)));
 	}
 
 	@Override

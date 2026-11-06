@@ -553,8 +553,8 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 
 		@Override
 		public List<StoredEvent> query ( EventFilter filter, org.sliceworkz.eventstore.stream.EventStreamId stream,
-				EventReference after, Limit limit, EventQuery.Direction queryDirection ) {
-			return delegate.query(filter, stream, after, limit, queryDirection);
+				EventReference after, EventReference notAfter, Limit limit, EventQuery.Direction queryDirection ) {
+			return delegate.query(filter, stream, after, notAfter, limit, queryDirection);
 		}
 
 		@Override
@@ -719,7 +719,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override
@@ -763,7 +763,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override
@@ -798,7 +798,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class, SecondDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class));
 		}
 
 		@Override
@@ -852,7 +852,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override

@@ -48,6 +48,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventDeserializationException;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
@@ -238,7 +239,7 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeOutboundEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(SomeOutboundEvent.class));
 		}
 
 		@Override
@@ -259,7 +260,7 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeOutboundEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(SomeOutboundEvent.class));
 		}
 
 		@Override

@@ -35,6 +35,7 @@ import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -157,8 +158,8 @@ public abstract class PolicyTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_E
 			}
 		}
 		List<Event<DOMAIN_EVENT_TYPE>> raised = domainBefore == null
-				? domainStream().query(EventQuery.matchAll())
-				: domainStream().query(EventQuery.matchAll(), domainBefore);
+				? domainStream().query(EventFilter.matchAll())
+				: domainStream().query(EventFilter.matchAll(), domainBefore);
 		return new ReactionResult(definition, outcomes, raised, failure, stalledOn);
 	}
 

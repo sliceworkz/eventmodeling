@@ -77,7 +77,7 @@ which is the more expensive answer to the same problem.
 public class AccountBalances extends PublishingReadModel<BankingEvent, Map<String,Balance>> {
     protected Map<String,Balance> initialState ( )                                     { return Map.of(); }
     protected Map<String,Balance> apply ( Map<String,Balance> s, Event<BankingEvent> e ) { return BalanceFold.apply(s, e); }
-    public EventQuery eventQuery ( )                                                    { return EventQuery.matchAll(); }
+    public EventQuery eventQuery ( )                                                    { return EventQuery.of(EventFilter.matchAll()); }
 }
 
 AccountBalances balances = new AccountBalances();

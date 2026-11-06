@@ -84,7 +84,7 @@ final class ProcessorLag {
 			if ( readUpTo != null && !head.get().storedEventHappenedAfter(readUpTo) ) {
 				continue;
 			}
-			Optional<StoredEvent> oldestUnread = storage.query(EventFilter.matchAll(), stream, readUpTo, Limit.to(1), Direction.FORWARD).stream().findFirst();
+			Optional<StoredEvent> oldestUnread = storage.query(EventFilter.matchAll(), stream, readUpTo, null, Limit.to(1), Direction.FORWARD).stream().findFirst();
 			oldestUnread.ifPresent(unread -> behind.add(new Behind(target, Duration.between(unread.timestamp(), now).isNegative()
 					? Duration.ZERO
 					: Duration.between(unread.timestamp(), now))));

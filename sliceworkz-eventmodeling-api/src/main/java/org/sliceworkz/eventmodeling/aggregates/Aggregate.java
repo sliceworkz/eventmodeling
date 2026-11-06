@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.aggregates;
 
 import org.sliceworkz.eventstore.events.EventHandler;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
@@ -27,7 +28,7 @@ public interface Aggregate<DOMAIN_EVENT_TYPE> extends EventHandler<DOMAIN_EVENT_
 	void setContext ( AggregateContext<DOMAIN_EVENT_TYPE> aggregateContext );
 	
 	default EventQuery eventQuery ( Tags identity ) {
-		return EventQuery.forEvents(EventTypesFilter.any(), identity);
+		return EventQuery.of(EventFilter.forTags(identity));
 	}
 
 }

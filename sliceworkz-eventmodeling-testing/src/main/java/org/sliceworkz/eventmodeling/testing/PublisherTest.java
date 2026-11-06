@@ -37,6 +37,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projector;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -153,7 +154,7 @@ public abstract class PublisherTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUN
 		} catch ( Exception e ) {
 			failure = e;
 		}
-		List<Event<OUTBOUND_EVENT_TYPE>> published = outboundStream().query(EventQuery.matchAll(), outboundBefore);
+		List<Event<OUTBOUND_EVENT_TYPE>> published = outboundStream().query(EventFilter.matchAll(), outboundBefore);
 		return new PublicationResult(definition, outcomes, published, failure);
 	}
 

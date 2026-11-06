@@ -37,6 +37,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
@@ -73,10 +74,7 @@ public class AccountsToCloseTodoList implements TodoListReadModel<BankingEvent, 
 	@Override
 	public EventQuery eventQuery() {
 		// Only watch lifecycle events — deposits/withdrawals are irrelevant for this todo list
-		return EventQuery.forEvents(
-			EventTypesFilter.of(AccountOpened.class, MonthClosed.class, MonthOpened.class),
-			Tags.none()
-		);
+		return EventQuery.of(EventFilter.forTypes(AccountOpened.class, MonthClosed.class, MonthOpened.class));
 	}
 
 	// when() runs on the projector's thread and streamItems() on the automation's, so the two meet

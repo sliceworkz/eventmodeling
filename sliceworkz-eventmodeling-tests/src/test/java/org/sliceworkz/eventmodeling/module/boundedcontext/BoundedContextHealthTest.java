@@ -49,6 +49,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.observability.HealthCheck;
 import org.sliceworkz.eventstore.observability.HealthStatus;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.spi.EventStorage;
@@ -327,7 +328,7 @@ public class BoundedContextHealthTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none());
+			return EventQuery.of(EventFilter.of(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none()));
 		}
 
 		@Override
@@ -364,7 +365,7 @@ public class BoundedContextHealthTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none());
+			return EventQuery.of(EventFilter.of(EventTypesFilter.of(List.of(FirstDomainEvent.class)), Tags.none()));
 		}
 
 		@Override

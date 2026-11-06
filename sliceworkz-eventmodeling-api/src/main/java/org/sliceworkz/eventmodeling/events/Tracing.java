@@ -61,7 +61,7 @@ public record Tracing ( Instance instance, String actor, String channel, String 
 	/**
 	 * The tag carrying the correlation id. Public, unlike the other tag names: a consumer that wants
 	 * every event of one flow queries for this tag by name (e.g.
-	 * {@code EventQuery.forEvents(EventTypesFilter.any(), Tags.of(Tracing.TAG_CORRELATION_ID, id))}),
+	 * {@code EventQuery.of(EventFilter.forTags(Tracing.TAG_CORRELATION_ID, id))}),
 	 * where the other tracing tags only ever round-trip through {@link #storeOn} / {@link #readFrom}.
 	 */
 	public static final String TAG_CORRELATION_ID = "x-correlation-id";

@@ -107,7 +107,7 @@ public class FailedBuildReleasesWhatItBuiltTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.any(), Tags.none());
+			return EventQuery.of(EventFilter.of(EventTypesFilter.any(), Tags.none()));
 		}
 
 		@Override
@@ -136,8 +136,8 @@ public class FailedBuildReleasesWhatItBuiltTest extends AbstractMockDomainTest {
 		@Override public void close ( ) { wrapped.close(); }
 
 		@Override
-		public List<StoredEvent> query ( EventFilter filter, EventStreamId stream, EventReference from, Limit limit, EventQuery.Direction direction ) {
-			return wrapped.query(filter, stream, from, limit, direction);
+		public List<StoredEvent> query ( EventFilter filter, EventStreamId stream, EventReference from, EventReference notAfter, Limit limit, EventQuery.Direction direction ) {
+			return wrapped.query(filter, stream, from, notAfter, limit, direction);
 		}
 
 		@Override

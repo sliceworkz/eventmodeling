@@ -44,6 +44,7 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -55,8 +56,8 @@ public class TranslateTest extends AbstractMockDomainTest {
 	void translateRunsMatchingTranslatorSynchronouslyAndBypassesInboundStream ( ) {
 		Mock ctx = buildBoundedContext(baseBuilder().translator(new SomeInboundTranslator()));
 
-		int inboundBefore = inboundStream().query(EventQuery.matchAll()).size();
-		int domainBefore = domainStream().query(EventQuery.matchAll()).size();
+		int inboundBefore = inboundStream().query(EventFilter.matchAll()).size();
+		int domainBefore = domainStream().query(EventFilter.matchAll()).size();
 
 		List<EventReference> raised = ctx.translate(new SomeInboundEvent("hello"));
 
@@ -65,10 +66,10 @@ public class TranslateTest extends AbstractMockDomainTest {
 		assertNotNull(raised.get(0));
 
 		// the interactive path does NOT append to the inbound stream ...
-		assertEquals(inboundBefore, inboundStream().query(EventQuery.matchAll()).size());
+		assertEquals(inboundBefore, inboundStream().query(EventFilter.matchAll()).size());
 
 		// ... but the raised domain event IS persisted synchronously
-		List<MockDomainEvent> domainEvents = domainStream().query(EventQuery.matchAll()).stream().map(Event::data).toList();
+		List<MockDomainEvent> domainEvents = domainStream().query(EventFilter.matchAll()).stream().map(Event::data).toList();
 		assertEquals(domainBefore + 1, domainEvents.size());
 		assertEquals(new FirstDomainEvent("hello"), domainEvents.get(domainEvents.size() - 1));
 	}
@@ -99,7 +100,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 		// the registered translator only matches FirstDomainEvent, so the inbound event matches nothing
 		Mock ctx = buildBoundedContext(baseBuilder().translator(new NonMatchingTranslator()));
 
-		int domainBefore = domainStream().query(EventQuery.matchAll()).size();
+		int domainBefore = domainStream().query(EventFilter.matchAll()).size();
 
 		NoTranslatorRegisteredException cause = assertTranslateThrows(() -> ctx.translate(new SomeInboundEvent("hello")));
 		assertEquals(
@@ -107,7 +108,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 			cause.getMessage());
 
 		// nothing was raised
-		assertEquals(domainBefore, domainStream().query(EventQuery.matchAll()).size());
+		assertEquals(domainBefore, domainStream().query(EventFilter.matchAll()).size());
 	}
 
 	@Test
@@ -148,7 +149,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeInboundEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(SomeInboundEvent.class));
 		}
 
 		@Override
@@ -161,7 +162,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeInboundEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(SomeInboundEvent.class));
 		}
 
 		@Override
@@ -178,7 +179,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 		@Override
 		public EventQuery eventQuery ( ) {
 			// matches a domain event type that an inbound SomeInboundEvent can never satisfy
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override

@@ -58,6 +58,7 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
@@ -146,7 +147,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 		try ( EventStore store = EventStore.on(eventStorage()).build() ) {
 			var stored = store
 					.getEventStream(BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class)
-					.query(EventQuery.matchAll());
+					.query(EventFilter.matchAll());
 			assertEquals(1, stored.size(), "the domain event must be durably appended: " + stored);
 			assertEquals(new FirstDomainEvent("x"), stored.get(0).data());
 		}
@@ -330,7 +331,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class, SecondDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class));
 		}
 
 		@Override

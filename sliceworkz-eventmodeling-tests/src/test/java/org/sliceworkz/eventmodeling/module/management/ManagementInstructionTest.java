@@ -67,6 +67,7 @@ import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -282,7 +283,7 @@ public class ManagementInstructionTest extends AbstractMockDomainTest {
 		instruct(new StopAutomation(Target.any(), node.automationId()));
 
 		await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-			List<BoundedContextEvent> stored = monitoring.query(EventQuery.matchAll()).stream().map(Event::data).toList();
+			List<BoundedContextEvent> stored = monitoring.query(EventFilter.matchAll()).stream().map(Event::data).toList();
 			assertTrue(stored.stream().anyMatch(e -> e instanceof InstanceStatusReported r && r.automations().size() == 1 && !r.processors().isEmpty()),
 					"the status report must read back with its statuses: " + stored);
 			assertEquals(2, stored.stream().filter(InstructionHandled.class::isInstance).count(), "both answers must read back: " + stored);

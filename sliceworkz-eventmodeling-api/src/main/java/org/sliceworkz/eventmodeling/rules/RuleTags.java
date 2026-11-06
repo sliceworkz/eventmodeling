@@ -47,7 +47,7 @@ import org.sliceworkz.eventstore.events.Tags;
  * did this actor make" is one tag query — the actor being the {@code x-actor} tag the kernel writes on every
  * event anyway:
  * <pre>{@code
- * EventQuery.forEvents(EventTypesFilter.of(MoneyWithdrawn.class), RuleTags.overriddenBy(actor, NO_OVERDRAFT))
+ * EventQuery.of(EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.overriddenBy(actor, NO_OVERDRAFT)))
  * }</pre>
  * Tag matching is containment, so the extra tags change no existing query and no consistency boundary. The
  * tags are written for what the payload records and are never removed: a justification pending stays tagged

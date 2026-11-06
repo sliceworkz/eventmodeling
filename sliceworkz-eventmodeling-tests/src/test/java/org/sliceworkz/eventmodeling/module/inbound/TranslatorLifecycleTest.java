@@ -48,6 +48,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent.SomeInb
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -171,7 +172,7 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 	private List<MockDomainEvent> translatedDomainEvents ( ) {
 		EventStream<MockDomainEvent> domainStream = EventStore.on(eventStorage()).build()
 				.getEventStream(BoundedContextStreams.domain(CONTEXT_NAME), MockDomainEvent.class);
-		return domainStream.query(EventQuery.matchAll()).stream().map(Event::data).toList();
+		return domainStream.query(EventFilter.matchAll()).stream().map(Event::data).toList();
 	}
 
 	/** A translator that fails while the flag is set — what its target being down looks like from the processor. */
@@ -181,7 +182,7 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeInboundEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(SomeInboundEvent.class));
 		}
 
 		@Override

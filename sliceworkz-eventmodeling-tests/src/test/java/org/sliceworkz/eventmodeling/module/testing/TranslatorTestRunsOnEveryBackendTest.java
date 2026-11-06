@@ -36,6 +36,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent.Unclaim
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.testing.TranslatorTest;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
@@ -57,7 +58,7 @@ public class TranslatorTestRunsOnEveryBackendTest extends TranslatorTest<MockDom
 
 		@Override
 		public EventQuery eventQuery ( ) {
-			return EventQuery.forEvents(EventTypesFilter.of(SomeInboundEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(SomeInboundEvent.class));
 		}
 
 		@Override
@@ -100,7 +101,7 @@ public class TranslatorTestRunsOnEveryBackendTest extends TranslatorTest<MockDom
 			.event(new FirstDomainEvent("hello"));
 
 		// the raised event went through the backend's own storage
-		assertEquals(1, domainStream().query(EventQuery.matchAll()).size());
+		assertEquals(1, domainStream().query(EventFilter.matchAll()).size());
 	}
 
 	@ForEachBackend

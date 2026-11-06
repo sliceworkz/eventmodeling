@@ -128,8 +128,8 @@ public class BenchmarkApplication {
 		long totalEvents = 0;
 		while ( totalEvents < TOTAL_EVENTS_EXPECTED ) {
 			totalEvents = domainStream.head().orElseThrow().position();
-//			int eventsDomain = domainStream.query(EventQuery.matchAll()).size();
-//			eventsOutbound = outboundStream.query(EventQuery.matchAll()).size();
+//			int eventsDomain = domainStream.query(EventFilter.matchAll()).size();
+//			eventsOutbound = outboundStream.query(EventFilter.matchAll()).size();
 //			System.err.println("events in domain : %d".formatted(eventsDomain));
 //			System.err.println("events outbound  : %d".formatted(eventsOutbound));
 			System.err.println("total events     : %d / %d".formatted(totalEvents, TOTAL_EVENTS_EXPECTED));
@@ -138,8 +138,8 @@ public class BenchmarkApplication {
 		
 		Instant done = Instant.now();
 		
-//		int eventsDomain = domainStream.query(EventQuery.matchAll()).size();
-//		eventsOutbound = outboundStream.query(EventQuery.matchAll()).size();
+//		int eventsDomain = domainStream.query(EventFilter.matchAll()).size();
+//		eventsOutbound = outboundStream.query(EventFilter.matchAll()).size();
 //		System.err.println("DONE events in domain : %d".formatted(eventsDomain));
 //		System.err.println("DONE events outbound  : %d".formatted(eventsOutbound));
 

@@ -46,6 +46,7 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
@@ -75,7 +76,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		
 		bo123.doSomething();
 		
-		List<? extends Event<MockDomainEvent>> all = allStream.query(EventQuery.matchAll());
+		List<? extends Event<MockDomainEvent>> all = allStream.query(EventFilter.matchAll());
 		assertEquals(1, all.size());
 		assertTrue(all.get(0).tags().containsAll(Tags.of("businessObject", "123")));
 		
@@ -130,7 +131,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		MockAggregate bo = domain.aggregate(MockAggregate.class, Tags.of("businessObject", "123"));
 		bo.doThreeThings();
 
-		List<? extends Event<MockDomainEvent>> all = allStream.query(EventQuery.matchAll());
+		List<? extends Event<MockDomainEvent>> all = allStream.query(EventFilter.matchAll());
 		assertEquals(3, all.size(), "all three raised events should have been appended");
 		all.forEach(event -> assertTrue(event.tags().containsAll(Tags.of("businessObject", "123"))));
 
@@ -139,7 +140,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		// and the appender's lock reference moved with them, so the same instance can carry on
 		bo.doSomething();
 		assertEquals(4, bo.getCounter());
-		assertEquals(4, allStream.query(EventQuery.matchAll()).size());
+		assertEquals(4, allStream.query(EventFilter.matchAll()).size());
 	}
 
 	@ForEachBackend
@@ -245,7 +246,7 @@ public class AggregateCapabilityTest  extends AbstractMockDomainTest {
 		if ( readBack == null ) {
 			readBack = EventStore.on(eventStorage()).build().getEventStream(BoundedContextStreams.domain("UnitTestBoundedContext"), MockDomainEvent.class);
 		}
-		await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(10)).until(() -> readBack.query(EventQuery.matchAll()).size() >= eventCount);
+		await().pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(10)).until(() -> readBack.query(EventFilter.matchAll()).size() >= eventCount);
 	}
 
 	Mock domainWithAggregate ( 

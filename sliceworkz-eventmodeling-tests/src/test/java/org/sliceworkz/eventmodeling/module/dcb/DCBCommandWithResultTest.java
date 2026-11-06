@@ -36,6 +36,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDom
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -70,7 +71,7 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 	}
 
 	private long countDomainEvents() {
-		return directStream.query(EventQuery.matchAll()).size();
+		return directStream.query(EventFilter.matchAll()).size();
 	}
 
 	// ════════════════════════════════════════════════════════════════════
@@ -119,7 +120,7 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 
 		@Override
 		public EventQuery eventQuery() {
-			return EventQuery.forEvents(EventTypesFilter.of(FirstDomainEvent.class), Tags.none());
+			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 		}
 
 		@Override

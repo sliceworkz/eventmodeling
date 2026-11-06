@@ -27,6 +27,7 @@ import org.sliceworkz.eventmodeling.outbound.Publisher;
 import org.sliceworkz.eventmodeling.outbound.PublisherContext;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -47,7 +48,7 @@ public class ItemPublisher implements Publisher<MockDomainEvent, MockOutboundEve
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.forTypes(FirstDomainEvent.class);
+		return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
 	}
 
 	@Override

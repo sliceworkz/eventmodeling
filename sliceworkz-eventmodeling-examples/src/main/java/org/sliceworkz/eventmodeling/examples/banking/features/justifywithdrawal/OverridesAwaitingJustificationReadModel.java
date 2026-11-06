@@ -34,7 +34,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.rules.RuleTags;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
@@ -77,7 +76,7 @@ public class OverridesAwaitingJustificationReadModel implements ReadModel<Bankin
 
 	@Override
 	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.forTypes(MoneyWithdrawn.class).tagged(Tags.of(RuleTags.justificationPending(LARGE_WITHDRAWAL_JUSTIFIED)))
+		return EventQuery.of(EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.justificationPending(LARGE_WITHDRAWAL_JUSTIFIED))
 			.or(EventFilter.forTypes(WithdrawalJustified.class)));
 	}
 

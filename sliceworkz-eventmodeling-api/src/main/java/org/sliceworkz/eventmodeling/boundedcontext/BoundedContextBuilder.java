@@ -58,13 +58,13 @@ import org.sliceworkz.eventstore.stream.EventStream;
  * {@link BoundedContext#newBuilder(Class)} resolved off the context interface, and rejects a component
  * whose declared event type is <em>unrelated</em> to this context's — naming every offender at once,
  * as it does for a read model whose mode nobody chose. Nothing further down would: the framework hands
- * a component its events through an erased projection, and the component's own {@code eventQuery()}
+ * a component its events through an erased projection, and the component's own query or filter
  * names types that never occur on this context's stream, so it would simply stay empty for good, with
  * no exception, no {@link BoundedContextEvent} and no log line.
  *
  * <p>A component declared over a <em>supertype</em> of this context's root is accepted — a read model
  * over {@code Object} projects whatever it is handed, which is what an analytics model across contexts
- * does — and so is one over a branch of the hierarchy, whose {@code eventQuery()} is what keeps the
+ * does — and so is one over a branch of the hierarchy, whose query or filter is what keeps the
  * other branches away from it. Neither can be told from a mistake, and a check that rejects a
  * legitimate registration is worse than none.
  *

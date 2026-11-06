@@ -148,8 +148,8 @@ public class TranslateTest extends AbstractMockDomainTest {
 		final List<Event<MockInboundEvent>> handed = new ArrayList<>();
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(SomeInboundEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeInboundEvent.class);
 		}
 
 		@Override
@@ -161,8 +161,8 @@ public class TranslateTest extends AbstractMockDomainTest {
 	static class SomeInboundTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(SomeInboundEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeInboundEvent.class);
 		}
 
 		@Override
@@ -177,9 +177,9 @@ public class TranslateTest extends AbstractMockDomainTest {
 	static class NonMatchingTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
+		public EventFilter eventFilter ( ) {
 			// matches a domain event type that an inbound SomeInboundEvent can never satisfy
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override

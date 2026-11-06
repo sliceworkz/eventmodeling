@@ -1719,7 +1719,9 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   loudly. The lease semantics themselves are pinned per backend by the eventstore's `LeaseTest`
 
 **Translators:**
-- Implement `Translator<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>`
+- Implement `Translator<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE>`: `eventFilter()` over the inbound stream
+  and `translate(...)` — a filter, since it is read forward from a bookmark (see "A component declares
+  a query only where it can use one" below)
 - Convert external events to domain events
 - `translate(Event<I>, TranslatorContext)` is handed the inbound `Event`, not its payload — the one-`when`
   rule every component follows, and what a translator needs to key what it raises from
@@ -1733,7 +1735,9 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   - `boundedContext.translate(inboundEvent)`: interactive. Runs every matching translator synchronously in the calling thread, does **not** persist the inbound event, and returns the `List<EventReference>` of domain events raised. Throws `NoTranslatorRegisteredException` if no registered translator matches the event. Useful for integration scenarios that need to act immediately on the produced domain events.
 
 **Dispatchers:**
-- Implement `Dispatcher<OUTBOUND_EVENT_TYPE>`
+- Implement `Dispatcher<OUTBOUND_EVENT_TYPE>`: `eventFilter()` over the outbound stream and `when(Event<O>)`.
+  It is an `EventHandler`, not the eventstore's `Projection`: the processor builds the projection around
+  it, so a dispatcher has no `initQuery()` to declare and no query to read backwards
 - Implement outbox pattern for publishing events
 - Registered with the bounded context via `builder.dispatcher(...)`, and subject to the naming rule below.
   This is the registry where getting a name wrong costs the most, since the bookmark records what has
@@ -1745,7 +1749,7 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   `builder.publisher(...)` and `builder.dispatcher(...)` could break with every suite still green
 
 **Publishers:**
-- Implement `Publisher<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>`: `eventQuery()` over the domain stream,
+- Implement `Publisher<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>`: `eventFilter()` over the domain stream,
   `reads()` declaring the live read models it reads, and `publish(Event<D>, PublisherContext<D,O>)`,
   which publishes zero or more outbound events. The only writer of the outbound stream
 - **It decides nothing, writes no domain events and calls out to nothing.** Its context offers reads
@@ -1800,7 +1804,7 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   backend; `ForeignEventTypeRegistrationTest` the foreign-type rejection
 
 **Policies — the other form of an automation: whenever an event happens, issue a command:**
-- Implement `Policy<DOMAIN_EVENT_TYPE>` (package `automation`): `eventQuery()` over the domain stream —
+- Implement `Policy<DOMAIN_EVENT_TYPE>` (package `automation`): `eventFilter()` over the domain stream —
   one triggering event type, or several variants of one fact leading to the same reaction — and
   `Optional<Command<D>> react(Event<D>)`, answering the command to issue or nothing for an event it does
   not act on. `policyName()` (the class' simple name by default) keys its bookmark, its lease and its
@@ -1906,7 +1910,7 @@ back out of `C extends BoundedContext<D,I,O>`.
 
 - **The failure it prevents is silent, which is why it is checked at all.** The framework hands a
   component its events through an erased `Projection`, so nothing casts and nothing throws; the
-  component's own `eventQuery()` names stored types that never occur on this context's stream, so the
+  component's own query or filter names stored types that never occur on this context's stream, so the
   query matches nothing and the read model, dispatcher or todo list simply stays empty, for good —
   no exception, no `BoundedContextEvent`, no log line. Same shape as an automation whose todo list
   nobody projects, and caught in the same place for the same reason
@@ -1917,7 +1921,7 @@ back out of `C extends BoundedContext<D,I,O>`.
   checks too, on facts that are beside the point
 - **Only *unrelated* types are refused.** A component over a **supertype** of this context's root is
   legitimate — the dashboard's analytics `ReadModel<Object>` projects whatever it is handed — and so is
-  one over a **branch** of the sealed hierarchy, whose `eventQuery()` is what keeps the other branches
+  one over a **branch** of the sealed hierarchy, whose query or filter is what keeps the other branches
   away from it. Neither can be told from a mistake from here, and a check that rejects a legitimate
   registration is worse than none (the rule `rejectAutomationsWhoseTodoListIsNotProjectedHere` already
   states). A declaration that fixes no event class at all — a generic read model registered as an
@@ -1952,6 +1956,41 @@ back out of `C extends BoundedContext<D,I,O>`.
   at once, and the three shapes that are deliberately accepted;
   `FeatureSliceScanIsPerContextTest.aComponentASliceRegistersIsCheckedToo` pins that a slice's
   registrations are checked too, and fails with nothing thrown if the checks move back before the scan
+
+### A component declares a query only where it can use one
+
+**A component the framework reads forward from a bookmark declares an `EventFilter`; one read per
+call declares an `EventQuery`.** The eventstore keeps the two apart — the filter says which events are
+relevant, the query how they are read (direction, limit, `notAfter`) — and a component offering a
+query where only a filter can be followed is one whose mistakes compile and then misbehave silently.
+
+- **`Translator`, `Publisher`, `Policy` and `Dispatcher` declare `eventFilter()`.** Each is driven by a
+  `ProjectorProcessor` from its bookmark, forward, every run; the module wraps the filter in
+  `EventQuery.of(...)` for the projector. `Dispatcher` extends `EventHandler` rather than `Projection`
+  for the same reason, so it cannot declare an `initQuery()` the eventstore would ignore under a bookmark.
+  The interactive `translate(...)` path matches translators on their filter, as the async one does
+- **`Aggregate.eventFilter(Tags identity)` decides both what an aggregate reads and what its append
+  checks** (`ProjectionTowardsAggregate`, `AggregateEventAppenderImpl`). Left at its default —
+  `EventFilter.forTags(identity)` — it is the classical aggregate: everything about it is its history,
+  and anything new about it conflicts. Narrowed, the events it leaves out are neither read nor checked,
+  which is the DCB rule every decision model follows. The alternative — the check always on every event
+  with the identity's tags while the read follows the override — loses because the check's reference is
+  the last event *read*, so an event the aggregate does not read, stored after that one, conflicts every
+  append and every retry: the aggregate can never append again. `AggregateFilterTest` pins the default,
+  that case, and both kinds of event arriving between load and append
+- **`ReadModel`, `TodoListReadModel` and `DecisionModel` keep their `EventQuery`**, because the live path
+  uses all of it: a live model or a decision model may read the newest event backwards with a limit of
+  one, and `initQuery()` is the savepoint pattern. The alternative — a filter-only interface for
+  background read models — loses because it splits one concept in two for a read model registered both
+  ways, and moves the choice of projection from the registration into the type
+- **So an eventually consistent registration is held to a forward read at `build()`**:
+  `rejectEventuallyConsistentReadModelsThatCannotBeReadForward` names every eventually consistent read
+  model — a todo list included — whose `eventQuery()` reads backwards, is limited or carries a
+  `notAfter`, or which declares an `initQuery()`. On a bookmarked projector a backwards query walks into
+  older events, a limit or a `notAfter` stops the read model for good, and the eventstore ignores an
+  `initQuery()`. A filter's own item bounds are business bounds and a forward read follows them, so
+  they pass. `EventuallyConsistentReadModelReadsForwardTest` pins each refusal, all of them named
+  together, the bounded filter accepted, and the same read model accepted live
 
 ### A feature slice is scanned for the bounded context it declares
 

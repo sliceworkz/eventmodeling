@@ -930,8 +930,8 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(SomeInboundEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeInboundEvent.class);
 		}
 
 		@Override

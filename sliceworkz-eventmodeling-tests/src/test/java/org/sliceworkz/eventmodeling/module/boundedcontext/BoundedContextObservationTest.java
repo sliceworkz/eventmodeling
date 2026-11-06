@@ -376,8 +376,8 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 
 	static class NamedDispatcher implements Dispatcher<MockOutboundEvent> {
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(SomeOutboundEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeOutboundEvent.class);
 		}
 
 		@Override

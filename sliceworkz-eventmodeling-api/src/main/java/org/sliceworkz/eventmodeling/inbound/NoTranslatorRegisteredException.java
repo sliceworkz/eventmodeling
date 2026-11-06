@@ -24,7 +24,7 @@ package org.sliceworkz.eventmodeling.inbound;
  * Unlike the eventually-consistent {@code incoming(...)} path - which simply appends the
  * inbound event to the inbound stream and lets translators pick it up asynchronously - the
  * interactive {@code translate(...)} path runs the matching translators synchronously. When
- * no translator's {@link Translator#eventQuery()} matches the supplied event there is nothing
+ * no translator's {@link Translator#eventFilter()} matches the supplied event there is nothing
  * to run, which is treated as a programming/configuration error and surfaced as this exception.
  */
 public class NoTranslatorRegisteredException extends RuntimeException {

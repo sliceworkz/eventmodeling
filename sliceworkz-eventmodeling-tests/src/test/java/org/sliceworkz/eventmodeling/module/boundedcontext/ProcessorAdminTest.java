@@ -235,8 +235,8 @@ public class ProcessorAdminTest extends AbstractMockDomainTest {
 	static class NoopTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(SomeInboundEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(SomeInboundEvent.class);
 		}
 
 		@Override
@@ -248,8 +248,8 @@ public class ProcessorAdminTest extends AbstractMockDomainTest {
 	static class NoopDispatcher implements Dispatcher<MockOutboundEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.of(EventTypesFilter.any(), Tags.none()));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.matchAll();
 		}
 
 		@Override

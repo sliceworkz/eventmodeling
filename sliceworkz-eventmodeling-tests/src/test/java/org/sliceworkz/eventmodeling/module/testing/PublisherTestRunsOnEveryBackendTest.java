@@ -40,7 +40,6 @@ import org.sliceworkz.eventmodeling.testing.PublisherTest;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -155,8 +154,8 @@ public class PublisherTestRunsOnEveryBackendTest extends PublisherTest<MockDomai
 	static class OnePerValuePublisher implements Publisher<MockDomainEvent, MockOutboundEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -177,8 +176,8 @@ public class PublisherTestRunsOnEveryBackendTest extends PublisherTest<MockDomai
 	static class UndeclaredReadPublisher implements Publisher<MockDomainEvent, MockOutboundEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override

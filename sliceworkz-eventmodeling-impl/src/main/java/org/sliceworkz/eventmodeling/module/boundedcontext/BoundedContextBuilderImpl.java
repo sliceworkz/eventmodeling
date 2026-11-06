@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import org.sliceworkz.eventstore.query.EventQuery;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -691,6 +692,57 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	/**
+	 * Rejects an eventually consistent read model — a todo list included — whose query asks for more
+	 * than its projector can do.
+	 * <p>
+	 * Such a read model is projected in the background by a processor reading the stream forward from
+	 * its bookmark, run after run. A {@code ReadModel} answers an {@code EventQuery} because the same
+	 * interface serves the live path, where a direction, a limit, a read bound and a savepoint
+	 * ({@code initQuery}) are all meaningful: a live model may well read the newest event backwards with
+	 * a limit of one. On a bookmarked projector none of them is: a backwards query resumed from its
+	 * bookmark walks into older events, never newer ones; a limit or a {@code notAfter} stops the read
+	 * model at a point it never leaves; and the eventstore ignores an {@code initQuery} under a bookmark,
+	 * with a warning in the log. Each of those projects something other than what the read model
+	 * declares, and says so nowhere, so the registration is refused here, naming every offender and what
+	 * it asked for. The alternative — a separate interface for background read models declaring a filter
+	 * only — loses because it splits one concept in two for every read model that is registered both
+	 * ways, and puts the choice of projection into the type rather than the registration.
+	 */
+	private void rejectEventuallyConsistentReadModelsThatCannotBeReadForward ( ) {
+		List<String> offenders = new ArrayList<>();
+		for ( EventuallyConsistentReadModelSpecificationImpl spec : eventuallyConsistentReadModelSpecs ) {
+			ReadModel<?> readModel = spec.readModel();
+			List<String> reasons = new ArrayList<>();
+			EventQuery query = readModel.eventQuery();
+			if ( query == null ) {
+				reasons.add("eventQuery() answers null");
+			} else {
+				if ( query.isBackwards() ) {
+					reasons.add("its eventQuery() reads backwards");
+				}
+				if ( query.limit() != null && query.limit().isSet() ) {
+					reasons.add("its eventQuery() is limited");
+				}
+				if ( query.notAfter() != null ) {
+					reasons.add("its eventQuery() is bounded by notAfter (use an until on the filter for a business bound)");
+				}
+			}
+			EventQuery initQuery = readModel.initQuery();
+			if ( initQuery != null && !initQuery.filter().isMatchNone() ) {
+				reasons.add("it declares an initQuery(), which a bookmarked projector ignores");
+			}
+			if ( !reasons.isEmpty() ) {
+				offenders.add("%s (%s)".formatted(readModel.readmodelName(), String.join(", ", reasons)));
+			}
+		}
+		if ( !offenders.isEmpty() ) {
+			throw new IllegalArgumentException(
+					"eventually consistent readmodel registered whose query its projector cannot follow -- it reads forward from its bookmark: "
+					+ String.join("; ", offenders));
+		}
+	}
+
+	/**
 	 * Rejects a live read model class no read of it could ever instantiate.
 	 * <p>
 	 * A live read model is constructed per read, so the class is registered here and the parameters
@@ -1181,6 +1233,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		rejectComponentsOfAnotherContextsEventTypes();
 		rejectReadModelsWithoutAChosenMode();
 		rejectLiveReadModelsThatCannotBeInstantiated();
+		rejectEventuallyConsistentReadModelsThatCannotBeReadForward();
 		rejectAutomationsWhoseTodoListIsNotProjectedHere();
 		rejectPublishersOutsideTheAutomationAspect();
 		rejectPublishersWhoseReadModelsAreNotLiveHere();

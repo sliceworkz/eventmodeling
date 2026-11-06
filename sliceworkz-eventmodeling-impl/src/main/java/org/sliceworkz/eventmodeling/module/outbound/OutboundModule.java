@@ -220,7 +220,7 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 
 		@Override
 		public EventQuery eventQuery() {
-			return dispatcher.eventQuery();
+			return EventQuery.of(dispatcher.eventFilter());
 		}
 	}
 

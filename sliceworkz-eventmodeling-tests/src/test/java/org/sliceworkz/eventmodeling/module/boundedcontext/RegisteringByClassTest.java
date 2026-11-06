@@ -134,14 +134,14 @@ public class RegisteringByClassTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"));
 	}
 
-	private static EventQuery everything ( ) {
-		return EventQuery.of(EventFilter.of(EventTypesFilter.any(), Tags.none()));
+	private static EventFilter everything ( ) {
+		return EventFilter.matchAll();
 	}
 
 	public static class PublicTranslator implements Translator<MockInboundEvent,MockDomainEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
+		public EventFilter eventFilter ( ) {
 			return everything();
 		}
 
@@ -154,7 +154,7 @@ public class RegisteringByClassTest extends AbstractMockDomainTest {
 	public static class PublicDispatcher implements Dispatcher<MockOutboundEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
+		public EventFilter eventFilter ( ) {
 			return everything();
 		}
 

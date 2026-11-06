@@ -38,7 +38,7 @@ public interface TranslationCapability<INBOUND_EVENT_TYPE> {
 	 * In contrast to {@link #incoming(Object)} - which appends the inbound event to the inbound
 	 * stream and lets the registered {@link Translator}s pick it up eventually (and asynchronously) -
 	 * this method runs the translation synchronously in the calling thread. Every registered
-	 * translator whose {@link Translator#eventQuery()} matches the supplied event is invoked, reusing
+	 * translator whose {@link Translator#eventFilter()} matches the supplied event is invoked, reusing
 	 * the exact same {@link Translator} implementations registered with the bounded context. The
 	 * inbound event itself is <em>not</em> persisted to the inbound stream.
 	 * <p>

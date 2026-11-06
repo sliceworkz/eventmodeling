@@ -49,7 +49,7 @@ public class MockReadModel implements ReadModel<MockDomainEvent> {
 	public MockReadModel ( String name, ReadModelStorage storage ) {
 		this.name = name;
 		this.storage = storage;
-		this.eventQuery = EventQuery.of(EventFilter.of(EventTypesFilter.any(), Tags.none()));
+		this.eventQuery = EventQuery.of(EventFilter.matchAll());
 	}
 
 	public MockReadModel ( String name, List<Class<?>> queriedClasses, ReadModelStorage storage ) {

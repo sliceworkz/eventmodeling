@@ -40,7 +40,6 @@ import org.sliceworkz.eventmodeling.testing.PolicyTest;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -149,8 +148,8 @@ public class PolicyTestRunsOnEveryBackendTest extends PolicyTest<MockDomainEvent
 		private int executions;
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override

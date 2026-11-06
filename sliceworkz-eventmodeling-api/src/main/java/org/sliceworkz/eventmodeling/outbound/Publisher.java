@@ -21,7 +21,7 @@ import java.util.Set;
 
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
  * Maps the bounded context's domain events into its published language: the outbound events a
@@ -68,11 +68,11 @@ public interface Publisher<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> {
 	String TAG_PUBLISHED_FROM = "x-published-from";
 
 	/**
-	 * The domain events this publisher publishes for.
+	 * The domain events this publisher publishes for, read forward from its bookmark.
 	 *
-	 * @return the query selecting them from the domain stream
+	 * @return the filter selecting them from the domain stream
 	 */
-	EventQuery eventQuery ( );
+	EventFilter eventFilter ( );
 
 	/**
 	 * The live read models {@link #publish} reads. Each must be registered {@code .live()} on every

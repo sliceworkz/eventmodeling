@@ -20,15 +20,27 @@ package org.sliceworkz.eventmodeling.aggregates;
 import org.sliceworkz.eventstore.events.EventHandler;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 public interface Aggregate<DOMAIN_EVENT_TYPE> extends EventHandler<DOMAIN_EVENT_TYPE> {
 	
 	void setContext ( AggregateContext<DOMAIN_EVENT_TYPE> aggregateContext );
 	
-	default EventQuery eventQuery ( Tags identity ) {
-		return EventQuery.of(EventFilter.forTags(identity));
+	/**
+	 * The events this aggregate is made of, for the identity it is loaded under. It decides both what
+	 * the aggregate reads and what its append checks: an event matching it that lands after the load
+	 * fails the append with an {@code OptimisticLockingException}, and one that does not match is
+	 * neither read nor checked.
+	 * <p>
+	 * The default — every event carrying the identity's tags — is the classical aggregate: everything
+	 * about it is its history, and anything new about it conflicts. Narrow it only to leave out events
+	 * that can change none of the aggregate's decisions, since an event left out is invisible to it
+	 * twice over.
+	 *
+	 * @param identity the tags the aggregate was loaded under
+	 * @return the filter selecting its events, read forward from the start or from its snapshot
+	 */
+	default EventFilter eventFilter ( Tags identity ) {
+		return EventFilter.forTags(identity);
 	}
 
 }

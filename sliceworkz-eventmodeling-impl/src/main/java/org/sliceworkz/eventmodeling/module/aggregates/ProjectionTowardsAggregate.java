@@ -40,7 +40,7 @@ public class ProjectionTowardsAggregate<DOMAIN_EVENT_TYPE> implements Projection
 
 	@Override
 	public EventQuery eventQuery() {
-		return aggregate.eventQuery(identity);
+		return EventQuery.of(aggregate.eventFilter(identity));
 	}
 
 }

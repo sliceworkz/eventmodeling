@@ -74,7 +74,7 @@ import org.sliceworkz.eventstore.query.EventQuery;
  * the framework, pinned by its own integration tests. The translation logic is identical on both
  * paths (the same registered {@code Translator} instances run), with one caveat worth knowing: the
  * interactive path matches translators on the inbound event's <em>type</em> only, so a translator
- * whose {@code eventQuery()} also requires tags never matches interactively.
+ * whose {@code eventFilter()} also requires tags never matches interactively.
  *
  * @param <DOMAIN_EVENT_TYPE> the bounded context's domain event type
  * @param <INBOUND_EVENT_TYPE> the bounded context's inbound event type

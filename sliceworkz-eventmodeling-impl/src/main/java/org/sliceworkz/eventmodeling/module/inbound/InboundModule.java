@@ -237,7 +237,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 		@Override
 		public EventQuery eventQuery() {
-			return translator.eventQuery();
+			return EventQuery.of(translator.eventFilter());
 		}
 	}
 
@@ -271,7 +271,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 
 	/**
 	 * Interactively translates an inbound event by synchronously running every registered translator
-	 * whose {@link Translator#eventQuery()} matches the event. The inbound event is <em>not</em>
+	 * whose {@link Translator#eventFilter()} matches the event. The inbound event is <em>not</em>
 	 * appended to the inbound stream.
 	 *
 	 * @return references to the domain events raised during translation, in the order they were raised
@@ -314,7 +314,7 @@ public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_T
 	// matches the event - which carries no tags on this interactive path - against a translator's event query,
 	// purely on event type (and any tag requirements, which a tag-less event can only satisfy when none are required).
 	private boolean matches ( Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> translator, INBOUND_EVENT_TYPE event ) {
-		EventFilter filter = translator.eventQuery().filter();
+		EventFilter filter = translator.eventFilter();
 		List<EventFilterItem> items = filter.items();
 		if ( items == null ) {
 			return true; // null items = match all

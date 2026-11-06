@@ -88,7 +88,7 @@ public class AggregateEventAppenderImpl<DOMAIN_EVENT_TYPE> implements AggregateE
 		try ( Observation.Scope<Outcome.AppendResult> scope = observer.start(new Observation.AggregateAppend(boundedContext, aggregateName, identity, raisedPerType, tracing)) ) {
 			try {
 				List<EventReference> appended = eventStream.append(
-						AppendCriteria.of(EventFilter.forTags(identity), lastReference),
+						AppendCriteria.of(aggregate.eventFilter(identity), lastReference),
 						events).stream().map(e->{this.lastReference=e.reference();return e;}).map(e->{aggregate.when(e);return e;}).map(Event::reference).toList();
 				events.clear();
 				scope.completed(new Outcome.Appended(appended));

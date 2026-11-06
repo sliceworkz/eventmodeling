@@ -48,7 +48,7 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  *         return BalanceFold.apply(state, event);        // pure, and reusable by a seeded read
  *     }
  *
- *     public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.of(EventTypesFilter.any(), Tags.none())); }
+ *     public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
  *
  *     public Balance of ( String accountId ) { return state().getOrDefault(accountId, Balance.ZERO); }
  * }

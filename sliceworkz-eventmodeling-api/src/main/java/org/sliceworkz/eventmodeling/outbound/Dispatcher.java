@@ -17,8 +17,29 @@
  */
 package org.sliceworkz.eventmodeling.outbound;
 
-import org.sliceworkz.eventstore.projection.Projection;
+import org.sliceworkz.eventstore.events.EventHandler;
+import org.sliceworkz.eventstore.query.EventFilter;
 
-public interface Dispatcher<OUTBOUND_EVENT_TYPE> extends Projection<OUTBOUND_EVENT_TYPE> {
-	
+/**
+ * Sends outbound events to the outside world: the outbox of a bounded context. A dispatcher is handed
+ * every outbound event its filter selects, in order, through {@link #when}, by a processor reading the
+ * outbound stream forward from the dispatcher's bookmark, on the elected leader.
+ * <p>
+ * It declares a filter and not a query, and has no savepoint: a bookmarked reader always reads forward
+ * from where it stopped, so a direction, a limit, a read bound or an {@code initQuery} would have nothing
+ * to mean. Delivery is at least once: an event is handed over again when a crash lands between the
+ * delivery and the bookmark, so whatever the dispatcher sends to should tolerate a repeat, keyed on the
+ * event's id.
+ *
+ * @param <OUTBOUND_EVENT_TYPE> the base type of outbound events in the bounded context
+ */
+public interface Dispatcher<OUTBOUND_EVENT_TYPE> extends EventHandler<OUTBOUND_EVENT_TYPE> {
+
+	/**
+	 * The outbound events this dispatcher sends.
+	 *
+	 * @return the filter selecting them from the outbound stream
+	 */
+	EventFilter eventFilter ( );
+
 }

@@ -18,7 +18,7 @@
 package org.sliceworkz.eventmodeling.inbound;
 
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
  * Translates inbound events from external systems into domain events or commands.
@@ -33,14 +33,16 @@ import org.sliceworkz.eventstore.query.EventQuery;
 public interface Translator<INBOUND_EVENT_TYPE,DOMAIN_EVENT_TYPE> {
 
 	/**
-	 * Returns the event query that determines which inbound events this translator handles.
+	 * The inbound events this translator handles.
 	 * <p>
-	 * The query is used to filter the inbound event stream and only deliver relevant events
-	 * to this translator.
+	 * A filter and not a query: the inbound stream is always read forward from the translator's
+	 * bookmark, one event after another, so a direction, a limit or a read bound would have nothing to
+	 * mean. On the interactive {@code translate(...)} path the filter decides which translators an
+	 * inbound event is handed to.
 	 *
-	 * @return the event query for filtering inbound events
+	 * @return the filter selecting inbound events
 	 */
-	EventQuery eventQuery();
+	EventFilter eventFilter ( );
 
 	/**
 	 * Translates an inbound event into domain events or commands.

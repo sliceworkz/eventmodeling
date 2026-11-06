@@ -227,17 +227,17 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 	}
 
 	public static class ForeignTranslator implements Translator<ForeignInboundEvent,ForeignDomainEvent> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void translate ( Event<ForeignInboundEvent> event, TranslatorContext<ForeignInboundEvent,ForeignDomainEvent> context ) { }
 	}
 
 	public static class ForeignPublisher implements Publisher<ForeignDomainEvent,ForeignOutboundEvent> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void publish ( Event<ForeignDomainEvent> event, PublisherContext<ForeignDomainEvent,ForeignOutboundEvent> context ) { }
 	}
 
 	public static class ForeignDispatcher implements Dispatcher<ForeignOutboundEvent> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void when ( Event<ForeignOutboundEvent> event ) { }
 	}
 

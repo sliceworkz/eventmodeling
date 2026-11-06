@@ -56,6 +56,21 @@ public class TracingScopeTest {
 	}
 
 	@Test
+	void callAndRunBindForTheWorkAndRestoreWhatWasBoundBefore ( ) {
+		Tracing outer = Tracing.actorAndChannel("alice", "api");
+		Tracing inner = Tracing.actorAndChannel("bob", "api");
+		try ( TracingScope scope = TracingScope.bind(outer) ) {
+			assertEquals(Optional.of(inner), TracingScope.call(inner, TracingScope::current));
+			AtomicReference<Optional<Tracing>> seen = new AtomicReference<>();
+			TracingScope.run(inner, () -> seen.set(TracingScope.current()));
+			assertEquals(Optional.of(inner), seen.get());
+			assertEquals(Optional.of(outer), TracingScope.current());
+			assertThrows(IllegalStateException.class, () -> TracingScope.call(inner, () -> { throw new IllegalStateException("work failed"); }));
+			assertEquals(Optional.of(outer), TracingScope.current(), "restored when the work throws too");
+		}
+	}
+
+	@Test
 	void closingTwiceRestoresOnce ( ) {
 		Tracing outer = Tracing.actorAndChannel("alice", "api");
 		try ( TracingScope o = TracingScope.bind(outer) ) {

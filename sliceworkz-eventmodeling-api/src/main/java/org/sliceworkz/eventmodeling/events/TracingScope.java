@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.events;
 
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * The tracing of the work the calling thread is doing on behalf of an edge — typically the HTTP request it
@@ -86,6 +87,37 @@ public final class TracingScope implements AutoCloseable {
 		TracingScope scope = new TracingScope(BOUND.get());
 		BOUND.set(tracing);
 		return scope;
+	}
+
+	/**
+	 * Calls {@code work} with {@code tracing} bound to this thread, and restores what was bound before when
+	 * it returns: the expression form of a {@link #bind(Tracing) binding}, for one call made on someone's
+	 * behalf —
+	 * {@code Optional<EventReference> ref = TracingScope.call(alice, () -> bank.execute(command));}
+	 *
+	 * @param tracing the tracing to bind; not {@code null}
+	 * @param work what to call with it bound
+	 * @return what {@code work} returned
+	 * @throws IllegalArgumentException for a {@code null} tracing
+	 */
+	public static <T> T call ( Tracing tracing, Supplier<T> work ) {
+		try ( TracingScope scope = bind(tracing) ) {
+			return work.get();
+		}
+	}
+
+	/**
+	 * Runs {@code work} with {@code tracing} bound to this thread, and restores what was bound before when it
+	 * returns: {@link #call(Tracing, Supplier)} for work that answers nothing.
+	 *
+	 * @param tracing the tracing to bind; not {@code null}
+	 * @param work what to run with it bound
+	 * @throws IllegalArgumentException for a {@code null} tracing
+	 */
+	public static void run ( Tracing tracing, Runnable work ) {
+		try ( TracingScope scope = bind(tracing) ) {
+			work.run();
+		}
 	}
 
 	/**

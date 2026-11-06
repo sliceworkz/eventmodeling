@@ -2194,7 +2194,8 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   for.** The alternative — a `Tracing` parameter overload beside every capability method — loses
   because it doubled every overload set (eighteen `execute`/`executeWithRetry` forms, seven `event`
   forms) for something an edge decides once per request, and a caller passing a tracing to one call and
-  none to the next split its own flow with nothing to say so. Inside the framework the component
+  none to the next split its own flow with nothing to say so. `TracingScope.call(tracing, () -> ...)` and
+  `run(...)` are the expression form for one call made on someone's behalf. Inside the framework the component
   contexts (`AutomationContextImpl`, `TranslatorContextImpl`, `TracingTranslatorContext`, `Reaction`)
   bind their tracing around each forwarded call with `BoundTracing` (impl), and `BoundedContextImpl`
   keeps its traced methods private

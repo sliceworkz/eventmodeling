@@ -30,7 +30,8 @@ import org.sliceworkz.eventmodeling.events.TracingScope;
  * thread. A component's context — an automation's, a translator's, a policy's reaction — holds the tracing
  * of the event or item it handles, and is what binds it around each call it forwards, so everything the
  * call does runs in that flow whatever the thread had bound. The binding is restored when the call
- * returns, so it never outlives the call that needed it.
+ * returns, so it never outlives the call that needed it. It is {@link TracingScope#call(Tracing, Supplier)}
+ * tolerating a component that has no tracing of its own.
  */
 public final class BoundTracing {
 
@@ -40,12 +41,7 @@ public final class BoundTracing {
 	 * Calls {@code work} with {@code tracing} bound to this thread; a {@code null} tracing binds nothing.
 	 */
 	public static <T> T call ( Tracing tracing, Supplier<T> work ) {
-		if ( tracing == null ) {
-			return work.get();
-		}
-		try ( TracingScope scope = TracingScope.bind(tracing) ) {
-			return work.get();
-		}
+		return tracing == null ? work.get() : TracingScope.call(tracing, work);
 	}
 
 	/**

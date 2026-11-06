@@ -28,7 +28,7 @@ import org.sliceworkz.eventmodeling.commands.BusinessException;
  * It is a {@link BusinessException}, deliberately: a rejection on a business rule is an outcome of the
  * command, not a bug, and everything that already tells the two apart keeps doing so — a {@code catch
  * ( BusinessException )} in application code, the kernel reporting it as a {@code CommandRejected} rather
- * than a {@code CommandFailed}, {@code executeWithRetry} leaving it alone, and {@code businessError(...)}
+ * than a {@code CommandFailed}, a retrying {@code Execution} leaving it alone, and {@code businessError(...)}
  * in the test harness. What it adds is the structure: {@link #evaluation()} is the same {@link Evaluation}
  * that evaluating the command would have answered, so the handler of a rejected submit can return exactly
  * what a check returns (an HTTP {@code 422} with the judgements as its body), and a front end has one shape

@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import org.sliceworkz.eventmodeling.commands.Execution;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -258,7 +259,7 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 	void externalKey_firstExecution_returnsResponse() {
 		Mock domain = buildDomain();
 
-		CommandExecutionResult<String> result = domain.execute(new SingleEventWithStringResponse("test"), "key-1");
+		CommandExecutionResult<String> result = domain.execute(new SingleEventWithStringResponse("test"), Execution.idempotent("key-1"));
 
 		assertEquals("response:test", result.response());
 		assertTrue(result.eventReference().isPresent());
@@ -269,10 +270,10 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 	void externalKey_duplicateExecution_eventRefEmpty() {
 		Mock domain = buildDomain();
 
-		CommandExecutionResult<String> first = domain.execute(new SingleEventWithStringResponse("test"), "key-1");
+		CommandExecutionResult<String> first = domain.execute(new SingleEventWithStringResponse("test"), Execution.idempotent("key-1"));
 		assertTrue(first.eventReference().isPresent());
 
-		CommandExecutionResult<String> second = domain.execute(new SingleEventWithStringResponse("test"), "key-1");
+		CommandExecutionResult<String> second = domain.execute(new SingleEventWithStringResponse("test"), Execution.idempotent("key-1"));
 		assertTrue(second.eventReference().isEmpty());
 
 		assertEquals(1, countDomainEvents());

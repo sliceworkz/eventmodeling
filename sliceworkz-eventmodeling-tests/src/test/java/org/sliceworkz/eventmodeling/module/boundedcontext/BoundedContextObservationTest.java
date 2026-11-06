@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -138,8 +139,8 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 	void anIdempotentRepeatIsExecutedWithNothingAppended ( ) {
 		Mock domain = buildBoundedContext(observedBuilder());
 
-		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), "key-1");
-		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), "key-1");
+		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), Execution.idempotent("key-1"));
+		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), Execution.idempotent("key-1"));
 
 		Outcome.Executed repeat = observer.last(Observation.CommandExecution.class).outcome(Outcome.Executed.class);
 		assertEquals(Map.of(EventType.of(FirstDomainEvent.class), 2), repeat.raisedPerType(), "what the command raised");

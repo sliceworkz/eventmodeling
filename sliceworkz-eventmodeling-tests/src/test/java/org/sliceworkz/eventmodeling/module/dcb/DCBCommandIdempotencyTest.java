@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import org.sliceworkz.eventmodeling.commands.Execution;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,7 +39,6 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.spi.EventStorage.StoredEvent;
 import org.sliceworkz.eventstore.stream.EventStream;
@@ -243,7 +243,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void externalKey_firstExecution_storesEvent() {
 		Mock domain = buildDomain();
 
-		Optional<EventReference> result = domain.execute(new SingleEventCommand("test"), "key-1");
+		Optional<EventReference> result = domain.execute(new SingleEventCommand("test"), Execution.idempotent("key-1"));
 
 		assertTrue(result.isPresent());
 		assertEquals(1, countDomainEvents());
@@ -253,10 +253,10 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void externalKey_duplicateExecution_silentlyIgnored() {
 		Mock domain = buildDomain();
 
-		Optional<EventReference> first = domain.execute(new SingleEventCommand("test"), "key-1");
+		Optional<EventReference> first = domain.execute(new SingleEventCommand("test"), Execution.idempotent("key-1"));
 		assertTrue(first.isPresent());
 
-		Optional<EventReference> second = domain.execute(new SingleEventCommand("test"), "key-1");
+		Optional<EventReference> second = domain.execute(new SingleEventCommand("test"), Execution.idempotent("key-1"));
 		assertTrue(second.isEmpty());
 
 		assertEquals(1, countDomainEvents());
@@ -266,8 +266,8 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void externalKey_differentKeys_bothStored() {
 		Mock domain = buildDomain();
 
-		domain.execute(new SingleEventCommand("test-1"), "key-1");
-		domain.execute(new SingleEventCommand("test-2"), "key-2");
+		domain.execute(new SingleEventCommand("test-1"), Execution.idempotent("key-1"));
+		domain.execute(new SingleEventCommand("test-2"), Execution.idempotent("key-2"));
 
 		assertEquals(2, countDomainEvents());
 	}
@@ -286,7 +286,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void externalKey_noEventsRaised_returnsEmpty() {
 		Mock domain = buildDomain();
 
-		Optional<EventReference> result = domain.execute(new NoEventCommand(), "key-1");
+		Optional<EventReference> result = domain.execute(new NoEventCommand(), Execution.idempotent("key-1"));
 
 		assertTrue(result.isEmpty());
 		assertEquals(0, countDomainEvents());
@@ -296,7 +296,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void externalKey_multipleEvents_eachEventGetsAKeyDerivedFromIt() {
 		Mock domain = buildDomain();
 
-		Optional<EventReference> result = domain.execute(new MultiEventCommand(), "key-1");
+		Optional<EventReference> result = domain.execute(new MultiEventCommand(), Execution.idempotent("key-1"));
 
 		assertTrue(result.isPresent());
 		assertEquals(2, countDomainEvents());
@@ -308,8 +308,8 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void externalKey_multipleEvents_retryIsSwallowedWhole() {
 		Mock domain = buildDomain();
 
-		assertTrue(domain.execute(new MultiEventCommand(), "key-1").isPresent());
-		Optional<EventReference> retry = domain.execute(new MultiEventCommand(), "key-1");
+		assertTrue(domain.execute(new MultiEventCommand(), Execution.idempotent("key-1")).isPresent());
+		Optional<EventReference> retry = domain.execute(new MultiEventCommand(), Execution.idempotent("key-1"));
 
 		assertTrue(retry.isEmpty(), "every derived key was stored before, so the batch is a retry");
 		assertEquals(2, countDomainEvents());
@@ -319,12 +319,12 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void externalKey_multipleEvents_aBatchMixingStoredAndNewKeysIsRefusedWhole() {
 		Mock domain = buildDomain();
 
-		assertTrue(domain.execute(new MultiEventCommand(2), "key-1").isPresent());
+		assertTrue(domain.execute(new MultiEventCommand(2), Execution.idempotent("key-1")).isPresent());
 
 		// the same command key, a different set of events: key-1/1 and key-1/2 are stored, key-1/3 is
 		// not, so this is not a retry -- and storing the third alone would land half a decision
 		assertThrows(IdempotencyKeyConflictException.class,
-				() -> domain.execute(new MultiEventCommand(3), "key-1"));
+				() -> domain.execute(new MultiEventCommand(3), Execution.idempotent("key-1")));
 		assertEquals(2, countDomainEvents());
 	}
 
@@ -332,7 +332,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void externalKey_multipleEvents_anEventKeyedByTheCommandKeepsItsOwnKey() {
 		Mock domain = buildDomain();
 
-		domain.execute(new PartlyKeyedMultiEventCommand(), "key-1");
+		domain.execute(new PartlyKeyedMultiEventCommand(), Execution.idempotent("key-1"));
 
 		// the derived key is spent on the position, so the second event's key does not shift to /1
 		assertEquals(List.of("own-key", "key-1/2"), storedKeys());
@@ -351,11 +351,11 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 			}
 		};
 
-		Optional<EventReference> first = domain.execute(cmd, "command-level-key");
+		Optional<EventReference> first = domain.execute(cmd, Execution.idempotent("command-level-key"));
 		assertTrue(first.isPresent());
 
 		// event-level key preserved; re-executing deduplicates based on that key
-		Optional<EventReference> second = domain.execute(cmd, "command-level-key");
+		Optional<EventReference> second = domain.execute(cmd, Execution.idempotent("command-level-key"));
 		assertTrue(second.isEmpty());
 
 		assertEquals(1, countDomainEvents());
@@ -383,7 +383,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		Mock domain = buildDomain();
 
 		// first execution uses external key
-		domain.execute(new FallbackKeyCommand("test", "internal-key"), "external-key");
+		domain.execute(new FallbackKeyCommand("test", "internal-key"), Execution.idempotent("external-key"));
 
 		// second execution with same internal key but no external — not deduplicated
 		// because the first event was stored with the external key
@@ -397,10 +397,10 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void fallbackKey_withExternalKey_duplicateExternal_deduplicated() {
 		Mock domain = buildDomain();
 
-		domain.execute(new FallbackKeyCommand("test", "internal-key"), "external-key");
+		domain.execute(new FallbackKeyCommand("test", "internal-key"), Execution.idempotent("external-key"));
 
 		// same external key deduplicates regardless of internal key
-		Optional<EventReference> second = domain.execute(new FallbackKeyCommand("test", "different-internal"), "external-key");
+		Optional<EventReference> second = domain.execute(new FallbackKeyCommand("test", "different-internal"), Execution.idempotent("external-key"));
 		assertTrue(second.isEmpty());
 
 		assertEquals(1, countDomainEvents());
@@ -414,7 +414,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void requireKey_withExternalKey_succeeds() {
 		Mock domain = buildDomain();
 
-		Optional<EventReference> result = domain.execute(new RequireExternalKeyCommand(), "external-key");
+		Optional<EventReference> result = domain.execute(new RequireExternalKeyCommand(), Execution.idempotent("external-key"));
 		assertTrue(result.isPresent());
 		assertEquals(1, countDomainEvents());
 	}
@@ -448,7 +448,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		Mock domain = buildDomain();
 
 		assertThrows(IllegalStateException.class,
-				() -> domain.execute(new ExclusiveKeyCommand("my-key"), "external-key"));
+				() -> domain.execute(new ExclusiveKeyCommand("my-key"), Execution.idempotent("external-key")));
 	}
 
 	// ════════════════════════════════════════════════════════════════════
@@ -472,10 +472,10 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		Mock domain = buildDomain();
 
 		// internal key "my-key" is used, external key ignored
-		domain.execute(new IdempotencyKeyCommand("my-key"), "external-key");
+		domain.execute(new IdempotencyKeyCommand("my-key"), Execution.idempotent("external-key"));
 
 		// same internal key, different external — still deduplicated by internal
-		Optional<EventReference> second = domain.execute(new IdempotencyKeyCommand("my-key"), "different-external");
+		Optional<EventReference> second = domain.execute(new IdempotencyKeyCommand("my-key"), Execution.idempotent("different-external"));
 		assertTrue(second.isEmpty());
 
 		assertEquals(1, countDomainEvents());
@@ -485,8 +485,8 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	void idempotencyKey_differentInternalKeys_bothStored() {
 		Mock domain = buildDomain();
 
-		domain.execute(new IdempotencyKeyCommand("key-a"), "same-external");
-		domain.execute(new IdempotencyKeyCommand("key-b"), "same-external");
+		domain.execute(new IdempotencyKeyCommand("key-a"), Execution.idempotent("same-external"));
+		domain.execute(new IdempotencyKeyCommand("key-b"), Execution.idempotent("same-external"));
 
 		// different internal keys means different events stored, despite same external
 		assertEquals(2, countDomainEvents());
@@ -510,7 +510,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		Mock domain = buildDomain();
 
 		assertThrows(IllegalStateException.class,
-				() -> domain.execute(new ForbidExternalKeyCommand(), "external-key"));
+				() -> domain.execute(new ForbidExternalKeyCommand(), Execution.idempotent("external-key")));
 	}
 
 }

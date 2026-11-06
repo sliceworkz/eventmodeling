@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -373,7 +374,7 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 		RuledCommand command = violating(Overrides.none(), GUIDELINE);
 
 		domain.evaluate(command);
-		assertTrue(domain.execute(command, "key-1").isPresent(), "the key is still unspent after an evaluation");
+		assertTrue(domain.execute(command, Execution.idempotent("key-1")).isPresent(), "the key is still unspent after an evaluation");
 	}
 
 	@Test
@@ -466,7 +467,7 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 
 		assertThrows(OptimisticLockingException.class, () -> BoundTracing.call(alice, () -> domain.execute(racing)));
 		RuleViolationException retried = assertThrows(RuleViolationException.class,
-				() -> BoundTracing.call(alice, () -> domain.executeWithRetry(new QuotaCommand(() -> { }), org.sliceworkz.eventmodeling.commands.RetryPolicy.DEFAULT)));
+				() -> BoundTracing.call(alice, () -> domain.execute(new QuotaCommand(() -> { }), Execution.retrying())));
 		assertEquals("quota of 2 reached", retried.evaluation().judgementOf(PRE_AUTHORIZED).orElseThrow().reason());
 		assertEquals(2, stored().size());
 	}

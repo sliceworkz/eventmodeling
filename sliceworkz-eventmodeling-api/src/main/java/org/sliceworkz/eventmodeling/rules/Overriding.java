@@ -25,8 +25,8 @@ package org.sliceworkz.eventmodeling.rules;
  *         implements Command<BankingEvent>, Overriding { ... }
  * }</pre>
  * Overrides are an input of the command rather than a parameter of {@code execute(...)} on purpose. The
- * command's caller is the one that knows what the user asked for, every existing {@code execute} and
- * {@code executeWithRetry} overload keeps working unchanged, and whatever builds a command without a user in
+ * command's caller is the one that knows what the user asked for, every existing {@code execute} keeps
+ * working unchanged, and whatever builds a command without a user in
  * front of it — an automation, a translator, a test — overrides nothing unless it says so. A retry
  * re-executes the same command, so it carries the same overrides into every attempt, and re-judges them
  * against the facts as they are then.

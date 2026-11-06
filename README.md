@@ -113,7 +113,7 @@ public record FreezeAccountCommand ( AccountId accountId, String reason ) implem
 
 The framework pins the consistency boundary before the decision model is read, and appends
 `AccountFrozen` only if no event about that account landed in the meantime. A conflict is an
-`OptimisticLockingException`; `executeWithRetry(...)` re-reads and re-decides for you.
+`OptimisticLockingException`; `execute(command, Execution.retrying())` re-reads and re-decides for you.
 
 **A policy** in another slice reacts to it — whenever an account is frozen or closed, block its cards:
 
@@ -151,7 +151,7 @@ Banking banking = BoundedContext.newBuilder(Banking.class)
     .build();
 banking.start();
 
-banking.executeWithRetry(new FreezeAccountCommand(accountId, "suspected fraud"));
+banking.execute(new FreezeAccountCommand(accountId, "suspected fraud"), Execution.retrying());
 AccountDetailsReadModel details = banking.read(AccountDetailsReadModel.class, accountId);
 ```
 

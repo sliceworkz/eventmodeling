@@ -144,7 +144,7 @@ command, with `overridableWhen(authorized, whyNot)`:
 
 - **It sits inside the consistency boundary.** `OverdraftExceptionsTodayDecisionModel` is one of the
   command's decision models, so its query is part of the lock filter. Two overdrafts by the same teller
-  racing past the quota cannot both succeed: the second append conflicts, and `executeWithRetry`
+  racing past the quota cannot both succeed: the second append conflicts, and `Execution.retrying()`
   re-decides on a count that includes the first.
 - **`whyNot` is required when the answer is no**, because it is what the actor is shown instead of a
   checkbox: "You already granted 3 overdraft exceptions today, the maximum is 3".

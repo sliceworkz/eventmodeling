@@ -23,6 +23,7 @@ import java.util.Optional;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
+import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -53,23 +54,13 @@ class TracingTranslatorContext<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> implements
 	}
 
 	@Override
-	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command ) {
-		return BoundTracing.call(tracing, ( ) -> delegate.execute(command));
+	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Execution execution ) {
+		return BoundTracing.call(tracing, ( ) -> delegate.execute(command, execution));
 	}
 
 	@Override
-	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey ) {
-		return BoundTracing.call(tracing, ( ) -> delegate.execute(command, idempotencyKey));
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command ) {
-		return BoundTracing.call(tracing, ( ) -> delegate.execute(command));
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey ) {
-		return BoundTracing.call(tracing, ( ) -> delegate.execute(command, idempotencyKey));
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Execution execution ) {
+		return BoundTracing.call(tracing, ( ) -> delegate.execute(command, execution));
 	}
 
 	@Override

@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.ports;
 
+import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -997,7 +998,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 
 		@Override
 		public Optional<EventReference> handle ( ItemToLookUp item, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
-			return context.event(new SecondDomainEvent(gateway.answer(item.value())), "looked-up:" + item.value());
+			return context.event(EphemeralEvent.of(new SecondDomainEvent(gateway.answer(item.value())), Tags.none()).withIdempotencyKey("looked-up:" + item.value()));
 		}
 	}
 

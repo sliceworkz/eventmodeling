@@ -52,8 +52,10 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDo
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.sql.SqlReadModelProjector;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
+import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.testing.EventStoreBackend.Capability;
@@ -152,7 +154,7 @@ public class SqlTodoListAcrossAspectsTest extends AbstractMockDomainTest {
 		@Override
 		public Optional<EventReference> handle ( String item, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
 			handled.add(item);
-			return context.event(new SecondDomainEvent(item), "handled-" + item);
+			return context.event(EphemeralEvent.of(new SecondDomainEvent(item), Tags.none()).withIdempotencyKey("handled-" + item));
 		}
 
 		List<String> handled ( ) {

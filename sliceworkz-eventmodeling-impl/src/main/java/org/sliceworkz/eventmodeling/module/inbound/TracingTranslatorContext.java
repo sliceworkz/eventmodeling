@@ -26,8 +26,8 @@ import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * A {@link TranslatorContext} decorator that carries a {@link Tracing} into every capability call a
@@ -69,18 +69,8 @@ class TracingTranslatorContext<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> implements
 	}
 
 	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-		return BoundTracing.call(tracing, ( ) -> delegate.event(event, tags));
-	}
-
-	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, String idempotencyKey ) {
-		return BoundTracing.call(tracing, ( ) -> delegate.event(event, Tags.none(), idempotencyKey));
-	}
-
-	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
-		return BoundTracing.call(tracing, ( ) -> delegate.event(event, tags, idempotencyKey));
+	public Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event ) {
+		return BoundTracing.call(tracing, ( ) -> delegate.event(event));
 	}
 
 }

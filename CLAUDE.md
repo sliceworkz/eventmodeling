@@ -242,7 +242,7 @@ the other, and when advising on who holds what, name the audience.
 
 - **`AllCapabilities` is a composition of audiences and declares nothing itself.** Six interfaces
   narrower than the context, each the surface of one caller: `ApplicationCapabilities<D,O>`
-  (`execute`, `executeWithRetry`, `evaluate`, `read`, `aggregate`) for code driving the domain,
+  (`execute`, `evaluate`, `read`, `aggregate`) for code driving the domain,
   `TranslationCapability<I>` for the inbound edge, `OperationsCapabilities` (the two admin
   capabilities) for an operator's tooling, `PrivacyCapability` for an erasure request,
   `ProvidedEventCapability<D>` for the escape hatch, and the owner's own — `LifecycleCapability`,
@@ -543,7 +543,7 @@ and, for a savepoint model, its `initQuery` — with their item bounds as they a
 - **It is locked whether or not the model found a savepoint.** A model that found none replayed from
   the beginning, and a savepoint appearing after the boundary makes that answer just as stale. The
   cost of being conservative here is a false conflict for a model whose `initQuery` seeds something
-  the command does not decide on, which `executeWithRetry` clears; the cost of the other way round is
+  the command does not decide on, which a retrying `Execution` clears; the cost of the other way round is
   silent. There is deliberately no `lockFilter()` override to opt out — it would be a second,
   greppable way to turn the check off, for a case nobody has hit
 - **Item bounds go in as they are, and `AppendCriteria` prunes them against the head.** An item
@@ -561,20 +561,26 @@ and, for a savepoint model, its `initQuery` — with their item bounds as they a
   `DCBDecisionModelTest`'s `optimisticLocking_*_conflictOnSavepointEventType` pair covers the same
   through the classic models
 
-**`executeWithRetry` — the DCB retry loop, written once so it cannot be hand-rolled wrong:**
+**`Execution` — how a command is executed, and the DCB retry loop, written once so it cannot be
+hand-rolled wrong:**
 - An `OptimisticLockingException` is the routine DCB outcome under contention, and the documented
-  answer has always been "re-execute, which re-projects and re-decides" — but the framework shipped
-  nothing that did it, so every caller wrote the same bounded loop, and the natural mistake (retrying
-  with the stale decision instead of re-reading) is exactly the one DCB exists to prevent. Every
-  `execute` overload now has an `executeWithRetry` twin taking a trailing `RetryPolicy`, plus a
-  policy-less convenience per command shape using `RetryPolicy.DEFAULT` (3 attempts). What makes the
-  retry correct is not the helper but the execution model it rides on: each `execute()` builds a fresh
-  command context, so the decision models are re-projected and the command re-decides against the new
-  facts — the helper just calls it again
-- **They are `default` methods on `CommandExecutionCapability`**, so they reach the bounded context,
-  `AutomationContext` and `TranslatorContext` with zero impl change, and are dispatched fine
-  through the context proxy (the impl inherits them as ordinary methods). One private loop, six
-  one-line delegates
+  answer has always been "re-execute, which re-projects and re-decides" — so every caller wrote the
+  same bounded loop, and the natural mistake (retrying with the stale decision instead of re-reading)
+  is exactly the one DCB exists to prevent. `execute(command, Execution.retrying())` is that loop.
+  What makes the retry correct is not the loop but the execution model it rides on: each attempt
+  builds a fresh command context, so the decision models are re-projected and the command re-decides
+  against the new facts
+- **There are two `execute` forms per command shape: `execute(command)` and `execute(command,
+  Execution)`.** An `Execution` (api, `commands`) is an idempotency key and a `RetryPolicy`, built with
+  `Execution.retrying()`, `Execution.retrying(policy)`, `Execution.idempotent(key)` and the withers
+  `withRetry(...)`/`withIdempotencyKey(...)`; `Execution.ONCE` is no key and one attempt, what
+  `execute(command)` does. The alternative — an `executeWithRetry` beside `execute`, each overloaded per
+  key — loses because it spread one choice over two method names and ten overloads, where a value says
+  it once, the way an `EventQuery` says how a filter is read
+- **The loop lives in the bounded context** (`RetryOnConflict`, impl, called from
+  `BoundedContextImpl.execute(command, Execution)`). A component's context (`AutomationContext`,
+  `TranslatorContext`) forwards the `Execution` as it is, under its own tracing, so the retry runs
+  where the attempts are made, and `Reaction` (a policy) asks for it the same way
 - **Only `OptimisticLockingException` is ever caught.** `BusinessException`,
   `IllegalArgumentException`, `IllegalStateException` and `EventStorageException` propagate from the
   attempt that raised them — the taxonomy in WHERE-VALIDATIONS-GO.md demands opposite responses per
@@ -632,7 +638,7 @@ opposite responses:**
   stack trace is what says so. A rule thrown as an `IllegalStateException` is reported as a failure
   for the same reason: the kernel cannot tell it from a bug, which is why the examples throw
   `BusinessException`
-- **Nothing is retried differently.** `executeWithRetry` catches only the conflict, so a retry that
+- **Nothing is retried differently.** A retrying `Execution` catches only the conflict, so a retry that
   ends in a rejection reports one `CommandFailedOnOptimisticLocking` per conflicted attempt and then
   one `CommandRejected` — each attempt observable under its own outcome, as before. The observer sees
   the same: one `CommandExecution` per attempt, whatever its outcome
@@ -688,7 +694,7 @@ framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook
   `IllegalStateException` (a bug, `CommandFailed`): the recorded violations must be the judged ones.
   `check` is on `CommandContext`, where the decision models are read
 - **`RuleViolationException extends BusinessException`**, so everything that tells a rejection from a
-  bug keeps doing so: `CommandRejected`, `executeWithRetry` leaving it alone, `businessError()` in the
+  bug keeps doing so: `CommandRejected`, a retrying `Execution` leaving it alone, `businessError()` in the
   harness. It carries the `Evaluation` a preview would have answered, so an HTTP binding answers a
   rejected `POST` (422) with the same shape a `QUERY` preview returns
 - **Who may override is the command's decision, through `RuleCheck.overridableWhen(authorized, whyNot)`,
@@ -701,7 +707,7 @@ framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook
   `CommandContext.actor()`, read from the `Tracing` — the same value as the `x-actor` tag
 - **Overrides are an input of the command** (`Overrides`, exposed by `implements Overriding`; a record
   component `Overrides overrides` suffices), not an `execute` parameter and not a field of `Tracing`.
-  No `execute`/`executeWithRetry` overload changes, and whatever builds a command without a user
+  No `execute` signature changes, and whatever builds a command without a user
   (automations, translators, retries, tests) overrides nothing. `Tracing` loses because it continues
   down a flow into translators and correlated automations, and an override must never reach a step the
   user did not see. A request for a rule that is not violated is ignored and records nothing
@@ -1827,7 +1833,7 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   models, inside its own consistency boundary, exactly as for a user. The alternative — a policy handed an
   `AutomationContext` and executing the command itself — loses because everything that makes the policy
   safe to redeliver (the key, the trace, the tracing, the rejection handling) would then be the policy
-  author's to get right, which is exactly the hand-rolled shape `executeWithRetry` and `Publication`
+  author's to get right, which is exactly the hand-rolled shape `Execution.retrying()` and `Publication`
   exist to remove; and because a policy that can call a port becomes a side-effect automation with no
   way to put an item aside, which is what a to-do list is for
 - **How it runs.** A `ProjectorProcessor` per policy over the domain stream, leader-only, one lease per
@@ -2192,7 +2198,7 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   does nothing on another thread
 - **No capability takes a tracing as an argument; binding one is the only way to say who a call is
   for.** The alternative — a `Tracing` parameter overload beside every capability method — loses
-  because it doubled every overload set (eighteen `execute`/`executeWithRetry` forms, seven `event`
+  because it doubled every overload set (`execute` and `executeWithRetry` in eighteen forms, seven `event`
   forms) for something an edge decides once per request, and a caller passing a tracing to one call and
   none to the next split its own flow with nothing to say so. `TracingScope.call(tracing, () -> ...)` and
   `run(...)` are the expression form for one call made on someone's behalf. A `read(X.class, tracing,

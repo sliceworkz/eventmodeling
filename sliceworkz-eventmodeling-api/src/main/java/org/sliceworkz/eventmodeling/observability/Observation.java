@@ -61,7 +61,7 @@ public sealed interface Observation<O extends Outcome> {
 
 	/**
 	 * One execution of a command: its decision models read, the command run, what it raised appended.
-	 * {@code executeWithRetry} executes once per attempt, so each attempt is an observation of its own.
+	 * an {@code Execution} that retries executes once per attempt, so each attempt is an observation of its own.
 	 *
 	 * @param boundedContext the bounded context
 	 * @param command the command's name

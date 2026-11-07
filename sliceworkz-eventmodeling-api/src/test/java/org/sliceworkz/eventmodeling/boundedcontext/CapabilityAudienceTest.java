@@ -74,6 +74,7 @@ public class CapabilityAudienceTest {
 			import org.sliceworkz.eventmodeling.boundedcontext.PrivacyCapability;
 			import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 			import org.sliceworkz.eventmodeling.commands.Command;
+			import org.sliceworkz.eventmodeling.commands.Execution;
 			import org.sliceworkz.eventmodeling.commands.RetryPolicy;
 			import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
 			import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
@@ -122,8 +123,8 @@ public class CapabilityAudienceTest {
 	@Test
 	void applicationCodeDecidesAndReads ( ) {
 		assertAccepted("application.execute(command);");
-		assertAccepted("application.execute(command, \"key\");");
-		assertAccepted("application.executeWithRetry(command, RetryPolicy.DEFAULT);");
+		assertAccepted("application.execute(command, Execution.idempotent(\"key\"));");
+		assertAccepted("application.execute(command, Execution.retrying(RetryPolicy.DEFAULT));");
 		assertAccepted("application.evaluate(command);");
 		assertAccepted("AccountDetails d = application.read(AccountDetails.class, \"id\");");
 		assertAccepted("Account a = application.aggregate(Account.class, Tags.of(\"account\", \"1\"));");

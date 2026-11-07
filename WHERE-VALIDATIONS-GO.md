@@ -129,7 +129,7 @@ out of this step, and they want different responses:
 |---|---|---|---|
 | `IllegalArgumentException` | the command, before any read | the request is malformed | never |
 | `BusinessException` | the command, after projecting | history says no | never — the answer *is* no |
-| `OptimisticLockingException` | the append | new relevant facts since the decision | yes — re-execute, which re-projects and re-decides (`executeWithRetry` is that loop, with bounded attempts) |
+| `OptimisticLockingException` | the append | new relevant facts since the decision | yes — re-execute, which re-projects and re-decides (`Execution.retrying()` is that loop, with bounded attempts) |
 
 All three reach the caller; the kernel additionally emits one event per outcome for observers —
 `CommandRejected` (the reason, nothing else), `CommandFailedOnOptimisticLocking`, and `CommandFailed`
@@ -283,8 +283,8 @@ retries the design promises will happen.
 | Input check (command) | before any read | a malformed request | `IllegalArgumentException` | no |
 | Decision model check | after projecting history | a rule history rejects | `BusinessException` + `CommandRejected` | no — the answer is no |
 | Business rule with an enforcement level | judged after the command ran | a rule people may break under conditions | `RuleViolationException` (a `BusinessException`) unless overridden, or recorded on the events — see [BUSINESS-RULES.md](BUSINESS-RULES.md) | no — override, or change the request |
-| DCB append check | inside the append | facts newer than the decision | `OptimisticLockingException` | yes — re-execute (`executeWithRetry`, bounded attempts) |
-| Empty boundary (uniqueness) | inside the append | a concurrent duplicate claim | `OptimisticLockingException` | re-execute; then rejected by the check — under `executeWithRetry` the re-decide's `BusinessException` propagates as the outcome |
+| DCB append check | inside the append | facts newer than the decision | `OptimisticLockingException` | yes — re-execute (`Execution.retrying()`, bounded attempts) |
+| Empty boundary (uniqueness) | inside the append | a concurrent duplicate claim | `OptimisticLockingException` | re-execute; then rejected by the check — under `Execution.retrying()` the re-decide's `BusinessException` propagates as the outcome |
 | Idempotency key | inside the append | the same request twice | empty result, silently | no — already done |
 | Automation `onFailure` | after an effect failed | a failing external effect | `AutomationFailureAction` + an event | per the action |
 

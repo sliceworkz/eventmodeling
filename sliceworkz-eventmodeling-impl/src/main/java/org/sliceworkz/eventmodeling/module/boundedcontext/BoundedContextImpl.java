@@ -42,6 +42,8 @@ import org.sliceworkz.eventmodeling.boundedcontext.PrivacyCapability;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
+import org.sliceworkz.eventmodeling.commands.Execution;
+import org.sliceworkz.eventmodeling.module.dcb.RetryOnConflict;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarted;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarting;
@@ -783,46 +785,26 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 */
 
 	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command ) {
-		return execute(command, callerTracing());
+	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Execution execution ) {
+		return RetryOnConflict.run(execution.retryPolicy(), ( ) -> execute(command, execution.idempotencyKey(), callerTracing()));
 	}
 
-	// traced variant: a capability takes no tracing; the no-tracing overload binds one
-	private Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return dcbDomainModule.execute(command, tracing.instance(instance));
-	}
-
-	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey ) {
-		return execute(command, idempotencyKey, callerTracing());
-	}
-
-	// traced variant: a capability takes no tracing; the no-tracing overload binds one
-	private Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
+	private Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
+		return idempotencyKey == null
+				? dcbDomainModule.execute(command, tracing.instance(instance))
+				: dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
 	}
 
 	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command) {
-		return execute(command, callerTracing());
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Execution execution ) {
+		return RetryOnConflict.run(execution.retryPolicy(), ( ) -> execute(command, execution.idempotencyKey(), callerTracing()));
 	}
 
-	// traced variant: a capability takes no tracing; the no-tracing overload binds one
-	private <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing) {
-		return dcbDomainModule.execute(command, tracing.instance(instance));
+	private <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing ) {
+		return idempotencyKey == null
+				? dcbDomainModule.execute(command, tracing.instance(instance))
+				: dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
 	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey) {
-		return execute(command, idempotencyKey, callerTracing());
-	}
-
-	// traced variant: a capability takes no tracing; the no-tracing overload binds one
-	private <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing) {
-		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
-	}
-
-
 
 	/*
 	 * AGGREGATE SUPPORT

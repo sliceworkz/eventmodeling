@@ -574,11 +574,11 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 	@Test
 	void aCallFromATranslatorNamesTheTranslator ( ) {
 		BoundedContextBuilder<Mock> builder = slicedBuilder(PortMonitoring.perCall());
-		builder.translator(new LookupTranslator(builder.port(GatewayPort.class)));
+		builder.inbound().translator(new LookupTranslator(builder.port(GatewayPort.class)));
 		Mock domain = buildBoundedContext(builder);
 		observed.clear();
 
-		domain.translate(new SomeInboundEvent("hi"), Tracing.actorAndChannel("bob", "api").correlationId("flow-t"));
+		domain.inbound().translate(new SomeInboundEvent("hi"), Tracing.actorAndChannel("bob", "api").correlationId("flow-t"));
 
 		EphemeralEvent<BoundedContextEvent> event = onlyEvent(PortCalled.class);
 		assertEquals(PortCaller.translator("LookupTranslator"), ((PortCalled) event.data()).caller());

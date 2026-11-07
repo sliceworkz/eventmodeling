@@ -120,9 +120,9 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 
 	@Test
 	void interactiveTranslationCarriesTheCallersCorrelationId ( ) {
-		Mock domain = buildBoundedContext(baseBuilder().translator(new SomeInboundTranslator()));
+		Mock domain = buildBoundedContext(baseBuilder().inbound().translator(new SomeInboundTranslator()).done());
 
-		domain.translate(new SomeInboundEvent("hello"),
+		domain.inbound().translate(new SomeInboundEvent("hello"),
 				Tracing.actorAndChannel("alice", "api").correlationId("flow-t"));
 
 		assertEquals("flow-t", correlationIdOf(domainEvents().get(0)),
@@ -131,9 +131,9 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 
 	@Test
 	void asyncTranslationCarriesTheInboundEventsCorrelationId ( ) {
-		Mock domain = buildBoundedContext(baseBuilder().translator(new SomeInboundTranslator()));
+		Mock domain = buildBoundedContext(baseBuilder().inbound().translator(new SomeInboundTranslator()).done());
 
-		domain.incoming(new SomeInboundEvent("hello"),
+		domain.inbound().incoming(new SomeInboundEvent("hello"),
 				Tracing.actorAndChannel("alice", "api").correlationId("flow-in"));
 
 		await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertEquals(1, domainEvents().size()));

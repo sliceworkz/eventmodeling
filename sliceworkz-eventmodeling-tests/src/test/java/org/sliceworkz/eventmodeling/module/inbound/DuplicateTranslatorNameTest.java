@@ -42,8 +42,8 @@ public class DuplicateTranslatorNameTest extends AbstractMockDomainTest {
 	void duplicateTranslatorClassRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
 			baseBuilder()
-				.translator(new MockTranslator())
-				.translator(new MockTranslator())
+				.inbound().translator(new MockTranslator()).done()
+				.inbound().translator(new MockTranslator()).done()
 				.build();
 		});
 		assertEquals("duplicate translator name 'MockTranslator' - bookmarks would collide", e.getMessage());
@@ -57,7 +57,7 @@ public class DuplicateTranslatorNameTest extends AbstractMockDomainTest {
 	@Test
 	void anonymousTranslatorRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
-			baseBuilder().translator(new MockTranslator() { }).build();
+			baseBuilder().inbound().translator(new MockTranslator() { }).done().build();
 		});
 		assertTrue(e.getMessage().contains("must be a named class"), e.getMessage());
 		assertTrue(e.getMessage().contains("bookmark"), "the message should say why a name is needed: " + e.getMessage());
@@ -66,7 +66,7 @@ public class DuplicateTranslatorNameTest extends AbstractMockDomainTest {
 	@Test
 	void singleTranslatorBuildsSuccessfully ( ) {
 		Mock ctx = buildBoundedContext(
-			baseBuilder().translator(new MockTranslator())
+			baseBuilder().inbound().translator(new MockTranslator()).done()
 		);
 		assertNotNull(ctx);
 	}

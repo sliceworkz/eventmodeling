@@ -78,6 +78,7 @@ public class CapabilityAudienceTest {
 			import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
 			import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
 			import org.sliceworkz.eventmodeling.readmodels.ReadModel;
+			import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
 			import org.sliceworkz.eventstore.events.Tags;
 			import org.sliceworkz.eventstore.shredding.ErasureReason;
 
@@ -89,12 +90,15 @@ public class CapabilityAudienceTest {
 				interface Banking extends BoundedContext<BankingEvent, BankingInboundEvent, BankingOutboundEvent> { }
 
 				abstract static class AccountDetails implements ReadModel<BankingEvent> { }
+				abstract static class InboundTraffic implements ReadModel<BankingInboundEvent> { }
+				abstract static class OutboundTraffic implements ReadModel<BankingOutboundEvent> { }
 				abstract static class Account implements Aggregate<BankingEvent> { }
 				abstract static class OpenAccount implements Command<BankingEvent> { }
 
 				void probe ( Banking owner,
-						ApplicationCapabilities<BankingEvent, BankingOutboundEvent> application,
+						ApplicationCapabilities<BankingEvent> application,
 						TranslationCapability<BankingInboundEvent> inbound,
+						ReadModelCapability<BankingInboundEvent> inboundReads,
 						OperationsCapabilities operations,
 						PrivacyCapability privacy,
 						ProvidedEventCapability<BankingEvent> provided,
@@ -110,6 +114,9 @@ public class CapabilityAudienceTest {
 
 	/** javac's key for "cannot find symbol", which is how a method absent from the reference type is rejected */
 	private static final String NO_SUCH_METHOD = "compiler.err.cant.resolve.location.args";
+
+	/** javac's key for "no overload applies", which is how a read model of another stream's event type is refused */
+	private static final String NO_APPLICABLE_OVERLOAD = "compiler.err.cant.apply.symbols";
 
 	/** javac's key for "incompatible types" */
 	private static final String INCOMPATIBLE_TYPES = "compiler.err.prob.found.req";
@@ -162,8 +169,45 @@ public class CapabilityAudienceTest {
 	@Test
 	void applicationCodeCannotFeedTheDomainExternalEvents ( ) {
 		assertRejected("application.incoming(inboundEvent);", NO_SUCH_METHOD);
+		assertRejected("application.inbound();", NO_SUCH_METHOD);
 		assertAccepted("inbound.incoming(inboundEvent);");
 		assertAccepted("inbound.translate(inboundEvent);");
+	}
+
+	// ---------------------------------------------------------------- the inbound and outbound streams
+
+	@Test
+	void theInboundStreamIsReachedThroughInboundAndNotOnTheContextItself ( ) {
+		assertAccepted("owner.inbound().incoming(inboundEvent);");
+		assertAccepted("owner.inbound().translate(inboundEvent);");
+		assertRejected("owner.incoming(inboundEvent);", NO_SUCH_METHOD);
+		assertRejected("owner.translate(inboundEvent);", NO_SUCH_METHOD);
+	}
+
+	@Test
+	void inboundNarrowsToItsTwoAudiences ( ) {
+		// the edge feeding the domain and a screen showing what came in, each holding only its own
+		assertAccepted("TranslationCapability<BankingInboundEvent> edge = owner.inbound();");
+		assertAccepted("ReadModelCapability<BankingInboundEvent> screen = owner.inbound();");
+		assertRejected("inbound.read(InboundTraffic.class);", NO_SUCH_METHOD);
+		assertRejected("inboundReads.incoming(inboundEvent);", NO_SUCH_METHOD);
+	}
+
+	@Test
+	void aReadModelIsReadThroughTheStreamItIsProjectedFrom ( ) {
+		assertAccepted("InboundTraffic in = owner.inbound().read(InboundTraffic.class);");
+		assertAccepted("InboundTraffic in = inboundReads.read(InboundTraffic.class);");
+		assertAccepted("OutboundTraffic out = owner.outbound().read(OutboundTraffic.class);");
+		assertRejected("owner.read(InboundTraffic.class);", NO_APPLICABLE_OVERLOAD);
+		assertRejected("owner.inbound().read(AccountDetails.class);", NO_APPLICABLE_OVERLOAD);
+		assertRejected("owner.outbound().read(InboundTraffic.class);", NO_APPLICABLE_OVERLOAD);
+	}
+
+	@Test
+	void theOutboundStreamIsReadOnly ( ) {
+		// the outbound stream is written by publishers alone
+		assertRejected("owner.outbound().incoming(inboundEvent);", NO_SUCH_METHOD);
+		assertRejected("owner.outbound().event(domainEvent);", NO_SUCH_METHOD);
 	}
 
 	@Test
@@ -212,8 +256,10 @@ public class CapabilityAudienceTest {
 		assertAccepted("owner.read(AccountDetails.class, \"id\");");
 		assertAccepted("owner.aggregate(Account.class, Tags.of(\"account\", \"1\"));");
 		assertAccepted("owner.event(domainEvent);");
-		assertAccepted("owner.incoming(inboundEvent);");
-		assertAccepted("owner.translate(inboundEvent);");
+		assertAccepted("owner.inbound().incoming(inboundEvent);");
+		assertAccepted("owner.inbound().translate(inboundEvent);");
+		assertAccepted("owner.inbound().read(InboundTraffic.class);");
+		assertAccepted("owner.outbound().read(OutboundTraffic.class);");
 		assertAccepted("owner.automations();");
 		assertAccepted("owner.processors();");
 		assertAccepted("owner.erase(\"customer\", \"alice-42\", ErasureReason.of(\"why\"));");
@@ -225,8 +271,8 @@ public class CapabilityAudienceTest {
 	@Test
 	void aBuiltContextNarrowsToEveryAudienceWithoutACast ( ) {
 		// what makes the narrowing cost a reference type and nothing else
-		assertAccepted("ApplicationCapabilities<BankingEvent, BankingOutboundEvent> a = owner;");
-		assertAccepted("TranslationCapability<BankingInboundEvent> t = owner;");
+		assertAccepted("ApplicationCapabilities<BankingEvent> a = owner;");
+		assertAccepted("TranslationCapability<BankingInboundEvent> t = owner.inbound();");
 		assertAccepted("OperationsCapabilities o = owner;");
 		assertAccepted("PrivacyCapability p = owner;");
 		assertAccepted("ProvidedEventCapability<BankingEvent> e = owner;");
@@ -234,7 +280,8 @@ public class CapabilityAudienceTest {
 
 	@Test
 	void anAudienceOfTheWrongEventTypeIsStillRefused ( ) {
-		assertRejected("ApplicationCapabilities<BankingInboundEvent, BankingOutboundEvent> a = owner;", INCOMPATIBLE_TYPES);
+		assertRejected("ApplicationCapabilities<BankingInboundEvent> a = owner;", INCOMPATIBLE_TYPES);
+		assertRejected("ReadModelCapability<BankingEvent> r = owner.inbound();", INCOMPATIBLE_TYPES);
 	}
 
 	// ---------------------------------------------------------------- the shorthand a context interface can carry
@@ -246,7 +293,7 @@ public class CapabilityAudienceTest {
 		// paths to ApplicationCapabilities must agree on their arguments, which is what makes a
 		// mistyped alias a compile error rather than a second surface
 		assertAcceptedDeclaration("""
-				interface BankingApi extends ApplicationCapabilities<BankingEvent, BankingOutboundEvent> { }
+				interface BankingApi extends ApplicationCapabilities<BankingEvent> { }
 				interface BankingWithApi extends BoundedContext<BankingEvent, BankingInboundEvent, BankingOutboundEvent>, BankingApi { }
 				""");
 	}
@@ -254,7 +301,7 @@ public class CapabilityAudienceTest {
 	@Test
 	void anAliasContradictingTheContextsOwnEventTypesDoesNotCompile ( ) {
 		assertRejectedDeclaration("""
-				interface WrongApi extends ApplicationCapabilities<BankingInboundEvent, BankingOutboundEvent> { }
+				interface WrongApi extends ApplicationCapabilities<BankingInboundEvent> { }
 				interface BankingWithWrongApi extends BoundedContext<BankingEvent, BankingInboundEvent, BankingOutboundEvent>, WrongApi { }
 				""");
 	}

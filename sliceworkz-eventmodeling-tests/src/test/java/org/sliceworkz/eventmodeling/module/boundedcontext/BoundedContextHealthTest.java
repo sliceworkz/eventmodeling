@@ -70,8 +70,8 @@ public class BoundedContextHealthTest extends AbstractMockDomainTest {
 	void aRunningContextInWorkingOrderIsUpOnEveryCheck ( ) {
 		BoundedContextBuilder<Mock> builder = builder();
 		builder.readmodel(new MockReadModel("health-readmodel", ReadModelStorage.EPHEMERAL)).eventuallyConsistent();
-		builder.translator(new ProcessorAdminTest.NoopTranslator());
-		builder.dispatcher(new ProcessorAdminTest.NoopDispatcher());
+		builder.inbound().translator(new ProcessorAdminTest.NoopTranslator());
+		builder.outbound().dispatcher(new ProcessorAdminTest.NoopDispatcher());
 		Mock domain = buildBoundedContext(builder);
 
 		BoundedContextHealth health = domain.health();

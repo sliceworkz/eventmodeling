@@ -26,11 +26,10 @@ import org.sliceworkz.eventmodeling.automation.Automation;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.events.Instance;
-import org.sliceworkz.eventmodeling.inbound.Translator;
+import org.sliceworkz.eventmodeling.inbound.InboundSpecification;
 import org.sliceworkz.eventmodeling.management.ManagementInstruction;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
-import org.sliceworkz.eventmodeling.outbound.Dispatcher;
-import org.sliceworkz.eventmodeling.outbound.Publisher;
+import org.sliceworkz.eventmodeling.outbound.OutboundSpecification;
 import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
@@ -45,7 +44,7 @@ import org.sliceworkz.eventstore.stream.EventStream;
  * Configures a bounded context and, from {@link #build()}, produces it.
  *
  * <p><b>Every registration on this builder is wildcard-typed</b> — {@link #readmodel(Class)},
- * {@link #automation(Automation)}, {@link #translator(Translator)} and the rest take
+ * {@link #automation(Automation)}, the translators on {@link #inbound()} and the rest take
  * {@code ReadModel<?>}, {@code Automation<?,?>}, {@code Translator<?,?>} — so the compiler admits a
  * component declared over another bounded context's event types. It cannot do otherwise: a builder is
  * typed by its context alone, and Java offers no way to project {@code D}, {@code I} and {@code O}
@@ -81,10 +80,28 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 			Class<?> inboundEventRootType,
 			Class<?> outboundEventRootType);
 
-	BoundedContextBuilder<C> historicalEventTypes(
-			Class<?> historicalDomainEventRootType,
-			Class<?> historicalInboundEventRootType,
-			Class<?> historicalOutboundEventRootType);
+	/**
+	 * The root of the domain events this context's history holds under a legacy shape, each upcast into a
+	 * current domain event on the read. See the eventstore's {@code @LegacyEvent} and {@code Upcaster}; the
+	 * inbound and outbound streams take theirs on {@link #inbound()} and {@link #outbound()}.
+	 *
+	 * @param legacyDomainEventRootType a sealed interface over the legacy domain event records
+	 * @return this builder
+	 */
+	BoundedContextBuilder<C> legacyEventTypes(Class<?> legacyDomainEventRootType);
+
+	/**
+	 * What this context is configured with on its inbound stream: translators, read models over the
+	 * inbound events and the inbound legacy event types. Everything else on this builder is about the
+	 * domain stream, or about the context as a whole.
+	 */
+	InboundSpecification<C> inbound();
+
+	/**
+	 * What this context is configured with on its outbound stream: publishers, dispatchers, read models
+	 * over the outbound events and the outbound legacy event types.
+	 */
+	OutboundSpecification<C> outbound();
 
 	BoundedContextBuilder<C> instance(Instance instance);
 
@@ -433,75 +450,6 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 *         context's — see the note on wildcard-typed registration above
 	 */
 	org.sliceworkz.eventmodeling.automation.PolicySpecification<C> policy(org.sliceworkz.eventmodeling.automation.Policy<?> policy);
-
-	/**
-	 * Registers a translator, which turns the inbound events matching its query into domain events.
-	 *
-	 * @throws IllegalArgumentException from {@link #build()} when its declared inbound or domain event type is
-	 *         unrelated to this context's — see the note on wildcard-typed registration above
-	 */
-	BoundedContextBuilder<C> translator(Translator<?,?> translator);
-
-	/**
-	 * Registers a translator this builder constructs, for one that needs nothing passed to it.
-	 *
-	 * @param translatorClass a concrete class with a public no-argument constructor
-	 * @return this builder
-	 * @throws IllegalArgumentException if the class cannot be instantiated -- it is abstract or an
-	 *         interface, has no public no-argument constructor (what a non-static inner class produces),
-	 *         or its constructor threw. The message names the class and the remedy, and a constructor's
-	 *         own throwable is the cause. Register an instance instead where the translator takes
-	 *         constructor arguments
-	 * @throws IllegalArgumentException from {@link #build()} when its declared inbound or domain event type is
-	 *         unrelated to this context's — see the note on wildcard-typed registration above
-	 */
-	BoundedContextBuilder<C> translator(Class<? extends Translator<?,?>> translatorClass);
-
-	/**
-	 * Registers a publisher, which maps the domain events matching its query into outbound events.
-	 * <p>
-	 * A publisher is part of a slice's automation aspect: register it from
-	 * {@link org.sliceworkz.eventmodeling.slices.Slice#configureAutomation configureAutomation}, together
-	 * with the live read models it {@linkplain Publisher#reads() reads}, so it runs on the instances that
-	 * deploy automations and finds its read models there:
-	 * <pre>{@code
-	 * public void configureAutomation ( BoundedContextBuilder<Planning> builder ) {
-	 *     builder
-	 *         .readmodel(PlannedSessionReadModel.class).live()
-	 *         .publisher(new PlannedSessionPublisher())
-	 *         .dispatcher(new PlannedSessionPublishedDispatcher(builder.port(MessageBusPublisher.class)));
-	 * }
-	 * }</pre>
-	 *
-	 * @throws IllegalArgumentException from {@link #build()} when it is registered while a slice configures
-	 *         another aspect than automation, when a read model it declares is not registered {@code .live()}
-	 *         on this instance, when its name cannot key a bookmark, or when its declared domain or outbound
-	 *         event type is unrelated to this context's — see the note on wildcard-typed registration above
-	 */
-	BoundedContextBuilder<C> publisher(Publisher<?,?> publisher);
-
-	/**
-	 * Registers a dispatcher, the outbound stream's reader and the only thing sending it off the store.
-	 *
-	 * @throws IllegalArgumentException from {@link #build()} when its declared outbound event type is
-	 *         unrelated to this context's — see the note on wildcard-typed registration above
-	 */
-	BoundedContextBuilder<C> dispatcher(Dispatcher<?> dispatcher);
-
-	/**
-	 * Registers a dispatcher this builder constructs, for one that needs nothing passed to it.
-	 *
-	 * @param dispatcherClass a concrete class with a public no-argument constructor
-	 * @return this builder
-	 * @throws IllegalArgumentException if the class cannot be instantiated -- it is abstract or an
-	 *         interface, has no public no-argument constructor (what a non-static inner class produces),
-	 *         or its constructor threw. The message names the class and the remedy, and a constructor's
-	 *         own throwable is the cause. Register an instance instead where the dispatcher takes
-	 *         constructor arguments
-	 * @throws IllegalArgumentException from {@link #build()} when its declared outbound event type is
-	 *         unrelated to this context's — see the note on wildcard-typed registration above
-	 */
-	BoundedContextBuilder<C> dispatcher(Class<? extends Dispatcher<?>> dispatcherClass);
 
 	/**
 	 * Starts an adapter binding for the given adapter instance.

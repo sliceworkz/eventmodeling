@@ -36,7 +36,7 @@ public class DispatchOrderFeatureSlice implements Slice<OrderProcessing> {
 		}
 		builder.readmodel(ordersReadyToDispatch).eventuallyConsistent();
 		builder.automation(new DispatchOrderAutomation(ordersReadyToDispatch));
-		builder.publisher(new OrderDispatchedPublisher());
+		builder.outbound().publisher(new OrderDispatchedPublisher());
 	}
 
 }

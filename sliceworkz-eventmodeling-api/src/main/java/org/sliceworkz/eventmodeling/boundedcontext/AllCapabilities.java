@@ -18,7 +18,10 @@
 package org.sliceworkz.eventmodeling.boundedcontext;
 
 import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
+import org.sliceworkz.eventmodeling.inbound.InboundStreamCapability;
 import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
+import org.sliceworkz.eventmodeling.outbound.OutboundStreamCapability;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
 
 /**
  * Everything a bounded context can do, which is what its owner holds.
@@ -35,7 +38,10 @@ import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
  *     <td>{@link ApplicationCapabilities}</td><td>{@code execute}, {@code executeWithRetry},
  *     {@code evaluate}, {@code read}, {@code aggregate}</td></tr>
  * <tr><td>inbound edge — a webhook, a consumer feeding the domain</td>
- *     <td>{@link TranslationCapability}</td><td>{@code incoming}, {@code translate}</td></tr>
+ *     <td>{@link TranslationCapability}, from {@code inbound()}</td><td>{@code incoming}, {@code translate}</td></tr>
+ * <tr><td>a reader of what came in or went out — a screen, a report</td>
+ *     <td>{@link ReadModelCapability}{@code <I>} from {@code inbound()},
+ *     {@code <O>} from {@code outbound()}</td><td>{@code read} of a read model over that stream</td></tr>
  * <tr><td>operator — an admin endpoint, a dashboard</td>
  *     <td>{@link OperationsCapabilities}</td><td>{@code automations}, {@code processors} and their
  *     {@code restart}/{@code stop}, {@code skipStalledEvent} for a stalled policy, and {@code health}</td></tr>
@@ -45,7 +51,8 @@ import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
  *     <td>{@code event} — a domain event no command raised</td></tr>
  * <tr><td>owner — whatever built the context</td><td>this interface</td>
  *     <td>the above, plus {@link LifecycleCapability}, {@link PortsCapability} and
- *     {@link FeatureSliceCapabilities}</td></tr>
+ *     {@link FeatureSliceCapabilities}; and {@link InboundStreamCapability#inbound()} and
+ *     {@link OutboundStreamCapability#outbound()}, whose results it narrows for the two audiences above</td></tr>
  * </table>
  * <p>
  * Narrowing costs a reference type and nothing else — a built context already is each of these — and
@@ -57,8 +64,9 @@ import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
  * @param <OUTBOUND_EVENT_TYPE> the bounded context's outbound event type
  */
 public interface AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends
-	ApplicationCapabilities<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>,
-	TranslationCapability<INBOUND_EVENT_TYPE>,
+	ApplicationCapabilities<DOMAIN_EVENT_TYPE>,
+	InboundStreamCapability<INBOUND_EVENT_TYPE>,
+	OutboundStreamCapability<OUTBOUND_EVENT_TYPE>,
 	OperationsCapabilities,
 	ProvidedEventCapability<DOMAIN_EVENT_TYPE>,
 	PrivacyCapability,

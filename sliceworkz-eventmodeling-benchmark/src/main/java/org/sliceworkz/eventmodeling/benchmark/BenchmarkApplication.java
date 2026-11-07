@@ -108,7 +108,7 @@ public class BenchmarkApplication {
 		    executor.submit(()->{
 		    	for ( int j = 0; j < EVENT_COUNT_PER_PRODUCER; j++ ) {
 		    		long orderNumber = orderNumbering.incrementAndGet();
-					bc.incoming(new OrderRegistered(orderNumber), Tag.of("idempotency", orderNumber).toString());
+					bc.inbound().incoming(new OrderRegistered(orderNumber), Tag.of("idempotency", orderNumber).toString());
 		    	}
 		    });
 		}

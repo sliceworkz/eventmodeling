@@ -117,7 +117,9 @@ public final class HealthReporter {
 		streams.put(ProcessorKind.PUBLISHER, BoundedContextStreams.domain(boundedContext));
 		streams.put(ProcessorKind.POLICY, BoundedContextStreams.domain(boundedContext));
 		streams.put(ProcessorKind.TRANSLATOR, BoundedContextStreams.inbound(boundedContext));
+		streams.put(ProcessorKind.INBOUND_READ_MODEL, BoundedContextStreams.inbound(boundedContext));
 		streams.put(ProcessorKind.DISPATCHER, BoundedContextStreams.outbound(boundedContext));
+		streams.put(ProcessorKind.OUTBOUND_READ_MODEL, BoundedContextStreams.outbound(boundedContext));
 		this.processorLag = new ProcessorLag(storage, streams);
 	}
 
@@ -254,6 +256,8 @@ public final class HealthReporter {
 	private static String checkName ( ProcessorKind kind ) {
 		return switch ( kind ) {
 			case READ_MODEL -> BoundedContextHealth.READ_MODELS;
+			case INBOUND_READ_MODEL -> BoundedContextHealth.INBOUND_READ_MODELS;
+			case OUTBOUND_READ_MODEL -> BoundedContextHealth.OUTBOUND_READ_MODELS;
 			case TRANSLATOR -> BoundedContextHealth.TRANSLATORS;
 			case DISPATCHER -> BoundedContextHealth.DISPATCHERS;
 			case PUBLISHER -> BoundedContextHealth.PUBLISHERS;

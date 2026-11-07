@@ -66,6 +66,12 @@ public record BoundedContextHealth ( String boundedContext, BoundedContextState 
 	/** The read model projectors, judged as described on {@link HealthCapability}. */
 	public static final String READ_MODELS = "readModels";
 
+	/** The projectors of the eventually consistent read models over the inbound stream, as {@link #READ_MODELS} judges the domain ones. */
+	public static final String INBOUND_READ_MODELS = "inboundReadModels";
+
+	/** The projectors of the eventually consistent read models over the outbound stream, as {@link #READ_MODELS} judges the domain ones. */
+	public static final String OUTBOUND_READ_MODELS = "outboundReadModels";
+
 	/** The automations, judged as described on {@link HealthCapability}. */
 	public static final String AUTOMATIONS = "automations";
 

@@ -27,6 +27,10 @@ import org.sliceworkz.eventstore.events.Tags;
 public record ProcessorIdentification ( String context, String type, String id, Storage storage, String location ) {
 
 	public static final String TYPE_READMODEL = "readmodel";
+	/** A read model over the inbound stream: a type of its own, so its bookmark never meets a domain read model's of the same name. */
+	public static final String TYPE_INBOUND_READMODEL = "inbound-readmodel";
+	/** A read model over the outbound stream: a type of its own, so its bookmark never meets a domain read model's of the same name. */
+	public static final String TYPE_OUTBOUND_READMODEL = "outbound-readmodel";
 	public static final String TYPE_TRANSLATOR = "translator";
 	public static final String TYPE_DISPATCHER = "dispatcher";
 	public static final String TYPE_PUBLISHER = "publisher";

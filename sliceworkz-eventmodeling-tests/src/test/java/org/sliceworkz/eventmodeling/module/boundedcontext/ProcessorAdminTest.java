@@ -72,8 +72,8 @@ public class ProcessorAdminTest extends AbstractMockDomainTest {
 	void statusesListEveryKindOfProcessor ( ) {
 		BoundedContextBuilder<Mock> builder = observedBuilder();
 		builder.readmodel(new MockReadModel("admin-readmodel", ReadModelStorage.EPHEMERAL)).eventuallyConsistent();
-		builder.translator(new NoopTranslator());
-		builder.dispatcher(new NoopDispatcher());
+		builder.inbound().translator(new NoopTranslator());
+		builder.outbound().dispatcher(new NoopDispatcher());
 		Mock domain = buildBoundedContext(builder);
 
 		List<ProcessorStatus> statuses = domain.processors();

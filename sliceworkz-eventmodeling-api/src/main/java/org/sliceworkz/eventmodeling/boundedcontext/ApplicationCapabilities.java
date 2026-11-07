@@ -38,12 +38,12 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
  * A built context already is one, because {@link AllCapabilities} extends this interface, so
  * narrowing costs a reference type and nothing more:
  * <pre>{@code
- * ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> app = banking;
+ * ApplicationCapabilities<BankingDomainEvent> app = banking;
  * }</pre>
  * Declaring an interface of your own over it drops the type arguments from every call site, exactly
  * as the context interface does:
  * <pre>{@code
- * public interface BankingApi extends ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> { }
+ * public interface BankingApi extends ApplicationCapabilities<BankingDomainEvent> { }
  * public interface Banking extends BoundedContext<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent>, BankingApi { }
  * }</pre>
  *
@@ -58,16 +58,19 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
  * <li>{@link OperationsCapabilities} and {@link PrivacyCapability} — an operator's surface and an
  *     erasure request are each their own audience.</li>
  * <li>{@link org.sliceworkz.eventmodeling.inbound.TranslationCapability} — feeding the domain
- *     external events is the inbound edge's job; an adapter that does both holds both.</li>
+ *     external events is the inbound edge's job, reached through {@code context.inbound()}; an adapter
+ *     that does both holds both.</li>
+ * <li>Reading the read models over the inbound or outbound stream — {@code context.inbound()} and
+ *     {@code context.outbound()} hand out a {@link ReadModelCapability} of that stream's event type,
+ *     which the code that wires the application hands on to whoever reads them.</li>
  * </ul>
  * <p>
  * This is a boundary of discipline, not of security: the object behind the reference is still the
  * whole context, and a cast reaches it. See {@code WHO-MAY-DO-WHAT.md}.
  *
  * @param <DOMAIN_EVENT_TYPE> the bounded context's domain event type
- * @param <OUTBOUND_EVENT_TYPE> the bounded context's outbound event type
  */
-public interface ApplicationCapabilities<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE> extends
+public interface ApplicationCapabilities<DOMAIN_EVENT_TYPE> extends
 	CommandExecutionCapability<DOMAIN_EVENT_TYPE>,
 	CommandEvaluationCapability<DOMAIN_EVENT_TYPE>,
 	ReadModelCapability<DOMAIN_EVENT_TYPE>,

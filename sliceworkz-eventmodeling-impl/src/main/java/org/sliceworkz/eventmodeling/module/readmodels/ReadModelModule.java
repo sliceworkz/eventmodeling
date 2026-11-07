@@ -36,7 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
-import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAdmin;
 import org.sliceworkz.eventmodeling.events.Instance;
@@ -83,6 +82,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private Map<Class<? extends ReadModel<DOMAIN_EVENT_TYPE>>, LiveModelInfo<DOMAIN_EVENT_TYPE>> liveModels = new HashMap<>();
 	private Collection<ReadModel<DOMAIN_EVENT_TYPE>> eventuallyConsistentReadModels = new ArrayList<>();
 	private String boundedContext;
+	/** The stream this module's read models are projected from; one module per stream. */
+	private final ProjectedStream stream;
 	private Instance instance;
 
 	private BoundedContextObserver observer;
@@ -104,8 +105,15 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 	}
 
+	/**
+	 * @param stream which of the context's streams this module projects its read models from: the builder
+	 *               makes one module per stream, each over that stream, with its own processor type and kind
+	 * @param allInStorageEventStream the raw view of the whole storage {@code readUnbounded} projects from;
+	 *               {@code null} for a module over the inbound or outbound stream, which has no unbounded read
+	 */
 	public <LMSI extends LiveModelSpecificationAccessor> ReadModelModule (
 			String boundedContext,
+			ProjectedStream stream,
 			EventStream<DOMAIN_EVENT_TYPE> domainEventStream,
 			EventSource<String> allInStorageEventStream,
 			List<LMSI> liveModelSpecs,
@@ -118,6 +126,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		this.domainEventStream = domainEventStream;
 		this.allInStorageEventStream = allInStorageEventStream;
 		this.boundedContext = boundedContext;
+		this.stream = stream;
 		this.instance = instance;
 		this.eventEmitter = eventEmitter;
 
@@ -155,7 +164,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		// the name keys this read model's bookmark, and readmodelName() defaults to the simple class name
 		// — see ProcessorNames for what a duplicate or an unstable one costs. Live models key no bookmark
 		// of their own, but they share the name space a read is addressed by, so they are reserved.
-		ProcessorNames names = ProcessorNames.of(ProcessorIdentification.TYPE_READMODEL);
+		ProcessorNames names = ProcessorNames.of(stream.processorType());
 		for ( Class<? extends ReadModel<DOMAIN_EVENT_TYPE>> liveClass : this.liveModels.keySet() ) {
 			names.reserve(liveClass.getSimpleName());
 		}
@@ -166,12 +175,12 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		}
 
 		this.observer = observer;
-		this.admin = new ProjectorProcessorAdmin(ProcessorKind.READ_MODEL, boundedContext);
+		this.admin = new ProjectorProcessorAdmin(stream.processorKind(), boundedContext);
 
 		this.projectorProcessors = createProjectorProcessors(this.eventuallyConsistentReadModels);
-		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(ProcessorIdentification.TYPE_READMODEL, this.projectorProcessors);
+		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(stream.processorType(), this.projectorProcessors);
 
-		LOGGER.info("live readmodels: %s".formatted(liveModels.keySet()));
+		LOGGER.info("live readmodels over the %s stream: %s".formatted(stream.purpose(), liveModels.keySet()));
 	}
 
 	/** The processors of this module that run on a single elected leader, for the leader elector. */
@@ -187,7 +196,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			Storage storage = Storage.of(readModelStorage);
 			ProjectorProcessor<DOMAIN_EVENT_TYPE> processor = new ProjectorProcessor<>(
 				ProcessorIdentification.ProcessorIdentificationBuilder.newBuilder(instance)
-					.context(boundedContext).readmodel().name(rm.readmodelName())
+					.context(boundedContext).type(stream.processorType()).name(rm.readmodelName())
 					.storage(readModelStorage)
 					.build(),
 				(EventStream<DOMAIN_EVENT_TYPE>) domainEventStream,
@@ -269,7 +278,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			public void onStarted ( ) {
 				if ( eventEmitter.enabled() ) {
 					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorStarted(
-							boundedContext, rm.readmodelName(), storage.label(), eventEmitter.sliceFor(rm.getClass())));
+							boundedContext, rm.readmodelName(), storage.label(), eventEmitter.sliceFor(rm.getClass()), stream.reported()));
 				}
 			}
 
@@ -278,7 +287,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				if ( eventEmitter.enabled() && metrics.eventsHandled() > 0 ) {
 					BoundedContextEvent.Metrics m = new BoundedContextEvent.Metrics(durationMicros, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
 					eventEmitter.emit(new BoundedContextEvent.EventuallyConsistentReadModelUpdated(
-							boundedContext, rm.readmodelName(), storage.label(), m, eventEmitter.sliceFor(rm.getClass())));
+							boundedContext, rm.readmodelName(), storage.label(), m, eventEmitter.sliceFor(rm.getClass()), stream.reported()));
 				}
 			}
 
@@ -291,7 +300,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
 							failure == null ? null : failure.getEventReference(),
 							consecutiveFailedRuns,
-							eventEmitter.sliceFor(rm.getClass())));
+							eventEmitter.sliceFor(rm.getClass()),
+							stream.reported()));
 				}
 			}
 
@@ -306,7 +316,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 							BoundedContextEvent.Failure.of(failure == null ? null : failure.getCause()),
 							failure == null ? null : failure.getEventReference(),
 							eventEmitter.sliceFor(rm.getClass()),
-							BoundedContextEvent.ProcessorStopReason.FAILURE));
+							BoundedContextEvent.ProcessorStopReason.FAILURE,
+							stream.reported()));
 				}
 			}
 
@@ -315,7 +326,8 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				if ( eventEmitter.enabled() ) {
 					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorStopped(
 							boundedContext, rm.readmodelName(), storage.label(), null, null, eventEmitter.sliceFor(rm.getClass()),
-							BoundedContextEvent.ProcessorStopReason.OPERATOR));
+							BoundedContextEvent.ProcessorStopReason.OPERATOR,
+							stream.reported()));
 				}
 			}
 		};
@@ -393,16 +405,24 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			return readModelClass.cast(observedLiveModel(domainEventStream, readModelClass, false, until, info, tracing, constructorParams));
 
 		} else {
-			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
+			throw new IllegalArgumentException(unknownLiveReadModel(readModelClass));
 		}
+	}
+
+	/**
+	 * Names the class and the stream it was looked for on: a read model registered on another stream than the
+	 * one it is read through is the likeliest way to get here, and the message says which one was asked.
+	 */
+	private String unknownLiveReadModel ( Class<?> readModelClass ) {
+		return "unknown live readmodel over the %s stream: %s".formatted(stream.purpose(), readModelClass.getName());
 	}
 
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL liveModelUnbounded ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... constructorParams ) {
 		LiveModelInfo<DOMAIN_EVENT_TYPE> info = liveModels.get(readModelClass);
-		if ( info != null ) {
+		if ( info != null && allInStorageEventStream != null ) {
 			return readModelClass.cast(observedLiveModel(allInStorageEventStream, readModelClass, true, null, info, tracing, constructorParams));
 		} else {
-			throw new IllegalArgumentException("unknown live readmodel: " + readModelClass);
+			throw new IllegalArgumentException(unknownLiveReadModel(readModelClass));
 		}
 	}
 
@@ -469,7 +489,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 			if ( eventEmitter.enabled() ) {
 				BoundedContextEvent.Metrics metrics = new BoundedContextEvent.Metrics(Elapsed.microsSince(start), projectorMetrics.queriesDone(), projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(), projectorMetrics.lastEventReference());
-				eventEmitter.emit(new BoundedContextEvent.LiveModelProjected(boundedContext, readModel.readmodelName(), metrics, seededAt, eventEmitter.sliceFor(readModel.getClass())), tracing);
+				eventEmitter.emit(new BoundedContextEvent.LiveModelProjected(boundedContext, readModel.readmodelName(), metrics, seededAt, eventEmitter.sliceFor(readModel.getClass()), stream.reported()), tracing);
 			}
 
 			scope.completed(new Outcome.LiveModelProjected(projectorMetrics.eventsStreamed(), projectorMetrics.eventsHandled(),

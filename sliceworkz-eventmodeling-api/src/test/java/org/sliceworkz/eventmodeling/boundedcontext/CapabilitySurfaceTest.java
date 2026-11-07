@@ -35,7 +35,11 @@ import org.sliceworkz.eventmodeling.automation.AutomationAdminCapability;
 import org.sliceworkz.eventmodeling.commands.CommandEvaluationCapability;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionCapability;
 import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
+import org.sliceworkz.eventmodeling.inbound.InboundCapabilities;
+import org.sliceworkz.eventmodeling.inbound.InboundStreamCapability;
 import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
+import org.sliceworkz.eventmodeling.outbound.OutboundCapabilities;
+import org.sliceworkz.eventmodeling.outbound.OutboundStreamCapability;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
 
 /**
@@ -62,8 +66,10 @@ public class CapabilitySurfaceTest {
 			CommandEvaluationCapability.class,
 			ReadModelCapability.class,
 			AggregateCapability.class,
-			// the inbound edge
-			TranslationCapability.class,
+			// the inbound and outbound streams: the owner reaches them, and narrows what it gets for the
+			// edge feeding the domain (TranslationCapability) and for a reader of those streams' read models
+			InboundStreamCapability.class,
+			OutboundStreamCapability.class,
 			// the operator
 			AutomationAdminCapability.class,
 			ProcessorAdminCapability.class,
@@ -86,7 +92,7 @@ public class CapabilitySurfaceTest {
 	@Test
 	void allCapabilitiesComposesTheAudiencesAndNothingElse ( ) {
 		assertEquals(
-				Set.of(ApplicationCapabilities.class, TranslationCapability.class, OperationsCapabilities.class,
+				Set.of(ApplicationCapabilities.class, InboundStreamCapability.class, OutboundStreamCapability.class, OperationsCapabilities.class,
 						ProvidedEventCapability.class, PrivacyCapability.class, LifecycleCapability.class,
 						PortsCapability.class, FeatureSliceCapabilities.class),
 				Set.of(AllCapabilities.class.getInterfaces()),
@@ -100,6 +106,16 @@ public class CapabilitySurfaceTest {
 				Set.of(CommandExecutionCapability.class, CommandEvaluationCapability.class, ReadModelCapability.class, AggregateCapability.class),
 				Set.of(ApplicationCapabilities.class.getInterfaces()));
 		assertEquals(List.of(), names(ApplicationCapabilities.class.getDeclaredMethods()));
+	}
+
+	@Test
+	void theInboundStreamIsTranslationAndReadingAndTheOutboundStreamReadingAlone ( ) {
+		assertEquals(Set.of(TranslationCapability.class, ReadModelCapability.class), Set.of(InboundCapabilities.class.getInterfaces()),
+				"inbound() hands out what its two audiences narrow to: the edge feeding the domain and a reader of what came in");
+		assertEquals(List.of(), names(InboundCapabilities.class.getDeclaredMethods()));
+		assertEquals(Set.of(ReadModelCapability.class), Set.of(OutboundCapabilities.class.getInterfaces()),
+				"nothing but a publisher writes the outbound stream, so outbound() only reads");
+		assertEquals(List.of(), names(OutboundCapabilities.class.getDeclaredMethods()));
 	}
 
 	@Test

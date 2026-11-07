@@ -27,6 +27,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
+import org.sliceworkz.eventmodeling.commands.CommandResult.CallerKey;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -157,7 +158,7 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 		@Override
 		public String execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.noDecisionModels();
-			result.fallbackIdempotencyKey(key)
+			result.idempotencyKey(key, CallerKey.PREFERRED)
 					.raiseEvent(new FirstDomainEvent(value), Tags.none());
 			return "response:" + value;
 		}

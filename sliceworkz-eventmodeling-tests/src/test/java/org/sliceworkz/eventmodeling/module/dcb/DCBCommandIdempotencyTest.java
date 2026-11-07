@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
+import org.sliceworkz.eventmodeling.commands.CommandResult.CallerKey;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
@@ -52,9 +53,8 @@ import org.sliceworkz.eventstore.stream.IdempotencyKeyConflictException;
  *   <li><b>External key:</b> The caller provides an idempotency key via
  *       {@code execute(command, idempotencyKey)}.</li>
  *   <li><b>Internal key:</b> The command itself declares an idempotency key
- *       strategy via {@code CommandResult.idempotencyKey()},
- *       {@code fallbackIdempotencyKey()}, {@code requireIdempotencyKey()},
- *       {@code exclusiveIdempotencyKey()}, or {@code forbidIdempotencyKey()}.</li>
+ *       strategy via {@code CommandResult.idempotencyKey(key, CallerKey)} or
+ *       {@code CommandResult.idempotencyKey(CallerKey)}, one test group per choice below.</li>
  * </ul>
  *
  * The framework resolves internal vs external keys based on the strategy chosen
@@ -155,7 +155,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		}
 	}
 
-	/** Command that uses {@code fallbackIdempotencyKey()} — internal fallback, external overrides. */
+	/** Command that uses {@code idempotencyKey(key, CallerKey.PREFERRED)} — internal fallback, external overrides. */
 	static class FallbackKeyCommand implements Command<MockDomainEvent> {
 
 		private final String value;
@@ -170,24 +170,24 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		public void execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			context.noDecisionModels()
-					.fallbackIdempotencyKey(key)
+					.idempotencyKey(key, CallerKey.PREFERRED)
 					.raiseEvent(new FirstDomainEvent(value), Tags.none());
 		}
 	}
 
-	/** Command that uses {@code requireIdempotencyKey()} — requires external key. */
+	/** Command that uses {@code idempotencyKey(CallerKey.REQUIRED)} — requires external key. */
 	static class RequireExternalKeyCommand implements Command<MockDomainEvent> {
 
 		@Override
 		public void execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			context.noDecisionModels()
-					.requireIdempotencyKey()
+					.idempotencyKey(CallerKey.REQUIRED)
 					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
 		}
 	}
 
-	/** Command that uses {@code exclusiveIdempotencyKey()} — rejects external key. */
+	/** Command that uses {@code idempotencyKey(key, CallerKey.REFUSED)} — rejects external key. */
 	static class ExclusiveKeyCommand implements Command<MockDomainEvent> {
 
 		private final String key;
@@ -200,12 +200,12 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		public void execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			context.noDecisionModels()
-					.exclusiveIdempotencyKey(key)
+					.idempotencyKey(key, CallerKey.REFUSED)
 					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
 		}
 	}
 
-	/** Command that uses {@code idempotencyKey()} — ignores external key. */
+	/** Command that uses {@code idempotencyKey(key, CallerKey.IGNORED)} — ignores external key. */
 	static class IdempotencyKeyCommand implements Command<MockDomainEvent> {
 
 		private final String key;
@@ -218,19 +218,19 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 		public void execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			context.noDecisionModels()
-					.idempotencyKey(key)
+					.idempotencyKey(key, CallerKey.IGNORED)
 					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
 		}
 	}
 
-	/** Command that uses {@code forbidIdempotencyKey()} — rejects any external key. */
+	/** Command that uses {@code idempotencyKey(CallerKey.REFUSED)} — rejects any external key. */
 	static class ForbidExternalKeyCommand implements Command<MockDomainEvent> {
 
 		@Override
 		public void execute(
 				CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			context.noDecisionModels()
-					.forbidIdempotencyKey()
+					.idempotencyKey(CallerKey.REFUSED)
 					.raiseEvent(new FirstDomainEvent("test"), Tags.none());
 		}
 	}
@@ -362,7 +362,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	// ════════════════════════════════════════════════════════════════════
-	// TESTS: fallbackIdempotencyKey() — internal fallback, external overrides
+	// TESTS: idempotencyKey(key, PREFERRED) — internal fallback, external overrides
 	// ════════════════════════════════════════════════════════════════════
 
 	@Test
@@ -407,7 +407,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	// ════════════════════════════════════════════════════════════════════
-	// TESTS: requireIdempotencyKey() — requires external key
+	// TESTS: idempotencyKey(REQUIRED) — requires external key
 	// ════════════════════════════════════════════════════════════════════
 
 	@Test
@@ -428,7 +428,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	// ════════════════════════════════════════════════════════════════════
-	// TESTS: exclusiveIdempotencyKey() — rejects external key
+	// TESTS: idempotencyKey(key, REFUSED) — rejects external key
 	// ════════════════════════════════════════════════════════════════════
 
 	@Test
@@ -452,7 +452,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	// ════════════════════════════════════════════════════════════════════
-	// TESTS: idempotencyKey() — ignores external key
+	// TESTS: idempotencyKey(key, IGNORED) — ignores external key
 	// ════════════════════════════════════════════════════════════════════
 
 	@Test
@@ -493,7 +493,7 @@ public class DCBCommandIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	// ════════════════════════════════════════════════════════════════════
-	// TESTS: forbidIdempotencyKey() — rejects external key
+	// TESTS: idempotencyKey(REFUSED) — rejects external key
 	// ════════════════════════════════════════════════════════════════════
 
 	@Test

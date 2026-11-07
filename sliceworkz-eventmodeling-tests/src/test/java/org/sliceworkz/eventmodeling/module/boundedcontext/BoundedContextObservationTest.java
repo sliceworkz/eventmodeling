@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -99,7 +100,7 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(observedBuilder());
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("alice").channel("web");
-		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), tracing);
+		BoundTracing.call(tracing, ( ) -> domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two")));
 
 		Recording execution = observer.last(Observation.CommandExecution.class);
 		Observation.CommandExecution started = execution.observation(Observation.CommandExecution.class);
@@ -193,7 +194,7 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(builder);
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("partner").channel("api");
-		domain.incoming(new SomeInboundEvent("in"), tracing);
+		BoundTracing.run(tracing, ( ) -> domain.incoming(new SomeInboundEvent("in")));
 
 		Recording incoming = observer.last(Observation.IncomingEvent.class);
 		assertEquals(EventType.of(SomeInboundEvent.class), incoming.observation(Observation.IncomingEvent.class).eventType());

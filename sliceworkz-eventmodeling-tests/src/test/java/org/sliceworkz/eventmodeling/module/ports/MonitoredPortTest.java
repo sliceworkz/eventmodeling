@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.ports;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -354,8 +355,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(slicedBuilder(PortMonitoring.perCall()));
 		GatewayPort gateway = domain.port(GatewayPort.class);
 
-		domain.execute(new CallGatewayCommand(gateway, g -> g.answer("q")),
-				Tracing.actorAndChannel("alice", "api").correlationId("flow-port"));
+		BoundTracing.call(Tracing.actorAndChannel("alice", "api").correlationId("flow-port"), ( ) -> domain.execute(new CallGatewayCommand(gateway, g -> g.answer("q"))));
 
 		EphemeralEvent<BoundedContextEvent> event = onlyEvent(PortCalled.class);
 		PortCalled called = (PortCalled) event.data();
@@ -451,8 +451,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(slicedBuilder(PortMonitoring.perCall()));
 
 		try ( TracingScope scope = TracingScope.bind(Tracing.actorAndChannel("alice", "api").correlationId("request-flow")) ) {
-			domain.execute(new CallGatewayCommand(domain.port(GatewayPort.class), g -> g.answer("q")),
-					Tracing.actorAndChannel("bob", "batch").correlationId("explicit-flow"));
+			BoundTracing.call(Tracing.actorAndChannel("bob", "batch").correlationId("explicit-flow"), ( ) -> domain.execute(new CallGatewayCommand(domain.port(GatewayPort.class), g -> g.answer("q"))));
 		}
 
 		EphemeralEvent<BoundedContextEvent> call = onlyEvent(PortCalled.class);
@@ -575,7 +574,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(builder);
 		observed.clear();
 
-		domain.translate(new SomeInboundEvent("hi"), Tracing.actorAndChannel("bob", "api").correlationId("flow-t"));
+		BoundTracing.call(Tracing.actorAndChannel("bob", "api").correlationId("flow-t"), ( ) -> domain.translate(new SomeInboundEvent("hi")));
 
 		EphemeralEvent<BoundedContextEvent> event = onlyEvent(PortCalled.class);
 		assertEquals(PortCaller.translator("LookupTranslator"), ((PortCalled) event.data()).caller());
@@ -590,8 +589,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		builder.automation(new LookUpAutomation(todoList, builder.port(GatewayPort.class)));
 		Mock domain = buildBoundedContext(builder);
 
-		domain.execute(new CallGatewayCommand(domain.port(GatewayPort.class), g -> "item-1"),
-				Tracing.actorAndChannel("carol", "api").correlationId("flow-a"));
+		BoundTracing.call(Tracing.actorAndChannel("carol", "api").correlationId("flow-a"), ( ) -> domain.execute(new CallGatewayCommand(domain.port(GatewayPort.class), g -> "item-1")));
 
 		await().atMost(Duration.ofSeconds(30)).until(() -> all(PortCalled.class).stream()
 				.anyMatch(c -> PortCaller.KIND_AUTOMATION.equals(c.caller().kind())));

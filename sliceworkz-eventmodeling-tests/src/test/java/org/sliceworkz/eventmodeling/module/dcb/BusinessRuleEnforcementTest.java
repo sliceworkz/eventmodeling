@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -318,7 +319,7 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 		assertEquals(Optional.empty(), anonymous.actor);
 
 		RuledCommand alice = violating(Overrides.none());
-		domain.execute(alice, Tracing.actorAndChannel("alice", "test"));
+		BoundTracing.call(Tracing.actorAndChannel("alice", "test"), ( ) -> domain.execute(alice));
 		assertEquals(Optional.of("alice"), alice.actor);
 	}
 
@@ -379,7 +380,7 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 	void anEvaluationIsObservedAsAnEvaluation ( ) {
 		Mock domain = domain();
 
-		domain.evaluate(violating(Overrides.none(), EXPLAINED), Tracing.actorAndChannel("bob", "test"));
+		BoundTracing.call(Tracing.actorAndChannel("bob", "test"), ( ) -> domain.evaluate(violating(Overrides.none(), EXPLAINED)));
 
 		var recording = observer.last(Observation.CommandEvaluation.class);
 		assertEquals("bob", recording.observation(Observation.CommandEvaluation.class).tracing().actor());
@@ -441,12 +442,12 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 		Tracing alice = Tracing.actorAndChannel("alice", "test");
 		Tracing bob = Tracing.actorAndChannel("bob", "test");
 
-		domain.execute(new QuotaCommand(() -> { }), alice);
-		domain.execute(new QuotaCommand(() -> { }), alice);
-		RuleViolationException third = assertThrows(RuleViolationException.class, () -> domain.execute(new QuotaCommand(() -> { }), alice));
+		BoundTracing.call(alice, () -> domain.execute(new QuotaCommand(() -> { })));
+		BoundTracing.call(alice, () -> domain.execute(new QuotaCommand(() -> { })));
+		RuleViolationException third = assertThrows(RuleViolationException.class, () -> BoundTracing.call(alice, () -> domain.execute(new QuotaCommand(() -> { }))));
 		assertEquals("quota of 2 reached", third.evaluation().judgementOf(PRE_AUTHORIZED).orElseThrow().reason());
 
-		domain.execute(new QuotaCommand(() -> { }), bob);	// another actor's quota is untouched
+		BoundTracing.call(bob, () -> domain.execute(new QuotaCommand(() -> { })));	// another actor's quota is untouched
 
 		List<Event<MockDomainEvent>> stored = stored();
 		assertEquals(3, stored.size());
@@ -458,14 +459,14 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 	void twoOverridesRacingPastAQuotaCannotBothSucceed ( ) {
 		Mock domain = domain();
 		Tracing alice = Tracing.actorAndChannel("alice", "test");
-		domain.execute(new QuotaCommand(() -> { }), alice);
+		BoundTracing.call(alice, () -> domain.execute(new QuotaCommand(() -> { })));
 
 		// alice's second override lands after this command decided on a count of one, and before it appends
-		QuotaCommand racing = new QuotaCommand(() -> domain.execute(new QuotaCommand(() -> { }), alice));
+		QuotaCommand racing = new QuotaCommand(() -> BoundTracing.call(alice, () -> domain.execute(new QuotaCommand(() -> { }))));
 
-		assertThrows(OptimisticLockingException.class, () -> domain.execute(racing, alice));
+		assertThrows(OptimisticLockingException.class, () -> BoundTracing.call(alice, () -> domain.execute(racing)));
 		RuleViolationException retried = assertThrows(RuleViolationException.class,
-				() -> domain.executeWithRetry(new QuotaCommand(() -> { }), alice, org.sliceworkz.eventmodeling.commands.RetryPolicy.DEFAULT));
+				() -> BoundTracing.call(alice, () -> domain.executeWithRetry(new QuotaCommand(() -> { }), org.sliceworkz.eventmodeling.commands.RetryPolicy.DEFAULT)));
 		assertEquals("quota of 2 reached", retried.evaluation().judgementOf(PRE_AUTHORIZED).orElseThrow().reason());
 		assertEquals(2, stored().size());
 	}

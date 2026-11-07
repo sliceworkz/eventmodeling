@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
+import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
@@ -83,6 +84,22 @@ public class LiveModelConstructionThroughAReadTest extends AbstractMockDomainTes
 		assertTrue(e.getMessage().contains("MockReadModel"), e.getMessage());
 		assertTrue(e.getMessage().contains("Integer"), "the argument as passed: " + e.getMessage());
 		assertTrue(e.getMessage().contains("MockReadModel(String)"), "and what it declares: " + e.getMessage());
+	}
+
+	/**
+	 * A read takes no tracing, and {@code Object...} takes a {@code Tracing} as readily as an id, so a caller
+	 * still passing one compiles. Refused at the read with the remedy, before any constructor is weighed.
+	 */
+	@Test
+	void aTracingPassedToAReadIsRefusedWithTheRemedy ( ) {
+		var builder = builder();
+		builder.readmodel(MockReadModel.class).live();
+		Mock boundedContext = buildBoundedContext(builder);
+
+		IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+				() -> boundedContext.read(MockReadModel.class, Tracing.actorAndChannel("alice", "api"), "name"));
+
+		assertTrue(e.getMessage().contains("TracingScope.call"), e.getMessage());
 	}
 
 	/**

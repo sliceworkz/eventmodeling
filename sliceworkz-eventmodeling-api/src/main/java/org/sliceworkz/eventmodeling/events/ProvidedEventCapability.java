@@ -50,15 +50,6 @@ import org.sliceworkz.eventstore.events.Tags;
 public interface ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
 
 	/**
-	 * Provides a domain event with tracing information.
-	 *
-	 * @param event the domain event to provide
-	 * @param tracing the tracing information for distributed tracing
-	 * @return reference to the appended event, or empty if the event was not appended
-	 */
-	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tracing tracing );
-
-	/**
 	 * Provides a domain event without tracing information.
 	 *
 	 * @param event the domain event to provide
@@ -74,16 +65,6 @@ public interface ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
 	 * @return reference to the appended event, or empty if the event was not appended
 	 */
 	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags );
-
-	/**
-	 * Provides a domain event with both tags and tracing information.
-	 *
-	 * @param event the domain event to provide
-	 * @param tags the tags to associate with the event
-	 * @param tracing the tracing information for distributed tracing
-	 * @return reference to the appended event, or empty if the event was not appended
-	 */
-	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing );
 
 	/**
 	 * Provides a domain event under an idempotency key, so that providing it again stores nothing.
@@ -116,17 +97,5 @@ public interface ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
 	 * @see #event(Object, String)
 	 */
 	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey );
-
-	/**
-	 * Provides a domain event with tags and tracing information, under an idempotency key.
-	 *
-	 * @param event the domain event to provide
-	 * @param tags the tags to associate with the event
-	 * @param idempotencyKey the key identifying this event on its stream, or null for no idempotency check
-	 * @param tracing the tracing information for distributed tracing
-	 * @return reference to the appended event, or empty if it was not appended, including when the key was already used
-	 * @see #event(Object, String)
-	 */
-	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing );
 
 }

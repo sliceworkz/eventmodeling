@@ -19,18 +19,13 @@ package org.sliceworkz.eventmodeling.inbound;
 
 import java.util.List;
 
-import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.EventReference;
 
 public interface TranslationCapability<INBOUND_EVENT_TYPE> {
 
 	void incoming ( INBOUND_EVENT_TYPE event );
 
-	void incoming ( INBOUND_EVENT_TYPE event, Tracing tracing );
-
 	void incoming ( INBOUND_EVENT_TYPE event, String idempotencyKey );
-
-	void incoming ( INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing );
 
 	/**
 	 * Interactively translates an inbound event.
@@ -50,16 +45,5 @@ public interface TranslationCapability<INBOUND_EVENT_TYPE> {
 	 * @throws NoTranslatorRegisteredException if no registered translator matches the supplied event
 	 */
 	List<EventReference> translate ( INBOUND_EVENT_TYPE event );
-
-	/**
-	 * Interactively translates an inbound event with tracing information.
-	 *
-	 * @param event the inbound event to translate
-	 * @param tracing the tracing information for distributed tracing
-	 * @return references to the domain events raised during translation, in the order they were raised
-	 * @throws NoTranslatorRegisteredException if no registered translator matches the supplied event
-	 * @see #translate(Object)
-	 */
-	List<EventReference> translate ( INBOUND_EVENT_TYPE event, Tracing tracing );
 
 }

@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.testing;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -37,7 +38,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> extends AbstractBoundedContextTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 	
@@ -156,11 +156,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		}
 		
 		public TestDefinition event ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-			if ( tracing != null ) {
-				kernel().event(event, tags, tracing);
-			} else {
-				kernel().event(event, tags);
-			}
+			BoundTracing.call(tracing, ( ) -> kernel().event(event, tags));
 			return this;
 		}
 
@@ -174,7 +170,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		 */
 		public TestDefinition whenEvaluated ( Command<DOMAIN_EVENT_TYPE> command ) {
 			EventReference before = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
-			this.evaluation = ( tracing != null ) ? kernel().evaluate(command, tracing) : kernel().evaluate(command);
+			this.evaluation = BoundTracing.call(tracing, ( ) -> kernel().evaluate(command));
 			EventReference after = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
 			assertEquals(before, after, "evaluating a command must not append anything");
 			return this;
@@ -193,11 +189,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		public TestDefinition when ( Command<DOMAIN_EVENT_TYPE> command ) {
 			try {
 				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
-				if ( tracing != null ) {
-					kernel().execute(command, tracing);
-				} else {
-					kernel().execute(command);
-				}
+				BoundTracing.call(tracing, ( ) -> kernel().execute(command));
 				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventFilter.matchAll(), bookmark);
 				this.result = new TestResultImpl ( newEvents );
 			} catch (Exception exception) {
@@ -209,7 +201,7 @@ public abstract class CommandTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_
 		public <RESPONSE_TYPE> TestDefinition when ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command ) {
 			try {
 				EventReference bookmark = eventStore().getEventStream(eventStreamId(), domainEventType()).head().orElse(null);
-				CommandExecutionResult<RESPONSE_TYPE> executionResult = ( tracing != null ) ? kernel().execute(command, tracing) : kernel().execute(command);
+				CommandExecutionResult<RESPONSE_TYPE> executionResult = BoundTracing.call(tracing, ( ) -> kernel().execute(command));
 				List<Event<DOMAIN_EVENT_TYPE>> newEvents = eventStore().getEventStream(eventStreamId(), domainEventType()).query(EventFilter.matchAll(), bookmark);
 				this.result = new TestResultWithResponseImpl<> ( newEvents, executionResult.response() );
 			} catch (Exception exception) {

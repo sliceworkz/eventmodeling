@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.outbound;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -89,7 +90,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 		Mock context = buildBoundedContext(builder);
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("alice").correlationId("flow-1");
-		Optional<EventReference> recorded = context.event(new FirstDomainEvent("v1"), ItemReadModel.tags("a"), tracing);
+		Optional<EventReference> recorded = BoundTracing.call(tracing, () -> context.event(new FirstDomainEvent("v1"), ItemReadModel.tags("a")));
 
 		waitBecauseOfEventualConsistency(() -> outbound().size() >= 1);
 		Event<MockOutboundEvent> published = outbound().get(0);

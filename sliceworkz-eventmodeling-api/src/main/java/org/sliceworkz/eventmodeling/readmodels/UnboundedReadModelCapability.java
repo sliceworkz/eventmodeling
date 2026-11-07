@@ -17,7 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.readmodels;
 
-import org.sliceworkz.eventmodeling.events.Tracing;
 
 /**
  * Capability for reading models across all event streams, regardless of bounded context boundaries.
@@ -38,8 +37,6 @@ import org.sliceworkz.eventmodeling.events.Tracing;
  * The same mechanism narrows in the other direction; see {@code WHO-MAY-DO-WHAT.md}.
  */
 public interface UnboundedReadModelCapability<DOMAIN_EVENT_TYPE> {
-
-	<READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL readUnbounded ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params );
 
 	<READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL readUnbounded ( Class<READ_MODEL> readModelClass, Object... params );
 

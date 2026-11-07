@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -111,8 +112,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 	void anExplicitTracingsCorrelationIdIsReusedNotReplaced ( ) {
 		Mock domain = buildBoundedContext(baseBuilder());
 
-		domain.execute(new RaiseTwoEventsCommand("a", "b"),
-				Tracing.actorAndChannel("alice", "api").correlationId("flow-42"));
+		BoundTracing.call(Tracing.actorAndChannel("alice", "api").correlationId("flow-42"), ( ) -> domain.execute(new RaiseTwoEventsCommand("a", "b")));
 
 		assertEquals("flow-42", correlationIdOf(domainEvents().get(0)));
 	}
@@ -121,8 +121,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 	void interactiveTranslationCarriesTheCallersCorrelationId ( ) {
 		Mock domain = buildBoundedContext(baseBuilder().inbound().translator(new SomeInboundTranslator()).done());
 
-		domain.inbound().translate(new SomeInboundEvent("hello"),
-				Tracing.actorAndChannel("alice", "api").correlationId("flow-t"));
+		BoundTracing.call(Tracing.actorAndChannel("alice", "api").correlationId("flow-t"), ( ) -> domain.inbound().translate(new SomeInboundEvent("hello")));
 
 		assertEquals("flow-t", correlationIdOf(domainEvents().get(0)),
 				"the domain event a translator raises continues the caller's flow");
@@ -132,8 +131,8 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 	void asyncTranslationCarriesTheInboundEventsCorrelationId ( ) {
 		Mock domain = buildBoundedContext(baseBuilder().inbound().translator(new SomeInboundTranslator()).done());
 
-		domain.inbound().incoming(new SomeInboundEvent("hello"),
-				Tracing.actorAndChannel("alice", "api").correlationId("flow-in"));
+		BoundTracing.run(Tracing.actorAndChannel("alice", "api").correlationId("flow-in"),
+				() -> domain.inbound().incoming(new SomeInboundEvent("hello")));
 
 		await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertEquals(1, domainEvents().size()));
 		assertEquals("flow-in", correlationIdOf(domainEvents().get(0)),
@@ -148,8 +147,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 		builder.automation(new RecordingAutomation(todoList));
 		Mock domain = buildBoundedContext(builder);
 
-		domain.execute(new RaiseTwoEventsCommand("go", "on"),
-				Tracing.actorAndChannel("alice", "api").correlationId("flow-auto"));
+		BoundTracing.call(Tracing.actorAndChannel("alice", "api").correlationId("flow-auto"), ( ) -> domain.execute(new RaiseTwoEventsCommand("go", "on")));
 
 		await().atMost(Duration.ofSeconds(30)).untilAsserted(
 				() -> assertEquals(2, stored(SecondDomainEvent.class).size()));
@@ -164,8 +162,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 		List<EphemeralEvent<BoundedContextEvent>> observed = Collections.synchronizedList(new ArrayList<>());
 		Mock domain = buildBoundedContext(baseBuilder().listener(observed::add));
 
-		domain.execute(new RaiseTwoEventsCommand("a", "b"),
-				Tracing.actorAndChannel("alice", "api").correlationId("flow-mon"));
+		BoundTracing.call(Tracing.actorAndChannel("alice", "api").correlationId("flow-mon"), ( ) -> domain.execute(new RaiseTwoEventsCommand("a", "b")));
 
 		EphemeralEvent<BoundedContextEvent> commandExecuted = observed.stream()
 				.filter(e -> e.data() instanceof BoundedContextEvent.CommandExecuted)
@@ -293,7 +290,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 
 		@Override
 		public Optional<EventReference> handle ( CorrelatedItem todoItem, AutomationContext<MockDomainEvent> context ) {
-			return context.event(new SecondDomainEvent(todoItem.value()), "handled:" + todoItem.value());
+			return context.event(EphemeralEvent.of(new SecondDomainEvent(todoItem.value()), Tags.none()).withIdempotencyKey("handled:" + todoItem.value()));
 		}
 	}
 

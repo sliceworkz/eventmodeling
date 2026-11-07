@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.automation;
 
+import org.sliceworkz.eventmodeling.commands.Execution;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -54,12 +55,11 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 
 /**
  * The retry an automation is meant to do inside {@code handle()} — a DCB conflict cleared in
- * milliseconds by re-executing the command — through {@code context.executeWithRetry(...)}: the
+ * milliseconds by re-executing the command — through {@code context.execute(..., Execution.retrying())}: the
  * item completes within one {@code handle} call, so {@code onFailure} is never consulted and the
  * batch is never abandoned. This is the complement of the framework's deliberate choice not to
  * retry at the item level (see {@code AutomationProcessor}): the item-level machinery answers
@@ -150,7 +150,7 @@ public class AutomationExecuteWithRetryTest extends AbstractMockDomainTest {
 
 		@Override
 		public Optional<EventReference> handle(String todoItem, AutomationContext<MockDomainEvent> context) {
-			Optional<EventReference> reference = context.executeWithRetry(new CompleteItemCommand(todoItem), RetryPolicy.of(3));
+			Optional<EventReference> reference = context.execute(new CompleteItemCommand(todoItem), Execution.retrying(RetryPolicy.of(3)));
 			handled.add(todoItem);
 			return reference;
 		}

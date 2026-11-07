@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.policy;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -53,7 +54,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
@@ -129,7 +129,7 @@ public class PolicyModuleTest extends AbstractMockDomainTest {
 		Mock context = buildBoundedContext(builder);
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("alice").correlationId("flow-1");
-		EventReference first = context.event(new FirstDomainEvent("a"), tracing).orElseThrow();
+		EventReference first = BoundTracing.call(tracing, ( ) -> context.event(new FirstDomainEvent("a"))).orElseThrow();
 
 		waitBecauseOfEventualConsistency(() -> seconds().size() >= 1);
 		Event<MockDomainEvent> raised = seconds().get(0);

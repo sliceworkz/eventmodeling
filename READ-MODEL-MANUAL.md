@@ -55,7 +55,7 @@ need nothing more. An `EventStream` answers an `EventQuery` — event types, tag
 ```java
 // the newest fact of one kind about one entity: one query, one event
 Optional<Event<BankingEvent>> lastClose = eventStream
-    .query(EventQuery.of(EventFilter.forTypes(MonthClosed.class).tagged(ACCOUNT.tags(accountId)))
+    .query(EventQuery.of(EventFilter.forTypes(MonthClosed.class).tagged(ACCOUNT.tag(accountId)))
                      .backwards().limit(1))
     .stream().findFirst();
 ```
@@ -94,7 +94,7 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
 
     @Override
     public EventFilter eventFilter ( ) {
-        return EventFilter.forTags(BankingDomain.ACCOUNT.tags(accountId));
+        return EventFilter.forTags(BankingDomain.ACCOUNT.tag(accountId));
     }
 
     @Override
@@ -130,12 +130,6 @@ Three things to internalise here, because everything later builds on them:
   is an `AccountDetailsReadModel`, so it chains (`bc.read(X.class, id).details()`) and fits a `var`
   without a cast, and assigning it to anything else is a compile error rather than a
   `ClassCastException` at the call site.
-- **A read model says which events it depends on with `eventFilter()`, and that is usually all.** A
-  live read model reads them forward, from the beginning or from where a seed or snapshot left off.
-  `eventQuery()` defaults to that forward read and is overridden only for a read that is not one —
-  backwards, limited — built on the filter: `EventQuery.of(eventFilter()).backwards().limit(1)` for a
-  model that needs only the newest event. An eventually consistent read model reads forward from its
-  bookmark, so `build()` refuses one that overrides it otherwise.
 - **Every event arrives with its metadata, and the domain event is `event.data()`.** There is one
   `when`, taking the `Event`: switch on `event.data()` for the domain event, and read the tags, the
   timestamp or the reference off the same argument when a projection needs them. There is no
@@ -197,22 +191,21 @@ backwards `limit(1)` query and replays only what came after:
 // CurrentPeriodReadModel — the savepoint pattern
 @Override
 public EventQuery initQuery ( ) {
-    return EventQuery.of(EventFilter.forTypes(AccountOpened.class, MonthOpened.class)   // the savepoints
-        .tagged(ACCOUNT.tags(accountId))).backwards().limit(1);
+    return EventQuery.of(EventFilter.forTypes(AccountOpened.class, MonthOpened.class).tagged(// the savepoints
+        ACCOUNT.tag(accountId))).backwards().limit(1);
 }
 
 @Override
 public EventFilter eventFilter ( ) {
-    return EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class)   // movements only
-        .tagged(ACCOUNT.tags(accountId));
+    return EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class).tagged(ACCOUNT.tag(accountId)               // movements only);
 }
 ```
 
-The framework runs `initQuery()` first, feeds its result through `when(...)`, then reads what
-`eventFilter()` matches from that event's position. With no savepoint yet, the init query finds nothing and
+The framework runs `initQuery()` first, feeds its result through `when(...)`, then starts
+`eventFilter()` from that event's position. With no savepoint yet, the init query finds nothing and
 the model gracefully replays from the beginning. Rules that keep it healthy:
 
-- **Name disjoint event types in the two methods.** The savepoint types belong to `initQuery()`
+- **Query disjoint event types from the two methods.** The savepoint types belong to `initQuery()`
   only — otherwise they are double-processed, and a buggy savepoint cannot be recovered from by
   ignoring it. This holds for a `DecisionModel` too, and needs no exception for the consistency
   boundary: the framework locks on the union of **both** queries, so a savepoint landing between the
@@ -433,8 +426,8 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
     }
 
     @Override
-    public EventFilter eventFilter ( ) {        // only this account -> the delta stays tiny
-        return EventFilter.forTags(ACCOUNT.tags(accountId));
+    public EventFilter eventFilter ( ) {          // only this account -> the delta stays tiny
+        return EventFilter.forTags(ACCOUNT.tag(accountId));
     }
 
     @Override

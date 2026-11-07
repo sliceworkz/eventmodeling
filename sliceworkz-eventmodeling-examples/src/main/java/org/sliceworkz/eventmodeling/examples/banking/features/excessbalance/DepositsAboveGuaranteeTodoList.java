@@ -35,7 +35,6 @@ import org.sliceworkz.eventmodeling.rules.RuleTags;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 
 /**

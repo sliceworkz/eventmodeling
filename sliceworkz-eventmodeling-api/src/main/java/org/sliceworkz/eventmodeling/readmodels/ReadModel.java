@@ -27,13 +27,6 @@ import org.sliceworkz.eventstore.projection.Projection;
  * always current and there is nothing to keep or rebuild. Right whenever the set of events its
  * {@link #eventFilter()} matches is bounded by design — one entity, one period, one savepoint onward.
  *
- * <p><b>It says which events it depends on with {@link #eventFilter()}</b>, and that is usually all it
- * says: {@link #eventQuery()} defaults to reading them forward. Override {@code eventQuery()} only for a live
- * read that is not forward and unlimited, and build it on the filter —
- * {@code EventQuery.of(eventFilter()).backwards().limit(1)} for one that needs the newest event alone. An
- * eventually consistent read model reads forward from its bookmark, and {@code build()} refuses one whose
- * {@code eventQuery()} says otherwise.
- *
  * <p>Every event arrives through {@code when(Event<DOMAIN_EVENT_TYPE>)}, with its metadata: the
  * domain event is {@code event.data()}, and the tags, timestamp and reference sit beside it on the
  * same argument. A read model that needs only the domain event switches on {@code event.data()}.

@@ -74,6 +74,7 @@ public class CapabilityAudienceTest {
 			import org.sliceworkz.eventmodeling.boundedcontext.PrivacyCapability;
 			import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 			import org.sliceworkz.eventmodeling.commands.Command;
+			import org.sliceworkz.eventmodeling.commands.Execution;
 			import org.sliceworkz.eventmodeling.commands.RetryPolicy;
 			import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
 			import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
@@ -115,8 +116,8 @@ public class CapabilityAudienceTest {
 	/** javac's key for "cannot find symbol", which is how a method absent from the reference type is rejected */
 	private static final String NO_SUCH_METHOD = "compiler.err.cant.resolve.location.args";
 
-	/** javac's key for "no overload applies", which is how a read model of another stream's event type is refused */
-	private static final String NO_APPLICABLE_OVERLOAD = "compiler.err.cant.apply.symbols";
+	/** javac's key for "the method does not apply to these arguments", which is how a read model of another stream's event type is refused */
+	private static final String NOT_APPLICABLE = "compiler.err.cant.apply.symbol";
 
 	/** javac's key for "incompatible types" */
 	private static final String INCOMPATIBLE_TYPES = "compiler.err.prob.found.req";
@@ -129,8 +130,8 @@ public class CapabilityAudienceTest {
 	@Test
 	void applicationCodeDecidesAndReads ( ) {
 		assertAccepted("application.execute(command);");
-		assertAccepted("application.execute(command, \"key\");");
-		assertAccepted("application.executeWithRetry(command, RetryPolicy.DEFAULT);");
+		assertAccepted("application.execute(command, Execution.idempotent(\"key\"));");
+		assertAccepted("application.execute(command, Execution.retrying(RetryPolicy.DEFAULT));");
 		assertAccepted("application.evaluate(command);");
 		assertAccepted("AccountDetails d = application.read(AccountDetails.class, \"id\");");
 		assertAccepted("Account a = application.aggregate(Account.class, Tags.of(\"account\", \"1\"));");
@@ -198,9 +199,9 @@ public class CapabilityAudienceTest {
 		assertAccepted("InboundTraffic in = owner.inbound().read(InboundTraffic.class);");
 		assertAccepted("InboundTraffic in = inboundReads.read(InboundTraffic.class);");
 		assertAccepted("OutboundTraffic out = owner.outbound().read(OutboundTraffic.class);");
-		assertRejected("owner.read(InboundTraffic.class);", NO_APPLICABLE_OVERLOAD);
-		assertRejected("owner.inbound().read(AccountDetails.class);", NO_APPLICABLE_OVERLOAD);
-		assertRejected("owner.outbound().read(InboundTraffic.class);", NO_APPLICABLE_OVERLOAD);
+		assertRejected("owner.read(InboundTraffic.class);", NOT_APPLICABLE);
+		assertRejected("owner.inbound().read(AccountDetails.class);", NOT_APPLICABLE);
+		assertRejected("owner.outbound().read(InboundTraffic.class);", NOT_APPLICABLE);
 	}
 
 	@Test

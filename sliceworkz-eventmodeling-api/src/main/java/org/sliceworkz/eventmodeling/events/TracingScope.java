@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.events;
 
 import java.util.Optional;
+import java.util.function.Supplier;
 
 /**
  * The tracing of the work the calling thread is doing on behalf of an edge — typically the HTTP request it
@@ -35,14 +36,20 @@ import java.util.Optional;
  * <ul>
  * <li><b>The no-tracing overloads</b> of the bounded context's capabilities ({@code execute(command)},
  * {@code read(...)}, {@code event(...)}, {@code incoming(...)}, {@code translate(...)}, {@code evaluate(...)},
- * {@code aggregate(...)}) use the bound tracing where they would otherwise mint a fresh one. An overload
- * handed a tracing uses what it was handed: an explicit tracing always wins.</li>
+ * {@code aggregate(...)}) use the bound tracing where they would otherwise mint a fresh one. They are the
+ * only overloads: no capability takes a tracing as an argument, so binding one is how a caller says who it
+ * acts for, and a component's own context (an automation's, a translator's, a policy's) carries the
+ * tracing of the event it handles whatever is bound.</li>
  * <li><b>A call through a monitored port</b> made where no component supplies a tracing — a REST endpoint a
  * feature slice wires in its {@code start...} methods, whose calls run on a request thread — reports its
  * {@code PortCalled}/{@code PortCallRejected}/{@code PortCallFailed} under the bound tracing, so the
  * membership check an endpoint makes before executing a command carries the command's correlation id
  * instead of one of its own.</li>
  * </ul>
+ * The alternative — a tracing parameter on every capability beside its no-tracing form — loses because it
+ * doubles every overload set for something the edge decides once per request, and a caller passing a tracing
+ * to one call and none to the next splits its own flow without anything saying so.
+ * <p>
  * The alternative — a correlation id per call, minted by each overload and each port call — loses because a
  * request that checks access, reads and then executes becomes three unrelated flows in the monitoring record,
  * which is exactly the question a correlation id exists to answer.
@@ -80,6 +87,37 @@ public final class TracingScope implements AutoCloseable {
 		TracingScope scope = new TracingScope(BOUND.get());
 		BOUND.set(tracing);
 		return scope;
+	}
+
+	/**
+	 * Calls {@code work} with {@code tracing} bound to this thread, and restores what was bound before when
+	 * it returns: the expression form of a {@link #bind(Tracing) binding}, for one call made on someone's
+	 * behalf —
+	 * {@code Optional<EventReference> ref = TracingScope.call(alice, () -> bank.execute(command));}
+	 *
+	 * @param tracing the tracing to bind; not {@code null}
+	 * @param work what to call with it bound
+	 * @return what {@code work} returned
+	 * @throws IllegalArgumentException for a {@code null} tracing
+	 */
+	public static <T> T call ( Tracing tracing, Supplier<T> work ) {
+		try ( TracingScope scope = bind(tracing) ) {
+			return work.get();
+		}
+	}
+
+	/**
+	 * Runs {@code work} with {@code tracing} bound to this thread, and restores what was bound before when it
+	 * returns: {@link #call(Tracing, Supplier)} for work that answers nothing.
+	 *
+	 * @param tracing the tracing to bind; not {@code null}
+	 * @param work what to run with it bound
+	 * @throws IllegalArgumentException for a {@code null} tracing
+	 */
+	public static void run ( Tracing tracing, Runnable work ) {
+		try ( TracingScope scope = bind(tracing) ) {
+			work.run();
+		}
 	}
 
 	/**

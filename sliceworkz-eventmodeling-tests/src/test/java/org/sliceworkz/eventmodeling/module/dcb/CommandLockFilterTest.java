@@ -44,7 +44,6 @@ import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
@@ -120,8 +119,14 @@ public class CommandLockFilterTest extends AbstractMockDomainTest {
 		private final EventReference until;
 		int seen;
 		FirstsUntil ( EventReference until ) { this.until = until; }
-		@Override public EventFilter eventFilter ( ) { return EventFilter.forTypes(FirstDomainEvent.class); }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(eventFilter()).notAfter(until); }
+		@Override public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
+		}
+
+		@Override
+		public EventQuery eventQuery ( ) {
+			return EventQuery.of(eventFilter()).notAfter(until);
+		}
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 

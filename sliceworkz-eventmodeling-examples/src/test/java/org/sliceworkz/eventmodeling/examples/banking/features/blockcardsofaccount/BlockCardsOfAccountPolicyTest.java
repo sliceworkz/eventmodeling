@@ -76,10 +76,10 @@ public class BlockCardsOfAccountPolicyTest extends PolicyTest<BankingEvent, Bank
 
 	@Test
 	void freezingAnAccountBlocksItsCards ( ) {
-		given(opened(ACCOUNT_1), ACCOUNT.tags(ACCOUNT_1))
+		given(opened(ACCOUNT_1), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.and(issued(ACCOUNT_1, CARD_A), cardTags(ACCOUNT_1, CARD_A))
 			.and(issued(ACCOUNT_1, CARD_B), cardTags(ACCOUNT_1, CARD_B))
-			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1))
+			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 		.whenReacting()
 			.events(
 				new CardBlocked(ACCOUNT_1, CARD_A, "account frozen: suspected fraud"),
@@ -88,52 +88,52 @@ public class BlockCardsOfAccountPolicyTest extends PolicyTest<BankingEvent, Bank
 
 	@Test
 	void closingAnAccountBlocksItsCardsToo ( ) {
-		given(opened(ACCOUNT_1), ACCOUNT.tags(ACCOUNT_1))
+		given(opened(ACCOUNT_1), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.and(issued(ACCOUNT_1, CARD_A), cardTags(ACCOUNT_1, CARD_A))
-			.and(new AccountClosed(ACCOUNT_1, LocalDate.of(2025, 3, 1)), ACCOUNT.tags(ACCOUNT_1))
+			.and(new AccountClosed(ACCOUNT_1, LocalDate.of(2025, 3, 1)), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 		.whenReacting()
 			.event(new CardBlocked(ACCOUNT_1, CARD_A, "account closed"), cardTags(ACCOUNT_1, CARD_A));
 	}
 
 	@Test
 	void theCardsOfOtherAccountsAndThoseAlreadyBlockedAreLeftAlone ( ) {
-		given(opened(ACCOUNT_1), ACCOUNT.tags(ACCOUNT_1))
-			.and(opened(ACCOUNT_2), ACCOUNT.tags(ACCOUNT_2))
+		given(opened(ACCOUNT_1), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
+			.and(opened(ACCOUNT_2), Tags.of(ACCOUNT.tag(ACCOUNT_2)))
 			.and(issued(ACCOUNT_1, CARD_A), cardTags(ACCOUNT_1, CARD_A))
 			.and(issued(ACCOUNT_1, CARD_B), cardTags(ACCOUNT_1, CARD_B))
 			.and(issued(ACCOUNT_2, CARD_C), cardTags(ACCOUNT_2, CARD_C))
 			.and(new CardBlocked(ACCOUNT_1, CARD_A, "reported lost"), cardTags(ACCOUNT_1, CARD_A))
-			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1))
+			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 		.whenReacting()
 			.events(new CardBlocked(ACCOUNT_1, CARD_B, "account frozen: suspected fraud"));
 	}
 
 	@Test
 	void anAccountWithoutCardsHasNothingToBlock ( ) {
-		given(opened(ACCOUNT_1), ACCOUNT.tags(ACCOUNT_1))
-			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1))
+		given(opened(ACCOUNT_1), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
+			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 		.whenReacting()
 			.noEvents();
 	}
 
 	@Test
 	void aFrozenAccountClosedLaterBlocksNothingTwice ( ) {
-		given(opened(ACCOUNT_1), ACCOUNT.tags(ACCOUNT_1))
+		given(opened(ACCOUNT_1), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.and(issued(ACCOUNT_1, CARD_A), cardTags(ACCOUNT_1, CARD_A))
-			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1))
+			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 		.whenReacting()
 			.events(new CardBlocked(ACCOUNT_1, CARD_A, "account frozen: suspected fraud"))
 		.and()
-			.and(new AccountClosed(ACCOUNT_1, LocalDate.of(2025, 3, 1)), ACCOUNT.tags(ACCOUNT_1))
+			.and(new AccountClosed(ACCOUNT_1, LocalDate.of(2025, 3, 1)), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 		.whenReacting()
 			.noEvents();
 	}
 
 	@Test
 	void aRedeliveredEventIsNotReactedToAgain ( ) {
-		given(opened(ACCOUNT_1), ACCOUNT.tags(ACCOUNT_1))
+		given(opened(ACCOUNT_1), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.and(issued(ACCOUNT_1, CARD_A), cardTags(ACCOUNT_1, CARD_A))
-			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1))
+			.and(new AccountFrozen(ACCOUNT_1, "suspected fraud"), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 		.whenReacting()
 			.events(new CardBlocked(ACCOUNT_1, CARD_A, "account frozen: suspected fraud"))
 		.and()
@@ -143,7 +143,7 @@ public class BlockCardsOfAccountPolicyTest extends PolicyTest<BankingEvent, Bank
 
 	@Test
 	void otherEventsAreNotReactedTo ( ) {
-		given(opened(ACCOUNT_1), ACCOUNT.tags(ACCOUNT_1))
+		given(opened(ACCOUNT_1), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.and(issued(ACCOUNT_1, CARD_A), cardTags(ACCOUNT_1, CARD_A))
 		.whenReacting()
 			.noEvents();

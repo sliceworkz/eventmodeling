@@ -26,9 +26,10 @@ import org.sliceworkz.eventmodeling.automation.PolicyRejectionHandling;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionCapability;
-import org.sliceworkz.eventmodeling.commands.RetryPolicy;
+import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -146,7 +147,8 @@ public final class Reaction {
 		}
 
 		try {
-			Optional<EventReference> appended = executor.executeWithRetry(command, idempotencyKey(policyName, event), tracing, RetryPolicy.DEFAULT);
+			Tracing reacting = tracing;
+			Optional<EventReference> appended = BoundTracing.call(reacting, ( ) -> executor.execute(command, Execution.idempotent(idempotencyKey(policyName, event)).withRetry()));
 			return new Outcome.Reacted(commandName, appended);
 		} catch ( IdempotencyKeyConflictException reactedBefore ) {
 			// some keys stored, some not: the command decided otherwise than the first time, for an event

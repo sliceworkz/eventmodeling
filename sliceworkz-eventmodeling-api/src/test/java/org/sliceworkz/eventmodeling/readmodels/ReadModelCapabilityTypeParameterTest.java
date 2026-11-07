@@ -87,10 +87,7 @@ public class ReadModelCapabilityTypeParameterTest {
 	// javac's key for "incompatible types", stable across locales and versions
 	private static final String INCOMPATIBLE_TYPES = "compiler.err.prob.found.req";
 
-	// javac's key for "no suitable method found", which is how an argument is rejected on an overloaded method
-	private static final String NO_APPLICABLE_METHOD = "compiler.err.cant.apply.symbols";
-
-	// javac's key for "method cannot be applied", the same rejection on a method with one signature
+	// javac's key for "method cannot be applied", how an argument is rejected on a method with one signature
 	private static final String NOT_APPLICABLE = "compiler.err.cant.apply.symbol";
 
 	@TempDir
@@ -122,7 +119,7 @@ public class ReadModelCapabilityTypeParameterTest {
 	@Test
 	void aReadModelOfAnotherEventTypeIsStillRefused ( ) {
 		// what typing the result must not loosen: the class argument stays bounded by the context's event type
-		assertRejected("context.read(OrderDetails.class);", NO_APPLICABLE_METHOD);
+		assertRejected("context.read(OrderDetails.class);", NOT_APPLICABLE);
 	}
 
 	@Test
@@ -136,7 +133,7 @@ public class ReadModelCapabilityTypeParameterTest {
 	void theUnboundedReadIsTypedTheSameWay ( ) {
 		assertAccepted("AccountDetails d = unbounded.readUnbounded(AccountDetails.class, \"id\");");
 		assertRejected("String s = unbounded.readUnbounded(AccountDetails.class, \"id\");");
-		assertRejected("unbounded.readUnbounded(OrderDetails.class);", NO_APPLICABLE_METHOD);
+		assertRejected("unbounded.readUnbounded(OrderDetails.class);", NOT_APPLICABLE);
 	}
 
 	@Test

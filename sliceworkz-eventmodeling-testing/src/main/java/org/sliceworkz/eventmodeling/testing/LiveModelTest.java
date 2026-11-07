@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.testing;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
@@ -61,7 +62,7 @@ public abstract class LiveModelTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUN
 		}
 		
 		public TestDefinition event ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-			kernel().event(event, tags);
+			kernel().event(EphemeralEvent.of(event, tags));
 			return this;
 		}
 		

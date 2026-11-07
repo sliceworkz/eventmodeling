@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.benchmark.features.dispatchorder;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.automation.Automation;
@@ -47,7 +48,7 @@ public class DispatchOrderAutomation implements Automation<OrderReadyToDispatch,
 
 		// record the dispatch, keyed by the item so a re-handled item records nothing twice; the
 		// OrderDispatchedPublisher tells the world, keyed by this event
-		return context.event(new OrderDispatched(todoItem.orderId()), Tags.none(), "order/" + todoItem.orderId());
+		return context.event(EphemeralEvent.of(new OrderDispatched(todoItem.orderId()), Tags.none()).withIdempotencyKey("order/" + todoItem.orderId()));
 	}
 
 }

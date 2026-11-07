@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.automation;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,8 +75,8 @@ public class ProvidedEventIdempotencyTest extends AbstractMockDomainTest {
 	void sameKeyStoresTheEventOnce ( ) {
 		Mock domain = startPlainContext();
 
-		Optional<EventReference> first = domain.event(new FirstDomainEvent("once"), "key-1");
-		Optional<EventReference> second = domain.event(new FirstDomainEvent("once"), "key-1");
+		Optional<EventReference> first = domain.event(EphemeralEvent.of(new FirstDomainEvent("once"), Tags.none()).withIdempotencyKey("key-1"));
+		Optional<EventReference> second = domain.event(EphemeralEvent.of(new FirstDomainEvent("once"), Tags.none()).withIdempotencyKey("key-1"));
 
 		assertTrue(first.isPresent(), "the first append stores the event");
 		assertTrue(second.isEmpty(), "a repeat under the same key stores nothing, and says so with an empty reference");
@@ -86,8 +87,8 @@ public class ProvidedEventIdempotencyTest extends AbstractMockDomainTest {
 	void differentKeysStoreBothEvents ( ) {
 		Mock domain = startPlainContext();
 
-		domain.event(new FirstDomainEvent("one"), "key-1");
-		domain.event(new FirstDomainEvent("two"), "key-2");
+		domain.event(EphemeralEvent.of(new FirstDomainEvent("one"), Tags.none()).withIdempotencyKey("key-1"));
+		domain.event(EphemeralEvent.of(new FirstDomainEvent("two"), Tags.none()).withIdempotencyKey("key-2"));
 
 		assertEquals(2, stored(FirstDomainEvent.class));
 	}
@@ -96,8 +97,8 @@ public class ProvidedEventIdempotencyTest extends AbstractMockDomainTest {
 	void theKeyAppliesToTaggedEventsToo ( ) {
 		Mock domain = startPlainContext();
 
-		domain.event(new FirstDomainEvent("tagged"), Tags.of("customer", "123"), "key-1");
-		domain.event(new FirstDomainEvent("tagged"), Tags.of("customer", "123"), "key-1");
+		domain.event(EphemeralEvent.of(new FirstDomainEvent("tagged"), Tags.of("customer", "123")).withIdempotencyKey("key-1"));
+		domain.event(EphemeralEvent.of(new FirstDomainEvent("tagged"), Tags.of("customer", "123")).withIdempotencyKey("key-1"));
 
 		assertEquals(1, stored(FirstDomainEvent.class));
 	}
@@ -123,7 +124,7 @@ public class ProvidedEventIdempotencyTest extends AbstractMockDomainTest {
 		List<String> handled = Collections.synchronizedList(new ArrayList<>());
 
 		start(todoList, (item, context) -> {
-			Optional<EventReference> raised = context.event(new SecondDomainEvent(item), "handled:" + item);
+			Optional<EventReference> raised = context.event(EphemeralEvent.of(new SecondDomainEvent(item), Tags.none()).withIdempotencyKey("handled:" + item));
 			handled.add(item); // counted after the append, so a second count means a second append has completed
 			return raised;
 		});

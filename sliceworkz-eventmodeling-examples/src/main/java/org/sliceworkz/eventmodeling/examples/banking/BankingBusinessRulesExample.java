@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.events.TracingScope;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.CurrentPeriodReadModel;
@@ -111,7 +112,7 @@ public class BankingBusinessRulesExample {
 		step("1. A deposit of 12.000: the origin of the funds has to be explained");
 
 		DepositCommand unexplained = new DepositCommand(account, new BigDecimal("12000"), "Car sold", Overrides.none());
-		show(bank.evaluate(unexplained, alice));
+		show(evaluateAs(bank, unexplained, alice));
 		submit(bank, unexplained, alice);
 
 		DepositCommand explained = new DepositCommand(account, new BigDecimal("12000"), "Car sold",
@@ -127,7 +128,7 @@ public class BankingBusinessRulesExample {
 		System.out.println("An anonymous caller:");
 		show(bank.evaluate(overdraft));
 		System.out.println("Teller alice, before ticking the box:");
-		show(bank.evaluate(new WithdrawCommand(account, new BigDecimal("12500"), "Kitchen", today, Overrides.none()), alice));
+		show(evaluateAs(bank, new WithdrawCommand(account, new BigDecimal("12500"), "Kitchen", today, Overrides.none()), alice));
 
 		// still a large withdrawal too, so it needs the post-justified override as well
 		WithdrawCommand overdraftAndLarge = new WithdrawCommand(account, new BigDecimal("12500"), "Kitchen", today,
@@ -144,7 +145,7 @@ public class BankingBusinessRulesExample {
 		// ── 3. Strictly enforced: above the maximum ───────────────────────────────────────
 
 		step("3. A withdrawal of 60.000: strictly enforced maximum, nothing to tick");
-		show(bank.evaluate(new WithdrawCommand(account, new BigDecimal("60000"), "Boat", today, Overrides.of("maximum-withdrawal")), alice));
+		show(evaluateAs(bank, new WithdrawCommand(account, new BigDecimal("60000"), "Boat", today, Overrides.of("maximum-withdrawal")), alice));
 
 		// ── 4. Deferred enforcement: over the guarantee ───────────────────────────────────
 
@@ -152,7 +153,7 @@ public class BankingBusinessRulesExample {
 		submit(bank, new DepositCommand(account, new BigDecimal("95000"), "Inheritance",
 			Overrides.none().with(ORIGIN_OF_FUNDS_EXPLAINED, "Inheritance, notary deed on file")), alice);
 		DepositCommand overGuarantee = new DepositCommand(account, new BigDecimal("9000"), "Bonus");
-		show(bank.evaluate(overGuarantee, alice));
+		show(evaluateAs(bank, overGuarantee, alice));
 		submit(bank, overGuarantee, alice);
 		System.out.println("(ReportExcessBalanceAutomation picks the deferred enforcement up in the background)");
 
@@ -161,8 +162,10 @@ public class BankingBusinessRulesExample {
 		step("5. The large withdrawal from step 2 still has to be justified");
 		for ( AwaitingJustification awaiting : bank.read(OverridesAwaitingJustificationReadModel.class).awaitingJustification() ) {
 			System.out.println("Awaiting justification: " + awaiting);
-			bank.execute(new JustifyWithdrawalCommand(awaiting.accountId(), awaiting.withdrawal(),
-				"Customer renovating, confirmed by phone"), alice);
+			try ( TracingScope asAlice = TracingScope.bind(alice) ) {
+				bank.execute(new JustifyWithdrawalCommand(awaiting.accountId(), awaiting.withdrawal(),
+					"Customer renovating, confirmed by phone"));
+			}
 		}
 		System.out.println("Still awaiting after justifying: "
 			+ bank.read(OverridesAwaitingJustificationReadModel.class).awaitingJustification().size());
@@ -171,16 +174,26 @@ public class BankingBusinessRulesExample {
 
 		step("6. A withdrawal without description: a guideline, advice only");
 		WithdrawCommand undescribed = new WithdrawCommand(account, new BigDecimal("20"), "", today, Overrides.none());
-		show(bank.evaluate(undescribed, alice));
+		show(evaluateAs(bank, undescribed, alice));
 		submit(bank, undescribed, alice);
 
 		bank.terminate();
 		eventStorage.close();
 	}
 
+	/**
+	 * Evaluates a command on behalf of the actor the tracing names. The capabilities take no tracing: who a
+	 * call is made for is bound to the thread, the way an HTTP edge binds the caller of a request.
+	 */
+	private static Evaluation evaluateAs ( ClosingTheBooks bank, Command<BankingEvent> command, Tracing tracing ) {
+		try ( TracingScope scope = TracingScope.bind(tracing) ) {
+			return bank.evaluate(command);
+		}
+	}
+
 	private static void submit ( ClosingTheBooks bank, Command<BankingEvent> command, Tracing tracing ) {
-		try {
-			bank.execute(command, tracing);
+		try ( TracingScope scope = TracingScope.bind(tracing) ) {
+			bank.execute(command);
 			System.out.println("  -> executed");
 		} catch ( RuleViolationException rejected ) {
 			// what an HTTP binding answers with a 422: the same evaluation a preview returns

@@ -25,10 +25,10 @@ import java.util.Optional;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
-import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * A {@link TranslatorContext} decorator used by the interactive {@code translate(...)} path.
@@ -65,43 +65,13 @@ class CapturingTranslatorContext<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> implemen
 	}
 
 	@Override
-	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command ) {
-		return capture(delegate.execute(command));
+	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Execution execution ) {
+		return capture(delegate.execute(command, execution));
 	}
 
 	@Override
-	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return capture(delegate.execute(command, tracing));
-	}
-
-	@Override
-	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey ) {
-		return capture(delegate.execute(command, idempotencyKey));
-	}
-
-	@Override
-	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return capture(delegate.execute(command, idempotencyKey, tracing));
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command ) {
-		return capture(delegate.execute(command));
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing ) {
-		return capture(delegate.execute(command, tracing));
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey ) {
-		return capture(delegate.execute(command, idempotencyKey));
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return capture(delegate.execute(command, idempotencyKey, tracing));
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Execution execution ) {
+		return capture(delegate.execute(command, execution));
 	}
 
 	@Override
@@ -110,33 +80,8 @@ class CapturingTranslatorContext<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> implemen
 	}
 
 	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tracing tracing ) {
-		return capture(delegate.event(event, tracing));
-	}
-
-	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-		return capture(delegate.event(event, tags));
-	}
-
-	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
-		return capture(delegate.event(event, tags, tracing));
-	}
-
-	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, String idempotencyKey ) {
-		return capture(delegate.event(event, idempotencyKey));
-	}
-
-	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
-		return capture(delegate.event(event, tags, idempotencyKey));
-	}
-
-	@Override
-	public Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing ) {
-		return capture(delegate.event(event, tags, idempotencyKey, tracing));
+	public Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event ) {
+		return capture(delegate.event(event));
 	}
 
 }

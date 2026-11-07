@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.automation;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import java.util.Optional;
 
 import org.sliceworkz.eventmodeling.automation.AutomationContext;
@@ -24,9 +25,10 @@ import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
+import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 
 public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AutomationContext<DOMAIN_EVENT_TYPE> {
 
@@ -44,78 +46,23 @@ public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND
 	}
 
 	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command) {
-		return delegate.execute(command, tracing);
+	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, Execution execution ) {
+		return BoundTracing.call(tracing, ( ) -> delegate.execute(command, execution));
 	}
 
 	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, Tracing tracing) {
-		return delegate.execute(command, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey) {
-		return delegate.execute(command, idempotencyKey, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing) {
-		return delegate.execute(command, idempotencyKey, tracing);
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command) {
-		return delegate.execute(command, tracing);
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing) {
-		return delegate.execute(command, tracing);
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey) {
-		return delegate.execute(command, idempotencyKey, tracing);
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing) {
-		return delegate.execute(command, idempotencyKey, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tracing tracing) {
-		return delegate.event(event, tracing);
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Execution execution ) {
+		return BoundTracing.call(tracing, ( ) -> delegate.execute(command, execution));
 	}
 
 	@Override
 	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event) {
-		return delegate.event(event, tracing);
+		return BoundTracing.call(tracing, ( ) -> delegate.event(event));
 	}
 
 	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags) {
-		return delegate.event(event, tags, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing) {
-		return delegate.event(event, tags, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey) {
-		return delegate.event(event, Tags.none(), idempotencyKey, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey) {
-		return delegate.event(event, tags, idempotencyKey, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing) {
-		return delegate.event(event, tags, idempotencyKey, tracing);
+	public Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event ) {
+		return BoundTracing.call(tracing, ( ) -> delegate.event(event));
 	}
 
 }

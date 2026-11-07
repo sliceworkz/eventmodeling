@@ -242,7 +242,7 @@ the other, and when advising on who holds what, name the audience.
 
 - **`AllCapabilities` is a composition of audiences and declares nothing itself.** Interfaces
   narrower than the context, each the surface of one caller: `ApplicationCapabilities<D>`
-  (`execute`, `executeWithRetry`, `evaluate`, `read`, `aggregate`) for code driving the domain,
+  (`execute`, `evaluate`, `read`, `aggregate`) for code driving the domain,
   `OperationsCapabilities` (the two admin capabilities and health) for an operator's tooling,
   `PrivacyCapability` for an erasure request, `ProvidedEventCapability<D>` for the escape hatch, and
   the owner's own — `LifecycleCapability`, `PortsCapability`, `FeatureSliceCapabilities` — which stay
@@ -405,8 +405,8 @@ public interface BankingDomain {
 
 AccountId accountId = ACCOUNT.newId();                                  // mint
 result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
-        Tags.of(ACCOUNT.tag(accountId), CUSTOMER.tag(customerId)));     // tag
-EventQuery.of(EventFilter.forTags(ACCOUNT.tags(accountId)));  // query
+        ACCOUNT.tag(accountId), CUSTOMER.tag(customerId));              // tag
+EventFilter.forTags(ACCOUNT.tag(accountId));                            // query
 ACCOUNT.idIn(event.tags());                                             // read back, Optional<AccountId>
 ACCOUNT.idsIn(transfer.tags());                                         // an event about two accounts, Set<AccountId>
 ```
@@ -435,9 +435,13 @@ ACCOUNT.idsIn(transfer.tags());                                         // an ev
   the payload. Renaming either changes what new events carry and none of the old ones. The record's
   *class* name is not stored — the serde uses no default typing — so the record can be renamed or
   moved freely
-- **Tags are made through the entity, never through a static factory beside it.** `tag(id)`,
-  `tags(id)` and the bare `tag()` flag are instance methods, so the id type is checked and the
-  key cannot be misspelled. Static `Tag`/`Tags` factory classes taking an entity and an id — the
+- **Tags are made through the entity, never through a static factory beside it.** `tag(id)` and the
+  bare `tag()` flag are instance methods, so the id type is checked and the key cannot be misspelled.
+  The entity makes a `Tag` and nothing else: everything that takes tags takes `Tag...` too
+  (`EventFilter.forTags`, `.tagged`, `CommandResult.raiseEvent(event, Tag...)`), and `Tags.of(...)`
+  is for the few places that take a `Tags` alone. The alternative — a `tags(id)` beside `tag(id)`
+  answering the same tag as a `Tags` — loses because it is a second spelling of one call, and the
+  one people reach for first wraps a single tag where nothing needs it wrapped. Static `Tag`/`Tags` factory classes taking an entity and an id — the
   natural alternative — lose because they would duplicate these methods under a second name and
   cannot be typed by the entity they are handed. A tag whose value is not the identity of anything
   (a region, a channel) is an ordinary `Tag.of("region", "EU")`; not every tag is an entity
@@ -500,6 +504,16 @@ ACCOUNT.idsIn(transfer.tags());                                         // an ev
   `IllegalStateException` — loses because it fails an execution whose outcome is already fully
   determined (a command that reads, finds nothing to do and returns early), for a call that would
   change nothing about it. `CommandWithoutDecisionModelsTest` pins it
+- **How an execution is keyed is one choice, made by the command: `CommandResult.idempotencyKey(key,
+  CallerKey)` or `idempotencyKey(CallerKey)`.** `CallerKey` says how the caller's key relates to the
+  command's own: `REQUIRED`, `REFUSED`, `PREFERRED` (the caller's wins, the command's is the fallback) or
+  `IGNORED` (the command's wins); saying nothing leaves the caller's key, if any, as the key. A
+  combination that makes no sense (`REQUIRED` beside a key of the command's own, `PREFERRED`/`IGNORED`
+  without one) is an `IllegalArgumentException` where the command says it, and a caller breaking the
+  command's choice an `IllegalStateException` before anything is appended. The alternative — a method per
+  choice (`requireIdempotencyKey`, `fallbackIdempotencyKey`, `exclusiveIdempotencyKey`, …) — loses because
+  five unrelated-looking features hid one question asked of one key. `CommandResultCallerKeyTest` pins the
+  table
 - **A command-level key on a command raising several events becomes a key per event.** The store
   holds a key per event, scoped to the stream, and refuses a batch repeating one — so
   `CommandResultImpl.applyIdempotencyKey` leaves a single event's key as it is (what every key on
@@ -609,7 +623,7 @@ and, for a savepoint model, its `initQuery` — with their item bounds as they a
 - **It is locked whether or not the model found a savepoint.** A model that found none replayed from
   the beginning, and a savepoint appearing after the boundary makes that answer just as stale. The
   cost of being conservative here is a false conflict for a model whose `initQuery` seeds something
-  the command does not decide on, which `executeWithRetry` clears; the cost of the other way round is
+  the command does not decide on, which a retrying `Execution` clears; the cost of the other way round is
   silent. There is deliberately no `lockFilter()` override to opt out — it would be a second,
   greppable way to turn the check off, for a case nobody has hit
 - **Item bounds go in as they are, and `AppendCriteria` prunes them against the head.** An item
@@ -627,20 +641,26 @@ and, for a savepoint model, its `initQuery` — with their item bounds as they a
   `DCBDecisionModelTest`'s `optimisticLocking_*_conflictOnSavepointEventType` pair covers the same
   through the classic models
 
-**`executeWithRetry` — the DCB retry loop, written once so it cannot be hand-rolled wrong:**
+**`Execution` — how a command is executed, and the DCB retry loop, written once so it cannot be
+hand-rolled wrong:**
 - An `OptimisticLockingException` is the routine DCB outcome under contention, and the documented
-  answer has always been "re-execute, which re-projects and re-decides" — but the framework shipped
-  nothing that did it, so every caller wrote the same bounded loop, and the natural mistake (retrying
-  with the stale decision instead of re-reading) is exactly the one DCB exists to prevent. Every
-  `execute` overload now has an `executeWithRetry` twin taking a trailing `RetryPolicy`, plus a
-  policy-less convenience per command shape using `RetryPolicy.DEFAULT` (3 attempts). What makes the
-  retry correct is not the helper but the execution model it rides on: each `execute()` builds a fresh
-  command context, so the decision models are re-projected and the command re-decides against the new
-  facts — the helper just calls it again
-- **They are `default` methods on `CommandExecutionCapability`**, so they reach the bounded context,
-  `AutomationContext` and `TranslatorContext` with zero impl change, and are dispatched fine
-  through the context proxy (the impl inherits them as ordinary methods). One private loop, fifteen
-  one-line delegates
+  answer has always been "re-execute, which re-projects and re-decides" — so every caller wrote the
+  same bounded loop, and the natural mistake (retrying with the stale decision instead of re-reading)
+  is exactly the one DCB exists to prevent. `execute(command, Execution.retrying())` is that loop.
+  What makes the retry correct is not the loop but the execution model it rides on: each attempt
+  builds a fresh command context, so the decision models are re-projected and the command re-decides
+  against the new facts
+- **There are two `execute` forms per command shape: `execute(command)` and `execute(command,
+  Execution)`.** An `Execution` (api, `commands`) is an idempotency key and a `RetryPolicy`, built with
+  `Execution.retrying()`, `Execution.retrying(policy)`, `Execution.idempotent(key)` and the withers
+  `withRetry(...)`/`withIdempotencyKey(...)`; `Execution.ONCE` is no key and one attempt, what
+  `execute(command)` does. The alternative — an `executeWithRetry` beside `execute`, each overloaded per
+  key — loses because it spread one choice over two method names and ten overloads, where a value says
+  it once, the way an `EventQuery` says how a filter is read
+- **The loop lives in the bounded context** (`RetryOnConflict`, impl, called from
+  `BoundedContextImpl.execute(command, Execution)`). A component's context (`AutomationContext`,
+  `TranslatorContext`) forwards the `Execution` as it is, under its own tracing, so the retry runs
+  where the attempts are made, and `Reaction` (a policy) asks for it the same way
 - **Only `OptimisticLockingException` is ever caught.** `BusinessException`,
   `IllegalArgumentException`, `IllegalStateException` and `EventStorageException` propagate from the
   attempt that raised them — the taxonomy in WHERE-VALIDATIONS-GO.md demands opposite responses per
@@ -698,7 +718,7 @@ opposite responses:**
   stack trace is what says so. A rule thrown as an `IllegalStateException` is reported as a failure
   for the same reason: the kernel cannot tell it from a bug, which is why the examples throw
   `BusinessException`
-- **Nothing is retried differently.** `executeWithRetry` catches only the conflict, so a retry that
+- **Nothing is retried differently.** A retrying `Execution` catches only the conflict, so a retry that
   ends in a rejection reports one `CommandFailedOnOptimisticLocking` per conflicted attempt and then
   one `CommandRejected` — each attempt observable under its own outcome, as before. The observer sees
   the same: one `CommandExecution` per attempt, whatever its outcome
@@ -754,7 +774,7 @@ framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook
   `IllegalStateException` (a bug, `CommandFailed`): the recorded violations must be the judged ones.
   `check` is on `CommandContext`, where the decision models are read
 - **`RuleViolationException extends BusinessException`**, so everything that tells a rejection from a
-  bug keeps doing so: `CommandRejected`, `executeWithRetry` leaving it alone, `businessError()` in the
+  bug keeps doing so: `CommandRejected`, a retrying `Execution` leaving it alone, `businessError()` in the
   harness. It carries the `Evaluation` a preview would have answered, so an HTTP binding answers a
   rejected `POST` (422) with the same shape a `QUERY` preview returns
 - **Who may override is the command's decision, through `RuleCheck.overridableWhen(authorized, whyNot)`,
@@ -767,7 +787,7 @@ framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook
   `CommandContext.actor()`, read from the `Tracing` — the same value as the `x-actor` tag
 - **Overrides are an input of the command** (`Overrides`, exposed by `implements Overriding`; a record
   component `Overrides overrides` suffices), not an `execute` parameter and not a field of `Tracing`.
-  No `execute`/`executeWithRetry` overload changes, and whatever builds a command without a user
+  No `execute` signature changes, and whatever builds a command without a user
   (automations, translators, retries, tests) overrides nothing. `Tracing` loses because it continues
   down a flow into translators and correlated automations, and an override must never reach a step the
   user did not see. A request for a rule that is not violated is ignored and records nothing
@@ -784,7 +804,8 @@ framework half lives in `org.sliceworkz.eventmodeling.rules` (api) and `RuleBook
   Its canonical constructor is lenient, as every payload record's must be. `RuleJudgement` does expose
   `overridable` and `explanationRequired` as JSON properties, deliberately (`@JsonProperty`), since a
   front end lays its widgets out by them; `@JsonIgnoreProperties(ignoreUnknown = true)` lets it read back
-- **`evaluate(command[, tracing])` on `CommandEvaluationCapability`, filed on `ApplicationCapabilities`**:
+- **`evaluate(command)` on `CommandEvaluationCapability`, filed on `ApplicationCapabilities`**, for the actor
+  of the bound `TracingScope`:
   the command run as an execution, judged, nothing appended, no idempotency key resolved, no
   `CommandExecuted`/`CommandRejected` emitted (a front end may evaluate per keystroke; the monitoring
   record is of what happened), a `BusinessException` the answer `REJECTED` with the judgements made
@@ -1450,12 +1471,16 @@ processor:**
   todo list that still held items already handled. `AutomationCatchUpOrderingTest` pins it, including the
   inclusive boundary (the event we produced counts as projected) and the `index` tiebreak upcasting produces
 - **`ProvidedEventCapability.event(...)` takes an idempotency key**, so an automation raising events
-  directly has the dedup lever a command already had through `CommandResult.idempotencyKey`. The key is
+  directly has the dedup lever a command already had through `CommandResult.idempotencyKey`. There are
+  two forms: `event(data)`, and `event(EphemeralEvent)` for an event with tags or a key —
+  `event(EphemeralEvent.of(data, tags).withIdempotencyKey(key))`, the value the eventstore appends. The
+  alternative — an overload per combination of tags and key — loses because it says in four signatures
+  what the eventstore already says in one value. The key is
   scoped to the stream, and a repeat is silently ignored by storage — which surfaces as `Optional.empty()`,
   the same value as "not appended", the two being deliberately not distinguished (for an automation the
   work is done either way, and the todo list drops the item once the original event is projected). Derive
   the key from the todo item, never from the attempt, or every replay gets a fresh key and dedups nothing.
-  The overloads are on the shared capability, so translators get them too. `ProvidedEventIdempotencyTest`
+  Both forms are on the shared capability, so translators get them too. `ProvidedEventIdempotencyTest`
   covers it per backend plus end to end through an automation handed the same item twice
 - **A stopped automation is visible and restartable, through `AutomationAdminCapability` on the bounded
   context.** `automations()` returns an `AutomationStatus` each — id, class, running, items failed,
@@ -1895,7 +1920,7 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   models, inside its own consistency boundary, exactly as for a user. The alternative — a policy handed an
   `AutomationContext` and executing the command itself — loses because everything that makes the policy
   safe to redeliver (the key, the trace, the tracing, the rejection handling) would then be the policy
-  author's to get right, which is exactly the hand-rolled shape `executeWithRetry` and `Publication`
+  author's to get right, which is exactly the hand-rolled shape `Execution.retrying()` and `Publication`
   exist to remove; and because a policy that can call a port becomes a side-effect automation with no
   way to put an item aside, which is what a to-do list is for
 - **How it runs.** A `ProjectorProcessor` per policy over the domain stream, leader-only, one lease per
@@ -2052,19 +2077,13 @@ query where only a filter can be followed is one whose mistakes compile and then
   the last event *read*, so an event the aggregate does not read, stored after that one, conflicts every
   append and every retry: the aggregate can never append again. `AggregateFilterTest` pins the default,
   that case, and both kinds of event arriving between load and append
-- **`ReadModel`, `TodoListReadModel` and `DecisionModel` declare `eventFilter()` and may override
-  `eventQuery()`**, because the live path uses all of a query: a live model or a decision model may
-  read the newest event backwards with a limit of one, and `initQuery()` is the savepoint pattern. They
-  are the eventstore's `Projection`, whose abstract method is `eventFilter()` and whose `eventQuery()`
-  defaults to `EventQuery.of(eventFilter())`, so the ordinary read model declares its filter and nothing
-  else, and one that reads otherwise overrides `eventQuery()` built on the filter
-  (`EventQuery.of(eventFilter()).backwards().limit(1)`). The framework's own projections that wrap
-  something carrying a query — `ReadModelAdapter`, the decision-model reads `SavepointRead` and
-  `CompositeDecisionModel` — answer `eventFilter()` with that query's filter and keep their
-  `eventQuery()` override, so a wrapped backwards or limited read is never turned into a forward one.
-  The alternative — a filter-only interface for background read models — loses because it splits one
-  concept in two for a read model registered both ways, and moves the choice of projection from the
-  registration into the type
+- **`ReadModel`, `TodoListReadModel` and `DecisionModel` declare `eventFilter()` and keep an overridable
+  `EventQuery`** — the eventstore's `Projection`: `eventQuery()` defaults to `EventQuery.of(eventFilter())`,
+  and is overridden only where the live path uses more of it: a live model or a decision model reading the
+  newest event backwards with a limit of one builds `EventQuery.of(eventFilter()).backwards().limit(1)`,
+  and `initQuery()` is the savepoint pattern. The alternative — a filter-only interface for background
+  read models — loses because it splits one concept in two for a read model registered both ways, and
+  moves the choice of projection from the registration into the type
 - **So an eventually consistent registration is held to a forward read at `build()`**:
   `rejectEventuallyConsistentReadModelsThatCannotBeReadForward` names every eventually consistent read
   model — a todo list included — whose `eventQuery()` reads backwards, is limited or carries a
@@ -2227,14 +2246,14 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   `kernel`) — never in the canonical constructor, `readFrom` or `storeOn`. That is load-bearing: a
   tracing copied field by field or read back from a stored event reproduces the id exactly instead of
   silently starting a new flow, and all events of one append share one id. An edge that wants its own
-  id sets it with `.correlationId(id)`; a no-tracing `execute`/`incoming` gets one minted by the
-  substituted `Tracing.init(instance)`, so every flow has an id from its first event
+  id sets it with `.correlationId(id)` and binds it; an `execute`/`incoming` with no tracing bound gets
+  one minted by the substituted `Tracing.init(instance)`, so every flow has an id from its first event
 - **Translators continue the flow of what they translate.** The async path derives a per-event tracing
   in `InboundModule.TranslatorAdapter`: the inbound event's correlation id when it carries one, a fresh
   id when it does not (one inbound event is one flow). The interactive `translate(...)` path carries
   the caller's tracing through. Both wrap the translator's context in `TracingTranslatorContext`, which
-  fills the tracing into every no-tracing capability overload — before that existed, a translator's
-  raised events carried only instance tags, losing actor and channel too
+  binds the tracing around every capability call it forwards (`BoundTracing`) — without it, a
+  translator's raised events carried only instance tags, losing actor and channel too
 - **Automations are the one hop the framework cannot bridge alone**: a todo item is a user type
   projected out of history, and nothing links it to the event that put it on the list.
   `CorrelatedTodoItem` is the opt-in link — the todo list captures
@@ -2255,21 +2274,32 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
 - **An edge makes one request one flow by binding its tracing to the thread: `TracingScope`.** An HTTP
   layer binds the request's tracing upfront (`try ( TracingScope s = TracingScope.bind(tracing) )`, or
   a before/after handler pair) and the framework picks it up wherever it has none of its own on that
-  thread: the **no-tracing overloads** of the context's capabilities (`execute(command)`, `read`,
-  `event`, `evaluate`, `aggregate`, and `incoming`, `translate` and `read` on `inbound()`/`outbound()`)
-  use it instead of minting
-  (`BoundedContextImpl.callerTracing()`), and a **monitored port call** with no component tracing — a
-  REST endpoint's own call, attributed to its slice — is reported under it (`PortReporter.start`). An
-  explicit tracing always wins, a component running on the thread keeps its own, and nothing is
+  thread: the context's capabilities (`execute(command)`, `read`, `event`, `evaluate`, `aggregate`, and
+  `incoming`, `translate` and `read` on `inbound()`/`outbound()`) use it instead of minting (`BoundedContextImpl.callerTracing()`), and a
+  **monitored port call** with no component tracing — a REST endpoint's own call, attributed to its
+  slice — is reported under it (`PortReporter.start`). The innermost binding wins, a component's own
+  context binds the tracing of what it handles around every call it forwards, and nothing is
   inherited by another thread; processor threads carry the tracing of the events they handle. The
   alternative — a correlation id per call — loses because an endpoint that checks access through a
   port, reads and then executes becomes three unrelated flows in the monitoring record. A binding
   belongs to its thread: `close()` restores what was bound before (scopes nest), is idempotent, and
   does nothing on another thread
+- **No capability takes a tracing as an argument; binding one is the only way to say who a call is
+  for.** The alternative — a `Tracing` parameter overload beside every capability method — loses
+  because it doubled every overload set (`execute` and `executeWithRetry` in eighteen forms, seven `event`
+  forms) for something an edge decides once per request, and a caller passing a tracing to one call and
+  none to the next split its own flow with nothing to say so. `TracingScope.call(tracing, () -> ...)` and
+  `run(...)` are the expression form for one call made on someone's behalf. A `read(X.class, tracing,
+  id)` left over still compiles — `Object...` takes a `Tracing` as readily as an id — so
+  `BoundedContextImpl.read`/`readUnbounded` refuse a `Tracing` among the parameters with the remedy
+  (`LiveModelConstructionThroughAReadTest`). Inside the framework the component
+  contexts (`AutomationContextImpl`, `TranslatorContextImpl`, `TracingTranslatorContext`, `Reaction`)
+  bind their tracing around each forwarded call with `BoundTracing` (impl), and `BoundedContextImpl`
+  keeps its traced methods private
 - `CorrelationPropagationTest` pins every hop; `TracingTest` pins minting, the tag round trip, and
   that a legacy event without the tag reads back as a null id (never a minted one); `TracingScopeTest`
   the binding, and `MonitoredPortTest.aRequestsBoundTracingIsTheFlowOfItsPortCallsAndOfTheCommandItExecutes`
-  (with its two neighbours) the port call and the command picking it up, and an explicit tracing winning
+  (with its two neighbours) the port call and the command picking it up, and an inner binding winning
 
 **An instance heartbeat — a killed process says nothing, so liveness is a bookmark, not an event:**
 - **The problem.** A reader of the monitoring stream learns a process is gone when it reports

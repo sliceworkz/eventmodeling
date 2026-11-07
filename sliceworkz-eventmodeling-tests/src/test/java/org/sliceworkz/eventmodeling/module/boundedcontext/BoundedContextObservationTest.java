@@ -17,6 +17,9 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import org.sliceworkz.eventmodeling.commands.Execution;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -60,7 +63,6 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 /**
@@ -100,7 +102,7 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(observedBuilder());
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("alice").channel("web");
-		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), tracing);
+		BoundTracing.call(tracing, ( ) -> domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two")));
 
 		Recording execution = observer.last(Observation.CommandExecution.class);
 		Observation.CommandExecution started = execution.observation(Observation.CommandExecution.class);
@@ -138,8 +140,8 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 	void anIdempotentRepeatIsExecutedWithNothingAppended ( ) {
 		Mock domain = buildBoundedContext(observedBuilder());
 
-		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), "key-1");
-		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), "key-1");
+		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), Execution.idempotent("key-1"));
+		domain.execute(new CorrelationPropagationTest.RaiseTwoEventsCommand("one", "two"), Execution.idempotent("key-1"));
 
 		Outcome.Executed repeat = observer.last(Observation.CommandExecution.class).outcome(Outcome.Executed.class);
 		assertEquals(Map.of(EventType.of(FirstDomainEvent.class), 2), repeat.raisedPerType(), "what the command raised");
@@ -179,11 +181,11 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 	void aProvidedEventIsObservedAndARepeatIsProvidedAsNothing ( ) {
 		Mock domain = buildBoundedContext(observedBuilder());
 
-		Optional<EventReference> first = domain.event(new FirstDomainEvent("provided"), "provided-1");
+		Optional<EventReference> first = domain.event(EphemeralEvent.of(new FirstDomainEvent("provided"), Tags.none()).withIdempotencyKey("provided-1"));
 		assertEquals(first, observer.last(Observation.ProvidedEvent.class).outcome(Outcome.Provided.class).reference());
 		assertEquals(EventType.of(FirstDomainEvent.class), observer.last(Observation.ProvidedEvent.class).observation(Observation.ProvidedEvent.class).eventType());
 
-		domain.event(new FirstDomainEvent("provided"), "provided-1");
+		domain.event(EphemeralEvent.of(new FirstDomainEvent("provided"), Tags.none()).withIdempotencyKey("provided-1"));
 		assertEquals(Optional.empty(), observer.last(Observation.ProvidedEvent.class).outcome(Outcome.Provided.class).reference());
 	}
 
@@ -194,7 +196,7 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 		Mock domain = buildBoundedContext(builder);
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("partner").channel("api");
-		domain.inbound().incoming(new SomeInboundEvent("in"), tracing);
+		BoundTracing.run(tracing, ( ) -> domain.inbound().incoming(new SomeInboundEvent("in")));
 
 		Recording incoming = observer.last(Observation.IncomingEvent.class);
 		assertEquals(EventType.of(SomeInboundEvent.class), incoming.observation(Observation.IncomingEvent.class).eventType());

@@ -42,6 +42,8 @@ import org.sliceworkz.eventmodeling.boundedcontext.PrivacyCapability;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
+import org.sliceworkz.eventmodeling.commands.Execution;
+import org.sliceworkz.eventmodeling.module.dcb.RetryOnConflict;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarted;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent.BoundedContextStarting;
@@ -535,23 +537,37 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 * READ MODEL CONSULTATION: a live projection, or the registered instance of an eventually consistent one
 	 */
 
-	@Override
-	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params ) {
+	// traced variant: a capability takes no tracing; the no-tracing overload binds one
+	private <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params ) {
 		return readmodelModule.read(readModelClass, tracing.instance(instance), params);
 	}
 
 	@Override
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params ) {
+		rejectATracingAmong(readModelClass, params);
 		return readmodelModule.read(readModelClass, callerTracing(), params);
+	}
+
+	/**
+	 * A read takes no tracing, and a {@link Tracing} among its parameters is not one: it would be handed to the
+	 * read model's constructor, where no read model expects it. Refused with the remedy, since the call
+	 * compiles — {@code Object...} takes a {@code Tracing} as readily as an id.
+	 */
+	private static void rejectATracingAmong ( Class<?> readModelClass, Object[] params ) {
+		if ( params != null && java.util.Arrays.stream(params).anyMatch(Tracing.class::isInstance) ) {
+			throw new IllegalArgumentException(("a read of %s was handed a Tracing among its parameters; a read takes no tracing: "
+				+ "bind it around the read with TracingScope.call(tracing, () -> read(%s.class, ...))").formatted(readModelClass.getSimpleName(), readModelClass.getSimpleName()));
+		}
 	}
 
 	@Override
 	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL readUnbounded ( Class<READ_MODEL> readModelClass, Object... params ) {
+		rejectATracingAmong(readModelClass, params);
 		return readmodelModule.liveModelUnbounded(readModelClass, callerTracing(), params);
 	}
 
-	@Override
-	public <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL readUnbounded ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params ) {
+	// traced variant: a capability takes no tracing; the no-tracing overload binds one
+	private <READ_MODEL extends ReadModel<? extends DOMAIN_EVENT_TYPE>> READ_MODEL readUnbounded ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params ) {
 		return readmodelModule.liveModelUnbounded(readModelClass, tracing.instance(instance), params);
 	}
 
@@ -653,33 +669,23 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		return event(event, callerTracing());
 	}
 
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tracing tracing ) {
+	// traced variant: a capability takes no tracing; the no-tracing overload binds one
+	private Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tracing tracing ) {
 		return event(event, Tags.none(), tracing.instance(instance));
 	}
 
 	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags ) {
-		return event(event, tags, callerTracing());
+	public Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event ) {
+		return event(event.data(), event.tags(), event.idempotencyKey(), callerTracing());
 	}
 
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey ) {
-		return event(event, Tags.none(), idempotencyKey, callerTracing());
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
-		return event(event, tags, idempotencyKey, callerTracing());
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
+	// traced variant: a capability takes no tracing; the no-tracing overload binds one
+	private Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing ) {
 		return event(event, tags, null, tracing);
 	}
 
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing ) {
+	// traced variant: a capability takes no tracing; the no-tracing overload binds one
+	private Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing ) {
 		tracing = tracing.instance(instance);
 
 		try ( Observation.Scope<Outcome.Provided> scope = observer.start(new Observation.ProvidedEvent(name, EventType.of(event.getClass()), tracing)) ) {
@@ -727,18 +733,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		}
 
 		@Override
-		public void incoming ( INBOUND_EVENT_TYPE event, Tracing tracing ) {
-			BoundedContextImpl.this.incoming(event, tracing);
-		}
-
-		@Override
 		public void incoming ( INBOUND_EVENT_TYPE event, String idempotencyKey ) {
 			BoundedContextImpl.this.incoming(event, idempotencyKey);
-		}
-
-		@Override
-		public void incoming ( INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
-			BoundedContextImpl.this.incoming(event, idempotencyKey, tracing);
 		}
 
 		@Override
@@ -747,17 +743,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		}
 
 		@Override
-		public List<EventReference> translate ( INBOUND_EVENT_TYPE event, Tracing tracing ) {
-			return BoundedContextImpl.this.translate(event, tracing);
-		}
-
-		@Override
-		public <READ_MODEL extends ReadModel<? extends INBOUND_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params ) {
-			return inboundReadmodelModule.read(readModelClass, tracing.instance(instance), params);
-		}
-
-		@Override
 		public <READ_MODEL extends ReadModel<? extends INBOUND_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params ) {
+			rejectATracingAmong(readModelClass, params);
 			return inboundReadmodelModule.read(readModelClass, callerTracing(), params);
 		}
 
@@ -771,12 +758,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private class OutboundCapabilitiesImpl implements OutboundCapabilities<OUTBOUND_EVENT_TYPE> {
 
 		@Override
-		public <READ_MODEL extends ReadModel<? extends OUTBOUND_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Tracing tracing, Object... params ) {
-			return outboundReadmodelModule.read(readModelClass, tracing.instance(instance), params);
-		}
-
-		@Override
 		public <READ_MODEL extends ReadModel<? extends OUTBOUND_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params ) {
+			rejectATracingAmong(readModelClass, params);
 			return outboundReadmodelModule.read(readModelClass, callerTracing(), params);
 		}
 
@@ -840,8 +823,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		return evaluate(command, callerTracing());
 	}
 
-	@Override
-	public Evaluation evaluate ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
+	// traced variant: a capability takes no tracing; the no-tracing overload binds one
+	private Evaluation evaluate ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
 		return dcbDomainModule.evaluate(command, tracing.instance(instance));
 	}
 
@@ -850,8 +833,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		return evaluate(command, callerTracing());
 	}
 
-	@Override
-	public Evaluation evaluate ( CommandWithResult<DOMAIN_EVENT_TYPE, ?> command, Tracing tracing ) {
+	// traced variant: a capability takes no tracing; the no-tracing overload binds one
+	private Evaluation evaluate ( CommandWithResult<DOMAIN_EVENT_TYPE, ?> command, Tracing tracing ) {
 		return dcbDomainModule.evaluate(command, tracing.instance(instance));
 	}
 
@@ -869,46 +852,26 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	 */
 
 	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command ) {
-		return execute(command, callerTracing());
+	public Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, Execution execution ) {
+		return RetryOnConflict.run(execution.retryPolicy(), ( ) -> execute(command, execution.idempotencyKey(), callerTracing()));
+	}
+
+	private Optional<EventReference> execute ( Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
+		return idempotencyKey == null
+				? dcbDomainModule.execute(command, tracing.instance(instance))
+				: dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
 	}
 
 	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, Tracing tracing ) {
-		return dcbDomainModule.execute(command, tracing.instance(instance));
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Execution execution ) {
+		return RetryOnConflict.run(execution.retryPolicy(), ( ) -> execute(command, execution.idempotencyKey(), callerTracing()));
 	}
 
-	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey ) {
-		return execute(command, idempotencyKey, callerTracing());
+	private <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute ( CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing ) {
+		return idempotencyKey == null
+				? dcbDomainModule.execute(command, tracing.instance(instance))
+				: dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
 	}
-
-	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing ) {
-		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command) {
-		return execute(command, callerTracing());
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing) {
-		return dcbDomainModule.execute(command, tracing.instance(instance));
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey) {
-		return execute(command, idempotencyKey, callerTracing());
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing) {
-		return dcbDomainModule.execute(command, idempotencyKey, tracing.instance(instance));
-	}
-
-
 
 	/*
 	 * AGGREGATE SUPPORT
@@ -918,8 +881,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		return aggregate(aggregateClass, identity, callerTracing());
 	}
 
-	@Override
-	public <T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate(Class<T> aggregateClass, Tags identity, Tracing tracing) {
+	// traced variant: a capability takes no tracing; the no-tracing overload binds one
+	private <T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate(Class<T> aggregateClass, Tags identity, Tracing tracing) {
 		return aggregateModule.aggregate(aggregateClass, identity, tracing.instance(instance));
 	}
 	

@@ -144,7 +144,7 @@ command, with `overridableWhen(authorized, whyNot)`:
 
 - **It sits inside the consistency boundary.** `OverdraftExceptionsTodayDecisionModel` is one of the
   command's decision models, so its query is part of the lock filter. Two overdrafts by the same teller
-  racing past the quota cannot both succeed: the second append conflicts, and `executeWithRetry`
+  racing past the quota cannot both succeed: the second append conflicts, and `Execution.retrying()`
   re-decides on a count that includes the first.
 - **`whyNot` is required when the answer is no**, because it is what the actor is shown instead of a
   checkbox: "You already granted 3 overdraft exceptions today, the maximum is 3".
@@ -159,10 +159,10 @@ command, with `overridableWhen(authorized, whyNot)`:
 
 The history a quota counts is written by the kernel, not by the domain: every event raised with an
 override carries `x-rule-overridden:<rule>`, and every event carries `x-actor`. So a per-actor count
-across all accounts is one tag filter, the decision model's `eventFilter()`:
+across all accounts is one tag query:
 
 ```java
-EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.overriddenBy(teller, NO_OVERDRAFT))
+EventQuery.of(EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.overriddenBy(teller, NO_OVERDRAFT)))
 ```
 
 ## 6. Overrides are an input of the command
@@ -222,7 +222,10 @@ event payload, its constructor is lenient and never throws.
 ## 8. Evaluating before executing
 
 ```java
-Evaluation evaluation = bank.evaluate(command, tracing);    // nothing is appended
+Evaluation evaluation;
+try ( TracingScope asCaller = TracingScope.bind(tracing) ) {   // who it is evaluated for
+    evaluation = bank.evaluate(command);                     // nothing is appended
+}
 ```
 
 `evaluate` runs the command exactly as `execute` would — decision models projected, its
@@ -452,7 +455,7 @@ as they are then.
 | Who may override | `.overridableWhen(authorized, whyNot)` on the check, on decision models | `BLOCKS` with `reason`, or `OVERRIDE_REQUIRED` / `OVERRIDDEN` |
 | What the user asked for | `Overrides` component, `implements Overriding` | override requests the kernel judges |
 | What to record | `context.ruleViolations()` in the payload; rule tags added by the kernel | audit, quota counts, follow-ups |
-| Preview | `evaluate(command, tracing)`; HTTP `QUERY` | `Evaluation`, nothing appended |
+| Preview | `evaluate(command)`, for the bound caller; HTTP `QUERY` | `Evaluation`, nothing appended |
 | Rejected execution | `RuleViolationException` (a `BusinessException`) | carries the same `Evaluation`; HTTP `422` |
 | Follow-up | todo list or read model on `RuleTags` | justification, deferred enforcement |
 | Settling a follow-up | `context.justifies(...)` / `context.enforces(...)` | `x-rule-justified` / `x-rule-enforced` link tag, `RuleFollowUp` for the payload |

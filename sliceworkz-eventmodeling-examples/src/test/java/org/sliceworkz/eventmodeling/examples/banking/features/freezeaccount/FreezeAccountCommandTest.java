@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.freezeaccount;
 
+import org.sliceworkz.eventstore.events.Tags;
 import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.ACCOUNT;
 import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CUSTOMER;
 
@@ -55,17 +56,17 @@ public class FreezeAccountCommandTest extends CommandTest<BankingEvent, BankingI
 	@Test
 	void anOpenAccountIsFrozen ( ) {
 		given()
-			.event(opened(), ACCOUNT.tags(ACCOUNT_1))
+			.event(opened(), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.when(new FreezeAccountCommand(ACCOUNT_1, " suspected fraud "))
 			.then()
-			.event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1));
+			.event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), Tags.of(ACCOUNT.tag(ACCOUNT_1)));
 	}
 
 	@Test
 	void anAccountIsFrozenOnce ( ) {
 		given()
-			.event(opened(), ACCOUNT.tags(ACCOUNT_1))
-			.event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), ACCOUNT.tags(ACCOUNT_1))
+			.event(opened(), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
+			.event(new AccountFrozen(ACCOUNT_1, "suspected fraud"), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.when(new FreezeAccountCommand(ACCOUNT_1, "again"))
 			.then()
 			.businessError("Account acc-1 is already frozen");
@@ -74,8 +75,8 @@ public class FreezeAccountCommandTest extends CommandTest<BankingEvent, BankingI
 	@Test
 	void aClosedAccountIsNotFrozen ( ) {
 		given()
-			.event(opened(), ACCOUNT.tags(ACCOUNT_1))
-			.event(new AccountClosed(ACCOUNT_1, LocalDate.of(2025, 3, 1)), ACCOUNT.tags(ACCOUNT_1))
+			.event(opened(), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
+			.event(new AccountClosed(ACCOUNT_1, LocalDate.of(2025, 3, 1)), Tags.of(ACCOUNT.tag(ACCOUNT_1)))
 			.when(new FreezeAccountCommand(ACCOUNT_1, "too late"))
 			.then()
 			.businessError("Account acc-1 is closed");

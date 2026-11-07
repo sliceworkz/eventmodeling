@@ -27,7 +27,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * Lightweight live read model that finds the active month for an account
@@ -57,10 +56,9 @@ public class ActiveMonthReadModel implements ReadModel<BankingEvent> {
 
 	@Override
 	public EventFilter eventFilter() {
-		return EventFilter.forTypes(AccountOpened.class, MonthOpened.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+		return EventFilter.forTypes(AccountOpened.class, MonthOpened.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
 	}
 
-	/** Only the newest of them says which month is active: read backwards, one event. */
 	@Override
 	public EventQuery eventQuery() {
 		return EventQuery.of(eventFilter()).backwards().limit(1);

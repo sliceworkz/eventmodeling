@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import org.sliceworkz.eventmodeling.commands.Execution;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,7 +49,6 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDomainEvent;
-import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
@@ -58,7 +58,7 @@ import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 /**
- * Pins {@code executeWithRetry} down: only an {@link OptimisticLockingException} is retried, and a
+ * Pins a retrying {@code Execution} down: only an {@link OptimisticLockingException} is retried, and a
  * retry is a full re-execution — a fresh command context, so the decision models are re-projected
  * and the command re-decides against the facts that made the previous attempt conflict. When the
  * {@link RetryPolicy}'s attempts are exhausted, the last conflict is rethrown unchanged with the
@@ -208,7 +208,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		Mock domain = buildDomain();
 		RetryableCommand command = new RetryableCommand(1, () -> domain.event(new FirstDomainEvent("conflict")));
 
-		Optional<EventReference> reference = domain.executeWithRetry(command, RetryPolicy.of(3));
+		Optional<EventReference> reference = domain.execute(command, Execution.retrying(RetryPolicy.of(3)));
 
 		assertTrue(reference.isPresent(), "the retried command should have appended its event");
 		assertEquals(2, command.attempts.get(), "one conflicted attempt plus one successful re-execution");
@@ -224,7 +224,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		RetryableCommand command = new RetryableCommand(100, () -> domain.event(new FirstDomainEvent("conflict")));
 
 		OptimisticLockingException thrown = assertThrows(OptimisticLockingException.class,
-				() -> domain.executeWithRetry(command, RetryPolicy.of(3)));
+				() -> domain.execute(command, Execution.retrying(RetryPolicy.of(3))));
 
 		assertEquals(3, command.attempts.get(), "the policy bounds the attempts");
 		assertEquals(2, thrown.getSuppressed().length, "the earlier attempts' conflicts travel as suppressed");
@@ -241,7 +241,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		Mock domain = buildDomain();
 		RetryableCommand command = new RetryableCommand(100, () -> domain.event(new FirstDomainEvent("conflict")));
 
-		assertThrows(OptimisticLockingException.class, () -> domain.executeWithRetry(command));
+		assertThrows(OptimisticLockingException.class, () -> domain.execute(command, Execution.retrying()));
 
 		assertEquals(RetryPolicy.DEFAULT.maxAttempts(), command.attempts.get());
 	}
@@ -254,7 +254,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		UniqueNameCommand command = new UniqueNameCommand(1, () -> domain.event(new FirstDomainEvent("taken")));
 
 		BusinessException rejection = assertThrows(BusinessException.class,
-				() -> domain.executeWithRetry(command, RetryPolicy.of(5)));
+				() -> domain.execute(command, Execution.retrying(RetryPolicy.of(5))));
 
 		assertEquals("name already taken", rejection.getMessage());
 		assertEquals(2, command.attempts.get(), "the rejection ends the retrying, well before the policy would");
@@ -274,7 +274,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		Mock domain = buildDomain();
 		FailingCommand command = new FailingCommand();
 
-		assertThrows(IllegalStateException.class, () -> domain.executeWithRetry(command, RetryPolicy.of(5)));
+		assertThrows(IllegalStateException.class, () -> domain.execute(command, Execution.retrying(RetryPolicy.of(5))));
 
 		assertEquals(1, command.attempts.get(), "only a DCB conflict is worth re-executing");
 	}
@@ -284,13 +284,13 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		Mock domain = buildDomain();
 		RetryableCommand command = new RetryableCommand(1, () -> domain.event(new FirstDomainEvent("conflict")));
 
-		Optional<EventReference> reference = domain.executeWithRetry(command, "key-1", RetryPolicy.of(3));
+		Optional<EventReference> reference = domain.execute(command, Execution.idempotent("key-1").withRetry(RetryPolicy.of(3)));
 
 		assertTrue(reference.isPresent(), "the conflicted attempt stored nothing, so the key was still unconsumed");
 		assertEquals(2, command.attempts.get());
 
 		// the key was consumed by the successful attempt, so a repeat under the same key stores nothing
-		Optional<EventReference> repeat = domain.execute(new RetryableCommand(0, () -> { }), "key-1");
+		Optional<EventReference> repeat = domain.execute(new RetryableCommand(0, () -> { }), Execution.idempotent("key-1"));
 		assertTrue(repeat.isEmpty(), "a repeat under the same key de-duplicates");
 		assertEquals(1, stored(SecondDomainEvent.class));
 	}
@@ -301,7 +301,7 @@ public class ExecuteWithRetryTest extends AbstractMockDomainTest {
 		RetryableCommandWithResult command = new RetryableCommandWithResult(1,
 				() -> domain.event(new FirstDomainEvent("conflict")));
 
-		CommandExecutionResult<String> result = domain.executeWithRetry(command, RetryPolicy.of(3));
+		CommandExecutionResult<String> result = domain.execute(command, Execution.retrying(RetryPolicy.of(3)));
 
 		assertEquals("done", result.response());
 		assertTrue(result.eventReference().isPresent());

@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.testing;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -32,7 +33,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * Base class for testing Aggregates.
@@ -156,7 +156,7 @@ public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBO
 		 * @return this TestDefinition for chaining
 		 */
 		public TestDefinition events(@SuppressWarnings("unchecked") DOMAIN_EVENT_TYPE... events) {
-			Arrays.asList(events).forEach(e -> kernel().event(e, identity));
+			Arrays.asList(events).forEach(e -> kernel().event(EphemeralEvent.of(e, identity)));
 			return this;
 		}
 
@@ -168,7 +168,7 @@ public abstract class AggregateTest<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBO
 		 * @return this TestDefinition for chaining
 		 */
 		public TestDefinition event(DOMAIN_EVENT_TYPE event, Tags tags) {
-			kernel().event(event, tags);
+			kernel().event(EphemeralEvent.of(event, tags));
 			return this;
 		}
 

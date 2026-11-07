@@ -323,8 +323,8 @@ class PlannedSessionPublisherTest extends PublisherTest<PlanningDomainEvent, Pla
 
     @Test
     void aSessionIsPublishedAsItWasWhenItChanged ( ) {
-        given(new SessionPlanned(sessionId, ..., capacity(20)), Planning.SESSION.tags(sessionId))
-            .and(new SessionCapacityChanged(sessionId, capacity(25)), Planning.SESSION.tags(sessionId))
+        given(new SessionPlanned(sessionId, ..., capacity(20)), Planning.SESSION.tag(sessionId))
+            .and(new SessionCapacityChanged(sessionId, capacity(25)), Planning.SESSION.tag(sessionId))
         .whenPublished()
             .published(new PlannedSessionPublished(sessionId, ..., capacity(20)),
                        new PlannedSessionPublished(sessionId, ..., capacity(25)));

@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.inbound;
 
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -43,10 +44,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent.SomeInb
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 
@@ -84,8 +82,8 @@ public class TranslateTest extends AbstractMockDomainTest {
 		Mock ctx = buildBoundedContext(baseBuilder().inbound().translator(translator).done());
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("partner").correlationId("flow-7");
-		ctx.inbound().translate(new SomeInboundEvent("hello"), tracing);
-		ctx.inbound().translate(new SomeInboundEvent("again"), tracing);
+		BoundTracing.call(tracing, ( ) -> ctx.inbound().translate(new SomeInboundEvent("hello")));
+		BoundTracing.call(tracing, ( ) -> ctx.inbound().translate(new SomeInboundEvent("again")));
 
 		assertEquals(2, translator.handed.size());
 		Event<MockInboundEvent> first = translator.handed.get(0);

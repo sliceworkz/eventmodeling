@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.testing;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -50,8 +51,8 @@ import org.sliceworkz.eventstore.query.EventFilter;
  *
  *     @Test
  *     void theSubscriptionsOfACancelledSessionAreCancelled ( ) {
- *         given(new StudentSubscribedToSession(...), Subscriptions.SESSION.tags(sessionId))
- *             .and(new SessionCancelled(sessionId), Subscriptions.SESSION.tags(sessionId))
+ *         given(new StudentSubscribedToSession(...), Subscriptions.SESSION.tag(sessionId))
+ *             .and(new SessionCancelled(sessionId), Subscriptions.SESSION.tag(sessionId))
  *         .whenReacting()
  *             .events(new SubscriptionCancelled(...));
  *     }
@@ -172,7 +173,7 @@ public abstract class PolicyTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_E
 
 		/** Appends a domain event with its tags — the way production tags it, so the command finds its entity. */
 		public TestDefinition and ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-			kernel().event(event, tags);
+			kernel().event(EphemeralEvent.of(event, tags));
 			return this;
 		}
 

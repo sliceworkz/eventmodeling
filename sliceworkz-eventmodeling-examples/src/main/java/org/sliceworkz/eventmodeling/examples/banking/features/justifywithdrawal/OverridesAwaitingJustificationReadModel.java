@@ -35,7 +35,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.rules.RuleTags;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * The large withdrawals that went ahead under the post-justified override of

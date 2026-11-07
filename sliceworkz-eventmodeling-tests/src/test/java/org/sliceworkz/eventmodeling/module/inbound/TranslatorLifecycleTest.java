@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.inbound;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,7 +50,6 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 /**
@@ -190,7 +190,7 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 				throw new IllegalStateException("this translator's dependency is down");
 			}
 			switch ( event.data() ) {
-				case SomeInboundEvent e -> context.event(new FirstDomainEvent(e.someValue()), "translated-" + e.someValue());
+				case SomeInboundEvent e -> context.event(EphemeralEvent.of(new FirstDomainEvent(e.someValue()), Tags.none()).withIdempotencyKey("translated-" + e.someValue()));
 				default -> { } // this test only ever sends SomeInboundEvent
 			}
 		}

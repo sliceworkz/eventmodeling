@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.testing;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -52,8 +53,8 @@ import org.sliceworkz.eventstore.query.EventFilter;
  *
  *     @Test
  *     void aPlannedSessionIsPublishedAsItWasPlanned ( ) {
- *         given(new SessionPlanned(...), Planning.SESSION.tags(sessionId))
- *             .and(new SessionCapacityChanged(...), Planning.SESSION.tags(sessionId))
+ *         given(new SessionPlanned(...), Planning.SESSION.tag(sessionId))
+ *             .and(new SessionCapacityChanged(...), Planning.SESSION.tag(sessionId))
  *         .whenPublished()
  *             .published(new PlannedSessionPublished(... capacity 20 ...),
  *                        new PlannedSessionPublished(... capacity 25 ...));
@@ -167,7 +168,7 @@ public abstract class PublisherTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUN
 
 		/** Appends a domain event with its tags — the way production tags it, so the publisher finds its entity. */
 		public TestDefinition and ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-			kernel().event(event, tags);
+			kernel().event(EphemeralEvent.of(event, tags));
 			return this;
 		}
 

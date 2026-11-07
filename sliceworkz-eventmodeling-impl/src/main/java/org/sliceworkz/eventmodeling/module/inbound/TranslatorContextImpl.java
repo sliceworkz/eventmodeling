@@ -23,10 +23,10 @@ import org.sliceworkz.eventmodeling.boundedcontext.AllCapabilities;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
-import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.inbound.TranslatorContext;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 
 // methods available to a Translator
 public class TranslatorContextImpl<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements TranslatorContext<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE> {
@@ -37,50 +37,15 @@ public class TranslatorContextImpl<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE,OUTBOUN
 	public TranslatorContextImpl ( AllCapabilities<DOMAIN_EVENT_TYPE, INBOUND_EVENT_TYPE, OUTBOUND_EVENT_TYPE> delegate ) {
 		this.delegate = delegate;
 	}
-	
+
 	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command) {
-		return delegate.execute(command);
+	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, Execution execution ) {
+		return delegate.execute(command, execution);
 	}
 
 	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, Tracing tracing) {
-		return delegate.execute(command, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey) {
-		return delegate.execute(command, idempotencyKey);
-	}
-
-	@Override
-	public Optional<EventReference> execute(Command<DOMAIN_EVENT_TYPE> command, String idempotencyKey, Tracing tracing) {
-		return delegate.execute(command, idempotencyKey, tracing);
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command) {
-		return delegate.execute(command);
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Tracing tracing) {
-		return delegate.execute(command, tracing);
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey) {
-		return delegate.execute(command, idempotencyKey);
-	}
-
-	@Override
-	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, String idempotencyKey, Tracing tracing) {
-		return delegate.execute(command, idempotencyKey, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tracing tracing) {
-		return delegate.event(event, tracing);
+	public <RESPONSE_TYPE> CommandExecutionResult<RESPONSE_TYPE> execute(CommandWithResult<DOMAIN_EVENT_TYPE, RESPONSE_TYPE> command, Execution execution ) {
+		return delegate.execute(command, execution);
 	}
 
 	@Override
@@ -89,28 +54,8 @@ public class TranslatorContextImpl<INBOUND_EVENT_TYPE, DOMAIN_EVENT_TYPE,OUTBOUN
 	}
 
 	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags) {
-		return delegate.event(event, tags);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing) {
-		return delegate.event(event, tags, tracing);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, String idempotencyKey) {
-		return delegate.event(event, idempotencyKey);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey) {
-		return delegate.event(event, tags, idempotencyKey);
-	}
-
-	@Override
-	public Optional<EventReference> event(DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing) {
-		return delegate.event(event, tags, idempotencyKey, tracing);
+	public Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event ) {
+		return delegate.event(event);
 	}
 
 }

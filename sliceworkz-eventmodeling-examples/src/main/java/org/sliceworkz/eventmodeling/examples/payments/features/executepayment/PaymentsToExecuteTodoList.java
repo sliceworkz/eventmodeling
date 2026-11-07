@@ -26,7 +26,6 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
-import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentId;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent;
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentAbandoned;
@@ -35,9 +34,7 @@ import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDom
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentRequested;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 
 /**

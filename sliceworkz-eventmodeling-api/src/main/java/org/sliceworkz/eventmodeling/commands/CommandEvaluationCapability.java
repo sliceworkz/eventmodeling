@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.commands;
 
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.events.TracingScope;
 import org.sliceworkz.eventmodeling.rules.Evaluation;
 
 /**
@@ -54,8 +55,9 @@ import org.sliceworkz.eventmodeling.rules.Evaluation;
 public interface CommandEvaluationCapability<DOMAIN_EVENT_TYPE> {
 
 	/**
-	 * Evaluates a command for an anonymous caller. A rule that only an identified actor may override is
-	 * therefore judged as blocking; pass a {@link Tracing} naming the actor to evaluate it for someone.
+	 * Evaluates a command for the caller the {@link TracingScope} bound to this thread names, or for an
+	 * anonymous caller when none is bound. A rule that only an identified actor may override is judged as
+	 * blocking for an anonymous caller; bind a {@link Tracing} naming the actor to evaluate it for someone.
 	 *
 	 * @param command the command
 	 * @return what executing it now would do
@@ -63,29 +65,11 @@ public interface CommandEvaluationCapability<DOMAIN_EVENT_TYPE> {
 	Evaluation evaluate ( Command<DOMAIN_EVENT_TYPE> command );
 
 	/**
-	 * Evaluates a command for the actor the tracing names.
-	 *
-	 * @param command the command
-	 * @param tracing the caller's tracing, as it would be passed to {@code execute}
-	 * @return what executing it now would do
-	 */
-	Evaluation evaluate ( Command<DOMAIN_EVENT_TYPE> command, Tracing tracing );
-
-	/**
-	 * Evaluates a command with a result for an anonymous caller. The response it computes is discarded.
+	 * Evaluates a command with a result, for the caller {@link #evaluate(Command)} evaluates for. The response it computes is discarded.
 	 *
 	 * @param command the command
 	 * @return what executing it now would do
 	 */
 	Evaluation evaluate ( CommandWithResult<DOMAIN_EVENT_TYPE, ?> command );
-
-	/**
-	 * Evaluates a command with a result for the actor the tracing names. The response it computes is discarded.
-	 *
-	 * @param command the command
-	 * @param tracing the caller's tracing, as it would be passed to {@code execute}
-	 * @return what executing it now would do
-	 */
-	Evaluation evaluate ( CommandWithResult<DOMAIN_EVENT_TYPE, ?> command, Tracing tracing );
 
 }

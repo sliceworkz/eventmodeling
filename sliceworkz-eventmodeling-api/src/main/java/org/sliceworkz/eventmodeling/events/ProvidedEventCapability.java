@@ -20,7 +20,7 @@ package org.sliceworkz.eventmodeling.events;
 import java.util.Optional;
 
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 
 /**
  * Recording a domain event that no command raised.
@@ -34,7 +34,9 @@ import org.sliceworkz.eventstore.events.Tags;
  * front-end recording what it has stored elsewhere, an import, a migration — and use a command
  * everywhere a rule has to be judged against history.
  * <p>
- * The idempotency-key overloads are what make it safe to repeat. The key is scoped to the stream,
+ * An event with tags or an idempotency key is given as the eventstore's {@link EphemeralEvent}, built the
+ * way an append builds one: {@code event(EphemeralEvent.of(data, tags).withIdempotencyKey(key))}. The key is what
+ * makes it safe to repeat. It is scoped to the stream,
  * and a repeat is silently ignored by storage, which surfaces as an empty {@code Optional} — the
  * same value as &quot;not appended&quot;, deliberately not distinguished. Derive the key from the
  * fact being recorded, never from the attempt, or a replay mints a fresh key and de-duplicates
@@ -50,16 +52,7 @@ import org.sliceworkz.eventstore.events.Tags;
 public interface ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
 
 	/**
-	 * Provides a domain event with tracing information.
-	 *
-	 * @param event the domain event to provide
-	 * @param tracing the tracing information for distributed tracing
-	 * @return reference to the appended event, or empty if the event was not appended
-	 */
-	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tracing tracing );
-
-	/**
-	 * Provides a domain event without tracing information.
+	 * Provides a domain event with no tags and no idempotency key.
 	 *
 	 * @param event the domain event to provide
 	 * @return reference to the appended event, or empty if the event was not appended
@@ -67,26 +60,8 @@ public interface ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
 	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event );
 
 	/**
-	 * Provides a domain event with tags for categorization and filtering.
-	 *
-	 * @param event the domain event to provide
-	 * @param tags the tags to associate with the event
-	 * @return reference to the appended event, or empty if the event was not appended
-	 */
-	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags );
-
-	/**
-	 * Provides a domain event with both tags and tracing information.
-	 *
-	 * @param event the domain event to provide
-	 * @param tags the tags to associate with the event
-	 * @param tracing the tracing information for distributed tracing
-	 * @return reference to the appended event, or empty if the event was not appended
-	 */
-	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, Tracing tracing );
-
-	/**
-	 * Provides a domain event under an idempotency key, so that providing it again stores nothing.
+	 * Provides a domain event with its tags and, when it carries one, under its idempotency key:
+	 * {@code event(EphemeralEvent.of(new CustomerImported(...), Tags.of(CUSTOMER.tag(id))).withIdempotencyKey(importId))}.
 	 * <p>
 	 * The key is scoped to the event stream, and a second event carrying a key already used on that
 	 * stream is silently ignored by storage. This is what makes an at-least-once caller safe: an
@@ -99,34 +74,13 @@ public interface ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
 	 * is the same {@code Optional.empty()} a caller gets for an event that was not appended, and the
 	 * two are not distinguished. For an automation that is the right outcome either way — the work is
 	 * done, and the todo list drops the item once the original event is projected.
+	 * <p>
+	 * The alternative — an overload per combination of tags and key beside the bare event — loses because
+	 * the eventstore already says "data, tags, key" in one value, and an append is written the same way.
 	 *
-	 * @param event the domain event to provide
-	 * @param idempotencyKey the key identifying this event on its stream, or null for no idempotency check
+	 * @param event the domain event, its tags and its optional idempotency key
 	 * @return reference to the appended event, or empty if it was not appended, including when the key was already used
 	 */
-	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, String idempotencyKey );
-
-	/**
-	 * Provides a domain event with tags, under an idempotency key.
-	 *
-	 * @param event the domain event to provide
-	 * @param tags the tags to associate with the event
-	 * @param idempotencyKey the key identifying this event on its stream, or null for no idempotency check
-	 * @return reference to the appended event, or empty if it was not appended, including when the key was already used
-	 * @see #event(Object, String)
-	 */
-	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey );
-
-	/**
-	 * Provides a domain event with tags and tracing information, under an idempotency key.
-	 *
-	 * @param event the domain event to provide
-	 * @param tags the tags to associate with the event
-	 * @param idempotencyKey the key identifying this event on its stream, or null for no idempotency check
-	 * @param tracing the tracing information for distributed tracing
-	 * @return reference to the appended event, or empty if it was not appended, including when the key was already used
-	 * @see #event(Object, String)
-	 */
-	Optional<EventReference> event ( DOMAIN_EVENT_TYPE event, Tags tags, String idempotencyKey, Tracing tracing );
+	Optional<EventReference> event ( EphemeralEvent<? extends DOMAIN_EVENT_TYPE> event );
 
 }

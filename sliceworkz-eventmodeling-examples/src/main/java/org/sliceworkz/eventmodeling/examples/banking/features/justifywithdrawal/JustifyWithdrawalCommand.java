@@ -32,7 +32,6 @@ import org.sliceworkz.eventmodeling.rules.RuleViolation.Disposition;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * Justifies, afterwards, a withdrawal that went ahead under the post-justified override of
@@ -72,7 +71,7 @@ public record JustifyWithdrawalCommand ( AccountId accountId, String withdrawal,
 		result.raiseEvent(
 			new WithdrawalJustified(accountId, withdrawal,
 				context.justifies(LARGE_WITHDRAWAL_JUSTIFIED, EventId.of(withdrawal), justification.strip())),
-			BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
 	}
 
 	/**
@@ -93,7 +92,7 @@ public record JustifyWithdrawalCommand ( AccountId accountId, String withdrawal,
 
 		@Override
 		public EventFilter eventFilter ( ) {
-			return EventFilter.forTypes(MoneyWithdrawn.class, WithdrawalJustified.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+			return EventFilter.forTypes(MoneyWithdrawn.class, WithdrawalJustified.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
 		}
 
 		@Override

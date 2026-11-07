@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.dcb;
 
+import org.sliceworkz.eventmodeling.commands.Execution;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -26,6 +27,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
+import org.sliceworkz.eventmodeling.commands.CommandResult.CallerKey;
 import org.sliceworkz.eventmodeling.commands.CommandWithResult;
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -37,7 +39,6 @@ import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
@@ -157,7 +158,7 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 		@Override
 		public String execute(CommandContext<MockDomainEvent, MockDomainEvent> context) {
 			var result = context.noDecisionModels();
-			result.fallbackIdempotencyKey(key)
+			result.idempotencyKey(key, CallerKey.PREFERRED)
 					.raiseEvent(new FirstDomainEvent(value), Tags.none());
 			return "response:" + value;
 		}
@@ -259,7 +260,7 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 	void externalKey_firstExecution_returnsResponse() {
 		Mock domain = buildDomain();
 
-		CommandExecutionResult<String> result = domain.execute(new SingleEventWithStringResponse("test"), "key-1");
+		CommandExecutionResult<String> result = domain.execute(new SingleEventWithStringResponse("test"), Execution.idempotent("key-1"));
 
 		assertEquals("response:test", result.response());
 		assertTrue(result.eventReference().isPresent());
@@ -270,10 +271,10 @@ public class DCBCommandWithResultTest extends AbstractMockDomainTest {
 	void externalKey_duplicateExecution_eventRefEmpty() {
 		Mock domain = buildDomain();
 
-		CommandExecutionResult<String> first = domain.execute(new SingleEventWithStringResponse("test"), "key-1");
+		CommandExecutionResult<String> first = domain.execute(new SingleEventWithStringResponse("test"), Execution.idempotent("key-1"));
 		assertTrue(first.eventReference().isPresent());
 
-		CommandExecutionResult<String> second = domain.execute(new SingleEventWithStringResponse("test"), "key-1");
+		CommandExecutionResult<String> second = domain.execute(new SingleEventWithStringResponse("test"), Execution.idempotent("key-1"));
 		assertTrue(second.eventReference().isEmpty());
 
 		assertEquals(1, countDomainEvents());

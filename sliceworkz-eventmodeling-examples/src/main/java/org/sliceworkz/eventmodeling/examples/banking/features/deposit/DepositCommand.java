@@ -34,7 +34,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActivePeriodDecisionModel;
 import org.sliceworkz.eventmodeling.rules.Overrides;
 import org.sliceworkz.eventmodeling.rules.Overriding;
-import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * Deposits money into the account's currently active period.
@@ -98,10 +97,8 @@ public record DepositCommand ( AccountId accountId, BigDecimal amount, String de
 		// Tag with both account identity AND period identity
 		result.raiseEvent(
 			new MoneyDeposited(accountId, period.activeMonth(), amount, description, context.ruleViolations()),
-			Tags.of(
-				BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
+			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
 				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(period.activeMonth()))
-			)
-		);
+			);
 	}
 }

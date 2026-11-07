@@ -82,7 +82,7 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
 	 */
 	@Override
 	public EventFilter eventFilter ( ) {
-		return EventFilter.forTags(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+		return EventFilter.forTags(BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
 	}
 
 	@Override

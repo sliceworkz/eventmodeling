@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.testing;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -33,7 +34,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * Base for testing {@link Translator}s: seed domain history if the translation needs any, hand an
@@ -163,7 +163,7 @@ public abstract class TranslatorTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 		}
 
 		public TestDefinition event ( DOMAIN_EVENT_TYPE event, Tags tags ) {
-			kernel().event(event, tags);
+			kernel().event(EphemeralEvent.of(event, tags));
 			return this;
 		}
 

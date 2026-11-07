@@ -17,6 +17,7 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,7 +39,6 @@ import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.infra.inmem.shredding.InMemoryShreddingKeyStore;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.shredding.DataSubject;
 import org.sliceworkz.eventstore.shredding.ErasureReason;
 import org.sliceworkz.eventstore.shredding.Shreddable;
@@ -77,9 +77,8 @@ public class ShreddingCarriedByTheStorageTest {
 		BoundedContext<ShreddingDomainEvent, MockInboundEvent, MockOutboundEvent> context = build(storage);
 		context.start();
 
-		context.event(new ShreddingDomainEvent.TransferMade("t-1", 5, "alice-42", "bob-77",
-				Shreddable.of("Alice Martin", ALICE), Shreddable.of("Bob Jansen", DataSubject.of("customer", "bob-77"))),
-				Tags.of("transfer", "t-1"));
+		context.event(EphemeralEvent.of(new ShreddingDomainEvent.TransferMade("t-1", 5, "alice-42", "bob-77",
+				Shreddable.of("Alice Martin", ALICE), Shreddable.of("Bob Jansen", DataSubject.of("customer", "bob-77"))), Tags.of("transfer", "t-1")));
 
 		// a store built over the same storage, with nothing configured, reads under the same codec
 		EventStore reader = EventStore.on(storage).build();

@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.examples.payments.features.executepayment;
 
+import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -113,7 +115,7 @@ public class ExecutePaymentAutomation implements Automation<PaymentToExecute,Pay
 
 		String gatewayReference = gateway.execute(payment.iban(), payment.amountInCents(), idempotencyKey);
 
-		return context.event(new PaymentExecuted(payment.paymentId(), gatewayReference), idempotencyKey);
+		return context.event(EphemeralEvent.of(new PaymentExecuted(payment.paymentId(), gatewayReference), Tags.none()).withIdempotencyKey(idempotencyKey));
 	}
 
 	@Override
@@ -136,9 +138,7 @@ public class ExecutePaymentAutomation implements Automation<PaymentToExecute,Pay
 				if ( attempt >= MAX_ATTEMPTS ) {
 					yield abandon(payment, "declined %d times, last reason: %s".formatted(attempt, declined.getMessage()), context);
 				}
-				context.event(
-					new PaymentAttemptFailed(payment.paymentId(), declined.getMessage(), attempt, Instant.now().plus(retryDelayFor(attempt))),
-					"payment-attempt-failed:%s:%d".formatted(payment.paymentId().value(), attempt));
+				context.event(EphemeralEvent.of(new PaymentAttemptFailed(payment.paymentId(), declined.getMessage(), attempt, Instant.now().plus(retryDelayFor(attempt))), Tags.none()).withIdempotencyKey("payment-attempt-failed:%s:%d".formatted(payment.paymentId().value(), attempt)));
 				yield AutomationFailureAction.CONTINUE_AND_RETRY_ITEM_LATER;
 			}
 
@@ -177,9 +177,7 @@ public class ExecutePaymentAutomation implements Automation<PaymentToExecute,Pay
 	}
 
 	private AutomationFailureAction abandon ( PaymentToExecute payment, String reason, AutomationContext<PaymentsDomainEvent> context ) {
-		context.event(
-			new PaymentAbandoned(payment.paymentId(), reason, payment.attempts() + 1),
-			"payment-abandoned:" + payment.paymentId().value());
+		context.event(EphemeralEvent.of(new PaymentAbandoned(payment.paymentId(), reason, payment.attempts() + 1), Tags.none()).withIdempotencyKey("payment-abandoned:" + payment.paymentId().value()));
 		// the item is gone once this event is projected, so the rest of the batch may proceed
 		return AutomationFailureAction.CONTINUE_AND_RETRY_ITEM_LATER;
 	}

@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.outbound;
 
+import org.sliceworkz.eventstore.events.EphemeralEvent;
+import org.sliceworkz.eventmodeling.module.boundedcontext.BoundTracing;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -89,7 +91,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 		Mock context = buildBoundedContext(builder);
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("alice").correlationId("flow-1");
-		Optional<EventReference> recorded = context.event(new FirstDomainEvent("v1"), ItemReadModel.tags("a"), tracing);
+		Optional<EventReference> recorded = BoundTracing.call(tracing, () -> context.event(EphemeralEvent.of(new FirstDomainEvent("v1"), ItemReadModel.tags("a"))));
 
 		waitBecauseOfEventualConsistency(() -> outbound().size() >= 1);
 		Event<MockOutboundEvent> published = outbound().get(0);
@@ -163,7 +165,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 		builder.outbound().publisher(new SeededItemPublisher());
 		Mock context = buildBoundedContext(builder);
 
-		context.event(new FirstDomainEvent("v1"), ItemReadModel.tags("a"));
+		context.event(EphemeralEvent.of(new FirstDomainEvent("v1"), ItemReadModel.tags("a")));
 
 		waitBecauseOfEventualConsistency(() -> outbound().size() >= 1);
 		assertEquals(new SomeOutboundEvent("v1"), outbound().get(0).data());
@@ -207,7 +209,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 		builder.features().rootPackage(PublishingFeatureSlice.class.getPackage()).done();
 		Mock context = buildBoundedContext(builder);
 
-		assertEquals("v1", context.event(new FirstDomainEvent("v1"), ItemReadModel.tags("a"))
+		assertEquals("v1", context.event(EphemeralEvent.of(new FirstDomainEvent("v1"), ItemReadModel.tags("a")))
 				.map(ref -> context.read(ItemReadModel.class, "a").state()).orElseThrow());
 	}
 

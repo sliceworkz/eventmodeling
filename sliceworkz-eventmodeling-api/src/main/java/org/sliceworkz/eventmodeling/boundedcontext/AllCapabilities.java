@@ -35,7 +35,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
  * <caption>The audiences</caption>
  * <tr><th>audience</th><th>interface</th><th>what it carries</th></tr>
  * <tr><td>application — a controller, a job, an adapter driving the domain</td>
- *     <td>{@link ApplicationCapabilities}</td><td>{@code execute}, {@code executeWithRetry},
+ *     <td>{@link ApplicationCapabilities}</td><td>{@code execute},
  *     {@code evaluate}, {@code read}, {@code aggregate}</td></tr>
  * <tr><td>inbound edge — a webhook, a consumer feeding the domain</td>
  *     <td>{@link TranslationCapability}, from {@code inbound()}</td><td>{@code incoming}, {@code translate}</td></tr>

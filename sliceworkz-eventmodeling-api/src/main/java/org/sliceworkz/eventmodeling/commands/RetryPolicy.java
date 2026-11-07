@@ -18,7 +18,7 @@
 package org.sliceworkz.eventmodeling.commands;
 
 /**
- * How often {@code executeWithRetry} attempts a command before giving up and rethrowing the last
+ * How often an {@link Execution} that retries attempts a command before giving up and rethrowing the last
  * {@link org.sliceworkz.eventstore.stream.OptimisticLockingException}.
  *
  * <p>

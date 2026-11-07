@@ -24,7 +24,7 @@ Every capability a bounded context carries is filed under one of these. `AllCapa
 
 | audience | interface | what it carries |
 |---|---|---|
-| **application** — a controller, a job, any adapter driving the domain | `ApplicationCapabilities<D>` | `execute`, `executeWithRetry`, `evaluate`, `read`, `aggregate` |
+| **application** — a controller, a job, any adapter driving the domain | `ApplicationCapabilities<D>` | `execute`, `evaluate`, `read`, `aggregate` |
 | **inbound edge** — a webhook, a consumer feeding the domain | `TranslationCapability<I>`, from `inbound()` | `incoming`, `translate` |
 | **a reader of what came in or went out** — a screen, a report | `ReadModelCapability<I>` from `inbound()`, `ReadModelCapability<O>` from `outbound()` | `read` of a read model over that stream |
 | **operator** — an admin endpoint, a dashboard | `OperationsCapabilities` | `automations`, `restartAutomation`, `stopAutomation`, `processors`, `restartProcessor`, `stopProcessor`, `skipStalledEvent`, `state`, `health` |

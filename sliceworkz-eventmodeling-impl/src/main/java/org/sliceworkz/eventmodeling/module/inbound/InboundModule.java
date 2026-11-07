@@ -57,7 +57,6 @@ import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventFilterItem;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
-import org.sliceworkz.eventstore.stream.OptimisticLockingException;
 
 public class InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
 

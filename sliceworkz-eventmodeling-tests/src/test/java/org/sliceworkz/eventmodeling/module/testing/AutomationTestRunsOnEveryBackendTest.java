@@ -37,12 +37,12 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDo
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockInboundEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockOutboundEvent;
 import org.sliceworkz.eventmodeling.testing.AutomationTest;
+import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
-import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.events.Tags;
+import org.sliceworkz.eventstore.query.EventFilter;
+import org.sliceworkz.eventstore.query.Limit;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -115,7 +115,7 @@ public class AutomationTestRunsOnEveryBackendTest extends AutomationTest<String,
 			if ( todoItem.startsWith("poison") ) {
 				throw new IllegalStateException("cannot handle " + todoItem);
 			}
-			return context.event(new SecondDomainEvent(todoItem), "handled:" + todoItem);
+			return context.event(EphemeralEvent.of(new SecondDomainEvent(todoItem), Tags.none()).withIdempotencyKey("handled:" + todoItem));
 		}
 
 		@Override

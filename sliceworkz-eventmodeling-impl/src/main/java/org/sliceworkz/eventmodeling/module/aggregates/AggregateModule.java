@@ -93,7 +93,6 @@ public class AggregateModule<DOMAIN_EVENT_TYPE> implements AggregateCapability<D
 	}
 
 	@SuppressWarnings("unchecked")
-	@Override
 	public <T extends Aggregate<DOMAIN_EVENT_TYPE>> T aggregate(Class<T> aggregateClass, Tags identity, Tracing tracing) {
 		tracing = tracing.instance(instance);
 

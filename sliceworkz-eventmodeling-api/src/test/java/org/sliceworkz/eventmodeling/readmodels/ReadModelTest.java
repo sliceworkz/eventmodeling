@@ -35,7 +35,7 @@ public class ReadModelTest {
 
 		@Override
 		public EventFilter eventFilter() {
-			return EventFilter.matchAll();
+			return null;
 		}
 
 		@Override
@@ -54,7 +54,7 @@ public class ReadModelTest {
 		
 		@Override
 		public EventFilter eventFilter() {
-			return EventFilter.matchAll();
+			return null;
 		}
 
 		@Override

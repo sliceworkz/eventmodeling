@@ -43,7 +43,6 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDo
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * Tests that a {@link DecisionModelProjected} bounded-context event is emitted for each decision

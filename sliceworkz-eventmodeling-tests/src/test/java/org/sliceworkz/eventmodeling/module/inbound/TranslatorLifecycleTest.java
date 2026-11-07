@@ -93,7 +93,7 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 		FlakyTranslator translator = new FlakyTranslator();
 
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.translator(translator);
+		builder.inbound().translator(translator);
 		buildBoundedContext(builder);
 
 		await().atMost(Duration.ofSeconds(15)).untilAsserted(
@@ -112,10 +112,10 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 		translator.failing.set(true);
 
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.translator(translator);
+		builder.inbound().translator(translator);
 		Mock domain = buildBoundedContext(builder);
 
-		domain.incoming(new SomeInboundEvent("survives-the-outage"));
+		domain.inbound().incoming(new SomeInboundEvent("survives-the-outage"));
 
 		await().atMost(Duration.ofSeconds(15)).untilAsserted(
 				() -> assertTrue(received.stream().anyMatch(e -> e instanceof BoundedContextEvent.TranslatorFailed f
@@ -136,7 +136,7 @@ public class TranslatorLifecycleTest extends AbstractMockDomainTest {
 	@Test
 	void aTranslatorGoingDownWithItsContextReportsNothing ( ) {
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.translator(new FlakyTranslator());
+		builder.inbound().translator(new FlakyTranslator());
 		buildBoundedContext(builder);
 
 		received.clear();

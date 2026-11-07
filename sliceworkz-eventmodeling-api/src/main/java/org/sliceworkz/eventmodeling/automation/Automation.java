@@ -47,9 +47,8 @@ import org.sliceworkz.eventstore.events.EventReference;
  *
  * @param <TODO_ITEM_TYPE> the type of items in the todo list
  * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context
- * @param <OUTBOUND_EVENT_TYPE> the base type of outbound events that can be published
  */
-public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
+public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> {
 
 	/** The number of todo items handled in one batch when an automation does not choose one. */
 	int DEFAULT_BATCH_SIZE = 50;
@@ -86,7 +85,7 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	 * @param context the automation context providing command execution and event capabilities
 	 * @return reference to the last event generated during processing, or empty if no events were generated
 	 */
-	Optional<EventReference> handle ( TODO_ITEM_TYPE todoItem, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context );
+	Optional<EventReference> handle ( TODO_ITEM_TYPE todoItem, AutomationContext<DOMAIN_EVENT_TYPE> context );
 
 	/**
 	 * How many todo items are handled before the automation waits for its todo list to catch up again.
@@ -138,7 +137,7 @@ public interface Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE
 	 * @param context the automation context, for recording the failure as an event
 	 * @return what to do with the item and with the rest of the batch, never null
 	 */
-	default AutomationFailureAction onFailure ( TODO_ITEM_TYPE todoItem, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context ) {
+	default AutomationFailureAction onFailure ( TODO_ITEM_TYPE todoItem, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE> context ) {
 		return AutomationFailureAction.RETRY_ITEM;
 	}
 

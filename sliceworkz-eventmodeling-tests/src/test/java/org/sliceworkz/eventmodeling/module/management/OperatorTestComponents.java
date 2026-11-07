@@ -108,7 +108,7 @@ final class OperatorTestComponents {
 	}
 
 	/** Handles every item by recording it and raising its completion under an item-derived idempotency key. */
-	static class RecordingAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class RecordingAutomation implements Automation<String,MockDomainEvent> {
 
 		private final ItemsTodoList todoList;
 		private final List<String> handled = new CopyOnWriteArrayList<>();
@@ -127,7 +127,7 @@ final class OperatorTestComponents {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			handled.add(todoItem);
 			return context.event(EphemeralEvent.of(new SecondDomainEvent(todoItem), Tags.none()).withIdempotencyKey("done-" + todoItem));
 		}

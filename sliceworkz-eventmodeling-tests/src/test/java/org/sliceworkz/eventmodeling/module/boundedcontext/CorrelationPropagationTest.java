@@ -119,9 +119,9 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 
 	@Test
 	void interactiveTranslationCarriesTheCallersCorrelationId ( ) {
-		Mock domain = buildBoundedContext(baseBuilder().translator(new SomeInboundTranslator()));
+		Mock domain = buildBoundedContext(baseBuilder().inbound().translator(new SomeInboundTranslator()).done());
 
-		BoundTracing.call(Tracing.actorAndChannel("alice", "api").correlationId("flow-t"), ( ) -> domain.translate(new SomeInboundEvent("hello")));
+		BoundTracing.call(Tracing.actorAndChannel("alice", "api").correlationId("flow-t"), ( ) -> domain.inbound().translate(new SomeInboundEvent("hello")));
 
 		assertEquals("flow-t", correlationIdOf(domainEvents().get(0)),
 				"the domain event a translator raises continues the caller's flow");
@@ -129,10 +129,10 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 
 	@Test
 	void asyncTranslationCarriesTheInboundEventsCorrelationId ( ) {
-		Mock domain = buildBoundedContext(baseBuilder().translator(new SomeInboundTranslator()));
+		Mock domain = buildBoundedContext(baseBuilder().inbound().translator(new SomeInboundTranslator()).done());
 
 		BoundTracing.run(Tracing.actorAndChannel("alice", "api").correlationId("flow-in"),
-				() -> domain.incoming(new SomeInboundEvent("hello")));
+				() -> domain.inbound().incoming(new SomeInboundEvent("hello")));
 
 		await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> assertEquals(1, domainEvents().size()));
 		assertEquals("flow-in", correlationIdOf(domainEvents().get(0)),
@@ -275,7 +275,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 	}
 
 	/** Named rather than anonymous: an automation's bookmark is keyed on its simple name. */
-	static class RecordingAutomation implements Automation<CorrelatedItem,MockDomainEvent,MockOutboundEvent> {
+	static class RecordingAutomation implements Automation<CorrelatedItem,MockDomainEvent> {
 
 		private final CorrelatedTodoList todoList;
 
@@ -289,7 +289,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( CorrelatedItem todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( CorrelatedItem todoItem, AutomationContext<MockDomainEvent> context ) {
 			return context.event(EphemeralEvent.of(new SecondDomainEvent(todoItem.value()), Tags.none()).withIdempotencyKey("handled:" + todoItem.value()));
 		}
 	}

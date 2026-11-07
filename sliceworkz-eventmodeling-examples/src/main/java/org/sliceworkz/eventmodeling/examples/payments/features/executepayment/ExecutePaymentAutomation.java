@@ -86,7 +86,7 @@ import org.sliceworkz.eventstore.events.EventReference;
  *       try again immediately.</li>
  * </ul>
  */
-public class ExecutePaymentAutomation implements Automation<PaymentToExecute,PaymentsDomainEvent,PaymentsOutboundEvent> {
+public class ExecutePaymentAutomation implements Automation<PaymentToExecute,PaymentsDomainEvent> {
 
 	/** After this many recorded failures a payment is abandoned rather than deferred again. */
 	static final int MAX_ATTEMPTS = 3;
@@ -105,7 +105,7 @@ public class ExecutePaymentAutomation implements Automation<PaymentToExecute,Pay
 	}
 
 	@Override
-	public Optional<EventReference> handle ( PaymentToExecute payment, AutomationContext<PaymentsDomainEvent,PaymentsOutboundEvent> context ) {
+	public Optional<EventReference> handle ( PaymentToExecute payment, AutomationContext<PaymentsDomainEvent> context ) {
 		// Delivery is at least once: this method runs again for the same payment whenever the events it
 		// raised did not reach the todo list -- after a crash between the append and the bookmark, and
 		// after every failure below. So the key is derived from the payment, never from the attempt: a
@@ -119,7 +119,7 @@ public class ExecutePaymentAutomation implements Automation<PaymentToExecute,Pay
 	}
 
 	@Override
-	public AutomationFailureAction onFailure ( PaymentToExecute payment, Throwable cause, AutomationContext<PaymentsDomainEvent,PaymentsOutboundEvent> context ) {
+	public AutomationFailureAction onFailure ( PaymentToExecute payment, Throwable cause, AutomationContext<PaymentsDomainEvent> context ) {
 		return switch ( cause ) {
 
 			// The gateway, not the payment. Nothing is recorded: an outage is not a fact about this
@@ -176,7 +176,7 @@ public class ExecutePaymentAutomation implements Automation<PaymentToExecute,Pay
 		return DEFAULT_BATCH_SIZE;
 	}
 
-	private AutomationFailureAction abandon ( PaymentToExecute payment, String reason, AutomationContext<PaymentsDomainEvent,PaymentsOutboundEvent> context ) {
+	private AutomationFailureAction abandon ( PaymentToExecute payment, String reason, AutomationContext<PaymentsDomainEvent> context ) {
 		context.event(EphemeralEvent.of(new PaymentAbandoned(payment.paymentId(), reason, payment.attempts() + 1), Tags.none()).withIdempotencyKey("payment-abandoned:" + payment.paymentId().value()));
 		// the item is gone once this event is projected, so the rest of the batch may proceed
 		return AutomationFailureAction.CONTINUE_AND_RETRY_ITEM_LATER;

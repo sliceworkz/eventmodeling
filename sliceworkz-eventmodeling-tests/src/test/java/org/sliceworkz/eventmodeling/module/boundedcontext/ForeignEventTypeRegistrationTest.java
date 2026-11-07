@@ -97,19 +97,38 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 	}
 
 	@Test
-	void anAutomationOfAnotherContextIsRejectedOnBothItsEventTypes ( ) {
+	void anAutomationOfAnotherContextIsRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
 				baseBuilder().automation(new ForeignAutomation()).build());
 		assertTrue(e.getMessage().contains("automation ForeignAutomation (its domain event type is "
 				+ ForeignDomainEvent.class.getName()), e.getMessage());
-		assertTrue(e.getMessage().contains("automation ForeignAutomation (its outbound event type is "
+	}
+
+	@Test
+	void aReadModelOverTheInboundOrOutboundStreamIsCheckedAgainstThatStreamsEventType ( ) {
+		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
+				baseBuilder()
+					.inbound().readmodel(ForeignInboundReadModel.class).live()
+					.outbound().readmodel(ForeignOutboundReadModel.class).live()
+					.build());
+		assertTrue(e.getMessage().contains("readmodel ForeignInboundReadModel (its inbound event type is "
+				+ ForeignInboundEvent.class.getName()), e.getMessage());
+		assertTrue(e.getMessage().contains("readmodel ForeignOutboundReadModel (its outbound event type is "
 				+ ForeignOutboundEvent.class.getName()), e.getMessage());
+	}
+
+	@Test
+	void aReadModelOverTheDomainStreamIsRefusedOnTheInboundStream ( ) {
+		// the stream a read model is registered on is the one whose event type it is held to
+		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
+				baseBuilder().inbound().readmodel(BranchReadModel.class).live().build());
+		assertTrue(e.getMessage().contains("readmodel BranchReadModel (its inbound event type is "), e.getMessage());
 	}
 
 	@Test
 	void aTranslatorOfAnotherContextIsRejectedOnBothItsEventTypes ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
-				baseBuilder().translator(new ForeignTranslator()).build());
+				baseBuilder().inbound().translator(new ForeignTranslator()).done().build());
 		assertTrue(e.getMessage().contains("translator ForeignTranslator (its inbound event type is "
 				+ ForeignInboundEvent.class.getName()), e.getMessage());
 		assertTrue(e.getMessage().contains("translator ForeignTranslator (its domain event type is "
@@ -119,7 +138,7 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 	@Test
 	void aDispatcherOfAnotherContextIsRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
-				baseBuilder().dispatcher(new ForeignDispatcher()).build());
+				baseBuilder().outbound().dispatcher(new ForeignDispatcher()).done().build());
 		assertTrue(e.getMessage().contains("dispatcher ForeignDispatcher (its outbound event type is "
 				+ ForeignOutboundEvent.class.getName()), e.getMessage());
 	}
@@ -127,7 +146,7 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 	@Test
 	void aPublisherOfAnotherContextIsRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
-				baseBuilder().publisher(new ForeignPublisher()).build());
+				baseBuilder().outbound().publisher(new ForeignPublisher()).done().build());
 		assertTrue(e.getMessage().contains("publisher ForeignPublisher (its domain event type is "
 				+ ForeignDomainEvent.class.getName()), e.getMessage());
 		assertTrue(e.getMessage().contains("publisher ForeignPublisher (its outbound event type is "
@@ -139,8 +158,8 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () ->
 				baseBuilder()
 					.readmodel(ForeignReadModel.class).live()
-					.dispatcher(new ForeignDispatcher())
-					.translator(new ForeignTranslator())
+					.outbound().dispatcher(new ForeignDispatcher()).done()
+					.inbound().translator(new ForeignTranslator()).done()
 					.build());
 		assertTrue(e.getMessage().contains("readmodel ForeignReadModel"), e.getMessage());
 		assertTrue(e.getMessage().contains("dispatcher ForeignDispatcher"), e.getMessage());
@@ -240,10 +259,10 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 		@Override public void when ( Event<ForeignOutboundEvent> event ) { }
 	}
 
-	public static class ForeignAutomation implements Automation<String,ForeignDomainEvent,ForeignOutboundEvent> {
+	public static class ForeignAutomation implements Automation<String,ForeignDomainEvent> {
 		private final ForeignTodoList todoList = new ForeignTodoList();
 		@Override public TodoListReadModel<ForeignDomainEvent,String> getTodoList ( ) { return todoList; }
-		@Override public Optional<EventReference> handle ( String item, AutomationContext<ForeignDomainEvent,ForeignOutboundEvent> context ) { return Optional.empty(); }
+		@Override public Optional<EventReference> handle ( String item, AutomationContext<ForeignDomainEvent> context ) { return Optional.empty(); }
 	}
 
 	public static class ForeignTodoList implements TodoListReadModel<ForeignDomainEvent,String> {
@@ -251,6 +270,16 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 		@Override public void when ( Event<ForeignDomainEvent> event ) { }
 		@Override public Stream<String> streamItems ( Limit limit ) { return Stream.empty(); }
 		@Override public Optional<EventReference> lastEventReference ( ) { return Optional.empty(); }
+	}
+
+	public static class ForeignInboundReadModel implements ReadModel<ForeignInboundEvent> {
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
+		@Override public void when ( Event<ForeignInboundEvent> event ) { }
+	}
+
+	public static class ForeignOutboundReadModel implements ReadModel<ForeignOutboundEvent> {
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
+		@Override public void when ( Event<ForeignOutboundEvent> event ) { }
 	}
 
 	// ── related types, which are not the mistake this catches ────────────────

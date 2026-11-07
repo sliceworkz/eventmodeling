@@ -94,7 +94,7 @@ public final class AutomationBatch {
 	 *
 	 * @throws IllegalArgumentException naming the automation when its declared batch size is not positive
 	 */
-	public static Limit batchSizeOf ( Automation<?,?,?> automation ) {
+	public static Limit batchSizeOf ( Automation<?,?> automation ) {
 		int declaredBatchSize = automation.batchSize();
 		if ( declaredBatchSize <= 0 ) {
 			throw new IllegalArgumentException("batch size %d of automation '%s' is invalid, should be larger than 0".formatted(declaredBatchSize, automation.getClass().getSimpleName()));
@@ -114,10 +114,10 @@ public final class AutomationBatch {
 	 * @param batchTracing the batch-level tracing, whose correlation id names the automation run;
 	 *        items that are not correlated keep it
 	 */
-	public static <TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> Function<TODO_ITEM_TYPE,AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> correlatedContexts (
-			Function<Tracing,AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> contextFactory,
+	public static <TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> Function<TODO_ITEM_TYPE,AutomationContext<DOMAIN_EVENT_TYPE>> correlatedContexts (
+			Function<Tracing,AutomationContext<DOMAIN_EVENT_TYPE>> contextFactory,
 			Tracing batchTracing ) {
-		AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> batchContext = contextFactory.apply(batchTracing);
+		AutomationContext<DOMAIN_EVENT_TYPE> batchContext = contextFactory.apply(batchTracing);
 		return item -> {
 			if ( item instanceof CorrelatedTodoItem correlated ) {
 				String correlationId = correlated.correlationId();
@@ -144,9 +144,9 @@ public final class AutomationBatch {
 	 * @param onItemFailure told about every throwable an item raised, before the automation's own
 	 *        {@code onFailure} decides what it costs; may be {@code null}
 	 */
-	public static <TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> Outcome handleBatch (
-			Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation,
-			Function<TODO_ITEM_TYPE,AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> contextForItem,
+	public static <TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> Outcome handleBatch (
+			Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> automation,
+			Function<TODO_ITEM_TYPE,AutomationContext<DOMAIN_EVENT_TYPE>> contextForItem,
 			Limit batchSize,
 			String automationName,
 			BooleanSupplier abandonRequested,
@@ -170,7 +170,7 @@ public final class AutomationBatch {
 				}
 				TODO_ITEM_TYPE item = iterator.next();
 				streamed++;
-				AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context = contextForItem == null ? null : contextForItem.apply(item);
+				AutomationContext<DOMAIN_EVENT_TYPE> context = contextForItem == null ? null : contextForItem.apply(item);
 				try {
 					Optional<EventReference> produced;
 					try ( PortCallerScope.Scope caller = callerScope(automation, context) ) {
@@ -211,7 +211,7 @@ public final class AutomationBatch {
 		return new Outcome(streamed, handled, failed, lastProducedEvent, false, lastFailure);
 	}
 
-	private static <TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> AutomationFailureAction determineFailureAction ( Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, TODO_ITEM_TYPE item, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> context, String automationName ) {
+	private static <TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> AutomationFailureAction determineFailureAction ( Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> automation, TODO_ITEM_TYPE item, Throwable cause, AutomationContext<DOMAIN_EVENT_TYPE> context, String automationName ) {
 		try ( PortCallerScope.Scope caller = callerScope(automation, context) ) {
 			AutomationFailureAction action = automation.onFailure(item, cause, context);
 			return action != null ? action : AutomationFailureAction.RETRY_ITEM;
@@ -225,7 +225,7 @@ public final class AutomationBatch {
 	 * Marks the thread as running the automation, so a port it calls reports it as the caller, with the
 	 * item's tracing — which is where the flow of a {@link CorrelatedTodoItem} is carried.
 	 */
-	private static PortCallerScope.Scope callerScope ( Automation<?,?,?> automation, AutomationContext<?,?> context ) {
+	private static PortCallerScope.Scope callerScope ( Automation<?,?> automation, AutomationContext<?> context ) {
 		Tracing tracing = context instanceof AutomationContextImpl<?,?,?> impl ? impl.tracing() : null;
 		return PortCallerScope.enter(PortCaller.automation(automation.getClass().getSimpleName()), automation.getClass(), tracing);
 	}

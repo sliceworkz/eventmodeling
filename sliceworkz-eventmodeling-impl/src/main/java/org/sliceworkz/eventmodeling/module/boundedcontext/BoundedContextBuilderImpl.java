@@ -57,6 +57,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.boundedcontext.FeaturesSpecification;
 import org.sliceworkz.eventmodeling.boundedcontext.LifecycleCapability;
 import org.sliceworkz.eventmodeling.events.Instance;
+import org.sliceworkz.eventmodeling.inbound.InboundSpecification;
 import org.sliceworkz.eventmodeling.inbound.Translator;
 import org.sliceworkz.eventmodeling.module.aggregates.AggregateModule;
 import org.sliceworkz.eventmodeling.module.automation.AutomationProcessor;
@@ -79,9 +80,11 @@ import org.sliceworkz.eventmodeling.module.inbound.InboundModule;
 import org.sliceworkz.eventmodeling.module.outbound.OutboundModule;
 import org.sliceworkz.eventmodeling.module.readmodels.LiveModelConstructors;
 import org.sliceworkz.eventmodeling.module.readmodels.LiveModelSpecificationAccessor;
+import org.sliceworkz.eventmodeling.module.readmodels.ProjectedStream;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
 import org.sliceworkz.eventmodeling.module.snapshots.LiveModelSnapshotSpecificationImpl;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
+import org.sliceworkz.eventmodeling.outbound.OutboundSpecification;
 import org.sliceworkz.eventmodeling.outbound.Publisher;
 import org.sliceworkz.eventmodeling.automation.Policy;
 import org.sliceworkz.eventmodeling.automation.PolicyRejectionHandling;
@@ -168,9 +171,12 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private Class<?> inboundEventRootType;
 	private Class<?> outboundEventRootType;
 
-	private Class<?> historicalDomainEventRootType;
-	private Class<?> historicalInboundEventRootType;
-	private Class<?> historicalOutboundEventRootType;
+	private Class<?> legacyDomainEventRootType;
+	private Class<?> legacyInboundEventRootType;
+	private Class<?> legacyOutboundEventRootType;
+
+	private final InboundSpecificationImpl inboundSpecification = new InboundSpecificationImpl();
+	private final OutboundSpecificationImpl outboundSpecification = new OutboundSpecificationImpl();
 
 	private FeaturesSpecificationImpl<C> featuresSpecification = new FeaturesSpecificationImpl<>(this);
 
@@ -223,15 +229,103 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	@Override
-	public BoundedContextBuilder<C> historicalEventTypes (
-			Class<?> historicalDomainEventRootType,
-			Class<?> historicalInboundEventRootType,
-			Class<?> historicalOutboundEventRootType
-			) {
-		this.historicalDomainEventRootType = historicalDomainEventRootType;
-		this.historicalInboundEventRootType = historicalInboundEventRootType;
-		this.historicalOutboundEventRootType = historicalOutboundEventRootType;
+	public BoundedContextBuilder<C> legacyEventTypes ( Class<?> legacyDomainEventRootType ) {
+		this.legacyDomainEventRootType = legacyDomainEventRootType;
 		return this;
+	}
+
+	@Override
+	public InboundSpecification<C> inbound ( ) {
+		return inboundSpecification;
+	}
+
+	@Override
+	public OutboundSpecification<C> outbound ( ) {
+		return outboundSpecification;
+	}
+
+	/**
+	 * {@code builder.inbound()}: the registrations on the inbound stream. A specification of the one builder,
+	 * so a slice reaching it from any of its {@code configure...} methods registers in the aspect and for the
+	 * slice being configured, exactly as on the builder itself.
+	 */
+	private class InboundSpecificationImpl implements InboundSpecification<C> {
+
+		@Override
+		public InboundSpecification<C> legacyEventTypes ( Class<?> legacyInboundEventRootType ) {
+			BoundedContextBuilderImpl.this.legacyInboundEventRootType = legacyInboundEventRootType;
+			return this;
+		}
+
+		@Override
+		public InboundSpecification<C> translator ( Translator<?,?> translator ) {
+			registerTranslator(translator);
+			return this;
+		}
+
+		@Override
+		public InboundSpecification<C> translator ( Class<? extends Translator<?,?>> translatorClass ) {
+			registerTranslator(instantiate(translatorClass, "Translator"));
+			return this;
+		}
+
+		@Override
+		public LiveModelSpecification<C> readmodel ( Class<? extends ReadModel<?>> readModelClass ) {
+			return registerLiveModel(readModelClass, ProjectedStream.INBOUND);
+		}
+
+		@Override
+		public EventuallyConsistentReadModelSpecification<C> readmodel ( ReadModel<?> readModel ) {
+			return registerEventuallyConsistentReadModel(readModel, ProjectedStream.INBOUND);
+		}
+
+		@Override
+		public BoundedContextBuilder<C> done ( ) {
+			return BoundedContextBuilderImpl.this;
+		}
+	}
+
+	/** {@code builder.outbound()}: the registrations on the outbound stream, see {@link InboundSpecificationImpl}. */
+	private class OutboundSpecificationImpl implements OutboundSpecification<C> {
+
+		@Override
+		public OutboundSpecification<C> legacyEventTypes ( Class<?> legacyOutboundEventRootType ) {
+			BoundedContextBuilderImpl.this.legacyOutboundEventRootType = legacyOutboundEventRootType;
+			return this;
+		}
+
+		@Override
+		public OutboundSpecification<C> publisher ( Publisher<?,?> publisher ) {
+			registerPublisher(publisher);
+			return this;
+		}
+
+		@Override
+		public OutboundSpecification<C> dispatcher ( Dispatcher<?> dispatcher ) {
+			registerDispatcher(dispatcher);
+			return this;
+		}
+
+		@Override
+		public OutboundSpecification<C> dispatcher ( Class<? extends Dispatcher<?>> dispatcherClass ) {
+			registerDispatcher(instantiate(dispatcherClass, "Dispatcher"));
+			return this;
+		}
+
+		@Override
+		public LiveModelSpecification<C> readmodel ( Class<? extends ReadModel<?>> readModelClass ) {
+			return registerLiveModel(readModelClass, ProjectedStream.OUTBOUND);
+		}
+
+		@Override
+		public EventuallyConsistentReadModelSpecification<C> readmodel ( ReadModel<?> readModel ) {
+			return registerEventuallyConsistentReadModel(readModel, ProjectedStream.OUTBOUND);
+		}
+
+		@Override
+		public BoundedContextBuilder<C> done ( ) {
+			return BoundedContextBuilderImpl.this;
+		}
 	}
 
 	@Override
@@ -376,16 +470,24 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 	@Override
 	public LiveModelSpecification<C> readmodel ( Class<? extends ReadModel<?>> readModelClass ) {
-		var m = new LiveModelSpecificationImpl(this, readModelClass);
+		return registerLiveModel(readModelClass, ProjectedStream.DOMAIN);
+	}
+
+	private LiveModelSpecification<C> registerLiveModel ( Class<? extends ReadModel<?>> readModelClass, ProjectedStream stream ) {
+		var m = new LiveModelSpecificationImpl(this, readModelClass, stream);
 		liveModelSpecs.add(m);
 		// A live model is instantiated per projection, so only its class is known here. That matches
 		// the name the LiveModelProjected events carry unless the read model overrides readmodelName().
-		recordSliceMember(readModelClass.getSimpleName(), BoundedContextEvent.MemberKind.READ_MODEL, BoundedContextEvent.ReadModelProjection.LIVE);
+		recordSliceMember(readModelClass.getSimpleName(), BoundedContextEvent.MemberKind.READ_MODEL, BoundedContextEvent.ReadModelProjection.LIVE, stream);
 		return m;
 	}
 
 	@Override
 	public EventuallyConsistentReadModelSpecification<C> readmodel ( ReadModel<?> readModel ) {
+		return registerEventuallyConsistentReadModel(readModel, ProjectedStream.DOMAIN);
+	}
+
+	private EventuallyConsistentReadModelSpecification<C> registerEventuallyConsistentReadModel ( ReadModel<?> readModel, ProjectedStream stream ) {
 		// A seed says where a *read* resumes projecting, and only the live path ever asks for one. An
 		// eventually consistent processor resumes from its bookmark (or from SelfBookmarkingProjection),
 		// so this registration would leave seed() never called and the read model silently ordinary.
@@ -394,33 +496,28 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 					+ "readmodel(%s.class).live(). An eventually consistent read model resumes from its bookmark and would never call seed()")
 					.formatted(readModel.readmodelName(), readModel.getClass().getSimpleName()));
 		}
-		var m = new EventuallyConsistentReadModelSpecificationImpl(this, readModel);
+		var m = new EventuallyConsistentReadModelSpecificationImpl(this, readModel, stream);
 		eventuallyConsistentReadModelSpecs.add(m);
-		recordSliceMember(readModel.readmodelName(), BoundedContextEvent.MemberKind.READ_MODEL, BoundedContextEvent.ReadModelProjection.EVENTUALLY_CONSISTENT);
+		recordSliceMember(readModel.readmodelName(), BoundedContextEvent.MemberKind.READ_MODEL, BoundedContextEvent.ReadModelProjection.EVENTUALLY_CONSISTENT, stream);
 		return m;
 	}
 
 	@Override
-	public BoundedContextBuilder<C> automation ( Automation<?,?,?> automation ) {
+	public BoundedContextBuilder<C> automation ( Automation<?,?> automation ) {
 		automations.add(automation);
 		recordSliceMember(automation.getClass().getSimpleName(), BoundedContextEvent.MemberKind.AUTOMATION);
 		return this;
 	}
 
-	@Override
-	public BoundedContextBuilder<C> translator ( Translator<?,?> translator ) {
+	private void registerTranslator ( Translator<?,?> translator ) {
+		if ( translator == null ) {
+			throw new IllegalArgumentException("translator must not be null");
+		}
 		translatorSpecs.add(translator);
 		recordSliceMember(translator.getClass().getSimpleName(), BoundedContextEvent.MemberKind.TRANSLATOR);
-		return this;
 	}
 
-	@Override
-	public BoundedContextBuilder<C> translator ( Class<? extends Translator<?,?>> translatorClass ) {
-		return translator(instantiate(translatorClass, "Translator"));
-	}
-
-	@Override
-	public BoundedContextBuilder<C> publisher ( Publisher<?,?> publisher ) {
+	private void registerPublisher ( Publisher<?,?> publisher ) {
 		if ( publisher == null ) {
 			throw new IllegalArgumentException("publisher must not be null");
 		}
@@ -430,7 +527,6 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			Set<String> names = publisherReads.computeIfAbsent(configuringSlice, slice -> new HashSet<>());
 			publisher.reads().forEach(readModelClass -> names.add(readModelClass.getSimpleName()));
 		}
-		return this;
 	}
 
 	@Override
@@ -492,16 +588,12 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 	}
 
-	@Override
-	public BoundedContextBuilder<C> dispatcher ( Dispatcher<?> dispatcher ) {
+	private void registerDispatcher ( Dispatcher<?> dispatcher ) {
+		if ( dispatcher == null ) {
+			throw new IllegalArgumentException("dispatcher must not be null");
+		}
 		dispatcherSpecs.add(dispatcher);
 		recordSliceMember(dispatcher.getClass().getSimpleName(), BoundedContextEvent.MemberKind.DISPATCHER);
-		return this;
-	}
-
-	@Override
-	public BoundedContextBuilder<C> dispatcher ( Class<? extends Dispatcher<?>> dispatcherClass ) {
-		return dispatcher(instantiate(dispatcherClass, "Dispatcher"));
 	}
 
 	/**
@@ -604,7 +696,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			for ( BoundedContextEvent.SliceMember m : members ) {
 				boolean publication = m.kind() == BoundedContextEvent.MemberKind.READ_MODEL && m.aspect() == Aspect.AUTOMATION
 						&& reads.contains(m.name()) && !usedElsewhere.contains(m.name());
-				marked.add(publication ? new BoundedContextEvent.SliceMember(m.name(), BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, m.aspect(), m.projection()) : m);
+				marked.add(publication ? new BoundedContextEvent.SliceMember(m.name(), BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, m.aspect(), m.projection(), m.stream()) : m);
 			}
 			sliceMembers.put(slice, marked);
 		});
@@ -626,9 +718,13 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	 * consistent), which {@code build()} holds the registration to.
 	 */
 	private void recordSliceMember ( String name, BoundedContextEvent.MemberKind kind, BoundedContextEvent.ReadModelProjection projection ) {
+		recordSliceMember(name, kind, projection, ProjectedStream.DOMAIN);
+	}
+
+	private void recordSliceMember ( String name, BoundedContextEvent.MemberKind kind, BoundedContextEvent.ReadModelProjection projection, ProjectedStream stream ) {
 		if ( configuringSlice != null && name != null ) {
 			sliceMembers.computeIfAbsent(configuringSlice, slice -> new LinkedHashSet<>())
-					.add(new BoundedContextEvent.SliceMember(name, kind, configuringAspect, projection));
+					.add(new BoundedContextEvent.SliceMember(name, kind, configuringAspect, projection, stream.reported()));
 		}
 	}
 
@@ -806,7 +902,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	 */
 	private void rejectAutomationsWhoseTodoListIsNotProjectedHere ( ) {
 		List<String> unprojected = new ArrayList<>();
-		for ( Automation<?,?,?> automation : automations ) {
+		for ( Automation<?,?> automation : automations ) {
 			String automationName = automation.getClass().getSimpleName();
 			TodoListReadModel<?,?> todoList = automation.getTodoList();
 			if ( todoList == null ) {
@@ -818,7 +914,10 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 				continue;
 			}
 			String name = todoList.readmodelName();
+			// a todo list is projected from the domain stream: one registered on inbound() or outbound()
+			// bookmarks under another processor type, and this automation would wait on a bookmark nobody writes
 			ReadModel<?> registered = eventuallyConsistentReadModelSpecs.stream()
+					.filter(spec -> spec.stream() == ProjectedStream.DOMAIN)
 					.map(EventuallyConsistentReadModelSpecificationImpl::readModel)
 					.filter(rm -> name.equals(rm.readmodelName()))
 					.findFirst().orElse(null);
@@ -920,6 +1019,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	private void rejectPublishersWhoseReadModelsAreNotLiveHere ( ) {
 		Set<Class<?>> live = liveModelSpecs.stream()
 				.filter(LiveModelSpecificationImpl::modeChosen)
+				// a publisher reads as of a domain event, so only a read model over the domain stream will do
+				.filter(spec -> spec.stream() == ProjectedStream.DOMAIN)
 				.map(LiveModelSpecificationImpl::readModelClass)
 				.collect(Collectors.toSet());
 		List<String> missing = new ArrayList<>();
@@ -984,7 +1085,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	 * Rejects a component registered over another bounded context's event types.
 	 * <p>
 	 * Every registration on this builder is wildcard-typed — {@code readmodel(Class<? extends
-	 * ReadModel<?>>)}, {@code automation(Automation<?,?,?>)}, {@code translator(Translator<?,?>)} and
+	 * ReadModel<?>>)}, {@code automation(Automation<?,?>)}, {@code translator(Translator<?,?>)} and
 	 * the rest — so the compiler admits a read model of the payments context on the banking one. It
 	 * cannot do otherwise: the builder is typed by the context alone, and Java offers no way to project
 	 * {@code D}, {@code I} and {@code O} back out of {@code C extends BoundedContext<D,I,O>}. The
@@ -1016,24 +1117,22 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		for ( LiveModelSpecificationImpl spec : liveModelSpecs ) {
 			Class<?> readModelClass = spec.readModelClass();
 			checkEventType(foreign, "readmodel", readModelClass.getSimpleName(),
-					readModelClass, ReadModel.class, 0, "domain", domainEventRootType);
+					readModelClass, ReadModel.class, 0, spec.stream().purpose(), rootTypeOf(spec.stream()));
 		}
 		for ( EventuallyConsistentReadModelSpecificationImpl spec : eventuallyConsistentReadModelSpecs ) {
 			ReadModel<?> readModel = spec.readModel();
 			checkEventType(foreign, "readmodel", readModel.readmodelName(),
-					readModel.getClass(), ReadModel.class, 0, "domain", domainEventRootType);
+					readModel.getClass(), ReadModel.class, 0, spec.stream().purpose(), rootTypeOf(spec.stream()));
 		}
 		for ( AggregateSpecificationImpl spec : aggregateSpecifications ) {
 			Class<?> aggregateClass = spec.aggregateClass();
 			checkEventType(foreign, "aggregate", aggregateClass.getSimpleName(),
 					aggregateClass, Aggregate.class, 0, "domain", domainEventRootType);
 		}
-		for ( Automation<?,?,?> automation : automations ) {
+		for ( Automation<?,?> automation : automations ) {
 			String name = automation.getClass().getSimpleName();
 			checkEventType(foreign, "automation", name,
 					automation.getClass(), Automation.class, 1, "domain", domainEventRootType);
-			checkEventType(foreign, "automation", name,
-					automation.getClass(), Automation.class, 2, "outbound", outboundEventRootType);
 		}
 		for ( Translator<?,?> translator : translatorSpecs ) {
 			String name = translator.getClass().getSimpleName();
@@ -1062,6 +1161,27 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			throw new IllegalArgumentException(
 					"component registered over another bounded context's event types: " + String.join(", ", foreign));
 		}
+	}
+
+	/**
+	 * The in-memory read models of all three streams, each under the name a probe reports it by: a domain read
+	 * model by its name, one over another stream prefixed with that stream's purpose, since names are unique
+	 * per stream only.
+	 */
+	private static Map<String, Boolean> inMemoryReadModelsProjected ( ReadModelModule<?> domain, ReadModelModule<?> inbound, ReadModelModule<?> outbound ) {
+		Map<String, Boolean> result = new LinkedHashMap<>(domain.inMemoryReadModelsProjected());
+		inbound.inMemoryReadModelsProjected().forEach((name, done) -> result.put(BoundedContextStreams.INBOUND + "/" + name, done));
+		outbound.inMemoryReadModelsProjected().forEach((name, done) -> result.put(BoundedContextStreams.OUTBOUND + "/" + name, done));
+		return result;
+	}
+
+	/** The root event type of the stream a read model is registered on. */
+	private Class<?> rootTypeOf ( ProjectedStream stream ) {
+		return switch ( stream ) {
+			case DOMAIN -> domainEventRootType;
+			case INBOUND -> inboundEventRootType;
+			case OUTBOUND -> outboundEventRootType;
+		};
 	}
 
 	/**
@@ -1169,14 +1289,14 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		EventStream inboundEventStream;
 		EventStream outboundEventStream;
 
-		domainEventStream = historicalDomainEventRootType != null
-			? eventStore.getEventStream(BoundedContextStreams.domain(name), domainEventRootType, historicalDomainEventRootType)
+		domainEventStream = legacyDomainEventRootType != null
+			? eventStore.getEventStream(BoundedContextStreams.domain(name), domainEventRootType, legacyDomainEventRootType)
 			: eventStore.getEventStream(BoundedContextStreams.domain(name), domainEventRootType);
-		inboundEventStream = historicalInboundEventRootType != null
-			? eventStore.getEventStream(BoundedContextStreams.inbound(name), inboundEventRootType, historicalInboundEventRootType)
+		inboundEventStream = legacyInboundEventRootType != null
+			? eventStore.getEventStream(BoundedContextStreams.inbound(name), inboundEventRootType, legacyInboundEventRootType)
 			: eventStore.getEventStream(BoundedContextStreams.inbound(name), inboundEventRootType);
-		outboundEventStream = historicalOutboundEventRootType != null
-			? eventStore.getEventStream(BoundedContextStreams.outbound(name), outboundEventRootType, historicalOutboundEventRootType)
+		outboundEventStream = legacyOutboundEventRootType != null
+			? eventStore.getEventStream(BoundedContextStreams.outbound(name), outboundEventRootType, legacyOutboundEventRootType)
 			: eventStore.getEventStream(BoundedContextStreams.outbound(name), outboundEventRootType);
 		readAllInStoreEventStream = eventStore.getRawEventStream(EventStreamId.anyContext().anyPurpose());
 
@@ -1257,11 +1377,20 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		// configureCommand and configureQuery, so it exists wherever either aspect runs, and an instance
 		// running both makes both registrations. Two *different* instances under one name stay two, and
 		// ProcessorNames refuses them, since they would share one bookmark.
-		Collection<ReadModel> eventuallyConsistentReadModels = new ArrayList<>();
+		Map<ProjectedStream, Collection<ReadModel>> eventuallyConsistentReadModels = new EnumMap<>(ProjectedStream.class);
+		Map<ProjectedStream, List<LiveModelSpecificationImpl>> liveModels = new EnumMap<>(ProjectedStream.class);
+		for ( ProjectedStream stream : ProjectedStream.values() ) {
+			eventuallyConsistentReadModels.put(stream, new ArrayList<>());
+			liveModels.put(stream, new ArrayList<>());
+		}
 		for ( EventuallyConsistentReadModelSpecificationImpl spec : eventuallyConsistentReadModelSpecs ) {
-			if ( eventuallyConsistentReadModels.stream().noneMatch(registered -> registered == spec.readModel()) ) {
-				eventuallyConsistentReadModels.add(spec.readModel());
+			Collection<ReadModel> onItsStream = eventuallyConsistentReadModels.get(spec.stream());
+			if ( onItsStream.stream().noneMatch(registered -> registered == spec.readModel()) ) {
+				onItsStream.add(spec.readModel());
 			}
+		}
+		for ( LiveModelSpecificationImpl spec : liveModelSpecs ) {
+			liveModels.get(spec.stream()).add(spec);
 		}
 
 		// each module is recorded as soon as it exists, so a failure in the next one still finds it --
@@ -1277,8 +1406,17 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		AutomationModule am = new AutomationModule(name, domainEventStream, automations, instance, observer, eventEmitter);
 		constructed.add(am);
 
-		ReadModelModule rmm = new ReadModelModule(name, domainEventStream, readAllInStoreEventStream, liveModelSpecs, eventuallyConsistentReadModels, instance, observer, eventEmitter);
+		// one read model module per stream: each projects its own stream, keys its bookmarks under its own
+		// processor type, and is addressed by an operator under its own processor kind
+		ReadModelModule rmm = new ReadModelModule(name, ProjectedStream.DOMAIN, domainEventStream, readAllInStoreEventStream,
+				liveModels.get(ProjectedStream.DOMAIN), eventuallyConsistentReadModels.get(ProjectedStream.DOMAIN), instance, observer, eventEmitter);
 		constructed.add(rmm);
+		ReadModelModule inboundRmm = new ReadModelModule(name, ProjectedStream.INBOUND, inboundEventStream, null,
+				liveModels.get(ProjectedStream.INBOUND), eventuallyConsistentReadModels.get(ProjectedStream.INBOUND), instance, observer, eventEmitter);
+		constructed.add(inboundRmm);
+		ReadModelModule outboundRmm = new ReadModelModule(name, ProjectedStream.OUTBOUND, outboundEventStream, null,
+				liveModels.get(ProjectedStream.OUTBOUND), eventuallyConsistentReadModels.get(ProjectedStream.OUTBOUND), instance, observer, eventEmitter);
+		constructed.add(outboundRmm);
 		DCBModule dcb = new DCBModule(name, instance, rmm, domainEventStream, observer, eventEmitter);
 		constructed.add(dcb);
 
@@ -1301,8 +1439,10 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		om.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		pm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		policyModule.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
-		am.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((AutomationProcessor<?,?,?>) p).identification(), (AutomationProcessor<?,?,?>) p)));
-		rmm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
+		am.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((AutomationProcessor<?,?>) p).identification(), (AutomationProcessor<?,?>) p)));
+		for ( ReadModelModule<?> module : List.<ReadModelModule<?>>of(rmm, inboundRmm, outboundRmm) ) {
+			module.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
+		}
 		LeaderElector leaderElector = new LeaderElector(name, eventStorage, instance.process(),
 				LeaderElector.Distribution.of(leadershipDistribution, instance, leadershipPriority, leadershipStartupHoldBack),
 				leadershipHeartbeat, leadershipTtl, electables, eventEmitter);
@@ -1314,18 +1454,22 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		Map<ProcessorKind, Supplier<List<ProcessorStatus>>> processorStatuses = new EnumMap<>(ProcessorKind.class);
 		processorStatuses.put(ProcessorKind.READ_MODEL, rmm::processorStatuses);
+		processorStatuses.put(ProcessorKind.INBOUND_READ_MODEL, inboundRmm::processorStatuses);
+		processorStatuses.put(ProcessorKind.OUTBOUND_READ_MODEL, outboundRmm::processorStatuses);
 		processorStatuses.put(ProcessorKind.TRANSLATOR, im::processorStatuses);
 		processorStatuses.put(ProcessorKind.DISPATCHER, om::processorStatuses);
 		processorStatuses.put(ProcessorKind.PUBLISHER, pm::processorStatuses);
 		processorStatuses.put(ProcessorKind.POLICY, policyModule::processorStatuses);
 		Map<ProcessorKind, Supplier<List<ProjectorProcessorAdmin.LagTarget>>> lagTargets = new EnumMap<>(ProcessorKind.class);
 		lagTargets.put(ProcessorKind.READ_MODEL, rmm::lagTargets);
+		lagTargets.put(ProcessorKind.INBOUND_READ_MODEL, inboundRmm::lagTargets);
+		lagTargets.put(ProcessorKind.OUTBOUND_READ_MODEL, outboundRmm::lagTargets);
 		lagTargets.put(ProcessorKind.TRANSLATOR, im::lagTargets);
 		lagTargets.put(ProcessorKind.DISPATCHER, om::lagTargets);
 		lagTargets.put(ProcessorKind.PUBLISHER, pm::lagTargets);
 		lagTargets.put(ProcessorKind.POLICY, policyModule::lagTargets);
 		HealthReporter healthReporter = new HealthReporter(name, eventStorage, processorLagTolerance, processorStatuses, lagTargets,
-				am::automations, rmm::inMemoryReadModelsProjected, leaderElector::leadership,
+				am::automations, () -> inMemoryReadModelsProjected(rmm, inboundRmm, outboundRmm), leaderElector::leadership,
 				eventEmitter.enabled(), eventEmitter::consecutiveListenerFailures);
 
 		BoundedContextImpl bc =
@@ -1335,7 +1479,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 						featuresSpecification.mustDeployAutomations(),
 						featuresSpecification.mustDeployProjections(),
 						eventStore,
-						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, am, im, om, pm, policyModule, leaderElector, managementModule, instance, observer, adapterRegistry, portReporter, summarizingPorts, List.copyOf(businessRules.values()), healthReporter);
+						domainEventStream, inboundEventStream, outboundEventStream, eventEmitter, dcb, aggregateModule, rmm, inboundRmm, outboundRmm, am, im, om, pm, policyModule, leaderElector, managementModule, instance, observer, adapterRegistry, portReporter, summarizingPorts, List.copyOf(businessRules.values()), healthReporter);
 
 		// From here the context owns the modules, and it is the only thing that can release them
 		// completely: its constructor registered a JVM shutdown hook holding it, which only its own
@@ -1382,13 +1526,19 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		private BoundedContextBuilder<C> builder;
 		private Class<? extends ReadModel<?>> readModelClass;
+		private final ProjectedStream stream;
 		private LiveModelSnapshotSpecificationImpl snapshotSpecification;
 		// whether the caller has said how this read model is projected -- see rejectReadModelsWithoutAChosenMode
 		private boolean modeChosen;
 
-		public LiveModelSpecificationImpl ( BoundedContextBuilder<C> builder, Class<? extends ReadModel<?>> readModelClass ) {
+		public LiveModelSpecificationImpl ( BoundedContextBuilder<C> builder, Class<? extends ReadModel<?>> readModelClass, ProjectedStream stream ) {
 			this.builder = builder;
 			this.readModelClass = readModelClass;
+			this.stream = stream;
+		}
+
+		public ProjectedStream stream ( ) {
+			return stream;
 		}
 
 		@Override
@@ -1452,12 +1602,18 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 
 		private BoundedContextBuilder<C> builder;
 		private ReadModel<?> readModel;
+		private final ProjectedStream stream;
 		// whether the caller has said how this read model is projected -- see rejectReadModelsWithoutAChosenMode
 		private boolean modeChosen;
 
-		public EventuallyConsistentReadModelSpecificationImpl ( BoundedContextBuilder<C> builder, ReadModel<?> readModel ) {
+		public EventuallyConsistentReadModelSpecificationImpl ( BoundedContextBuilder<C> builder, ReadModel<?> readModel, ProjectedStream stream ) {
 			this.builder = builder;
 			this.readModel= readModel;
+			this.stream = stream;
+		}
+
+		public ProjectedStream stream ( ) {
+			return stream;
 		}
 
 		@Override

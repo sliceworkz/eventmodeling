@@ -111,7 +111,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 	void aRunThatPublishedSomethingIsReportedAndAnIdlePublisherReportsNone ( ) {
 		List<BoundedContextEvent> received = Collections.synchronizedList(new ArrayList<>());
 		BoundedContextBuilder<Mock> builder = baseBuilder().listener(event -> received.add(event.data()));
-		builder.publisher(new MockPublisher());
+		builder.outbound().publisher(new MockPublisher());
 		Mock context = buildBoundedContext(builder);
 
 		assertTrue(processed(received).isEmpty(), "an idle publisher must not report runs: " + received);
@@ -138,7 +138,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 	@Test
 	void aPublisherIsAProcessorAnOperatorCanStopAndRestart ( ) {
 		BoundedContextBuilder<Mock> builder = baseBuilder();
-		builder.publisher(new MockPublisher());
+		builder.outbound().publisher(new MockPublisher());
 		Mock context = buildBoundedContext(builder);
 
 		ProcessorStatus status = context.processors().stream()
@@ -162,7 +162,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 	void aReadAsOfAnEventIsNeverSeeded ( ) {
 		BoundedContextBuilder<Mock> builder = baseBuilder();
 		builder.readmodel(SeededItem.class).live();
-		builder.publisher(new SeededItemPublisher());
+		builder.outbound().publisher(new SeededItemPublisher());
 		Mock context = buildBoundedContext(builder);
 
 		context.event(EphemeralEvent.of(new FirstDomainEvent("v1"), ItemReadModel.tags("a")));
@@ -186,7 +186,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 	@Test
 	void aPublisherWhoseReadModelIsNotRegisteredLiveIsRejected ( ) {
 		BoundedContextBuilder<Mock> builder = baseBuilder();
-		builder.publisher(new ItemPublisher());
+		builder.outbound().publisher(new ItemPublisher());
 
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, builder::build);
 		assertEquals("publisher reads a read model that is not registered live on this instance: ItemPublisher reads ItemReadModel"
@@ -226,8 +226,8 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 	@Test
 	void twoPublishersUnderOneNameAreRejected ( ) {
 		BoundedContextBuilder<Mock> builder = baseBuilder();
-		builder.publisher(new MockPublisher());
-		builder.publisher(new MockPublisher());
+		builder.outbound().publisher(new MockPublisher());
+		builder.outbound().publisher(new MockPublisher());
 
 		assertThrows(IllegalArgumentException.class, builder::build);
 	}
@@ -235,7 +235,7 @@ public class PublisherModuleTest extends AbstractMockDomainTest {
 	@Test
 	void anAnonymousPublisherIsRejected ( ) {
 		BoundedContextBuilder<Mock> builder = baseBuilder();
-		builder.publisher(new MockPublisher() { });
+		builder.outbound().publisher(new MockPublisher() { });
 
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, builder::build);
 		assertFalse(e.getMessage().isBlank());

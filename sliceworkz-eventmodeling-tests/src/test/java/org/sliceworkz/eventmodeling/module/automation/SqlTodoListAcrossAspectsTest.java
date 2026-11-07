@@ -137,7 +137,7 @@ public class SqlTodoListAcrossAspectsTest extends AbstractMockDomainTest {
 		}
 	}
 
-	static class HandleItemsAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class HandleItemsAutomation implements Automation<String,MockDomainEvent> {
 
 		private final ItemsToHandle todoList;
 		private final List<String> handled = new CopyOnWriteArrayList<>();
@@ -152,7 +152,7 @@ public class SqlTodoListAcrossAspectsTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String item, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String item, AutomationContext<MockDomainEvent> context ) {
 			handled.add(item);
 			return context.event(EphemeralEvent.of(new SecondDomainEvent(item), Tags.none()).withIdempotencyKey("handled-" + item));
 		}

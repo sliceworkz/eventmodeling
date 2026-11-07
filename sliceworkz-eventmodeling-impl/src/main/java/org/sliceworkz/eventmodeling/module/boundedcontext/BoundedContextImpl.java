@@ -72,6 +72,8 @@ import org.sliceworkz.eventmodeling.module.outbound.PublisherModule;
 import org.sliceworkz.eventmodeling.module.policy.PolicyModule;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventmodeling.module.readmodels.ReadModelModule;
+import org.sliceworkz.eventmodeling.inbound.InboundCapabilities;
+import org.sliceworkz.eventmodeling.outbound.OutboundCapabilities;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.UnboundedReadModelCapability;
 import org.sliceworkz.eventmodeling.slices.Aspect;
@@ -114,6 +116,11 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private EventStream<DOMAIN_EVENT_TYPE> domainEventStream;
 
 	private ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule;
+	private ReadModelModule<INBOUND_EVENT_TYPE> inboundReadmodelModule;
+	private ReadModelModule<OUTBOUND_EVENT_TYPE> outboundReadmodelModule;
+	/** {@code inbound()} and {@code outbound()}: made once, since a caller may keep the narrow reference it narrows them to. */
+	private final InboundCapabilities<INBOUND_EVENT_TYPE> inboundCapabilities = new InboundCapabilitiesImpl();
+	private final OutboundCapabilities<OUTBOUND_EVENT_TYPE> outboundCapabilities = new OutboundCapabilitiesImpl();
 	private DCBModule<DOMAIN_EVENT_TYPE> dcbDomainModule;
 	private AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule;
 	private AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule;
@@ -189,6 +196,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			DCBModule<DOMAIN_EVENT_TYPE> dcbModule,
 			AggregateModule<DOMAIN_EVENT_TYPE> aggregateModule,
 			ReadModelModule<DOMAIN_EVENT_TYPE> readmodelModule,
+			ReadModelModule<INBOUND_EVENT_TYPE> inboundReadmodelModule,
+			ReadModelModule<OUTBOUND_EVENT_TYPE> outboundReadmodelModule,
 			AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationModule,
 			InboundModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> inboundModule,
 			OutboundModule<OUTBOUND_EVENT_TYPE> outboundModule,
@@ -217,6 +226,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.domainEventStream = domainEventStream;
 		
 		this.readmodelModule = readmodelModule;
+		this.inboundReadmodelModule = inboundReadmodelModule;
+		this.outboundReadmodelModule = outboundReadmodelModule;
 		this.inboundModule = inboundModule;
 		this.dcbDomainModule = dcbModule;
 		this.automationModule = automationModule;
@@ -365,6 +376,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 			this.automationModule.start();
 			// the read models' processors run from here; finishStart waits for the ephemeral ones
 			this.readmodelModule.startProcessors();
+			this.inboundReadmodelModule.startProcessors();
+			this.outboundReadmodelModule.startProcessors();
 			if (managementModule != null) {
 				// idempotent: subscribed once, at the stream's head, and kept across stop()/start() so an
 				// instruction can start a stopped context again -- or stop one that is still starting
@@ -386,6 +399,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	private void finishStart ( Starting starting ) {
 		try {
 			this.readmodelModule.awaitEphemeralReadModelsProjected(() -> isStillStarting(starting.generation()));
+			this.inboundReadmodelModule.awaitEphemeralReadModelsProjected(() -> isStillStarting(starting.generation()));
+			this.outboundReadmodelModule.awaitEphemeralReadModelsProjected(() -> isStillStarting(starting.generation()));
 			boolean reachedRunning;
 			synchronized (this) {
 				// unless a stop() or terminate() came in during the wait, which has the last word
@@ -433,6 +448,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.dcbDomainModule.stop();
 		this.automationModule.stop();
 		this.readmodelModule.stop();
+		this.inboundReadmodelModule.stop();
+		this.outboundReadmodelModule.stop();
 		// after the processors have stopped, so the leases are handed over once nothing here still
 		// works on them -- a stopped instance holding leases would stall the whole deployment
 		this.leaderElector.stop();
@@ -466,6 +483,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		this.dcbDomainModule.terminate();
 		this.automationModule.terminate();
 		this.readmodelModule.terminate();
+		this.inboundReadmodelModule.terminate();
+		this.outboundReadmodelModule.terminate();
 		// releases the held leases once the processor threads are drained, so a standby instance takes
 		// over promptly instead of waiting out the lease ttl. Leases live on the storage, which stays
 		// open: only the store below is ours to close.
@@ -598,6 +617,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	public List<ProcessorStatus> processors ( ) {
 		List<ProcessorStatus> result = new ArrayList<>();
 		result.addAll(readmodelModule.processorStatuses());
+		result.addAll(inboundReadmodelModule.processorStatuses());
+		result.addAll(outboundReadmodelModule.processorStatuses());
 		result.addAll(inboundModule.processorStatuses());
 		result.addAll(outboundModule.processorStatuses());
 		result.addAll(publisherModule.processorStatuses());
@@ -609,6 +630,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	public boolean restartProcessor ( ProcessorKind kind, String name ) {
 		return switch ( kind ) {
 			case READ_MODEL -> readmodelModule.restartProcessor(name);
+			case INBOUND_READ_MODEL -> inboundReadmodelModule.restartProcessor(name);
+			case OUTBOUND_READ_MODEL -> outboundReadmodelModule.restartProcessor(name);
 			case TRANSLATOR -> inboundModule.restartProcessor(name);
 			case DISPATCHER -> outboundModule.restartProcessor(name);
 			case PUBLISHER -> publisherModule.restartProcessor(name);
@@ -620,6 +643,8 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	public boolean stopProcessor ( ProcessorKind kind, String name ) {
 		return switch ( kind ) {
 			case READ_MODEL -> readmodelModule.stopProcessor(name);
+			case INBOUND_READ_MODEL -> inboundReadmodelModule.stopProcessor(name);
+			case OUTBOUND_READ_MODEL -> outboundReadmodelModule.stopProcessor(name);
 			case TRANSLATOR -> inboundModule.stopProcessor(name);
 			case DISPATCHER -> outboundModule.stopProcessor(name);
 			case PUBLISHER -> publisherModule.stopProcessor(name);
@@ -683,25 +708,79 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 	}
 
 	/*
-	 * INBOUND INTEGRATION
+	 * INBOUND INTEGRATION, and the read models over the inbound and outbound streams
 	 */
 
 	@Override
-	public void incoming(INBOUND_EVENT_TYPE event) {
+	public InboundCapabilities<INBOUND_EVENT_TYPE> inbound ( ) {
+		return inboundCapabilities;
+	}
+
+	@Override
+	public OutboundCapabilities<OUTBOUND_EVENT_TYPE> outbound ( ) {
+		return outboundCapabilities;
+	}
+
+	/**
+	 * {@code inbound()}: this context's own methods for the inbound stream, so a call through it picks up the
+	 * caller's {@code TracingScope} and reports to the observer exactly as a call on the context did.
+	 */
+	private class InboundCapabilitiesImpl implements InboundCapabilities<INBOUND_EVENT_TYPE> {
+
+		@Override
+		public void incoming ( INBOUND_EVENT_TYPE event ) {
+			BoundedContextImpl.this.incoming(event);
+		}
+
+		@Override
+		public void incoming ( INBOUND_EVENT_TYPE event, String idempotencyKey ) {
+			BoundedContextImpl.this.incoming(event, idempotencyKey);
+		}
+
+		@Override
+		public List<EventReference> translate ( INBOUND_EVENT_TYPE event ) {
+			return BoundedContextImpl.this.translate(event);
+		}
+
+		@Override
+		public <READ_MODEL extends ReadModel<? extends INBOUND_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params ) {
+			rejectATracingAmong(readModelClass, params);
+			return inboundReadmodelModule.read(readModelClass, callerTracing(), params);
+		}
+
+		@Override
+		public String toString ( ) {
+			return "inbound of bounded context '%s'".formatted(name);
+		}
+	}
+
+	/** {@code outbound()}: the read models over the outbound stream. */
+	private class OutboundCapabilitiesImpl implements OutboundCapabilities<OUTBOUND_EVENT_TYPE> {
+
+		@Override
+		public <READ_MODEL extends ReadModel<? extends OUTBOUND_EVENT_TYPE>> READ_MODEL read ( Class<READ_MODEL> readModelClass, Object... params ) {
+			rejectATracingAmong(readModelClass, params);
+			return outboundReadmodelModule.read(readModelClass, callerTracing(), params);
+		}
+
+		@Override
+		public String toString ( ) {
+			return "outbound of bounded context '%s'".formatted(name);
+		}
+	}
+
+	private void incoming(INBOUND_EVENT_TYPE event) {
 		this.incoming ( event, callerTracing() );
 	}
 
-	// traced variant: a capability takes no tracing; the no-tracing overload binds one
 	private void incoming(INBOUND_EVENT_TYPE event, Tracing tracing ) {
 		this.incoming ( event, null, tracing.instance(instance) );
 	}
 
-	@Override
-	public void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey ) {
+	private void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey ) {
 		this.incoming ( event, idempotencyKey, callerTracing() );
 	}
 
-	// traced variant: a capability takes no tracing; the no-tracing overload binds one
 	private void incoming(INBOUND_EVENT_TYPE event, String idempotencyKey, Tracing tracing ) {
 		tracing = tracing.instance(instance);
 
@@ -716,12 +795,10 @@ public class BoundedContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EV
 		}
 	}
 
-	@Override
-	public List<EventReference> translate(INBOUND_EVENT_TYPE event) {
+	private List<EventReference> translate(INBOUND_EVENT_TYPE event) {
 		return this.translate ( event, callerTracing() );
 	}
 
-	// traced variant: a capability takes no tracing; the no-tracing overload binds one
 	private List<EventReference> translate(INBOUND_EVENT_TYPE event, Tracing tracing) {
 		tracing = tracing.instance(instance);
 

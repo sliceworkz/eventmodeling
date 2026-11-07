@@ -90,7 +90,7 @@ public abstract class TranslatorTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 
 	@Override
 	public void configure ( BoundedContextBuilder<?> boundedContextBuilder ) {
-		translators().forEach(boundedContextBuilder::translator);
+		translators().forEach(boundedContextBuilder.inbound()::translator);
 	}
 
 	public TestDefinition given ( @SuppressWarnings("unchecked") DOMAIN_EVENT_TYPE... events ) {
@@ -172,7 +172,7 @@ public abstract class TranslatorTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 			long inboundEventsBefore = inboundStream().query(EventFilter.matchAll()).size();
 			try {
 				EventReference bookmark = domainStream().head().orElse(null);
-				kernel().translate(inboundEvent);
+				kernel().inbound().translate(inboundEvent);
 				List<Event<DOMAIN_EVENT_TYPE>> newEvents = new ArrayList<>(domainStream().query(EventFilter.matchAll(), bookmark));
 				this.result = new TestResultImpl(newEvents);
 			} catch ( Exception exception ) {

@@ -114,7 +114,7 @@ public class AutomationDuringStartupTest extends AbstractMockDomainTest {
 				"the automation handled an item resolved later in the history, on a todo list that had not caught up yet: " + handled);
 	}
 
-	static class RecordingAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class RecordingAutomation implements Automation<String,MockDomainEvent> {
 
 		private final OpenItems todoList;
 		private final List<String> handled;
@@ -130,7 +130,7 @@ public class AutomationDuringStartupTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			handled.add(todoItem); // an external call would go here: a payment, an e-mail
 			return Optional.empty();
 		}

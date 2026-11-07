@@ -56,8 +56,8 @@ public class RegisteringByClassTest extends AbstractMockDomainTest {
 	void aPublicClassWithANoArgumentConstructorIsRegistered ( ) {
 		Mock ctx = buildBoundedContext(
 			baseBuilder()
-				.translator(PublicTranslator.class)
-				.dispatcher(PublicDispatcher.class)
+				.inbound().translator(PublicTranslator.class).done()
+				.outbound().dispatcher(PublicDispatcher.class).done()
 		);
 		assertNotNull(ctx);
 	}
@@ -69,7 +69,7 @@ public class RegisteringByClassTest extends AbstractMockDomainTest {
 	@Test
 	void aClassWithoutANoArgumentConstructorIsRefused ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-				() -> baseBuilder().translator(TranslatorTakingArguments.class));
+				() -> baseBuilder().inbound().translator(TranslatorTakingArguments.class).done());
 
 		assertTrue(e.getMessage().contains(TranslatorTakingArguments.class.getName()),
 				"the message should name the class: " + e.getMessage());
@@ -83,7 +83,7 @@ public class RegisteringByClassTest extends AbstractMockDomainTest {
 	@Test
 	void anAbstractClassIsRefused ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-				() -> baseBuilder().dispatcher(AbstractDispatcher.class));
+				() -> baseBuilder().outbound().dispatcher(AbstractDispatcher.class).done());
 
 		assertTrue(e.getMessage().contains(AbstractDispatcher.class.getName()),
 				"the message should name the class: " + e.getMessage());
@@ -101,7 +101,7 @@ public class RegisteringByClassTest extends AbstractMockDomainTest {
 	@Test
 	void aConstructorTheFrameworkCannotReachIsRefused ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-				() -> baseBuilder().translator(TranslatorWithAPrivateConstructor.class));
+				() -> baseBuilder().inbound().translator(TranslatorWithAPrivateConstructor.class).done());
 
 		assertTrue(e.getMessage().contains(TranslatorWithAPrivateConstructor.class.getName()),
 				"the message should name the class: " + e.getMessage());
@@ -117,7 +117,7 @@ public class RegisteringByClassTest extends AbstractMockDomainTest {
 	@Test
 	void aConstructorThatThrewReportsWhatItThrew ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-				() -> baseBuilder().dispatcher(ThrowingDispatcher.class));
+				() -> baseBuilder().outbound().dispatcher(ThrowingDispatcher.class).done());
 
 		assertTrue(e.getMessage().contains(ThrowingDispatcher.class.getName()),
 				"the message should name the class: " + e.getMessage());

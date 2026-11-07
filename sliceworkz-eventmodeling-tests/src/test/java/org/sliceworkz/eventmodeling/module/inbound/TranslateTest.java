@@ -52,12 +52,12 @@ public class TranslateTest extends AbstractMockDomainTest {
 
 	@Test
 	void translateRunsMatchingTranslatorSynchronouslyAndBypassesInboundStream ( ) {
-		Mock ctx = buildBoundedContext(baseBuilder().translator(new SomeInboundTranslator()));
+		Mock ctx = buildBoundedContext(baseBuilder().inbound().translator(new SomeInboundTranslator()).done());
 
 		int inboundBefore = inboundStream().query(EventFilter.matchAll()).size();
 		int domainBefore = domainStream().query(EventFilter.matchAll()).size();
 
-		List<EventReference> raised = ctx.translate(new SomeInboundEvent("hello"));
+		List<EventReference> raised = ctx.inbound().translate(new SomeInboundEvent("hello"));
 
 		// the matching translator raised exactly one domain event and we got its reference back
 		assertEquals(1, raised.size());
@@ -79,11 +79,11 @@ public class TranslateTest extends AbstractMockDomainTest {
 	@Test
 	void anInteractivelyTranslatedEventCarriesTheCallersFlowAndAnIdOfItsOwn ( ) {
 		CapturingTranslator translator = new CapturingTranslator();
-		Mock ctx = buildBoundedContext(baseBuilder().translator(translator));
+		Mock ctx = buildBoundedContext(baseBuilder().inbound().translator(translator).done());
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("partner").correlationId("flow-7");
-		BoundTracing.call(tracing, ( ) -> ctx.translate(new SomeInboundEvent("hello")));
-		BoundTracing.call(tracing, ( ) -> ctx.translate(new SomeInboundEvent("again")));
+		BoundTracing.call(tracing, ( ) -> ctx.inbound().translate(new SomeInboundEvent("hello")));
+		BoundTracing.call(tracing, ( ) -> ctx.inbound().translate(new SomeInboundEvent("again")));
 
 		assertEquals(2, translator.handed.size());
 		Event<MockInboundEvent> first = translator.handed.get(0);
@@ -96,11 +96,11 @@ public class TranslateTest extends AbstractMockDomainTest {
 	@Test
 	void translateWithoutMatchingTranslatorThrows ( ) {
 		// the registered translator only matches FirstDomainEvent, so the inbound event matches nothing
-		Mock ctx = buildBoundedContext(baseBuilder().translator(new NonMatchingTranslator()));
+		Mock ctx = buildBoundedContext(baseBuilder().inbound().translator(new NonMatchingTranslator()).done());
 
 		int domainBefore = domainStream().query(EventFilter.matchAll()).size();
 
-		NoTranslatorRegisteredException cause = assertTranslateThrows(() -> ctx.translate(new SomeInboundEvent("hello")));
+		NoTranslatorRegisteredException cause = assertTranslateThrows(() -> ctx.inbound().translate(new SomeInboundEvent("hello")));
 		assertEquals(
 			"no translator registered for inbound event 'SomeInboundEvent' in bounded context 'UnitTestBoundedContext'",
 			cause.getMessage());
@@ -113,7 +113,7 @@ public class TranslateTest extends AbstractMockDomainTest {
 	void translateWithNoTranslatorsRegisteredThrows ( ) {
 		Mock ctx = buildBoundedContext(baseBuilder());
 
-		assertTranslateThrows(() -> ctx.translate(new SomeInboundEvent("hello")));
+		assertTranslateThrows(() -> ctx.inbound().translate(new SomeInboundEvent("hello")));
 	}
 
 	/**

@@ -258,12 +258,12 @@ public class OperatorStopTest extends AbstractMockDomainTest {
 		}
 
 		ContextSetup with ( NoopTranslator translator ) {
-			builder.translator(translator);
+			builder.inbound().translator(translator);
 			return this;
 		}
 
 		ContextSetup with ( NoopDispatcher dispatcher ) {
-			builder.dispatcher(dispatcher);
+			builder.outbound().dispatcher(dispatcher);
 			return this;
 		}
 	}

@@ -609,7 +609,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	 * The completion event carries an idempotency key derived from the item — the framework's own
 	 * recipe for at-least-once delivery across restarts and failovers.
 	 */
-	static class RecordingAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class RecordingAutomation implements Automation<String,MockDomainEvent> {
 
 		private final EventSourcedTodoList todoList;
 		private final List<String> handled = new CopyOnWriteArrayList<>();
@@ -628,7 +628,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			handled.add(todoItem);
 			return context.event(EphemeralEvent.of(new SecondDomainEvent(todoItem), Tags.none()).withIdempotencyKey("done-" + todoItem));
 		}
@@ -643,7 +643,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 	 * and asks to be stopped — the same class on both instances, so both contend for one lease,
 	 * with only one of them broken.
 	 */
-	static class StoppableAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class StoppableAutomation implements Automation<String,MockDomainEvent> {
 
 		private final EventSourcedTodoList todoList;
 		private final boolean failing;
@@ -664,7 +664,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			if ( failing ) {
 				throw new IllegalStateException("this instance cannot handle '%s'".formatted(todoItem));
 			}
@@ -673,7 +673,7 @@ public class LeaderElectionTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public AutomationFailureAction onFailure ( String todoItem, Throwable cause, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public AutomationFailureAction onFailure ( String todoItem, Throwable cause, AutomationContext<MockDomainEvent> context ) {
 			return AutomationFailureAction.STOP_AUTOMATION;
 		}
 

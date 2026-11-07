@@ -62,8 +62,8 @@ public class ProjectorBatchNamingTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"))
 				.eventStoreObserver(storeObserver);
 		builder.readmodel(new MockReadModel("balances", ReadModelStorage.EPHEMERAL)).eventuallyConsistent();
-		builder.publisher(new MockPublisher());
-		builder.dispatcher(new PublishingDispatcher());
+		builder.outbound().publisher(new MockPublisher());
+		builder.outbound().dispatcher(new PublishingDispatcher());
 		Mock domain = buildBoundedContext(builder);
 
 		domain.event(new FirstDomainEvent("projected"));

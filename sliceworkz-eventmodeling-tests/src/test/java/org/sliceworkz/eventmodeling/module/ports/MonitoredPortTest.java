@@ -571,11 +571,11 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 	@Test
 	void aCallFromATranslatorNamesTheTranslator ( ) {
 		BoundedContextBuilder<Mock> builder = slicedBuilder(PortMonitoring.perCall());
-		builder.translator(new LookupTranslator(builder.port(GatewayPort.class)));
+		builder.inbound().translator(new LookupTranslator(builder.port(GatewayPort.class)));
 		Mock domain = buildBoundedContext(builder);
 		observed.clear();
 
-		BoundTracing.call(Tracing.actorAndChannel("bob", "api").correlationId("flow-t"), ( ) -> domain.translate(new SomeInboundEvent("hi")));
+		BoundTracing.call(Tracing.actorAndChannel("bob", "api").correlationId("flow-t"), ( ) -> domain.inbound().translate(new SomeInboundEvent("hi")));
 
 		EphemeralEvent<BoundedContextEvent> event = onlyEvent(PortCalled.class);
 		assertEquals(PortCaller.translator("LookupTranslator"), ((PortCalled) event.data()).caller());
@@ -981,7 +981,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		}
 	}
 
-	static class LookUpAutomation implements Automation<ItemToLookUp,MockDomainEvent,MockOutboundEvent> {
+	static class LookUpAutomation implements Automation<ItemToLookUp,MockDomainEvent> {
 
 		private final ItemsToLookUp todoList;
 		private final GatewayPort gateway;
@@ -997,7 +997,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( ItemToLookUp item, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( ItemToLookUp item, AutomationContext<MockDomainEvent> context ) {
 			return context.event(EphemeralEvent.of(new SecondDomainEvent(gateway.answer(item.value())), Tags.none()).withIdempotencyKey("looked-up:" + item.value()));
 		}
 	}

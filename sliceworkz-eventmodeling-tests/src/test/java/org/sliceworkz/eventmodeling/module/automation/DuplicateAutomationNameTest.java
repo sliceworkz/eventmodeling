@@ -120,7 +120,7 @@ public class DuplicateAutomationNameTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"));
 	}
 
-	static class MockAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class MockAutomation implements Automation<String,MockDomainEvent> {
 
 		private final String todoName;
 
@@ -134,7 +134,7 @@ public class DuplicateAutomationNameTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			return Optional.empty();
 		}
 	}

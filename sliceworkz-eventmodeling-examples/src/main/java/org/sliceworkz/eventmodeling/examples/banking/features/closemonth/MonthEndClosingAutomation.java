@@ -49,7 +49,7 @@ import org.sliceworkz.eventstore.events.EventReference;
  * idempotency keys prevent duplicate MonthClosed/MonthOpened events.</p>
  */
 public class MonthEndClosingAutomation
-		implements Automation<AccountToClose, BankingEvent, BankingOutboundEvent> {
+		implements Automation<AccountToClose, BankingEvent> {
 
 	private final AccountsToCloseTodoList todoList;
 
@@ -70,7 +70,7 @@ public class MonthEndClosingAutomation
 	@Override
 	public Optional<EventReference> handle(
 			AccountToClose todoItem,
-			AutomationContext<BankingEvent, BankingOutboundEvent> context) {
+			AutomationContext<BankingEvent> context) {
 
 		// Execute the close command for this account
 		return context.execute(

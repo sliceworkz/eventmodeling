@@ -142,7 +142,7 @@ public class IdleProcessorsHoldNoPlatformThreadsTest extends AbstractMockDomainT
 	}
 
 	/** An automation's name is its class, so each idle one is a class of its own. */
-	abstract static class IdleAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	abstract static class IdleAutomation implements Automation<String,MockDomainEvent> {
 
 		private final TodoListReadModel<MockDomainEvent,String> todoList;
 
@@ -156,7 +156,7 @@ public class IdleProcessorsHoldNoPlatformThreadsTest extends AbstractMockDomainT
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			return Optional.empty();
 		}
 	}

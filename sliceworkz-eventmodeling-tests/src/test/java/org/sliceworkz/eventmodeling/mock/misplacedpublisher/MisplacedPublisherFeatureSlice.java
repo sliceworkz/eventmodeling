@@ -29,7 +29,7 @@ public class MisplacedPublisherFeatureSlice implements Slice<Mock> {
 
 	@Override
 	public void configureProjection ( BoundedContextBuilder<Mock> builder ) {
-		builder.publisher(new MockPublisher());
+		builder.outbound().publisher(new MockPublisher());
 	}
 
 }

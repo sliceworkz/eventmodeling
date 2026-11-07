@@ -34,7 +34,7 @@ import org.sliceworkz.eventstore.events.EventReference;
  */
 public class AutomationPacingTest {
 
-	private static Automation<String,Object,Object> automation ( Duration idle ) {
+	private static Automation<String,Object> automation ( Duration idle ) {
 		return new Automation<>() {
 			@Override
 			public TodoListReadModel<Object,String> getTodoList ( ) {
@@ -42,7 +42,7 @@ public class AutomationPacingTest {
 			}
 
 			@Override
-			public Optional<EventReference> handle ( String todoItem, AutomationContext<Object,Object> context ) {
+			public Optional<EventReference> handle ( String todoItem, AutomationContext<Object> context ) {
 				return Optional.empty();
 			}
 
@@ -65,7 +65,7 @@ public class AutomationPacingTest {
 
 	@Test
 	void aFailingAutomationBacksOffFromThePollIntervalWhateverItsIdleInterval ( ) {
-		Automation<String,Object,Object> hourly = automation(Duration.ofHours(1));
+		Automation<String,Object> hourly = automation(Duration.ofHours(1));
 		RuntimeException down = new RuntimeException("down");
 		assertEquals(Duration.ofSeconds(10), hourly.delayBeforeNextBatch(1, down));
 		assertEquals(Duration.ofSeconds(20), hourly.delayBeforeNextBatch(2, down));

@@ -39,7 +39,7 @@ public class PublishingFeatureSlice implements Slice<Mock> {
 	public void configureAutomation ( BoundedContextBuilder<Mock> builder ) {
 		builder
 			.readmodel(ItemReadModel.class).live()
-			.publisher(new ItemPublisher());
+			.outbound().publisher(new ItemPublisher()).done();
 	}
 
 }

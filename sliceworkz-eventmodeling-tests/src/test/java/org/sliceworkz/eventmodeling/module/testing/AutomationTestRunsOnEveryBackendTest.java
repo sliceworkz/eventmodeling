@@ -99,7 +99,7 @@ public class AutomationTestRunsOnEveryBackendTest extends AutomationTest<String,
 	 * — which is what makes the redelivery scenario a no-op. Items whose value starts with
 	 * {@code poison} throw instead, and the failure action is scripted per test.
 	 */
-	static class TestAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class TestAutomation implements Automation<String,MockDomainEvent> {
 
 		private final TodoList todoList = new TodoList();
 		private AutomationFailureAction failureAction = AutomationFailureAction.RETRY_ITEM;
@@ -111,7 +111,7 @@ public class AutomationTestRunsOnEveryBackendTest extends AutomationTest<String,
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			if ( todoItem.startsWith("poison") ) {
 				throw new IllegalStateException("cannot handle " + todoItem);
 			}
@@ -119,7 +119,7 @@ public class AutomationTestRunsOnEveryBackendTest extends AutomationTest<String,
 		}
 
 		@Override
-		public AutomationFailureAction onFailure ( String todoItem, Throwable cause, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public AutomationFailureAction onFailure ( String todoItem, Throwable cause, AutomationContext<MockDomainEvent> context ) {
 			return failureAction;
 		}
 
@@ -147,7 +147,7 @@ public class AutomationTestRunsOnEveryBackendTest extends AutomationTest<String,
 	}
 
 	@Override
-	public Automation<String,MockDomainEvent,MockOutboundEvent> automation ( ) {
+	public Automation<String,MockDomainEvent> automation ( ) {
 		return automation;
 	}
 

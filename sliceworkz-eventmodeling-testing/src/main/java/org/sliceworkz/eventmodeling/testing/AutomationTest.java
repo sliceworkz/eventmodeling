@@ -53,7 +53,7 @@ import org.sliceworkz.eventstore.query.Limit;
  *     private final SimulatedPaymentGateway gateway = new SimulatedPaymentGateway();
  *
  *     @Override
- *     public Automation<PaymentToExecute, PaymentsDomainEvent, PaymentsOutboundEvent> automation ( ) {
+ *     public Automation<PaymentToExecute, PaymentsDomainEvent> automation ( ) {
  *         return new ExecutePaymentAutomation(new PaymentsToExecuteTodoList(), gateway);
  *     }
  *
@@ -114,7 +114,7 @@ import org.sliceworkz.eventstore.query.Limit;
  */
 public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> extends AbstractBoundedContextTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
 
-	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationUnderTest;
+	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> automationUnderTest;
 	private Projector<DOMAIN_EVENT_TYPE> todoListProjector;
 	private boolean automationStopped;
 
@@ -123,7 +123,7 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 	 * pair, never a shared one — the harness projects the todo list itself, and state left over from
 	 * another test would be indistinguishable from projected state.
 	 */
-	public abstract Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation ( );
+	public abstract Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> automation ( );
 
 	/**
 	 * Nothing to register: the harness owns the automation and its todo list (see the class javadoc
@@ -142,7 +142,7 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 	 * Called lazily from the first fluent call rather than from {@code setUp()}, so a subclass'
 	 * {@code automation()} may build on fields its own {@code @BeforeEach} assigns.
 	 */
-	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automationUnderTest ( ) {
+	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> automationUnderTest ( ) {
 		if ( automationUnderTest == null ) {
 			automationUnderTest = automation();
 			todoListProjector = Projector.from(domainStream()).into(automationUnderTest.getTodoList()).build();
@@ -155,7 +155,7 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 	 * runs, so an item implementing {@code CorrelatedTodoItem} has its handling stamped with its
 	 * flow's correlation id in a test exactly as it would be at runtime.
 	 */
-	private Function<TODO_ITEM_TYPE,AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContexts ( ) {
+	private Function<TODO_ITEM_TYPE,AutomationContext<DOMAIN_EVENT_TYPE>> automationContexts ( ) {
 		return AutomationBatch.correlatedContexts(
 				tracing -> new AutomationContextImpl<>(kernel(), tracing),
 				Tracing.init(InstanceFactory.determine("unittests")));
@@ -236,7 +236,7 @@ public abstract class AutomationTest<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,INBOUND_EV
 		}
 
 		private BatchResult runOneBatch ( boolean catchUpTodoListFirst ) {
-			Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation = automationUnderTest();
+			Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> automation = automationUnderTest();
 			if ( automationStopped ) {
 				fail("the automation has stopped itself - in production it will not run again until it is restarted; call restartAutomation() to put it back to work");
 			}

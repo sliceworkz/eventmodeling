@@ -42,7 +42,7 @@ import org.sliceworkz.eventstore.events.EventReference;
  * The items are independent of one another, but the default failure action ({@code RETRY_ITEM}) is kept: a
  * report that fails is almost always the store being unavailable, which would fail every item behind it too.
  */
-public class ReportExcessBalanceAutomation implements Automation<ExcessBalanceToReport, BankingEvent, BankingOutboundEvent> {
+public class ReportExcessBalanceAutomation implements Automation<ExcessBalanceToReport, BankingEvent> {
 
 	private final DepositsAboveGuaranteeTodoList todoList;
 
@@ -56,7 +56,7 @@ public class ReportExcessBalanceAutomation implements Automation<ExcessBalanceTo
 	}
 
 	@Override
-	public Optional<EventReference> handle ( ExcessBalanceToReport item, AutomationContext<BankingEvent, BankingOutboundEvent> context ) {
+	public Optional<EventReference> handle ( ExcessBalanceToReport item, AutomationContext<BankingEvent> context ) {
 		return context.execute(new ReportExcessBalanceCommand(item.accountId(), item.deposit()));
 	}
 }

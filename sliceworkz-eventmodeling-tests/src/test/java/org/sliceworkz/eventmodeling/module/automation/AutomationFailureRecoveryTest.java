@@ -359,10 +359,10 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 	}
 
 	interface Handler {
-		Optional<EventReference> handle ( String item, AutomationContext<MockDomainEvent,MockOutboundEvent> context );
+		Optional<EventReference> handle ( String item, AutomationContext<MockDomainEvent> context );
 	}
 
-	static class TestAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class TestAutomation implements Automation<String,MockDomainEvent> {
 
 		private final TodoListReadModel<MockDomainEvent,String> todoList;
 		private final Handler handler;
@@ -389,13 +389,13 @@ public class AutomationFailureRecoveryTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			attempts.incrementAndGet();
 			return handler.handle(todoItem, context);
 		}
 
 		@Override
-		public AutomationFailureAction onFailure ( String todoItem, Throwable cause, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public AutomationFailureAction onFailure ( String todoItem, Throwable cause, AutomationContext<MockDomainEvent> context ) {
 			return failureAction != null ? failureAction : Automation.super.onFailure(todoItem, cause, context);
 		}
 

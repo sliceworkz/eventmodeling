@@ -50,8 +50,8 @@ public class DuplicateDispatcherNameTest extends AbstractMockDomainTest {
 	void duplicateDispatcherClassRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
 			baseBuilder()
-				.dispatcher(new MockDispatcher())
-				.dispatcher(new MockDispatcher())
+				.outbound().dispatcher(new MockDispatcher()).done()
+				.outbound().dispatcher(new MockDispatcher()).done()
 				.build();
 		});
 		assertEquals("duplicate dispatcher name 'MockDispatcher' - bookmarks would collide", e.getMessage());
@@ -65,7 +65,7 @@ public class DuplicateDispatcherNameTest extends AbstractMockDomainTest {
 	@Test
 	void anonymousDispatcherRejected ( ) {
 		IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
-			baseBuilder().dispatcher(new MockDispatcher() { }).build();
+			baseBuilder().outbound().dispatcher(new MockDispatcher() { }).done().build();
 		});
 		assertTrue(e.getMessage().contains("must be a named class"), e.getMessage());
 		assertTrue(e.getMessage().contains("bookmark"), "the message should say why a name is needed: " + e.getMessage());
@@ -74,7 +74,7 @@ public class DuplicateDispatcherNameTest extends AbstractMockDomainTest {
 	@Test
 	void singleDispatcherBuildsSuccessfully ( ) {
 		Mock ctx = buildBoundedContext(
-			baseBuilder().dispatcher(new MockDispatcher())
+			baseBuilder().outbound().dispatcher(new MockDispatcher()).done()
 		);
 		assertNotNull(ctx);
 	}

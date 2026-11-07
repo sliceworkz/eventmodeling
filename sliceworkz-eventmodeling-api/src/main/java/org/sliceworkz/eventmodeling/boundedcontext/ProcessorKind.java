@@ -27,8 +27,14 @@ package org.sliceworkz.eventmodeling.boundedcontext;
  */
 public enum ProcessorKind {
 
-	/** An eventually consistent read model's projector. */
+	/** An eventually consistent read model's projector, over the domain stream. */
 	READ_MODEL,
+
+	/** An eventually consistent read model's projector, over the inbound stream. */
+	INBOUND_READ_MODEL,
+
+	/** An eventually consistent read model's projector, over the outbound stream. */
+	OUTBOUND_READ_MODEL,
 
 	/** A translator's processor, reading the inbound stream. */
 	TRANSLATOR,

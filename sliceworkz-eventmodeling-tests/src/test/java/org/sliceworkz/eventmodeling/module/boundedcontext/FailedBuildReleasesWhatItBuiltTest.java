@@ -71,7 +71,7 @@ public class FailedBuildReleasesWhatItBuiltTest extends AbstractMockDomainTest {
 
 		// the inbound module is wired first, so this translator's processor has subscribed to the
 		// inbound stream by the time the read model registry rejects the duplicate name below
-		builder.translator(new ProbeTranslator());
+		builder.inbound().translator(new ProbeTranslator());
 
 		builder.readmodel(new MockReadModel("same name", ReadModelStorage.EPHEMERAL)).eventuallyConsistent();
 		builder.readmodel(new MockReadModel("same name", ReadModelStorage.EPHEMERAL)).eventuallyConsistent();

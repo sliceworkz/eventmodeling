@@ -27,7 +27,7 @@ public class InboundOrderFeatureSlice implements Slice<OrderProcessing> {
 
 	@Override
 	public void configureAutomation(BoundedContextBuilder<OrderProcessing> builder) {
-		builder.translator(new OrderRegisteredTranslator());
+		builder.inbound().translator(new OrderRegisteredTranslator());
 	}
 
 }

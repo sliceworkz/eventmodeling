@@ -1,7 +1,8 @@
 # sliceworkz-eventmodeling-testing
 
 Base classes for testing an application built on the framework: `CommandTest`, `AggregateTest`,
-`LiveModelTest`, `AutomationTest`, `TranslatorTest`, `DispatcherTest` and `SqlReadModelTest`.
+`LiveModelTest` (and `InboundLiveModelTest` / `OutboundLiveModelTest` for a read model over the inbound
+or outbound stream), `AutomationTest`, `TranslatorTest`, `DispatcherTest` and `SqlReadModelTest`.
 
 ```xml
 <dependency>
@@ -13,7 +14,7 @@ Base classes for testing an application built on the framework: `CommandTest`, `
 
 ## Running against every event storage
 
-`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `TranslatorTest` and
+`CommandTest`, `AggregateTest`, `LiveModelTest` (with its inbound and outbound twins), `AutomationTest`, `TranslatorTest` and
 `DispatcherTest` all extend `AbstractBoundedContextTest`, which
 builds a bounded context over a storage and releases both around every test method. **Which storage
 that is depends on how the test method is annotated** — the same choice the framework's own suite
@@ -159,7 +160,7 @@ class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecute, Paym
     private final SimulatedPaymentGateway gateway = new SimulatedPaymentGateway();
 
     @Override
-    public Automation<PaymentToExecute, PaymentsDomainEvent, PaymentsOutboundEvent> automation ( ) {
+    public Automation<PaymentToExecute, PaymentsDomainEvent> automation ( ) {
         return new ExecutePaymentAutomation(new PaymentsToExecuteTodoList(), gateway);
     }
 
@@ -205,10 +206,38 @@ backoff pacing, `AutomationStatus`.
 The worked example to copy is `ExecutePaymentAutomationTest` (and `PaymentsToExecuteTodoListTest` for
 the projection alone) in `sliceworkz-eventmodeling-examples`.
 
+## Testing a read model over the inbound or outbound stream
+
+`InboundLiveModelTest` and `OutboundLiveModelTest` are `LiveModelTest` for a read model registered on
+`builder.inbound()` or `builder.outbound()`: `given().events(...)` appends inbound (or outbound) events
+to that stream as fixture data — nothing is translated or dispatched, since nothing else is registered
+— and the read model is read through `inbound().read(...)` (or `outbound()`):
+
+```java
+class InboundTrafficReadModelTest extends InboundLiveModelTest<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent> {
+
+    @Override
+    public Class<? extends ReadModel<BankingInboundEvent>> getLiveModelClass ( ) {
+        return InboundTrafficReadModel.class;
+    }
+
+    @Test
+    void countsWhatCameIn ( ) {
+        given().events(new CustomerSuspended(alice), new CustomerSuspended(alice))
+               .then().liveModel(m -> ((InboundTrafficReadModel) m).published().data().perType())
+               .is(Map.of("CustomerSuspended", 2L));
+    }
+}
+```
+
+A read model the slice registers eventually consistent is tested the same way: projected live, it folds
+the same events through the same code, with no background thread to wait for. `InboundTrafficReadModelTest`
+in `sliceworkz-eventmodeling-examples` is the worked example.
+
 ## Testing a translator
 
 `TranslatorTest` registers the translators under test and runs them through the *interactive* path —
-`BoundedContext.translate(...)`, synchronous, in the calling thread:
+`boundedContext.inbound().translate(...)`, synchronous, in the calling thread:
 
 ```java
 class OrderRegisteredTranslatorTest extends TranslatorTest<ShopEvent, PartnerEvent, Void> {

@@ -83,7 +83,7 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 		var builder = BoundedContext.newBuilder(Untyped.class)
 				.eventTypes(CurrentDomainEvent.class, InboundEvent.class, OutboundEvent.class)
 			.name("test-historical")
-			.historicalEventTypes(HistoricalDomainEvent.class, null, null)
+			.legacyEventTypes(HistoricalDomainEvent.class)
 			.eventStorage(eventStorage())
 			.instance(InstanceFactory.determine("unittests"));
 
@@ -118,7 +118,7 @@ public class HistoricalDomainEventTest extends AbstractEventStoreTest {
 		var builder = BoundedContext.newBuilder(Untyped.class)
 				.eventTypes(CurrentDomainEvent.class, InboundEvent.class, OutboundEvent.class)
 			.name("test-historical")
-			.historicalEventTypes(HistoricalDomainEvent.class, null, null)
+			.legacyEventTypes(HistoricalDomainEvent.class)
 			.eventStorage(eventStorage())
 			.instance(InstanceFactory.determine("unittests"));
 

@@ -194,7 +194,8 @@ the outcome for a front end before anything is stored. See [Business rules](BUSI
 
 **Talking to the outside.** Ports and adapters for what a slice calls, monitored per call; translators
 for what comes in; publishers and dispatchers for what goes out, with every outbound event traceable to
-the domain event it was published for.
+the domain event it was published for. Each is registered on `builder.inbound()` or
+`builder.outbound()`, and a read model registered there is projected from what came in or went out.
 
 **Personal data.** A `Shreddable<T>` field is encrypted per person; `erase(...)` destroys the key and the
 event log stays untouched.

@@ -331,8 +331,19 @@ public sealed interface BoundedContextEvent {
 	 * @param metrics what the projection cost, {@code eventsStreamed} included
 	 * @param seededAt the position the projection started from, or {@code null} for a full replay
 	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 * <p>
+	 * {@code stream} is the stream the read model is projected from, as {@link BoundedContextStreams} names its
+	 * purpose: {@code inbound} or {@code outbound} for a read model registered on {@code builder.inbound()} or
+	 * {@code builder.outbound()}, {@code null} for the domain stream — and on an event stored before it existed,
+	 * which meant the domain stream.
 	 */
-	record LiveModelProjected ( String boundedContext, String readModel, Metrics metrics, EventReference seededAt, FeatureSlice slice ) implements BoundedContextEvent { }
+	record LiveModelProjected ( String boundedContext, String readModel, Metrics metrics, EventReference seededAt, FeatureSlice slice, String stream ) implements BoundedContextEvent {
+
+		/** A live read model over the domain stream. */
+		public LiveModelProjected ( String boundedContext, String readModel, Metrics metrics, EventReference seededAt, FeatureSlice slice ) {
+			this(boundedContext, readModel, metrics, seededAt, slice, null);
+		}
+	}
 
 	/**
 	 * Emitted after an aggregate has been loaded from its event stream.
@@ -352,8 +363,19 @@ public sealed interface BoundedContextEvent {
 	 * <p>
 	 * {@code slice} identifies the originating feature slice (resolved by package convention) and may
 	 * be {@code null}.
+	 * <p>
+	 * {@code stream} is the stream the read model is projected from, as {@link BoundedContextStreams} names its
+	 * purpose: {@code inbound} or {@code outbound} for a read model registered on {@code builder.inbound()} or
+	 * {@code builder.outbound()}, {@code null} for the domain stream — and on an event stored before it existed,
+	 * which meant the domain stream.
 	 */
-	record EventuallyConsistentReadModelUpdated ( String boundedContext, String readModel, String readModelType, Metrics metrics, FeatureSlice slice ) implements BoundedContextEvent { }
+	record EventuallyConsistentReadModelUpdated ( String boundedContext, String readModel, String readModelType, Metrics metrics, FeatureSlice slice, String stream ) implements BoundedContextEvent {
+
+		/** A read model over the domain stream. */
+		public EventuallyConsistentReadModelUpdated ( String boundedContext, String readModel, String readModelType, Metrics metrics, FeatureSlice slice ) {
+			this(boundedContext, readModel, readModelType, metrics, slice, null);
+		}
+	}
 
 	/**
 	 * Emitted when the projector of an eventually consistent read model starts: once per read model
@@ -378,8 +400,19 @@ public sealed interface BoundedContextEvent {
 	 * @param readModelType where the read model keeps its state: {@code ephemeral}, {@code local} or
 	 *        {@code shared}, as on {@link EventuallyConsistentReadModelUpdated}
 	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 * <p>
+	 * {@code stream} is the stream the read model is projected from, as {@link BoundedContextStreams} names its
+	 * purpose: {@code inbound} or {@code outbound} for a read model registered on {@code builder.inbound()} or
+	 * {@code builder.outbound()}, {@code null} for the domain stream — and on an event stored before it existed,
+	 * which meant the domain stream.
 	 */
-	record ReadModelProjectorStarted ( String boundedContext, String readModel, String readModelType, FeatureSlice slice ) implements BoundedContextEvent { }
+	record ReadModelProjectorStarted ( String boundedContext, String readModel, String readModelType, FeatureSlice slice, String stream ) implements BoundedContextEvent {
+
+		/** A read model over the domain stream. */
+		public ReadModelProjectorStarted ( String boundedContext, String readModel, String readModelType, FeatureSlice slice ) {
+			this(boundedContext, readModel, readModelType, slice, null);
+		}
+	}
 
 	/**
 	 * Emitted when a read model's projector has retired on a <em>permanent</em> failure and will
@@ -411,12 +444,22 @@ public sealed interface BoundedContextEvent {
 	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
 	 * @param reason whether a permanent failure retired the projector or an operator stopped it; {@code null}
 	 *        on an event written before operators could, which meant the former
+	 * <p>
+	 * {@code stream} is the stream the read model is projected from, as {@link BoundedContextStreams} names its
+	 * purpose: {@code inbound} or {@code outbound} for a read model registered on {@code builder.inbound()} or
+	 * {@code builder.outbound()}, {@code null} for the domain stream — and on an event stored before it existed,
+	 * which meant the domain stream.
 	 */
-	record ReadModelProjectorStopped ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, FeatureSlice slice, ProcessorStopReason reason ) implements BoundedContextEvent {
+	record ReadModelProjectorStopped ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, FeatureSlice slice, ProcessorStopReason reason, String stream ) implements BoundedContextEvent {
 
-		/** The shape from before {@code reason} existed: a projector retired by a permanent failure. */
+		/** A read model over the domain stream. */
+		public ReadModelProjectorStopped ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, FeatureSlice slice, ProcessorStopReason reason ) {
+			this(boundedContext, readModel, readModelType, failure, failedAt, slice, reason, null);
+		}
+
+		/** The shape from before {@code reason} existed: a projector over the domain stream retired by a permanent failure. */
 		public ReadModelProjectorStopped ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, FeatureSlice slice ) {
-			this(boundedContext, readModel, readModelType, failure, failedAt, slice, ProcessorStopReason.FAILURE);
+			this(boundedContext, readModel, readModelType, failure, failedAt, slice, ProcessorStopReason.FAILURE, null);
 		}
 	}
 
@@ -446,8 +489,19 @@ public sealed interface BoundedContextEvent {
 	 * @param failedAt the last event the projection handled, as on {@link ReadModelProjectorStopped}
 	 * @param consecutiveFailedRuns how many runs in a row have now failed, 1 for the first
 	 * @param slice the originating feature slice (resolved by package convention), may be {@code null}
+	 * <p>
+	 * {@code stream} is the stream the read model is projected from, as {@link BoundedContextStreams} names its
+	 * purpose: {@code inbound} or {@code outbound} for a read model registered on {@code builder.inbound()} or
+	 * {@code builder.outbound()}, {@code null} for the domain stream — and on an event stored before it existed,
+	 * which meant the domain stream.
 	 */
-	record ReadModelProjectorFailed ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, int consecutiveFailedRuns, FeatureSlice slice ) implements BoundedContextEvent { }
+	record ReadModelProjectorFailed ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, int consecutiveFailedRuns, FeatureSlice slice, String stream ) implements BoundedContextEvent {
+
+		/** A read model over the domain stream. */
+		public ReadModelProjectorFailed ( String boundedContext, String readModel, String readModelType, Failure failure, EventReference failedAt, int consecutiveFailedRuns, FeatureSlice slice ) {
+			this(boundedContext, readModel, readModelType, failure, failedAt, consecutiveFailedRuns, slice, null);
+		}
+	}
 
 	/**
 	 * Emitted when a translator's processor starts reading the inbound stream: once per translator when
@@ -1031,13 +1085,24 @@ public sealed interface BoundedContextEvent {
 	 * registered in the command aspect and has no projector to report on until it is first read. It is
 	 * {@code null} for every member that is not a read model, and on an event written before members
 	 * carried it.
+	 * <p>
+	 * {@code stream} says which of the context's streams a read model is projected from, as the purpose
+	 * {@link BoundedContextStreams} names it: {@code inbound} or {@code outbound} for one registered on
+	 * {@code builder.inbound()} or {@code builder.outbound()}. It is {@code null} for a read model over the
+	 * domain stream, for every member that is not a read model, and on an event written before members
+	 * carried it — all of which read as the domain stream.
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	record SliceMember ( String name, MemberKind kind, Aspect aspect, ReadModelProjection projection ) {
+	record SliceMember ( String name, MemberKind kind, Aspect aspect, ReadModelProjection projection, String stream ) {
 
 		/** A member that is not a read model, or one announced without its projection. */
 		public SliceMember ( String name, MemberKind kind, Aspect aspect ) {
-			this(name, kind, aspect, null);
+			this(name, kind, aspect, null, null);
+		}
+
+		/** A member over the domain stream. */
+		public SliceMember ( String name, MemberKind kind, Aspect aspect, ReadModelProjection projection ) {
+			this(name, kind, aspect, projection, null);
 		}
 	}
 

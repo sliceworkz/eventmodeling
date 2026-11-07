@@ -95,7 +95,7 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 	@Test
 	void aDispatcherAnnouncesItselfAtStartup ( ) {
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.dispatcher(new FlakyDispatcher());
+		builder.outbound().dispatcher(new FlakyDispatcher());
 		buildBoundedContext(builder);
 
 		await().atMost(Duration.ofSeconds(15)).untilAsserted(
@@ -111,7 +111,7 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 	void aRunThatSentSomethingIsReportedAndAnIdleDispatcherReportsNone ( ) {
 		FlakyDispatcher dispatcher = new FlakyDispatcher();
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.dispatcher(dispatcher);
+		builder.outbound().dispatcher(dispatcher);
 		buildBoundedContext(builder);
 
 		await().atMost(Duration.ofSeconds(15)).until(() -> started("FlakyDispatcher") != null);
@@ -139,7 +139,7 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 		dispatcher.failing.set(true);
 
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.dispatcher(dispatcher);
+		builder.outbound().dispatcher(dispatcher);
 		buildBoundedContext(builder);
 
 		appendOutbound(new SomeOutboundEvent("survives-the-outage"));
@@ -165,7 +165,7 @@ public class DispatcherLifecycleTest extends AbstractMockDomainTest {
 		PoisonedDispatcher dispatcher = new PoisonedDispatcher();
 
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.dispatcher(dispatcher);
+		builder.outbound().dispatcher(dispatcher);
 		buildBoundedContext(builder);
 
 		appendOutbound(new SomeOutboundEvent("poison"));

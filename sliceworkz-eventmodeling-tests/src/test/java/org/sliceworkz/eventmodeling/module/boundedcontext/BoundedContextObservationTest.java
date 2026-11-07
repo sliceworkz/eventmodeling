@@ -152,8 +152,8 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 	void aPublicationAndTheDispatchOfWhatItPublishedAreObserved ( ) {
 		NamedDispatcher dispatcher = new NamedDispatcher();
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.publisher(new MockPublisher());
-		builder.dispatcher(dispatcher);
+		builder.outbound().publisher(new MockPublisher());
+		builder.outbound().dispatcher(dispatcher);
 		Mock domain = buildBoundedContext(builder);
 
 		domain.event(new FirstDomainEvent("published"));
@@ -192,11 +192,11 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 	@Test
 	void anIncomingEventIsObservedAndTranslatedInItsOwnFlow ( ) {
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.translator(new CorrelationPropagationTest.SomeInboundTranslator());
+		builder.inbound().translator(new CorrelationPropagationTest.SomeInboundTranslator());
 		Mock domain = buildBoundedContext(builder);
 
 		Tracing tracing = Tracing.init(InstanceFactory.determine("unittests")).actor("partner").channel("api");
-		BoundTracing.run(tracing, ( ) -> domain.incoming(new SomeInboundEvent("in")));
+		BoundTracing.run(tracing, ( ) -> domain.inbound().incoming(new SomeInboundEvent("in")));
 
 		Recording incoming = observer.last(Observation.IncomingEvent.class);
 		assertEquals(EventType.of(SomeInboundEvent.class), incoming.observation(Observation.IncomingEvent.class).eventType());
@@ -213,10 +213,10 @@ public class BoundedContextObservationTest extends AbstractMockDomainTest {
 	@Test
 	void anInteractiveTranslationNestsItsTranslatorsAndAnswersWhatTheyRaised ( ) {
 		BoundedContextBuilder<Mock> builder = observedBuilder();
-		builder.translator(new CorrelationPropagationTest.SomeInboundTranslator());
+		builder.inbound().translator(new CorrelationPropagationTest.SomeInboundTranslator());
 		Mock domain = buildBoundedContext(builder);
 
-		List<EventReference> raised = domain.translate(new SomeInboundEvent("now"));
+		List<EventReference> raised = domain.inbound().translate(new SomeInboundEvent("now"));
 
 		Recording translation = observer.last(Observation.Translation.class);
 		assertEquals(raised, translation.outcome(Outcome.Translated.class).raised());

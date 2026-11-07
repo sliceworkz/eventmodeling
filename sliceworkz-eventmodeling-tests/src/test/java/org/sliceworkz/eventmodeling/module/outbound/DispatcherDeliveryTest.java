@@ -46,7 +46,7 @@ import org.sliceworkz.eventstore.testing.ForEachBackend;
  * <p>
  * This is the delivery path nothing else pins. The published {@code PublisherTest} and
  * {@code DispatcherTest} bases deliberately drive their component <em>without</em> registering it — so
- * without this test, the wiring from {@code builder.publisher(...)} and {@code builder.dispatcher(...)}
+ * without this test, the wiring from {@code builder.outbound().publisher(...)} and {@code .dispatcher(...)}
  * through their projectors could break with every suite still green.
  */
 public class DispatcherDeliveryTest extends AbstractMockDomainTest {
@@ -78,8 +78,8 @@ public class DispatcherDeliveryTest extends AbstractMockDomainTest {
 				.name("UnitTestBoundedContext")
 				.eventStorage(eventStorage())
 				.instance(InstanceFactory.determine("unittests"));
-		builder.publisher(new MockPublisher());
-		builder.dispatcher(dispatcher);
+		builder.outbound().publisher(new MockPublisher());
+		builder.outbound().dispatcher(dispatcher);
 		return buildBoundedContext(builder);
 	}
 

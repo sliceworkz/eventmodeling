@@ -38,7 +38,7 @@ public class QueryLiveFeatureSlice implements Slice<Mock> {
 
 	@Override
 	public void configureAutomation ( BoundedContextBuilder<Mock> builder ) {
-		builder.publisher(new ItemPublisher());
+		builder.outbound().publisher(new ItemPublisher());
 	}
 
 }

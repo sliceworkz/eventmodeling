@@ -25,11 +25,17 @@ import org.sliceworkz.eventmodeling.commands.CommandExecutionResult;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.AccountId;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingInboundEvent;
+import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingInboundEvent.CustomerSuspended;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountdetails.AccountDetailsReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountoverview.AccountOverviewReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.accountoverview.AccountOverviewReadModel.AccountSummary;
+import org.sliceworkz.eventmodeling.examples.banking.features.inboundtraffic.InboundTrafficReadModel;
+import org.sliceworkz.eventmodeling.examples.banking.features.inboundtraffic.InboundTrafficReadModel.Traffic;
 import org.sliceworkz.eventmodeling.examples.banking.features.openaccount.OpenAccountCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.openaccountwithresult.OpenAccountWithResultCommand;
+import org.sliceworkz.eventmodeling.inbound.TranslationCapability;
+import org.sliceworkz.eventmodeling.readmodels.ReadModelCapability;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelResult;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
@@ -37,7 +43,7 @@ import org.sliceworkz.eventstore.spi.EventStorage;
 
 public class BankingExample {
 	
-	public static void main ( String[] args ) {
+	public static void main ( String[] args ) throws InterruptedException {
 		
 		EventStorage eventStorage = InMemoryEventStorage.newBuilder().build();
 
@@ -105,6 +111,25 @@ public class BankingExample {
 
 		AccountDetailsReadModel details = app.read(AccountDetailsReadModel.class, accountId);
 		System.out.println(details.getAccountDetails());
+
+		/*
+		 * What arrives from outside is a stream of its own, reached through inbound(). It serves two
+		 * audiences, and the wiring hands each its own narrow reference: the adapter feeding external
+		 * events in holds a TranslationCapability, a screen showing what came in a ReadModelCapability
+		 * over the inbound events. The read model it reads is registered on builder.inbound() by the
+		 * inboundtraffic slice, and sees every inbound event -- whether a translator claims it or not.
+		 */
+		TranslationCapability<BankingInboundEvent> partnerFeed = bc.inbound();
+		ReadModelCapability<BankingInboundEvent> inboundScreen = bc.inbound();
+
+		partnerFeed.incoming(new CustomerSuspended(BankingDomain.CUSTOMER.newId()));
+
+		ReadModelResult<Traffic> traffic = inboundScreen.read(InboundTrafficReadModel.class).published();
+		for ( int attempt = 0; attempt < 50 && traffic.data().perType().isEmpty(); attempt++ ) {
+			Thread.sleep(20); // eventually consistent: projected in the background, like the overview above
+			traffic = inboundScreen.read(InboundTrafficReadModel.class).published();
+		}
+		System.out.println("Received from outside: " + traffic.data().perType());
 
 		/*
 		 * Shut down from the outside in: terminate the bounded context (which closes the EventStore it

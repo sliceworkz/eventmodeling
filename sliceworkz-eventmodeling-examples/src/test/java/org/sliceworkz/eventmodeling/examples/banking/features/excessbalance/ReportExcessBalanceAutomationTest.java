@@ -67,7 +67,7 @@ public class ReportExcessBalanceAutomationTest extends AutomationTest<ExcessBala
 	}
 
 	@Override
-	public Automation<ExcessBalanceToReport, BankingEvent, BankingOutboundEvent> automation ( ) {
+	public Automation<ExcessBalanceToReport, BankingEvent> automation ( ) {
 		return new ReportExcessBalanceAutomation(new DepositsAboveGuaranteeTodoList());
 	}
 

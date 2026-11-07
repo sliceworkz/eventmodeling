@@ -17,6 +17,8 @@
  */
 package org.sliceworkz.eventmodeling.module.boundedcontext;
 
+import org.sliceworkz.eventstore.query.EventFilter;
+import org.sliceworkz.eventstore.query.EventFilterItem;
 import org.sliceworkz.eventstore.query.EventQuery;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
@@ -35,6 +37,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -498,7 +501,8 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 		var m = new EventuallyConsistentReadModelSpecificationImpl(this, readModel, stream);
 		eventuallyConsistentReadModelSpecs.add(m);
-		recordSliceMember(readModel.readmodelName(), BoundedContextEvent.MemberKind.READ_MODEL, BoundedContextEvent.ReadModelProjection.EVENTUALLY_CONSISTENT, stream);
+		recordSliceMember(readModel.readmodelName(), BoundedContextEvent.MemberKind.READ_MODEL, BoundedContextEvent.ReadModelProjection.EVENTUALLY_CONSISTENT, stream,
+				eventTypesRead(() -> readModel.eventQuery().filter()));
 		return m;
 	}
 
@@ -514,7 +518,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			throw new IllegalArgumentException("translator must not be null");
 		}
 		translatorSpecs.add(translator);
-		recordSliceMember(translator.getClass().getSimpleName(), BoundedContextEvent.MemberKind.TRANSLATOR);
+		recordReadingMember(translator.getClass().getSimpleName(), BoundedContextEvent.MemberKind.TRANSLATOR, eventTypesRead(translator::eventFilter));
 	}
 
 	private void registerPublisher ( Publisher<?,?> publisher ) {
@@ -522,7 +526,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			throw new IllegalArgumentException("publisher must not be null");
 		}
 		publisherSpecs.add(new PublisherRegistration(publisher, configuringAspect, configuringSlice == null ? null : configuringSlice.name()));
-		recordSliceMember(publisher.getClass().getSimpleName(), BoundedContextEvent.MemberKind.PUBLISHER);
+		recordReadingMember(publisher.getClass().getSimpleName(), BoundedContextEvent.MemberKind.PUBLISHER, eventTypesRead(publisher::eventFilter));
 		if ( configuringSlice != null && publisher.reads() != null ) {
 			Set<String> names = publisherReads.computeIfAbsent(configuringSlice, slice -> new HashSet<>());
 			publisher.reads().forEach(readModelClass -> names.add(readModelClass.getSimpleName()));
@@ -536,7 +540,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		}
 		PolicySpecificationImpl spec = new PolicySpecificationImpl(policy, configuringAspect, configuringSlice == null ? null : configuringSlice.name());
 		policySpecs.add(spec);
-		recordSliceMember(policy.policyName(), BoundedContextEvent.MemberKind.POLICY);
+		recordReadingMember(policy.policyName(), BoundedContextEvent.MemberKind.POLICY, eventTypesRead(policy::eventFilter));
 		return spec;
 	}
 
@@ -593,7 +597,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			throw new IllegalArgumentException("dispatcher must not be null");
 		}
 		dispatcherSpecs.add(dispatcher);
-		recordSliceMember(dispatcher.getClass().getSimpleName(), BoundedContextEvent.MemberKind.DISPATCHER);
+		recordReadingMember(dispatcher.getClass().getSimpleName(), BoundedContextEvent.MemberKind.DISPATCHER, eventTypesRead(dispatcher::eventFilter));
 	}
 
 	/**
@@ -696,7 +700,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			for ( BoundedContextEvent.SliceMember m : members ) {
 				boolean publication = m.kind() == BoundedContextEvent.MemberKind.READ_MODEL && m.aspect() == Aspect.AUTOMATION
 						&& reads.contains(m.name()) && !usedElsewhere.contains(m.name());
-				marked.add(publication ? new BoundedContextEvent.SliceMember(m.name(), BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, m.aspect(), m.projection(), m.stream()) : m);
+				marked.add(publication ? new BoundedContextEvent.SliceMember(m.name(), BoundedContextEvent.MemberKind.PUBLICATION_READ_MODEL, m.aspect(), m.projection(), m.stream(), m.reads()) : m);
 			}
 			sliceMembers.put(slice, marked);
 		});
@@ -712,6 +716,38 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		recordSliceMember(name, kind, null);
 	}
 
+	/** As {@link #recordSliceMember(String, BoundedContextEvent.MemberKind)}, for a member fed the event types its filter names. */
+	private void recordReadingMember ( String name, BoundedContextEvent.MemberKind kind, Set<String> reads ) {
+		recordSliceMember(name, kind, null, ProjectedStream.DOMAIN, reads);
+	}
+
+	/**
+	 * The event types a member's filter feeds it, as {@link BoundedContextEvent.SliceMember#reads()} reports
+	 * them: their stored names, empty for a filter matching nothing, {@code null} for one with an item that
+	 * names no type (match-all, or tags only). Asked of the component at registration, which is its own code;
+	 * a filter that cannot be built here is reported as unknown rather than failing the build, since the
+	 * component's processor is what has to deal with it, and does.
+	 */
+	static Set<String> eventTypesRead ( Supplier<EventFilter> filter ) {
+		EventFilter f;
+		try {
+			f = filter.get();
+		} catch ( RuntimeException e ) {
+			return null;
+		}
+		if ( f == null || f.isMatchAll() ) {
+			return null;
+		}
+		Set<String> names = new TreeSet<>();
+		for ( EventFilterItem item : f.items() ) {
+			if ( item.eventTypes() == null || item.eventTypes().eventTypes().isEmpty() ) {
+				return null;
+			}
+			item.eventTypes().eventTypes().forEach(t -> names.add(t.name()));
+		}
+		return names;
+	}
+
 	/**
 	 * As {@link #recordSliceMember(String, BoundedContextEvent.MemberKind)}, for a read model: its projection
 	 * follows from the overload it was registered with (a class can only be live, an instance only eventually
@@ -722,9 +758,13 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	private void recordSliceMember ( String name, BoundedContextEvent.MemberKind kind, BoundedContextEvent.ReadModelProjection projection, ProjectedStream stream ) {
+		recordSliceMember(name, kind, projection, stream, null);
+	}
+
+	private void recordSliceMember ( String name, BoundedContextEvent.MemberKind kind, BoundedContextEvent.ReadModelProjection projection, ProjectedStream stream, Set<String> reads ) {
 		if ( configuringSlice != null && name != null ) {
 			sliceMembers.computeIfAbsent(configuringSlice, slice -> new LinkedHashSet<>())
-					.add(new BoundedContextEvent.SliceMember(name, kind, configuringAspect, projection, stream.reported()));
+					.add(new BoundedContextEvent.SliceMember(name, kind, configuringAspect, projection, stream.reported(), reads));
 		}
 	}
 

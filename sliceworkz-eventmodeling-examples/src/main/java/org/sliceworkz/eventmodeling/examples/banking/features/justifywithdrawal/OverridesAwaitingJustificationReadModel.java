@@ -35,8 +35,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.rules.RuleTags;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * The large withdrawals that went ahead under the post-justified override of
@@ -75,9 +73,9 @@ public class OverridesAwaitingJustificationReadModel implements ReadModel<Bankin
 	private final Map<String, AwaitingJustification> awaiting = new LinkedHashMap<>();
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.justificationPending(LARGE_WITHDRAWAL_JUSTIFIED))
-			.or(EventFilter.forTypes(WithdrawalJustified.class)));
+	public EventFilter eventFilter ( ) {
+		return EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.justificationPending(LARGE_WITHDRAWAL_JUSTIFIED))
+			.or(EventFilter.forTypes(WithdrawalJustified.class));
 	}
 
 	@Override

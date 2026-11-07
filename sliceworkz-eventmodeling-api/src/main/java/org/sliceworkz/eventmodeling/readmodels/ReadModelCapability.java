@@ -21,7 +21,7 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 
 /**
  * Reads a read model of this bounded context. A live read model is constructed with the parameters
- * given, projected from the events its {@code eventQuery()} matches, and handed back. An eventually
+ * given, projected from the events its {@code eventFilter()} matches, and handed back. An eventually
  * consistent one — registered as an instance, {@code builder.readmodel(instance).eventuallyConsistent()} —
  * is that registered instance, read without parameters: it exists for the life of the context and its
  * projector keeps it current, so nothing is projected for the read and the caller may keep the

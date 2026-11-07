@@ -44,7 +44,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventDeserializationException;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * A read model's projector has to be answerable from the event stream alone, and
@@ -218,8 +217,8 @@ public class ReadModelProjectorLifecycleTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override

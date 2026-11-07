@@ -46,7 +46,7 @@ import org.sliceworkz.eventstore.projection.BatchAwareProjection;
  * <p>Subclasses implement:
  * <ul>
  *   <li>{@link #createTables()} — DDL statements (use {@link #table(String)} for table names)</li>
- *   <li>{@link ReadModel#eventQuery()} — which events to subscribe to</li>
+ *   <li>{@link ReadModel#eventFilter()} — which events to subscribe to</li>
  *   <li>{@link #project(Event)} — event projection logic</li>
  * </ul>
  *

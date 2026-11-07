@@ -57,6 +57,7 @@ public class EventuallyConsistentReadModelReadsForwardTest extends AbstractMockD
 		public Shaped ( String name, EventQuery eventQuery, EventQuery initQuery ) { this.name = name; this.eventQuery = eventQuery; this.initQuery = initQuery; }
 		public Shaped ( ) { this("live", FIRSTS.backwards().limit(1), EventQuery.of(EventFilter.forTypes(ThirdDomainEvent.class)).backwards().limit(1)); }
 		@Override public String readmodelName ( ) { return name; }
+		@Override public EventFilter eventFilter ( ) { return eventQuery.filter(); }
 		@Override public EventQuery eventQuery ( ) { return eventQuery; }
 		@Override public EventQuery initQuery ( ) { return initQuery; }
 		@Override public void when ( Event<MockDomainEvent> event ) { }

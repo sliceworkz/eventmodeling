@@ -43,8 +43,6 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.SecondDo
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * Tests that a {@link DecisionModelProjected} bounded-context event is emitted for each decision
@@ -68,8 +66,8 @@ public class DecisionModelProjectedTest extends AbstractMockDomainTest {
 
 	static class CountingFirstDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -79,8 +77,8 @@ public class DecisionModelProjectedTest extends AbstractMockDomainTest {
 
 	static class CountingSecondDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(SecondDomainEvent.class);
 		}
 
 		@Override

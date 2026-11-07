@@ -312,6 +312,11 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		}
 
 		@Override
+		public EventFilter eventFilter ( ) {
+			return initQuery.filter();
+		}
+
+		@Override
 		public EventQuery eventQuery ( ) {
 			return initQuery;
 		}
@@ -338,6 +343,11 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			this.mergedQuery = mergedQuery;
 			this.models = models;
 			this.handled = new long[models.size()];
+		}
+
+		@Override
+		public EventFilter eventFilter ( ) {
+			return mergedQuery.filter();
 		}
 
 		@Override

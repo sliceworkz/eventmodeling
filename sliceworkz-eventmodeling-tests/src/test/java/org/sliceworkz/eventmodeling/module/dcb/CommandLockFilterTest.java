@@ -44,7 +44,6 @@ import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
@@ -111,7 +110,7 @@ public class CommandLockFilterTest extends AbstractMockDomainTest {
 		int seen;
 		SecondsSinceSavepoint ( Tags tags ) { this.tags = tags; }
 		@Override public EventQuery initQuery ( ) { return EventQuery.of(EventFilter.forTypes(ThirdDomainEvent.class).tagged(tags)).backwards().limit(1); }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class).tagged(tags)); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.forTypes(SecondDomainEvent.class).tagged(tags); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 
@@ -120,7 +119,14 @@ public class CommandLockFilterTest extends AbstractMockDomainTest {
 		private final EventReference until;
 		int seen;
 		FirstsUntil ( EventReference until ) { this.until = until; }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class)).notAfter(until); }
+		@Override public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
+		}
+
+		@Override
+		public EventQuery eventQuery ( ) {
+			return EventQuery.of(eventFilter()).notAfter(until);
+		}
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 

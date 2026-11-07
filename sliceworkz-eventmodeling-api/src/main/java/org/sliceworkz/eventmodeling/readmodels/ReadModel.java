@@ -25,7 +25,7 @@ import org.sliceworkz.eventstore.projection.Projection;
  * <p><b>The one to start with.</b> Registered with {@code builder.readmodel(MyReadModel.class).live()}
  * and read with {@code context.read(MyReadModel.class, ...)}, it is projected when it is read, so it is
  * always current and there is nothing to keep or rebuild. Right whenever the set of events its
- * {@link #eventQuery()} matches is bounded by design — one entity, one period, one savepoint onward.
+ * {@link #eventFilter()} matches is bounded by design — one entity, one period, one savepoint onward.
  *
  * <p>Every event arrives through {@code when(Event<DOMAIN_EVENT_TYPE>)}, with its metadata: the
  * domain event is {@code event.data()}, and the tags, timestamp and reference sit beside it on the

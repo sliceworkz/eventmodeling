@@ -27,7 +27,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomain.BankingDomain
 import org.sliceworkz.eventmodeling.readmodels.PublishingReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * Every account that has been opened — an eventually consistent read model, projected in the
@@ -70,8 +69,8 @@ public class AccountOverviewReadModel extends PublishingReadModel<BankingDomainE
 	}
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.matchAll());
+	public EventFilter eventFilter ( ) {
+		return EventFilter.matchAll();
 	}
 
 	/**

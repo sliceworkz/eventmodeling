@@ -34,7 +34,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * Decision model that tracks the state of a specific account period.
@@ -92,8 +91,8 @@ public class ActivePeriodDecisionModel implements DecisionModel<BankingEvent> {
 	}
 
 	@Override
-	public EventQuery eventQuery() {
-		return EventQuery.of(EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId)));
+	public EventFilter eventFilter() {
+		return EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
 	}
 
 	@Override

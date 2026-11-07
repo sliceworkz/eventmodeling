@@ -34,8 +34,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * Blocks every card of an account that is not blocked yet, one {@code CardBlocked} per card.
@@ -82,8 +80,8 @@ public record BlockCardsOfAccountCommand ( AccountId accountId, String reason ) 
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(CardIssued.class, CardBlocked.class).tagged(ACCOUNT.tags(accountId)));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(CardIssued.class, CardBlocked.class).tagged(ACCOUNT.tags(accountId));
 		}
 
 		@Override

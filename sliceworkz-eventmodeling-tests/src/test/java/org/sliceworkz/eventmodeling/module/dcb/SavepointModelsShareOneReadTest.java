@@ -87,14 +87,14 @@ public class SavepointModelsShareOneReadTest extends AbstractMockDomainTest {
 		final List<String> seen = new ArrayList<>();
 		SinceSavepoint ( String entity ) { this.entity = entity; }
 		@Override public EventQuery initQuery ( ) { return EventQuery.of(EventFilter.forTypes(ThirdDomainEvent.class).tagged("entity", entity)).backwards().limit(1); }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class).tagged("entity", entity)); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class).tagged("entity", entity); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen.add(value(event)); }
 	}
 
 	/** Every First, whatever its entity. */
 	static class AllFirsts implements DecisionModel<MockDomainEvent> {
 		final List<String> seen = new ArrayList<>();
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class)); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.forTypes(FirstDomainEvent.class); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen.add(value(event)); }
 	}
 
@@ -103,7 +103,7 @@ public class SavepointModelsShareOneReadTest extends AbstractMockDomainTest {
 		final EventReference until;
 		final List<String> seen = new ArrayList<>();
 		SecondsUntil ( EventReference until ) { this.until = until; }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class).until(until)); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.forTypes(SecondDomainEvent.class).until(until); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen.add(value(event)); }
 	}
 

@@ -51,7 +51,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
@@ -90,8 +89,8 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 
 	static class FirstDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -145,8 +144,8 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 	 */
 	static class JudgingDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override

@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 
 public class ReadModelTest {
 
@@ -34,7 +34,7 @@ public class ReadModelTest {
 	class DummyReadModel implements ReadModel<Object> {
 
 		@Override
-		public EventQuery eventQuery() {
+		public EventFilter eventFilter() {
 			return null;
 		}
 
@@ -53,7 +53,7 @@ public class ReadModelTest {
 		}
 		
 		@Override
-		public EventQuery eventQuery() {
+		public EventFilter eventFilter() {
 			return null;
 		}
 

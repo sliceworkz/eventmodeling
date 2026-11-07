@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -124,6 +125,11 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN
 
 	private void closeOpenBatch ( ) {
 		endBatch(scope -> scope.completed(new Outcome.Cancelled()));
+	}
+
+	@Override
+	public EventFilter eventFilter() {
+		return readModel.eventFilter();
 	}
 
 	@Override

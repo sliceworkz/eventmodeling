@@ -27,7 +27,7 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.projection.Projector;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 
 /**
@@ -125,7 +125,7 @@ public abstract class DispatcherTest<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOU
 	/** The dispatcher as the projection a deployed one is driven as: its filter, read forward, and its {@code when}. */
 	private static <E> Projection<E> projectionOf ( Dispatcher<E> dispatcher ) {
 		return new Projection<>() {
-			@Override public EventQuery eventQuery ( ) { return EventQuery.of(dispatcher.eventFilter()); }
+			@Override public EventFilter eventFilter ( ) { return dispatcher.eventFilter(); }
 			@Override public void when ( Event<E> event ) { dispatcher.when(event); }
 		};
 	}

@@ -24,10 +24,7 @@ import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDom
 import org.sliceworkz.eventmodeling.examples.payments.PaymentsDomain.PaymentsDomainEvent.PaymentAbandoned;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * The dead-letter view: every payment the automation gave up on, and why.
@@ -43,8 +40,8 @@ public class AbandonedPaymentsReadModel implements ReadModel<PaymentsDomainEvent
 	private final List<AbandonedPayment> abandoned = new ArrayList<>();
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.forTypes(PaymentAbandoned.class));
+	public EventFilter eventFilter ( ) {
+		return EventFilter.forTypes(PaymentAbandoned.class);
 	}
 
 	@Override

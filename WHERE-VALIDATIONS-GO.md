@@ -110,17 +110,17 @@ closed): no override can make it meaningful. The banking example's `WithdrawComm
 side by side — its balance check above is the `no-overdraft` rule there.
 
 This is where invariants live, and the shape is always the same three lines: **select decision models,
-check, raise.** A `DecisionModel` is a projection the command instantiates inline — `eventQuery()`
+check, raise.** A `DecisionModel` is a projection the command instantiates inline — `eventFilter()`
 scoped by tags to the entity, `when(...)` folding state, accessors for the checks
 (`ActivePeriodDecisionModel` in the banking example is the one to copy, including the savepoint
 `initQuery()` that bounds its replay).
 
 What makes this more than a lookup: `context.decisionModels(...)` puts the events the model was
 projected from **inside the command's consistency boundary**. The optimistic-lock filter is the union
-of *every* query the models were actually read with — each `eventQuery()`, and the `initQuery()` of a
+of *every* query the models were actually read with — each `eventFilter()`, and the `initQuery()` of a
 savepoint model, since "the newest savepoint is X" is as much a fact the command decided on as the
 movements after it — and it travels with the append, so the DCB check at append time re-asks exactly
-the question the command decided on. You do not widen a model's `eventQuery()` to get that: the
+the question the command decided on. You do not widen a model's `eventFilter()` to get that: the
 framework locks both queries, and the savepoint pattern's rule that the two name disjoint event types
 stands. Three distinct failures come
 out of this step, and they want different responses:
@@ -162,8 +162,8 @@ class EmailNotTakenDecisionModel implements DecisionModel<CrmEvent> {
     private final EmailAddress email;
     private boolean taken = false;
 
-    public EventQuery eventQuery ( ) {
-        return EventQuery.of(EventFilter.forTypes(CustomerRegistered.class).tagged("email", email.value()));
+    public EventFilter eventFilter ( ) {
+        return EventFilter.forTypes(CustomerRegistered.class).tagged("email", email.value());
     }
     public void when ( Event<CrmEvent> e ) { taken = true; }
     public boolean taken ( ) { return taken; }

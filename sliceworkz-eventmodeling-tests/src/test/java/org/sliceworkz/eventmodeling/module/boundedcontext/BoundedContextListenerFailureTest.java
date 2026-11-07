@@ -57,10 +57,7 @@ import org.sliceworkz.eventmodeling.testing.RecordingBoundedContextObserver;
 import org.sliceworkz.eventstore.EventStore;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 
 
@@ -330,8 +327,8 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class, SecondDomainEvent.class);
 		}
 
 		@Override

@@ -29,7 +29,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * Live read model that shows the state of the current account period.
@@ -63,8 +62,8 @@ public class CurrentPeriodReadModel implements ReadModel<BankingEvent> {
 	}
 
 	@Override
-	public EventQuery eventQuery() {
-		return EventQuery.of(EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId)));
+	public EventFilter eventFilter() {
+		return EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
 	}
 
 	@Override

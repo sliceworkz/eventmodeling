@@ -24,10 +24,7 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * A live read model that looks every event up through the gateway while it is projected — so those calls
@@ -43,8 +40,8 @@ public class GatewayLookupReadModel implements ReadModel<MockDomainEvent> {
 	}
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+	public EventFilter eventFilter ( ) {
+		return EventFilter.forTypes(FirstDomainEvent.class);
 	}
 
 	@Override

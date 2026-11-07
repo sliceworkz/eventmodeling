@@ -40,7 +40,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.AppendCriteria;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
@@ -111,8 +110,8 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		private int count = 0;
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -133,8 +132,8 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		private int count = 0;
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(SecondDomainEvent.class);
 		}
 
 		@Override
@@ -162,8 +161,8 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -190,8 +189,8 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(SecondDomainEvent.class);
 		}
 
 		@Override
@@ -227,11 +226,11 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery() {
+		public EventFilter eventFilter() {
 			if (watching == null) {
-				return EventQuery.of(EventFilter.matchNone());
+				return EventFilter.matchNone();
 			}
-			return EventQuery.of(EventFilter.forTypes("first".equals(watching) ? FirstDomainEvent.class : SecondDomainEvent.class));
+			return EventFilter.forTypes("first".equals(watching) ? FirstDomainEvent.class : SecondDomainEvent.class);
 		}
 
 		@Override

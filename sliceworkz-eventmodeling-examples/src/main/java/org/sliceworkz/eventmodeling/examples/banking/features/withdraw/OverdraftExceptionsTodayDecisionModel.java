@@ -30,8 +30,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.rules.RuleTags;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
  * Whether the teller executing a withdrawal may grant another overdraft today: the decision behind
@@ -67,11 +65,11 @@ public class OverdraftExceptionsTodayDecisionModel implements DecisionModel<Bank
 	}
 
 	@Override
-	public EventQuery eventQuery ( ) {
+	public EventFilter eventFilter ( ) {
 		// an anonymous caller has no quota to count: it may not grant an overdraft at all
 		return teller
-			.map(t -> EventQuery.of(EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.overriddenBy(t, NO_OVERDRAFT))))
-			.orElse(EventQuery.of(EventFilter.matchNone()));
+			.map(t -> EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.overriddenBy(t, NO_OVERDRAFT)))
+			.orElse(EventFilter.matchNone());
 	}
 
 	@Override

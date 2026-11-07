@@ -21,13 +21,11 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.readmodels.PublishingReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * The balance of every account, projected in the background — the base a
@@ -60,8 +58,8 @@ public class AccountBalancesReadModel extends PublishingReadModel<BankingEvent,M
 	}
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.matchAll());
+	public EventFilter eventFilter ( ) {
+		return EventFilter.matchAll();
 	}
 
 	/**

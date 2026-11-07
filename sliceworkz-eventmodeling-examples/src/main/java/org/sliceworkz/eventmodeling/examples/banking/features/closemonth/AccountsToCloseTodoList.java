@@ -24,7 +24,6 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.sliceworkz.eventmodeling.automation.TodoListReadModel;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
@@ -36,10 +35,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.RulebookFollowUp;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
-import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 
 /**
@@ -72,9 +68,9 @@ public class AccountsToCloseTodoList implements TodoListReadModel<BankingEvent, 
 	}
 
 	@Override
-	public EventQuery eventQuery() {
+	public EventFilter eventFilter() {
 		// Only watch lifecycle events — deposits/withdrawals are irrelevant for this todo list
-		return EventQuery.of(EventFilter.forTypes(AccountOpened.class, MonthClosed.class, MonthOpened.class));
+		return EventFilter.forTypes(AccountOpened.class, MonthClosed.class, MonthOpened.class);
 	}
 
 	// when() runs on the projector's thread and streamItems() on the automation's, so the two meet

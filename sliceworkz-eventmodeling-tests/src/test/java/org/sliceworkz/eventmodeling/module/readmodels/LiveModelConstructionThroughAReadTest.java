@@ -37,7 +37,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * The same rule, seen from where a user meets it: {@code read(X.class, ...)}.
@@ -124,8 +123,8 @@ public class LiveModelConstructionThroughAReadTest extends AbstractMockDomainTes
 	public abstract static class HalfAReadModel implements ReadModel<MockDomainEvent> {
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.matchAll());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.matchAll();
 		}
 
 		@Override

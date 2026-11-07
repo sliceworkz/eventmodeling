@@ -45,7 +45,7 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.outbound.Dispatcher;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.projection.Projection;
-import org.sliceworkz.eventstore.query.EventQuery;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
 
 public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability {
@@ -219,8 +219,8 @@ public class OutboundModule<OUTBOUND_EVENT_TYPE> implements LifecycleCapability 
 		}
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(dispatcher.eventFilter());
+		public EventFilter eventFilter() {
+			return dispatcher.eventFilter();
 		}
 	}
 

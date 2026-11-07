@@ -2165,6 +2165,19 @@ one nobody checks, agreeing with the code only by luck; the reported descriptor
   the command aspect, and without the projection a reader such as the dashboard took it for a projector that
   never started until it was first read. `null` for a member that is no read model and on events written
   before the field existed; the three-argument constructor leaves it `null`, so existing callers compile.
+- **A member that declares a filter says which event types it reads**: `SliceMember.reads` holds the stored
+  names (`EventType.of`, so `@EventName` is honoured and a sealed interface stands for every type under it)
+  read off a translator's, publisher's, dispatcher's or policy's `eventFilter()` and the `eventQuery()`
+  filter of a read model registered as an instance, at registration (`BoundedContextBuilderImpl.eventTypesRead`).
+  It is what lets a reader wire a context together before anything has run — which dispatcher sends which
+  outbound event, which translator takes which inbound one. Empty for a filter matching nothing; `null`
+  where the types are not known: an item naming no type (match-all, tags only), a filter that throws when
+  asked at registration (the processor is what has to deal with that, and does), a live read model (only
+  its class is known), a command, an aggregate, an automation (it reads its to-do list), and every event
+  written before the field. The alternative — an untyped filter reported as an empty set — loses because
+  "fed nothing" and "fed everything" would read the same. What a publisher *writes* is deliberately not
+  reported: it is not declared anywhere, and a reader learns it from the outbound stream, where every
+  event carries its publisher as `x-actor`. `SliceMemberReadsTest` pins it, through a monitoring stream too.
 - **Two consequences of reading the type off the registrations**, both documented on `SliceType`:
   - Only what is registered counts. A slice that only wires an endpoint in `startCommand` is
     `UNDEFINED`; `builder.command(...)`, which is purely declarative, makes it a state change. A

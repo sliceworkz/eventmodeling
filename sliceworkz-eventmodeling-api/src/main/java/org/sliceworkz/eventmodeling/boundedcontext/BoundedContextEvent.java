@@ -18,8 +18,10 @@
 package org.sliceworkz.eventmodeling.boundedcontext;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
 import org.sliceworkz.eventmodeling.ports.PortCaller;
@@ -1091,18 +1093,40 @@ public sealed interface BoundedContextEvent {
 	 * {@code builder.inbound()} or {@code builder.outbound()}. It is {@code null} for a read model over the
 	 * domain stream, for every member that is not a read model, and on an event written before members
 	 * carried it — all of which read as the domain stream.
+	 * <p>
+	 * {@code reads} names the event types the member is fed, as stored ({@code EventType.of}, so an
+	 * {@code @EventName} is honoured and a sealed interface in a filter stands for every type under it),
+	 * read off the filter it declares: a translator's, publisher's, dispatcher's or policy's
+	 * {@code eventFilter()}, and the {@code eventQuery()} filter of a read model registered as an
+	 * instance. It is what lets a reader wire the members of a context together before any of them has
+	 * run — which dispatcher sends which outbound event, which translator takes which inbound one. It is
+	 * empty for a filter that matches nothing, and {@code null} where the types are not known: a filter
+	 * with an item that names no type (match-all, or tags only), a live read model (only its class is
+	 * known at registration), a command, an aggregate, an automation (it reads its to-do list, not a
+	 * stream), and an event written before members carried it. The alternative — reporting a filter
+	 * that names no type as an empty set — loses because "fed nothing" and "fed everything" would then
+	 * read the same.
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	record SliceMember ( String name, MemberKind kind, Aspect aspect, ReadModelProjection projection, String stream ) {
+	record SliceMember ( String name, MemberKind kind, Aspect aspect, ReadModelProjection projection, String stream, Set<String> reads ) {
+
+		public SliceMember {
+			reads = reads == null ? null : Collections.unmodifiableSortedSet(new TreeSet<>(reads));
+		}
 
 		/** A member that is not a read model, or one announced without its projection. */
 		public SliceMember ( String name, MemberKind kind, Aspect aspect ) {
-			this(name, kind, aspect, null, null);
+			this(name, kind, aspect, null, null, null);
 		}
 
 		/** A member over the domain stream. */
 		public SliceMember ( String name, MemberKind kind, Aspect aspect, ReadModelProjection projection ) {
-			this(name, kind, aspect, projection, null);
+			this(name, kind, aspect, projection, null, null);
+		}
+
+		/** A member announced without the event types it reads. */
+		public SliceMember ( String name, MemberKind kind, Aspect aspect, ReadModelProjection projection, String stream ) {
+			this(name, kind, aspect, projection, stream, null);
 		}
 	}
 

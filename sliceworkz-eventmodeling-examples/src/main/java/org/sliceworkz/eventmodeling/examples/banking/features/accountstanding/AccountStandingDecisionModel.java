@@ -48,7 +48,7 @@ public class AccountStandingDecisionModel implements DecisionModel<BankingEvent>
 
 	@Override
 	public EventFilter eventFilter ( ) {
-		return EventFilter.forTypes(AccountOpened.class, AccountFrozen.class, AccountClosed.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+		return EventFilter.forTypes(AccountOpened.class, AccountFrozen.class, AccountClosed.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
 	}
 
 	@Override

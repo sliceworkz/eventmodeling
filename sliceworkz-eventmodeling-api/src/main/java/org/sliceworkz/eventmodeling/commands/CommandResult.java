@@ -17,11 +17,22 @@
  */
 package org.sliceworkz.eventmodeling.commands;
 
+import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 
 public interface CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
 	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags );
+
+	/**
+	 * Raises an event tagged with the given tags, made elsewhere — an entity's
+	 * ({@code ACCOUNT.tag(accountId)}), a rule tag — without wrapping them in {@link Tags#of(Tag...)}
+	 * first: {@code raiseEvent(new AccountOpened(...), ACCOUNT.tag(accountId), CUSTOMER.tag(customerId))}.
+	 * The same as {@link #raiseEvent(Object, Tags)} with {@code Tags.of(tags)}.
+	 */
+	public default CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tag... tags ) {
+		return raiseEvent(event, Tags.of(tags));
+	}
 
 	public CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags, String idempotencyKey );
 

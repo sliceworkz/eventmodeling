@@ -48,11 +48,6 @@ public class EntityTest {
 	}
 
 	@Test
-	void tagsWrapsTheOneTag ( ) {
-		assertEquals(Tags.of(Tag.of("account", "123")), ACCOUNT.tags(new AccountId("123")));
-	}
-
-	@Test
 	void theBareTagIsAFlagWithoutAValue ( ) {
 		Tag tag = ACCOUNT.tag();
 		assertEquals("account", tag.key());

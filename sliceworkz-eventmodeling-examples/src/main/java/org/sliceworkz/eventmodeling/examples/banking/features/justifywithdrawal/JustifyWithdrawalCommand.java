@@ -71,7 +71,7 @@ public record JustifyWithdrawalCommand ( AccountId accountId, String withdrawal,
 		result.raiseEvent(
 			new WithdrawalJustified(accountId, withdrawal,
 				context.justifies(LARGE_WITHDRAWAL_JUSTIFIED, EventId.of(withdrawal), justification.strip())),
-			BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
 	}
 
 	/**
@@ -92,7 +92,7 @@ public record JustifyWithdrawalCommand ( AccountId accountId, String withdrawal,
 
 		@Override
 		public EventFilter eventFilter ( ) {
-			return EventFilter.forTypes(MoneyWithdrawn.class, WithdrawalJustified.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+			return EventFilter.forTypes(MoneyWithdrawn.class, WithdrawalJustified.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
 		}
 
 		@Override

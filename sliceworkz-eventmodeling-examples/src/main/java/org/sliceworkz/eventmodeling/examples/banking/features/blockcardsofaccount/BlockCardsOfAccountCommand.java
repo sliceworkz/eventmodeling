@@ -63,7 +63,7 @@ public record BlockCardsOfAccountCommand ( AccountId accountId, String reason ) 
 		var result = context.decisionModels(cards);
 
 		for ( CardId cardId : cards.usable() ) {
-			result.raiseEvent(new CardBlocked(accountId, cardId, reason), Tags.of(ACCOUNT.tag(accountId), CARD.tag(cardId)));
+			result.raiseEvent(new CardBlocked(accountId, cardId, reason), ACCOUNT.tag(accountId), CARD.tag(cardId));
 		}
 	}
 
@@ -81,7 +81,7 @@ public record BlockCardsOfAccountCommand ( AccountId accountId, String reason ) 
 
 		@Override
 		public EventFilter eventFilter ( ) {
-			return EventFilter.forTypes(CardIssued.class, CardBlocked.class).tagged(ACCOUNT.tags(accountId));
+			return EventFilter.forTypes(CardIssued.class, CardBlocked.class).tagged(ACCOUNT.tag(accountId));
 		}
 
 		@Override

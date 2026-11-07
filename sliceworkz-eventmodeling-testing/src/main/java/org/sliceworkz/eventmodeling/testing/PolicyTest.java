@@ -50,8 +50,8 @@ import org.sliceworkz.eventstore.query.EventFilter;
  *
  *     @Test
  *     void theSubscriptionsOfACancelledSessionAreCancelled ( ) {
- *         given(new StudentSubscribedToSession(...), Subscriptions.SESSION.tags(sessionId))
- *             .and(new SessionCancelled(sessionId), Subscriptions.SESSION.tags(sessionId))
+ *         given(new StudentSubscribedToSession(...), Subscriptions.SESSION.tag(sessionId))
+ *             .and(new SessionCancelled(sessionId), Subscriptions.SESSION.tag(sessionId))
  *         .whenReacting()
  *             .events(new SubscriptionCancelled(...));
  *     }

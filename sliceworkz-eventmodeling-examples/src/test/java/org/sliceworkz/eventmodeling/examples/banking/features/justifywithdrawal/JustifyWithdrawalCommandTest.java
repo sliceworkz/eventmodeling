@@ -158,6 +158,6 @@ public class JustifyWithdrawalCommandTest extends CommandTest<BankingEvent, Bank
 	}
 
 	private static Tags accountTags ( ) {
-		return BankingDomainWithClosingTheBooks.ACCOUNT.tags(ACCOUNT_1);
+		return Tags.of(BankingDomainWithClosingTheBooks.ACCOUNT.tag(ACCOUNT_1));
 	}
 }

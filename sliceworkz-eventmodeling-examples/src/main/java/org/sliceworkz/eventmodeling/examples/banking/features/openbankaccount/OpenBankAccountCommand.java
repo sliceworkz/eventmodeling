@@ -27,7 +27,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CustomerId;
-import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * Opens a new bank account and starts the first period.
@@ -66,11 +65,9 @@ public class OpenBankAccountCommand implements CommandWithResult<BankingEvent, A
 
 		result.raiseEvent(
 			new AccountOpened(accountId, customerId, initialMonth, LocalDate.now()),
-			Tags.of(
-				BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
+			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
 				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(initialMonth))
-			)
-		);
+			);
 
 		return accountId;
 	}

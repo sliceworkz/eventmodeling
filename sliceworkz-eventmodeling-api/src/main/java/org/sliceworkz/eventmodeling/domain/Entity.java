@@ -54,7 +54,7 @@ import org.sliceworkz.eventstore.events.Tags;
  *         Tags.of(ACCOUNT.tag(accountId), CUSTOMER.tag(customerId)));
  *
  * // in a read model
- * return EventQuery.of(EventFilter.forTags(ACCOUNT.tags(accountId)));
+ * return EventQuery.of(EventFilter.forTags(ACCOUNT.tag(accountId)));
  * }</pre>
  *
  * <p>The id type is part of the entity, which is what makes the tags type-safe:
@@ -150,13 +150,6 @@ public final class Entity<ID extends EntityId> {
 	 */
 	public Tag tag ( ) {
 		return Tag.of(name);
-	}
-
-	/**
-	 * {@link #tag(EntityId)} as a {@link Tags}, which is what a query and an append take.
-	 */
-	public Tags tags ( ID id ) {
-		return Tags.of(tag(id));
 	}
 
 	/**

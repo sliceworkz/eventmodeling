@@ -28,7 +28,7 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.benchmark.features.packageorder.OrdersReadyToPackage.OrderReadyToPackage;
 import org.sliceworkz.eventstore.events.EventReference;
 
-public class PackageOrderAutomation implements Automation<OrderReadyToPackage,OrderProcessingDomainEvent,OrderProcessingOutboundEvent> {
+public class PackageOrderAutomation implements Automation<OrderReadyToPackage,OrderProcessingDomainEvent> {
 	
 	private OrdersReadyToPackage ordersReadyToPackage; 
 	
@@ -43,7 +43,7 @@ public class PackageOrderAutomation implements Automation<OrderReadyToPackage,Or
 	}
 
 	@Override
-	public Optional<EventReference> handle(OrderReadyToPackage todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context) {
+	public Optional<EventReference> handle(OrderReadyToPackage todoItem, AutomationContext<OrderProcessingDomainEvent> context) {
 		return context.event(new OrderPackaged(todoItem.orderId()));
 	}
 	

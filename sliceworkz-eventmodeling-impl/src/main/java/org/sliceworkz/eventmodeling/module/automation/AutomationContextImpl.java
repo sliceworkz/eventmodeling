@@ -28,7 +28,7 @@ import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 
-public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> {
+public class AutomationContextImpl<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements AutomationContext<DOMAIN_EVENT_TYPE> {
 
 	private final AllCapabilities<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> delegate;
 	private final Tracing tracing;

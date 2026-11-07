@@ -44,13 +44,13 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 	private String boundedContext;
 	private AllCapabilities<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVENT_TYPE> capabilitiesDelegate;
 	private ProcessorThreadManager<DOMAIN_EVENT_TYPE> processorThreadManager;
-	private final List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationProcessors;
+	private final List<AutomationProcessor<?,DOMAIN_EVENT_TYPE>> automationProcessors;
 
 	private Instance instance;
 	private BoundedContextObserver observer;
 	private BoundedContextEventEmitter eventEmitter;
 
-	public AutomationModule ( String boundedContext, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations, Instance instance, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
+	public AutomationModule ( String boundedContext, EventStream<DOMAIN_EVENT_TYPE> domainEventStream, Collection<Automation<?,DOMAIN_EVENT_TYPE>> automations, Instance instance, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
 		this.boundedContext = boundedContext;
 		this.domainEventStream = domainEventStream;
 		this.instance = instance;
@@ -68,7 +68,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 	 * @see org.sliceworkz.eventmodeling.automation.AutomationAdminCapability#automations()
 	 */
 	/** The processors of this module, all leader-only by construction, for the leader elector. */
-	public List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> leaderOnlyProcessors ( ) {
+	public List<AutomationProcessor<?,DOMAIN_EVENT_TYPE>> leaderOnlyProcessors ( ) {
 		return automationProcessors;
 	}
 
@@ -94,7 +94,7 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 		return processor(automation).stopByOperator();
 	}
 
-	private AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> processor ( String automation ) {
+	private AutomationProcessor<?,DOMAIN_EVENT_TYPE> processor ( String automation ) {
 		return automationProcessors.stream()
 				.filter(p -> p.automationId().equals(automation))
 				.findFirst()
@@ -106,12 +106,12 @@ public class AutomationModule<DOMAIN_EVENT_TYPE,INBOUND_EVENT_TYPE,OUTBOUND_EVEN
 		this.capabilitiesDelegate = delegate;
 	}
 
-	private AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> createAutomationContext ( Tracing tracing ) {
+	private AutomationContext<DOMAIN_EVENT_TYPE> createAutomationContext ( Tracing tracing ) {
 		return new AutomationContextImpl<>(capabilitiesDelegate, tracing);
 	}
 	
-	List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> createAutomationProcessors ( Collection<Automation<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automations ) {
-		List<AutomationProcessor<?,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> result = new ArrayList<>();
+	List<AutomationProcessor<?,DOMAIN_EVENT_TYPE>> createAutomationProcessors ( Collection<Automation<?,DOMAIN_EVENT_TYPE>> automations ) {
+		List<AutomationProcessor<?,DOMAIN_EVENT_TYPE>> result = new ArrayList<>();
 
 		// An automation's simple name is its identity: it keys the bookmark that records how far it has
 		// got, the metric tags, and the id AutomationAdminCapability addresses it by - see ProcessorNames

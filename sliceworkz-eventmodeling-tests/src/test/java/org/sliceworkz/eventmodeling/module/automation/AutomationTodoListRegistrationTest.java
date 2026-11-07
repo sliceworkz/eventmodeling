@@ -133,7 +133,7 @@ public class AutomationTodoListRegistrationTest extends AbstractMockDomainTest {
 				.instance(InstanceFactory.determine("unittests"));
 	}
 
-	static class UnregisteredTodoAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class UnregisteredTodoAutomation implements Automation<String,MockDomainEvent> {
 
 		private final TodoList todoList;
 
@@ -147,7 +147,7 @@ public class AutomationTodoListRegistrationTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			return Optional.empty();
 		}
 	}

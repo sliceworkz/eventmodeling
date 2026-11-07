@@ -279,7 +279,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 	}
 
 	/** Named rather than anonymous: an automation's bookmark is keyed on its simple name. */
-	static class RecordingAutomation implements Automation<CorrelatedItem,MockDomainEvent,MockOutboundEvent> {
+	static class RecordingAutomation implements Automation<CorrelatedItem,MockDomainEvent> {
 
 		private final CorrelatedTodoList todoList;
 
@@ -293,7 +293,7 @@ public class CorrelationPropagationTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( CorrelatedItem todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( CorrelatedItem todoItem, AutomationContext<MockDomainEvent> context ) {
 			return context.event(new SecondDomainEvent(todoItem.value()), "handled:" + todoItem.value());
 		}
 	}

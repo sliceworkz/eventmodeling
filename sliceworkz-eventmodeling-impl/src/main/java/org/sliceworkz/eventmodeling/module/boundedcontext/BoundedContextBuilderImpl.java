@@ -401,7 +401,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	@Override
-	public BoundedContextBuilder<C> automation ( Automation<?,?,?> automation ) {
+	public BoundedContextBuilder<C> automation ( Automation<?,?> automation ) {
 		automations.add(automation);
 		recordSliceMember(automation.getClass().getSimpleName(), BoundedContextEvent.MemberKind.AUTOMATION);
 		return this;
@@ -806,7 +806,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	 */
 	private void rejectAutomationsWhoseTodoListIsNotProjectedHere ( ) {
 		List<String> unprojected = new ArrayList<>();
-		for ( Automation<?,?,?> automation : automations ) {
+		for ( Automation<?,?> automation : automations ) {
 			String automationName = automation.getClass().getSimpleName();
 			TodoListReadModel<?,?> todoList = automation.getTodoList();
 			if ( todoList == null ) {
@@ -984,7 +984,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	 * Rejects a component registered over another bounded context's event types.
 	 * <p>
 	 * Every registration on this builder is wildcard-typed — {@code readmodel(Class<? extends
-	 * ReadModel<?>>)}, {@code automation(Automation<?,?,?>)}, {@code translator(Translator<?,?>)} and
+	 * ReadModel<?>>)}, {@code automation(Automation<?,?>)}, {@code translator(Translator<?,?>)} and
 	 * the rest — so the compiler admits a read model of the payments context on the banking one. It
 	 * cannot do otherwise: the builder is typed by the context alone, and Java offers no way to project
 	 * {@code D}, {@code I} and {@code O} back out of {@code C extends BoundedContext<D,I,O>}. The
@@ -1028,12 +1028,10 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 			checkEventType(foreign, "aggregate", aggregateClass.getSimpleName(),
 					aggregateClass, Aggregate.class, 0, "domain", domainEventRootType);
 		}
-		for ( Automation<?,?,?> automation : automations ) {
+		for ( Automation<?,?> automation : automations ) {
 			String name = automation.getClass().getSimpleName();
 			checkEventType(foreign, "automation", name,
 					automation.getClass(), Automation.class, 1, "domain", domainEventRootType);
-			checkEventType(foreign, "automation", name,
-					automation.getClass(), Automation.class, 2, "outbound", outboundEventRootType);
 		}
 		for ( Translator<?,?> translator : translatorSpecs ) {
 			String name = translator.getClass().getSimpleName();
@@ -1301,7 +1299,7 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 		om.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		pm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		policyModule.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
-		am.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((AutomationProcessor<?,?,?>) p).identification(), (AutomationProcessor<?,?,?>) p)));
+		am.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((AutomationProcessor<?,?>) p).identification(), (AutomationProcessor<?,?>) p)));
 		rmm.leaderOnlyProcessors().forEach(p -> electables.add(new LeaderElector.Electable(((ProjectorProcessor<?>) p).identification(), (ProjectorProcessor<?>) p)));
 		LeaderElector leaderElector = new LeaderElector(name, eventStorage, instance.process(),
 				LeaderElector.Distribution.of(leadershipDistribution, instance, leadershipPriority, leadershipStartupHoldBack),

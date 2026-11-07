@@ -90,7 +90,7 @@ public class TodoListStorageTest extends AbstractMockDomainTest {
 				"automation should handle the todo item of a %s todo list".formatted(storage.label())));
 	}
 
-	static class MockAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class MockAutomation implements Automation<String,MockDomainEvent> {
 
 		private final MockTodoList todoList;
 		private final List<String> handledItems = Collections.synchronizedList(new ArrayList<>());
@@ -105,7 +105,7 @@ public class TodoListStorageTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			handledItems.add(todoItem);
 			todoList.done(todoItem);
 			return Optional.empty();

@@ -159,7 +159,7 @@ class ExecutePaymentAutomationTest extends AutomationTest<PaymentToExecute, Paym
     private final SimulatedPaymentGateway gateway = new SimulatedPaymentGateway();
 
     @Override
-    public Automation<PaymentToExecute, PaymentsDomainEvent, PaymentsOutboundEvent> automation ( ) {
+    public Automation<PaymentToExecute, PaymentsDomainEvent> automation ( ) {
         return new ExecutePaymentAutomation(new PaymentsToExecuteTodoList(), gateway);
     }
 

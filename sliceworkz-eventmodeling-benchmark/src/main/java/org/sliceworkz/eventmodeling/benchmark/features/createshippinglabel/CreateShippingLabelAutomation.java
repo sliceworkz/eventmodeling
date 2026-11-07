@@ -28,7 +28,7 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.benchmark.features.createshippinglabel.RequiredShippingLabels.RequiredShippingLabel;
 import org.sliceworkz.eventstore.events.EventReference;
 
-public class CreateShippingLabelAutomation implements Automation<RequiredShippingLabel,OrderProcessingDomainEvent,OrderProcessingOutboundEvent> {
+public class CreateShippingLabelAutomation implements Automation<RequiredShippingLabel,OrderProcessingDomainEvent> {
 	
 	private RequiredShippingLabels requiredShippingLabels; 
 	
@@ -43,7 +43,7 @@ public class CreateShippingLabelAutomation implements Automation<RequiredShippin
 	}
 
 	@Override
-	public Optional<EventReference> handle(RequiredShippingLabel todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context) {
+	public Optional<EventReference> handle(RequiredShippingLabel todoItem, AutomationContext<OrderProcessingDomainEvent> context) {
 		return context.event(new ShippingLabelCreated(todoItem.orderId()));
 	}
 

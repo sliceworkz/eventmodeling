@@ -241,10 +241,10 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 		@Override public void when ( Event<ForeignOutboundEvent> event ) { }
 	}
 
-	public static class ForeignAutomation implements Automation<String,ForeignDomainEvent,ForeignOutboundEvent> {
+	public static class ForeignAutomation implements Automation<String,ForeignDomainEvent> {
 		private final ForeignTodoList todoList = new ForeignTodoList();
 		@Override public TodoListReadModel<ForeignDomainEvent,String> getTodoList ( ) { return todoList; }
-		@Override public Optional<EventReference> handle ( String item, AutomationContext<ForeignDomainEvent,ForeignOutboundEvent> context ) { return Optional.empty(); }
+		@Override public Optional<EventReference> handle ( String item, AutomationContext<ForeignDomainEvent> context ) { return Optional.empty(); }
 	}
 
 	public static class ForeignTodoList implements TodoListReadModel<ForeignDomainEvent,String> {

@@ -90,7 +90,7 @@ public class AutomationBatchTest {
 	}
 
 	/** An automation whose handling and failure policy are scripted per item. */
-	private static class ScriptedAutomation implements Automation<String,Object,Object> {
+	private static class ScriptedAutomation implements Automation<String,Object> {
 
 		private final ScriptedTodoList todoList;
 		private final Function<String,Optional<EventReference>> handler;
@@ -111,7 +111,7 @@ public class AutomationBatchTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<Object,Object> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<Object> context ) {
 			interactions.add("handled:" + todoItem);
 			return handler.apply(todoItem);
 		}
@@ -122,7 +122,7 @@ public class AutomationBatchTest {
 		}
 
 		@Override
-		public AutomationFailureAction onFailure ( String todoItem, Throwable cause, AutomationContext<Object,Object> context ) {
+		public AutomationFailureAction onFailure ( String todoItem, Throwable cause, AutomationContext<Object> context ) {
 			return failurePolicy.apply(todoItem, cause);
 		}
 	}

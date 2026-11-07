@@ -136,7 +136,7 @@ public class AutomationExecuteWithRetryTest extends AbstractMockDomainTest {
 	}
 
 	/** Named rather than anonymous: an automation's bookmark is keyed on its simple name. */
-	class RetryingAutomation implements Automation<String, MockDomainEvent, MockOutboundEvent> {
+	class RetryingAutomation implements Automation<String, MockDomainEvent> {
 
 		private final DroppingTodoList todoList;
 
@@ -150,14 +150,14 @@ public class AutomationExecuteWithRetryTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle(String todoItem, AutomationContext<MockDomainEvent, MockOutboundEvent> context) {
+		public Optional<EventReference> handle(String todoItem, AutomationContext<MockDomainEvent> context) {
 			Optional<EventReference> reference = context.executeWithRetry(new CompleteItemCommand(todoItem), RetryPolicy.of(3));
 			handled.add(todoItem);
 			return reference;
 		}
 
 		@Override
-		public AutomationFailureAction onFailure(String todoItem, Throwable cause, AutomationContext<MockDomainEvent, MockOutboundEvent> context) {
+		public AutomationFailureAction onFailure(String todoItem, Throwable cause, AutomationContext<MockDomainEvent> context) {
 			failuresSeen.incrementAndGet();
 			return AutomationFailureAction.RETRY_ITEM;
 		}

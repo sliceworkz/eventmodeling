@@ -66,7 +66,7 @@ public class PaymentsToExecuteTodoListTest extends AutomationTest<PaymentToExecu
 	}
 
 	@Override
-	public Automation<PaymentToExecute, PaymentsDomainEvent, PaymentsOutboundEvent> automation ( ) {
+	public Automation<PaymentToExecute, PaymentsDomainEvent> automation ( ) {
 		todoList = new PaymentsToExecuteTodoList();
 		return new ExecutePaymentAutomation(todoList, new SimulatedPaymentGateway());
 	}

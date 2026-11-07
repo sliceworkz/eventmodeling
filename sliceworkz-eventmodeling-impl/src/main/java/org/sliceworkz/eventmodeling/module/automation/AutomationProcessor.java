@@ -49,7 +49,7 @@ import org.sliceworkz.eventstore.stream.EventSource;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.BookmarkListener;
 
-public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> implements BookmarkListener, Processor {
+public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> implements BookmarkListener, Processor {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(AutomationProcessor.class);
 
@@ -59,7 +59,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private final Limit batchSize;
 
 	private EventSource<DOMAIN_EVENT_TYPE> eventSource;
-	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation;
+	private Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> automation;
 	private final ProcessorMode originalProcessorMode;
 
 	// written by start/stop/terminate on other threads, read by this processor's loop, by handleBatch's
@@ -69,7 +69,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private ProcessorIdentification monitoredProcessorIdentification; // this is the readmodel-building processor we will shadow
 	private final String monitoredReader; // the reader name that projector bookmarks under, matched as-is
 
-	private Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory;
+	private Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE>> automationContextFactory;
 
 	// The election result, flipped at runtime by the leader elector through instanceMode(): an
 	// automation is always leader-only, so it starts as a standby and is promoted, never assumed.
@@ -152,7 +152,7 @@ public class AutomationProcessor<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT
 	private final BoundedContextObserver observer;
 	private final BoundedContextEventEmitter eventEmitter;
 
-	public AutomationProcessor ( ProcessorIdentification processorIdentification, ProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE>> automationContextFactory, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
+	public AutomationProcessor ( ProcessorIdentification processorIdentification, ProcessorIdentification monitoredProcessorIdentification, EventStream<DOMAIN_EVENT_TYPE> eventSource, Function<Tracing, AutomationContext<DOMAIN_EVENT_TYPE>> automationContextFactory, Automation<TODO_ITEM_TYPE,DOMAIN_EVENT_TYPE> automation, ProcessorMode processorMode, Instance instance, String boundedContext, BoundedContextObserver observer, BoundedContextEventEmitter eventEmitter ) {
 		this.automationContextFactory = automationContextFactory;
 		this.automation = automation;
 		this.originalProcessorMode = processorMode;

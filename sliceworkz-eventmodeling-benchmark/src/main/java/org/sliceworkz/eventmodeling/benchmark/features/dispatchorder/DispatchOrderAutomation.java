@@ -29,7 +29,7 @@ import org.sliceworkz.eventmodeling.benchmark.features.dispatchorder.OrdersReady
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 
-public class DispatchOrderAutomation implements Automation<OrderReadyToDispatch,OrderProcessingDomainEvent,OrderProcessingOutboundEvent>{
+public class DispatchOrderAutomation implements Automation<OrderReadyToDispatch,OrderProcessingDomainEvent>{
 
 	private OrdersReadyToDispatch ordersReadyToDispatch;
 	
@@ -43,7 +43,7 @@ public class DispatchOrderAutomation implements Automation<OrderReadyToDispatch,
 	}
 
 	@Override
-	public Optional<EventReference> handle(OrderReadyToDispatch todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context ) {
+	public Optional<EventReference> handle(OrderReadyToDispatch todoItem, AutomationContext<OrderProcessingDomainEvent> context ) {
 
 		// record the dispatch, keyed by the item so a re-handled item records nothing twice; the
 		// OrderDispatchedPublisher tells the world, keyed by this event

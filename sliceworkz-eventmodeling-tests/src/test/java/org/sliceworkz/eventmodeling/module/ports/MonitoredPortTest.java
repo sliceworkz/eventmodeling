@@ -985,7 +985,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		}
 	}
 
-	static class LookUpAutomation implements Automation<ItemToLookUp,MockDomainEvent,MockOutboundEvent> {
+	static class LookUpAutomation implements Automation<ItemToLookUp,MockDomainEvent> {
 
 		private final ItemsToLookUp todoList;
 		private final GatewayPort gateway;
@@ -1001,7 +1001,7 @@ public class MonitoredPortTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( ItemToLookUp item, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( ItemToLookUp item, AutomationContext<MockDomainEvent> context ) {
 			return context.event(new SecondDomainEvent(gateway.answer(item.value())), "looked-up:" + item.value());
 		}
 	}

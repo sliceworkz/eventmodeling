@@ -160,7 +160,7 @@ public class ProvidedEventIdempotencyTest extends AbstractMockDomainTest {
 	}
 
 	/** Named rather than anonymous: an automation's bookmark is keyed on its simple name. */
-	static class KeyedAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class KeyedAutomation implements Automation<String,MockDomainEvent> {
 
 		private final StickyTodoList todoList;
 		private final Handler handler;
@@ -176,13 +176,13 @@ public class ProvidedEventIdempotencyTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String todoItem, AutomationContext<MockDomainEvent> context ) {
 			return handler.handle(todoItem, context);
 		}
 	}
 
 	interface Handler {
-		Optional<EventReference> handle ( String item, AutomationContext<MockDomainEvent,MockOutboundEvent> context );
+		Optional<EventReference> handle ( String item, AutomationContext<MockDomainEvent> context );
 	}
 
 	/**

@@ -28,7 +28,7 @@ import org.sliceworkz.eventmodeling.benchmark.OrderProcessingEvent.OrderProcessi
 import org.sliceworkz.eventmodeling.benchmark.features.announceshipment.ShipmentsToBeAnounced.ShipmentToBeAnnounced;
 import org.sliceworkz.eventstore.events.EventReference;
 
-public class AnnounceShipmentAutomation implements Automation<ShipmentToBeAnnounced,OrderProcessingDomainEvent,OrderProcessingOutboundEvent> {
+public class AnnounceShipmentAutomation implements Automation<ShipmentToBeAnnounced,OrderProcessingDomainEvent> {
 	
 	private ShipmentsToBeAnounced shipmentsToBeAnounced; 
 	
@@ -42,7 +42,7 @@ public class AnnounceShipmentAutomation implements Automation<ShipmentToBeAnnoun
 	}
 
 	@Override
-	public Optional<EventReference> handle(ShipmentToBeAnnounced todoItem, AutomationContext<OrderProcessingDomainEvent,OrderProcessingOutboundEvent> context ) {
+	public Optional<EventReference> handle(ShipmentToBeAnnounced todoItem, AutomationContext<OrderProcessingDomainEvent> context ) {
 		return context.event(new ShipmentAnnounced(todoItem.orderId()));
 	}
 

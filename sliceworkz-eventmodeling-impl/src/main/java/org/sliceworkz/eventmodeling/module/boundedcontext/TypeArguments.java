@@ -30,7 +30,7 @@ import java.util.Map;
  * Two registration checks need it, and both exist because a registration is wildcard-typed where the
  * compiler cannot be given the constraint:
  * <ul>
- *   <li>the event type a component was declared over ({@code ReadModel<?>}, {@code Automation<?,?,?>}
+ *   <li>the event type a component was declared over ({@code ReadModel<?>}, {@code Automation<?,?>}
  *       and the rest on {@link org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder}),
  *       against this context's own — the builder is typed by the context alone, and Java has no way
  *       to project {@code D}, {@code I} and {@code O} back out of

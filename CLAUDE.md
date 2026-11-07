@@ -1152,9 +1152,11 @@ processor:**
   compiling; the type moved and the accessor is now `upTo()`
 
 **Automations:**
-- Implement `Automation<TODO_ITEM_TYPE, DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>` — the item type
-  first, then the domain events it reads, then the outbound events it may publish. Note the todo list
-  it pairs with is declared the other way round, `TodoListReadModel<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE>`
+- Implement `Automation<TODO_ITEM_TYPE, DOMAIN_EVENT_TYPE>` — the item type first, then the domain
+  events it reads and raises. An automation writes the domain stream only; what it decides reaches the
+  outside world through a publisher mapping the domain events it raised, so neither it nor its
+  `AutomationContext<DOMAIN_EVENT_TYPE>` names the outbound events. Note the todo list it pairs with is
+  declared the other way round, `TodoListReadModel<DOMAIN_EVENT_TYPE, TODO_ITEM_TYPE>`
 - Paired with `TodoListReadModel` to identify work
 - Process outstanding todo items by executing commands
 - **Delivery is at least once, and the todo list is the queue.** Nothing else records outstanding work:
@@ -1901,7 +1903,7 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
 
 **Every registration on `BoundedContextBuilder` takes a wildcard** — `readmodel(Class<? extends
 ReadModel<?>>)`, `readmodel(ReadModel<?>)`, `aggregate(Class<? extends Aggregate<?>>)`,
-`automation(Automation<?,?,?>)`, `policy(Policy<?>)`, `translator(Translator<?,?>)`, `publisher(Publisher<?,?>)`,
+`automation(Automation<?,?>)`, `policy(Policy<?>)`, `translator(Translator<?,?>)`, `publisher(Publisher<?,?>)`,
 `dispatcher(Dispatcher<?>)` — so the
 compiler admits a payments read model on the banking context. The builder knows the three event types
 (`newBuilder` resolves them off the context interface and calls `eventTypes(...)`), but only at

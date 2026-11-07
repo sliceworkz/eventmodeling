@@ -46,7 +46,7 @@ import org.sliceworkz.eventstore.stream.EventStream;
  *
  * <p><b>Every registration on this builder is wildcard-typed</b> — {@link #readmodel(Class)},
  * {@link #automation(Automation)}, {@link #translator(Translator)} and the rest take
- * {@code ReadModel<?>}, {@code Automation<?,?,?>}, {@code Translator<?,?>} — so the compiler admits a
+ * {@code ReadModel<?>}, {@code Automation<?,?>}, {@code Translator<?,?>} — so the compiler admits a
  * component declared over another bounded context's event types. It cannot do otherwise: a builder is
  * typed by its context alone, and Java offers no way to project {@code D}, {@code I} and {@code O}
  * back out of {@code C extends BoundedContext<D,I,O>}. The alternative — carrying all four as type
@@ -409,7 +409,7 @@ public interface BoundedContextBuilder<C extends BoundedContext<?,?,?>> {
 	 * @throws IllegalArgumentException from {@link #build()} when its declared domain or outbound event type is
 	 *         unrelated to this context's — see the note on wildcard-typed registration above
 	 */
-	BoundedContextBuilder<C> automation(Automation<?,?,?> automation);
+	BoundedContextBuilder<C> automation(Automation<?,?> automation);
 
 	/**
 	 * Registers a policy, which issues a command whenever a domain event matching its query happens — the

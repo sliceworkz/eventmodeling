@@ -29,8 +29,7 @@ import org.sliceworkz.eventmodeling.events.ProvidedEventCapability;
  * {@link org.sliceworkz.eventmodeling.outbound.Publisher} that maps the domain events it raised.
  *
  * @param <DOMAIN_EVENT_TYPE> the base type of domain events in the bounded context
- * @param <OUTBOUND_EVENT_TYPE> the base type of the bounded context's outbound events
  */
-public interface AutomationContext<DOMAIN_EVENT_TYPE,OUTBOUND_EVENT_TYPE> extends CommandExecutionCapability<DOMAIN_EVENT_TYPE>, ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
+public interface AutomationContext<DOMAIN_EVENT_TYPE> extends CommandExecutionCapability<DOMAIN_EVENT_TYPE>, ProvidedEventCapability<DOMAIN_EVENT_TYPE> {
 
 }

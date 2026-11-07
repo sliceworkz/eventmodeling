@@ -357,7 +357,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 		}
 	}
 
-	static class HandlingAutomation implements Automation<String,MockDomainEvent,MockOutboundEvent> {
+	static class HandlingAutomation implements Automation<String,MockDomainEvent> {
 
 		private final TodoList todoList;
 		private final List<String> handled;
@@ -373,7 +373,7 @@ public class BoundedContextListenerFailureTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public Optional<EventReference> handle ( String item, AutomationContext<MockDomainEvent,MockOutboundEvent> context ) {
+		public Optional<EventReference> handle ( String item, AutomationContext<MockDomainEvent> context ) {
 			handled.add(item);
 			return context.event(new SecondDomainEvent(item));
 		}

@@ -240,16 +240,19 @@ and `event()`, and nothing at compile time objects. [WHO-MAY-DO-WHAT.md](WHO-MAY
 user-facing version of this section; keep the two in step via the link rather than restating one in
 the other, and when advising on who holds what, name the audience.
 
-- **`AllCapabilities` is a composition of audiences and declares nothing itself.** Six interfaces
-  narrower than the context, each the surface of one caller: `ApplicationCapabilities<D,O>`
+- **`AllCapabilities` is a composition of audiences and declares nothing itself.** Interfaces
+  narrower than the context, each the surface of one caller: `ApplicationCapabilities<D>`
   (`execute`, `executeWithRetry`, `evaluate`, `read`, `aggregate`) for code driving the domain,
-  `TranslationCapability<I>` for the inbound edge, `OperationsCapabilities` (the two admin
-  capabilities) for an operator's tooling, `PrivacyCapability` for an erasure request,
-  `ProvidedEventCapability<D>` for the escape hatch, and the owner's own — `LifecycleCapability`,
-  `PortsCapability`, `FeatureSliceCapabilities` — which stay leaves on `AllCapabilities` because
-  only whatever called `build()` has a use for them
+  `OperationsCapabilities` (the two admin capabilities and health) for an operator's tooling,
+  `PrivacyCapability` for an erasure request, `ProvidedEventCapability<D>` for the escape hatch, and
+  the owner's own — `LifecycleCapability`, `PortsCapability`, `FeatureSliceCapabilities` — which stay
+  leaves on `AllCapabilities` because only whatever called `build()` has a use for them. The inbound
+  and outbound streams are reached through `InboundStreamCapability<I>.inbound()` and
+  `OutboundStreamCapability<O>.outbound()`, whose results the owner narrows for their audiences — the
+  inbound edge (`TranslationCapability<I>`) and a reader of what came in or went out
+  (`ReadModelCapability<I>` / `<O>`); see "The inbound and outbound streams" below
 - **Narrowing costs a reference type and nothing else.** A built context already *is* each audience,
-  so `ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> app = banking;` is the whole
+  so `ApplicationCapabilities<BankingDomainEvent> app = banking;` is the whole
   technique: no wrapper, no conversion, no builder setting. Build the context in one place and hand
   out the narrow types from there. An alias interface beside the context interface —
   `interface BankingApi extends ApplicationCapabilities<...>`, with `Banking extends
@@ -271,8 +274,8 @@ the other, and when advising on who holds what, name the audience.
   `ApplicationCapabilities` go through a boundary — a command pins one at the stream head, an
   `Aggregate` raises within its identity — where `event()` goes through none; a team using one of the
   two write styles never registers the other, so bundling costs it nothing. `incoming`/`translate`
-  stay separate because feeding the domain external events is a different job from deciding on a
-  user's behalf, and an adapter doing both holds both types
+  stay separate — on `inbound()` — because feeding the domain external events is a different job from
+  deciding on a user's behalf, and an adapter doing both holds both types
 - **The groupings are by audience, never by style.** The alternative — a `CQRSCapabilities` and a
   `DCBCapabilities` naming the two ways to drive this framework — loses because a style is not a
   caller: both would carry `read`, both would need `LifecycleCapability` to be usable as the one type
@@ -289,6 +292,73 @@ the other, and when advising on who holds what, name the audience.
   probes — each audience accepts its own methods and refuses the others', a built context still
   carries everything, it narrows to every audience without a cast, and the alias-interface
   declaration compiles while one contradicting the context's own event types does not
+
+### The inbound and outbound streams: `inbound()` and `outbound()`
+
+**Whatever is about one of the context's two edge streams is reached through `inbound()` or
+`outbound()`, on the builder and on the context; the root of either is the domain stream and the context
+as a whole.** On the builder, `inbound()` (`InboundSpecification`) takes the translators, the read models
+over the inbound stream and the inbound legacy event types; `outbound()` (`OutboundSpecification`) the
+publishers, the dispatchers, the read models over the outbound stream and the outbound legacy event
+types; each returns to the builder with `done()`, and a read model registration ends on the builder, as
+on the root. On the context, `inbound()` hands out `InboundCapabilities<I>` (`incoming`, `translate`,
+`read`) and `outbound()` `OutboundCapabilities<O>` (`read`). The domain legacy event types are
+`legacyEventTypes(...)` on the root.
+
+- **A read model may be projected from the inbound or the outbound stream.** It is the same
+  `ReadModel<E>`, declared over that stream's event type — so `PublishingReadModel`,
+  `SqlReadModelProjector`, `SeededReadModel`, snapshots and the live/eventually-consistent choice all
+  carry over — registered on `builder.inbound()`/`outbound()` and read through
+  `context.inbound().read(...)`/`outbound().read(...)`. What came in (whether a translator claimed it or
+  not) or went out, counted per type or per tag value. `ReadModelModule` is built once per stream
+  (`ProjectedStream`), each over its own stream, with everything the domain one has: the startup wait
+  for in-memory read models, the processor admin, leader election for a `SHARED` one, the health check
+- **Its bookmark is keyed under a processor type of its own** — `inbound-readmodel`,
+  `outbound-readmodel` — so a read model over the inbound stream may share a name with one over the
+  domain stream, and the domain one keeps `readmodel`, which every bookmark placed before is named
+  under: no bookmark moves. The alternative — one `readmodel` type for all three — loses because two
+  read models of one name on two streams would share a bookmark, each skipping what the other read,
+  with nothing raised. For the same reason an operator addresses them as
+  `ProcessorKind.INBOUND_READ_MODEL`/`OUTBOUND_READ_MODEL` (names are unique per kind), health reports
+  them as `inboundReadModels`/`outboundReadModels` with their lag measured on their own stream, and
+  the read model lifecycle events (`ReadModelProjectorStarted`/`Failed`/`Stopped`,
+  `EventuallyConsistentReadModelUpdated`, `LiveModelProjected`) and the slice member carry `stream` —
+  `inbound` or `outbound`, `null` for the domain stream and on an event stored before it existed
+- **`build()` holds each registration to its stream's event type**: a read model on
+  `builder.inbound()` is checked against the inbound root by
+  `rejectComponentsOfAnotherContextsEventTypes`, a domain read model there is refused naming the
+  stream. And a read through the wrong stream does not compile: `read` is
+  `<R extends ReadModel<? extends E>>` on a `ReadModelCapability<E>`, and the root's `E` is the
+  domain type
+- **One read model type and one capability type, used three times.** Java has no union bound
+  (`<R extends ReadModel<? extends D | I>>` does not parse), overloads of `read` by bound erase to the
+  same signature, and a class cannot implement `ReadModelCapability<D>` and `<I>` both — so the context
+  is a `ReadModelCapability<D>` and hands out the other two. The alternatives — an `InboundReadModel`
+  and `OutboundReadModel` interface beside `ReadModel` — lose because every read model base class
+  would need a twin per stream
+- **It reads and decides nothing.** Not a decision input (a command's boundary covers the domain
+  stream alone, and `CommandContext.read` is typed by the domain event type), not a todo list (an
+  automation waits on its todo list's bookmark under the `readmodel` type —
+  `rejectAutomationsWhoseTodoListIsNotProjectedHere` only counts domain registrations), not a
+  publisher's read (`rejectPublishersWhoseReadModelsAreNotLiveHere` likewise), and no
+  `readUnbounded`
+- **`inbound()` serves two audiences with one object**, since a context can be a
+  `ReadModelCapability` of one event type only: the edge feeding the domain and a reader of what came
+  in. The owner narrows it — `TranslationCapability<I> edge = banking.inbound();`,
+  `ReadModelCapability<I> screen = banking.inbound();` — exactly as it narrows the context itself.
+  `outbound()` only reads: nothing but a publisher writes the outbound stream
+- **The publisher sits on `outbound()` although it reads domain events**: it is the only writer of the
+  outbound stream, so everything the context tells the world is registered in one place. It keeps its
+  rule of being registered from `configureAutomation`
+- **`legacyEventTypes(...)` per stream**, rather than one positional `(domain, inbound, outbound)`
+  triple of `Class<?>` where swapping two still compiles, and in the eventstore's word for it
+- `InboundAndOutboundReadModelTest` pins the projection of both streams, eventually consistent and
+  live, a shared name across streams, the processor kind, the stream on the lifecycle events, the
+  build-time type check and the todo-list refusal; `ForeignEventTypeRegistrationTest` the type check
+  per stream; `CapabilitySurfaceTest`/`CapabilityAudienceTest` the surface (the two audiences of
+  `inbound()`, reads refused through the wrong stream, `incoming` gone from the root);
+  `InboundLiveModelTestRunsOnEveryBackendTest`/`Outbound...` the published test bases. The banking
+  `inboundtraffic` slice and `InboundTrafficReadModelTest` are the worked example
 
 ### Feature Slice Pattern
 
@@ -1528,7 +1598,8 @@ assembles it.
 - **The checks**, each present only where it applies (constants on `BoundedContextHealth`):
   `lifecycle` (`DOWN` unless `RUNNING`), `inMemoryReadModels` (`DEGRADED` while a context that stopped
   waiting at the startup timeout still has some catching up), one per processor kind deployed here
-  (`readModels`, `automations`, `translators`, `dispatchers`, `publishers`, `policies`), `processorLag`,
+  (`readModels`, `inboundReadModels`, `outboundReadModels`, `automations`, `translators`, `dispatchers`,
+  `publishers`, `policies`), `processorLag`,
   `leadership` and `monitoringListener` (only with a listener)
 - **The processor kinds share one rule, judged only while `RUNNING`**: retired on a failure (`stoppedBy`)
   and retrying (consecutive failed runs or batches) are `DEGRADED` and named in the message; stopped by
@@ -1731,24 +1802,24 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   the inbound event is stored nowhere, so it is handed an `Event` built for the call: the caller's
   tracing as its tags, and a reference with a freshly minted id under a position that names no stored
   event, fit to key a translation and for nothing else. `TranslateTest` pins it
-- Registered with the bounded context from a feature slice (`builder.translator(...)`), which is what makes that slice a `TRANSLATION`
+- Registered with the bounded context from a feature slice (`builder.inbound().translator(...)`), which is what makes that slice a `TRANSLATION`
 - Two ways to run a translation, both reusing the same registered `Translator` implementations:
-  - `boundedContext.incoming(inboundEvent)`: eventually-consistent. Appends the inbound event to the inbound stream; matching translators run asynchronously via projectors. Supports idempotency keys.
-  - `boundedContext.translate(inboundEvent)`: interactive. Runs every matching translator synchronously in the calling thread, does **not** persist the inbound event, and returns the `List<EventReference>` of domain events raised. Throws `NoTranslatorRegisteredException` if no registered translator matches the event. Useful for integration scenarios that need to act immediately on the produced domain events.
+  - `boundedContext.inbound().incoming(inboundEvent)`: eventually-consistent. Appends the inbound event to the inbound stream; matching translators run asynchronously via projectors. Supports idempotency keys.
+  - `boundedContext.inbound().translate(inboundEvent)`: interactive. Runs every matching translator synchronously in the calling thread, does **not** persist the inbound event, and returns the `List<EventReference>` of domain events raised. Throws `NoTranslatorRegisteredException` if no registered translator matches the event. Useful for integration scenarios that need to act immediately on the produced domain events.
 
 **Dispatchers:**
 - Implement `Dispatcher<OUTBOUND_EVENT_TYPE>`: `eventFilter()` over the outbound stream and `when(Event<O>)`.
   It is an `EventHandler`, not the eventstore's `Projection`: the processor builds the projection around
   it, so a dispatcher has no `initQuery()` to declare and no query to read backwards
 - Implement outbox pattern for publishing events
-- Registered with the bounded context via `builder.dispatcher(...)`, and subject to the naming rule below.
+- Registered with the bounded context via `builder.outbound().dispatcher(...)`, and subject to the naming rule below.
   This is the registry where getting a name wrong costs the most, since the bookmark records what has
   already been published to an external system
 - `DispatcherDeliveryTest` pins the delivery path end to end — a fact a command records, published by a
   registered publisher and reaching a registered dispatcher's `when()` exactly once, through real
   processors. It is the only test that does: the published `PublisherTest` and `DispatcherTest` bases
   deliberately drive their component without registering it, so without this test the wiring from
-  `builder.publisher(...)` and `builder.dispatcher(...)` could break with every suite still green
+  `builder.outbound().publisher(...)` and `.dispatcher(...)` could break with every suite still green
 
 **Publishers:**
 - Implement `Publisher<DOMAIN_EVENT_TYPE, OUTBOUND_EVENT_TYPE>`: `eventFilter()` over the domain stream,
@@ -1784,7 +1855,7 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
   element in the model, only the class in the code. Where several slices publish the same integration
   event, one publisher in a slice of its own holding the mapping (and the dispatcher) is usually better
   than one per slice; such a slice derives `AUTOMATION` (see `SliceType`). Registered from
-  `configureAutomation` with `builder.publisher(...)`, it runs on the instances deploying automations, leader-only, one lease per
+  `configureAutomation` with `builder.outbound().publisher(...)`, it runs on the instances deploying automations, leader-only, one lease per
   publisher named by its `ProcessorIdentification` (type `publisher`), bookmarked on the domain stream.
   `build()` rejects one a slice registered from another aspect's hook, naming the slice and the hook
   (`rejectPublishersOutsideTheAutomationAspect`); one registered straight on the builder runs wherever
@@ -1903,8 +1974,9 @@ every lease each heartbeat and flips `ProcessorInstanceMode` (`LEADER`/`STANDBY`
 
 **Every registration on `BoundedContextBuilder` takes a wildcard** — `readmodel(Class<? extends
 ReadModel<?>>)`, `readmodel(ReadModel<?>)`, `aggregate(Class<? extends Aggregate<?>>)`,
-`automation(Automation<?,?>)`, `policy(Policy<?>)`, `translator(Translator<?,?>)`, `publisher(Publisher<?,?>)`,
-`dispatcher(Dispatcher<?>)` — so the
+`automation(Automation<?,?>)`, `policy(Policy<?>)`, and on `inbound()`/`outbound()`
+`translator(Translator<?,?>)`, `publisher(Publisher<?,?>)`, `dispatcher(Dispatcher<?>)` and their
+`readmodel(...)` — so the
 compiler admits a payments read model on the banking context. The builder knows the three event types
 (`newBuilder` resolves them off the context interface and calls `eventTypes(...)`), but only at
 runtime: it is typed `BoundedContextBuilder<C>`, and Java offers no way to project `D`, `I` and `O`
@@ -2176,7 +2248,8 @@ is containment, so the extra tag changes no existing query and no DCB boundary.
   layer binds the request's tracing upfront (`try ( TracingScope s = TracingScope.bind(tracing) )`, or
   a before/after handler pair) and the framework picks it up wherever it has none of its own on that
   thread: the **no-tracing overloads** of the context's capabilities (`execute(command)`, `read`,
-  `event`, `incoming`, `translate`, `evaluate`, `aggregate`) use it instead of minting
+  `event`, `evaluate`, `aggregate`, and `incoming`, `translate` and `read` on `inbound()`/`outbound()`)
+  use it instead of minting
   (`BoundedContextImpl.callerTracing()`), and a **monitored port call** with no component tracing — a
   REST endpoint's own call, attributed to its slice — is reported under it (`PortReporter.start`). An
   explicit tracing always wins, a component running on the thread keeps its own, and nothing is
@@ -2405,7 +2478,7 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 
 **Base Classes:**
 - `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves. The release *terminates* the context rather than stopping it, because terminating is what closes the `EventStore` the context built and drains its processor threads — see "Shutdown — who closes what" below
-- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest`, `AutomationTest`, `PolicyTest`, `TranslatorTest`, `PublisherTest`, `DispatcherTest`, `SqlReadModelTest`)
+- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest` — with `InboundLiveModelTest` and `OutboundLiveModelTest` for a read model over the inbound or outbound stream — `AutomationTest`, `PolicyTest`, `TranslatorTest`, `PublisherTest`, `DispatcherTest`, `SqlReadModelTest`)
 - `CommandTest` tests business rules with `as(actor)` (seeded events and the execution carry the actor),
   `whenEvaluated(command).thenEvaluation()` (fails if anything was appended) and
   `then().rulesViolated()`, both handing out `EvaluationAssertions`

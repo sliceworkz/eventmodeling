@@ -24,12 +24,13 @@ Every capability a bounded context carries is filed under one of these. `AllCapa
 
 | audience | interface | what it carries |
 |---|---|---|
-| **application** — a controller, a job, any adapter driving the domain | `ApplicationCapabilities<D,O>` | `execute`, `executeWithRetry`, `evaluate`, `read`, `aggregate` |
-| **inbound edge** — a webhook, a consumer feeding the domain | `TranslationCapability<I>` | `incoming`, `translate` |
+| **application** — a controller, a job, any adapter driving the domain | `ApplicationCapabilities<D>` | `execute`, `executeWithRetry`, `evaluate`, `read`, `aggregate` |
+| **inbound edge** — a webhook, a consumer feeding the domain | `TranslationCapability<I>`, from `inbound()` | `incoming`, `translate` |
+| **a reader of what came in or went out** — a screen, a report | `ReadModelCapability<I>` from `inbound()`, `ReadModelCapability<O>` from `outbound()` | `read` of a read model over that stream |
 | **operator** — an admin endpoint, a dashboard | `OperationsCapabilities` | `automations`, `restartAutomation`, `stopAutomation`, `processors`, `restartProcessor`, `stopProcessor`, `skipStalledEvent`, `state`, `health` |
 | **erasure requests** | `PrivacyCapability` | `erase`, `eraseCategory` |
 | **the escape hatch** | `ProvidedEventCapability<D>` | `event` |
-| **owner** — whatever built the context | `BoundedContext<D,I,O>` | all of the above, plus `start`/`stop`/`terminate`, `port`, the slice inventory |
+| **owner** — whatever built the context | `BoundedContext<D,I,O>` | all of the above, plus `start`/`stop`/`terminate`, `port`, the slice inventory, and `inbound()`/`outbound()`, whose results it narrows for the two audiences above |
 
 `UnboundedReadModelCapability<D>` sits outside this table: it reads across every stream regardless of
 context boundaries, is not part of `AllCapabilities`, and is reached by naming it on a context
@@ -43,11 +44,19 @@ A built context already *is* each of these, so there is nothing to convert and n
 Banking banking = BoundedContext.newBuilder(Banking.class) /* ... */ .build();
 banking.start();                                              // the owner, holding everything
 
-ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> app = banking;
+ApplicationCapabilities<BankingDomainEvent> app = banking;
 app.execute(new OpenAccountCommand(customerId));              // fine
 app.read(AccountDetailsReadModel.class, accountId);           // fine
 app.terminate();                                              // does not compile
 app.erase("customer", id, reason);                            // does not compile
+
+TranslationCapability<BankingInboundEvent> feed = banking.inbound();
+feed.incoming(new CustomerSuspended(customerId));             // fine
+feed.read(InboundTrafficReadModel.class);                     // does not compile
+
+ReadModelCapability<BankingInboundEvent> screen = banking.inbound();
+screen.read(InboundTrafficReadModel.class);                   // fine
+screen.read(AccountDetailsReadModel.class, accountId);        // does not compile: a domain read model
 ```
 
 Build the context in one place and hand out the narrow types from there, so a caller is given the
@@ -55,12 +64,12 @@ reach its job needs and cannot be handed another's by a wiring change nobody loo
 
 ## An alias interface, for the same reason `Banking` exists
 
-`ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent>` at every call site is the same
+`ApplicationCapabilities<BankingDomainEvent>` at every call site is the same
 noise `BoundedContext<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent>` would be, which
 is why the context interface exists at all. Give each audience the same treatment:
 
 ```java
-public interface BankingApi extends ApplicationCapabilities<BankingDomainEvent, BankingOutboundEvent> { }
+public interface BankingApi extends ApplicationCapabilities<BankingDomainEvent> { }
 
 public interface Banking extends BoundedContext<BankingDomainEvent, BankingInboundEvent, BankingOutboundEvent>,
                                  BankingApi { }
@@ -70,8 +79,8 @@ public interface Banking extends BoundedContext<BankingDomainEvent, BankingInbou
 `BankingApi` — with the same type arguments both ways, which is legal and is what makes a mistyped
 alias a compile error rather than a second surface. Controllers then take `BankingApi`.
 
-Nothing requires the alias: `Banking` is an `ApplicationCapabilities<BankingDomainEvent,
-BankingOutboundEvent>` whether or not you declare one.
+Nothing requires the alias: `Banking` is an `ApplicationCapabilities<BankingDomainEvent>` whether or
+not you declare one.
 
 ## Why each line of the table falls where it does
 
@@ -117,6 +126,17 @@ context's name alone, since tooling rarely holds a built context.
 **The inbound edge is separate from the application surface.** `incoming` and `translate` feed the
 domain events from outside, which is a different job from deciding on behalf of a user. An adapter
 that genuinely does both holds both types; most hold one.
+
+**The inbound and outbound streams are reached through `inbound()` and `outbound()`, not on the
+context itself.** Whatever is about one of those streams sits there: on the context, feeding the
+inbound stream and reading the read models projected from either; on the builder, the translators, the
+publishers and dispatchers, those read models and each stream's legacy event types. The root of the
+context and of the builder is the domain stream, and the context as a whole. `inbound()` hands out one
+object for two audiences — the edge feeding the domain and a reader of what came in — because a
+context can implement `ReadModelCapability` for one event type only; the owner narrows it to
+`TranslationCapability<I>` or `ReadModelCapability<I>` and hands each on. A read model over the
+domain stream passed to `inbound().read(...)`, or one over the inbound stream passed to `read(...)`,
+does not compile. `outbound()` only reads: nothing but a publisher writes the outbound stream.
 
 ## Adding a capability
 

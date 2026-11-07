@@ -205,7 +205,7 @@ inverts: **what has arrived can only be accepted; what you do about it is where 
   translator, every inbound event behind the bad one waiting, reported as `TranslatorFailed` each round. An inbound event that fails
   validation is *decided about in-band*: ignore it (the `default -> { }` arm), or record the rejection
   as a domain event, which makes the dead-letter view an ordinary read model. (Through the synchronous
-  `boundedContext.translate(...)` an exception propagates to the caller instead — that path may
+  `boundedContext.inbound().translate(...)` an exception propagates to the caller instead — that path may
   validate loudly, because there is a caller to reject.)
 - **An automation validates the outcome of its effect through `onFailure`.** The external call it
   makes can fail in ways only the automation can classify, and `AutomationFailureAction` is that

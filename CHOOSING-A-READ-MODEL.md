@@ -161,6 +161,35 @@ long history and no read model you would otherwise maintain. You implement the `
 
 ---
 
+## Which stream: domain, inbound or outbound
+
+Every step above applies to the stream a read model is projected from, and that is the domain stream
+unless the registration says otherwise. A read model over the **inbound** stream — what came in from
+outside, counted per type or per tag value, whether a translator claimed it or not — is registered on
+`builder.inbound()` and read through `context.inbound().read(...)`; one over the **outbound** stream —
+what went out — on `builder.outbound()` and `context.outbound().read(...)`. Nothing else changes: the
+same `ReadModel`, `PublishingReadModel` and `SqlReadModelProjector`, the same choice of live or
+eventually consistent, the same ladder.
+
+```java
+builder.inbound().readmodel(new InboundTrafficReadModel()).eventuallyConsistent();
+builder.outbound().readmodel(OutboundPerPartnerReadModel.class).live();
+
+InboundTrafficReadModel traffic = banking.inbound().read(InboundTrafficReadModel.class);
+```
+
+The read model is declared over the stream's event type — `ReadModel<BankingInboundEvent>` — and
+`build()` holds it to the stream it is registered on, so one registered on the wrong stream fails
+naming it, and one read through the wrong stream does not compile. Its bookmark is kept under a
+processor type of its own, so it may share a name with a domain read model.
+
+Such a read model reads and decides nothing. It is not a decision input — a command's consistency
+boundary covers the domain stream alone — not a todo list, since an automation waits on a todo list
+over the domain stream, and not something a publisher reads. `banking` example: the `inboundtraffic`
+slice.
+
+---
+
 ## Shapes to avoid
 
 **A read model that mutates its own fields and exposes a getter.** The projector thread mutates while

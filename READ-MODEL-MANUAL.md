@@ -520,6 +520,12 @@ their failure modes in [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md#shape
 - **`TodoListReadModel`** — an eventually consistent read model that serves as an automation's work
   queue. Same registration, two extra obligations: `streamItems` owns ordering, and it must not be a
   live view its own projector can mutate mid-batch.
+- **A read model over the inbound or outbound stream** — any of the read models above, declared over
+  the stream's event type (`ReadModel<BankingInboundEvent>`) and registered on `builder.inbound()` or
+  `builder.outbound()` instead of the builder itself, read through `context.inbound().read(...)` or
+  `context.outbound().read(...)`. What came in or went out, counted per type or per tag value. It reads
+  and decides nothing: no decision model, no todo list, no publisher read. See "Which stream" in
+  [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md); the banking `inboundtraffic` slice is the example.
 - **`readUnbounded(...)`** (`UnboundedReadModelCapability`) — a live read across *all* event streams,
   ignoring context boundaries. Internal dashboards and monitoring only; a context opts in by
   extending the capability interface.
@@ -536,12 +542,17 @@ their failure modes in [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md#shape
   failure (the read model's target database being down) never stops the projector anymore; it backs
   off, retries, and recovery shows as the next `EventuallyConsistentReadModelUpdated`.
 - `EventuallyConsistentReadModelUpdated` — only for catch-ups that handled something.
+- Each of these carries `stream`: `inbound` or `outbound` for a read model over that stream, `null`
+  for the domain stream. An operator addresses such a projector as `INBOUND_READ_MODEL` or
+  `OUTBOUND_READ_MODEL`.
 - For `SHARED`: `LeadershipAcquired` / `LeadershipReleased` report the election axis separately.
 
 ### Testing
 
 - `LiveModelTest` (published in `sliceworkz-eventmodeling-testing`) — `given().events(...)`
-  `.when(params)` `.then().liveModelIs(...)` for chapters 2, 4, 7 and 8.
+  `.when(params)` `.then().liveModelIs(...)` for chapters 2, 4, 7 and 8. `InboundLiveModelTest` and
+  `OutboundLiveModelTest` are the same for a read model over the inbound or outbound stream, seeding
+  that stream.
 - `SqlReadModelTest` — H2 and PostgreSQL DataSources, plus `projectedUpTo()` and
   `restartedProjector()` so you can assert the chapter-6 restart property yourself.
 - Annotate scenarios `@ForEachBackend` to run them against every registered event storage backend; a

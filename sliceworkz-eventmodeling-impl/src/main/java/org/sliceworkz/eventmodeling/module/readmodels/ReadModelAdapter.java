@@ -30,6 +30,7 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
+import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
@@ -126,6 +127,15 @@ class ReadModelAdapter<DOMAIN_EVENT_TYPE> implements BatchAwareProjection<DOMAIN
 		endBatch(scope -> scope.completed(new Outcome.Cancelled()));
 	}
 
+	@Override
+	public EventFilter eventFilter() {
+		return readModel.eventFilter();
+	}
+
+	/**
+	 * The read model's own query, not one derived from its filter: a read model may read in a way a filter
+	 * does not say (the builder holds an eventually consistent one to a forward read).
+	 */
 	@Override
 	public EventQuery eventQuery() {
 		return readModel.eventQuery();

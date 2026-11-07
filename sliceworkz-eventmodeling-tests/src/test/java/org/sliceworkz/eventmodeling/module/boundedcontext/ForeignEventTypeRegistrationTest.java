@@ -47,7 +47,6 @@ import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.Limit;
 
 /**
@@ -224,18 +223,18 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 	}
 
 	public static class ForeignReadModel implements ReadModel<ForeignDomainEvent> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void when ( Event<ForeignDomainEvent> event ) { }
 	}
 
 	public static class ForeignPublishingReadModel extends PublishingReadModel<ForeignDomainEvent,Integer> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override protected Integer initialState ( ) { return 0; }
 		@Override protected Integer apply ( Integer state, Event<ForeignDomainEvent> event ) { return state + 1; }
 	}
 
 	public static class MockPublishingReadModel extends PublishingReadModel<MockDomainEvent,Integer> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override protected Integer initialState ( ) { return 0; }
 		@Override protected Integer apply ( Integer state, Event<MockDomainEvent> event ) { return state + 1; }
 	}
@@ -267,36 +266,36 @@ public class ForeignEventTypeRegistrationTest extends AbstractMockDomainTest {
 	}
 
 	public static class ForeignTodoList implements TodoListReadModel<ForeignDomainEvent,String> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void when ( Event<ForeignDomainEvent> event ) { }
 		@Override public Stream<String> streamItems ( Limit limit ) { return Stream.empty(); }
 		@Override public Optional<EventReference> lastEventReference ( ) { return Optional.empty(); }
 	}
 
 	public static class ForeignInboundReadModel implements ReadModel<ForeignInboundEvent> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void when ( Event<ForeignInboundEvent> event ) { }
 	}
 
 	public static class ForeignOutboundReadModel implements ReadModel<ForeignOutboundEvent> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void when ( Event<ForeignOutboundEvent> event ) { }
 	}
 
 	// ── related types, which are not the mistake this catches ────────────────
 
 	public static class AnalyticsReadModel implements ReadModel<Object> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void when ( Event<Object> event ) { }
 	}
 
 	public static class BranchReadModel implements ReadModel<MockDomainEvent.FirstDomainEvent> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void when ( Event<MockDomainEvent.FirstDomainEvent> event ) { }
 	}
 
 	public static class GenericReadModel<E> implements ReadModel<E> {
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.matchAll()); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.matchAll(); }
 		@Override public void when ( Event<E> event ) { }
 	}
 

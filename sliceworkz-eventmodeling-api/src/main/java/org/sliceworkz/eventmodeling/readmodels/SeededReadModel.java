@@ -50,7 +50,7 @@ import org.sliceworkz.eventstore.events.EventReference;
  * this buys the cost of a live model down, not the visibility rules away.
  *
  * <p><b>Scope the seed to the read.</b> The instance is constructed with the read's parameters before
- * {@link #seed()} is called, so both the base and {@link #eventQuery()} can be narrowed to the one
+ * {@link #seed()} is called, so both the base and {@link #eventFilter()} can be narrowed to the one
  * thing being asked for — one row in, a handful of delta events, a small object out. A seed that
  * loads the whole model on every read is a live model with extra steps.
  *

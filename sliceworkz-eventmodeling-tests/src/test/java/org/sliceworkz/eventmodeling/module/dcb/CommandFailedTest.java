@@ -90,8 +90,8 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 
 	static class FirstDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -145,8 +145,8 @@ public class CommandFailedTest extends AbstractMockDomainTest {
 	 */
 	static class JudgingDecisionModel implements DecisionModel<MockDomainEvent> {
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override

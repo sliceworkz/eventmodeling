@@ -32,7 +32,6 @@ import org.sliceworkz.eventmodeling.rules.RuleViolation.Disposition;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
@@ -93,8 +92,8 @@ public record JustifyWithdrawalCommand ( AccountId accountId, String withdrawal,
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(MoneyWithdrawn.class, WithdrawalJustified.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId)));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(MoneyWithdrawn.class, WithdrawalJustified.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
 		}
 
 		@Override

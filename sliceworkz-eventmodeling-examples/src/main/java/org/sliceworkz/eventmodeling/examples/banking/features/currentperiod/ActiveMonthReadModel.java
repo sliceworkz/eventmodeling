@@ -56,8 +56,14 @@ public class ActiveMonthReadModel implements ReadModel<BankingEvent> {
 	}
 
 	@Override
+	public EventFilter eventFilter() {
+		return EventFilter.forTypes(AccountOpened.class, MonthOpened.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
+	}
+
+	/** Only the newest of them says which month is active: read backwards, one event. */
+	@Override
 	public EventQuery eventQuery() {
-		return EventQuery.of(EventFilter.forTypes(AccountOpened.class, MonthOpened.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId))).backwards().limit(1);
+		return EventQuery.of(eventFilter()).backwards().limit(1);
 	}
 
 	@Override

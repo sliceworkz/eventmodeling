@@ -62,6 +62,11 @@ public class MockReadModel implements ReadModel<MockDomainEvent> {
 	}
 
 	@Override
+	public EventFilter eventFilter() {
+		return eventQuery.filter();
+	}
+
+	@Override
 	public EventQuery eventQuery() {
 		return eventQuery;
 	}

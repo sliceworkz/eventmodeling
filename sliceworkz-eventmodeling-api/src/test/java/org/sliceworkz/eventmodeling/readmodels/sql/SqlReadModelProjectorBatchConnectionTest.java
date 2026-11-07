@@ -35,7 +35,6 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * A SQL read model hands its pooled connection back at the end of every batch, including the batches
@@ -118,8 +117,8 @@ class SqlReadModelProjectorBatchConnectionTest {
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.matchAll());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.matchAll();
 		}
 
 		@Override

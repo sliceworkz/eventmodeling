@@ -111,8 +111,8 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		private int count = 0;
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -133,8 +133,8 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		private int count = 0;
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(SecondDomainEvent.class);
 		}
 
 		@Override
@@ -162,8 +162,8 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -190,8 +190,8 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery() {
-			return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class));
+		public EventFilter eventFilter() {
+			return EventFilter.forTypes(SecondDomainEvent.class);
 		}
 
 		@Override
@@ -227,11 +227,11 @@ public class DCBDecisionModelTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery() {
+		public EventFilter eventFilter() {
 			if (watching == null) {
-				return EventQuery.of(EventFilter.matchNone());
+				return EventFilter.matchNone();
 			}
-			return EventQuery.of(EventFilter.forTypes("first".equals(watching) ? FirstDomainEvent.class : SecondDomainEvent.class));
+			return EventFilter.forTypes("first".equals(watching) ? FirstDomainEvent.class : SecondDomainEvent.class);
 		}
 
 		@Override

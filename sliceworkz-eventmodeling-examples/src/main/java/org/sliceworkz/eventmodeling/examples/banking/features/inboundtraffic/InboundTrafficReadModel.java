@@ -26,7 +26,6 @@ import org.sliceworkz.eventmodeling.readmodels.PublishingReadModel;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventType;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 
 /**
  * Everything the bank received from outside, counted per event type and per customer — a read model over
@@ -63,8 +62,8 @@ public class InboundTrafficReadModel extends PublishingReadModel<BankingInboundE
 	}
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.matchAll());
+	public EventFilter eventFilter ( ) {
+		return EventFilter.matchAll();
 	}
 
 	/**

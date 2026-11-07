@@ -93,8 +93,8 @@ public class AccountDetailsReadModel implements ReadModel<BankingDomainEvent> {
     }
 
     @Override
-    public EventQuery eventQuery ( ) {
-        return EventQuery.of(EventFilter.forTags(BankingDomain.ACCOUNT.tags(accountId)));
+    public EventFilter eventFilter ( ) {
+        return EventFilter.forTags(BankingDomain.ACCOUNT.tags(accountId));
     }
 
     @Override
@@ -125,11 +125,17 @@ Three things to internalise here, because everything later builds on them:
   constructor whose parameter types the arguments fit, by their types and not by their count — the
   most specific one where several fit, as Java's own overload resolution does — and refuses a read
   that fits none or is ambiguous, naming the constructors it weighed. This is what scopes the model to
-  one entity — and what scopes its `eventQuery()`.
+  one entity — and what scopes its `eventFilter()`.
 - **The read is typed by the class it asks for.** `bc.read(AccountDetailsReadModel.class, accountId)`
   is an `AccountDetailsReadModel`, so it chains (`bc.read(X.class, id).details()`) and fits a `var`
   without a cast, and assigning it to anything else is a compile error rather than a
   `ClassCastException` at the call site.
+- **A read model says which events it depends on with `eventFilter()`, and that is usually all.** A
+  live read model reads them forward, from the beginning or from where a seed or snapshot left off.
+  `eventQuery()` defaults to that forward read and is overridden only for a read that is not one —
+  backwards, limited — built on the filter: `EventQuery.of(eventFilter()).backwards().limit(1)` for a
+  model that needs only the newest event. An eventually consistent read model reads forward from its
+  bookmark, so `build()` refuses one that overrides it otherwise.
 - **Every event arrives with its metadata, and the domain event is `event.data()`.** There is one
   `when`, taking the `Event`: switch on `event.data()` for the domain event, and read the tags, the
   timestamp or the reference off the same argument when a projection needs them. There is no
@@ -148,7 +154,7 @@ Before scaling reads up, one boundary must be drawn, because getting it wrong is
 unfixable by any read-model tuning: **state a command bases its decision on is not a read model — it
 is a `DecisionModel`.**
 
-A `DecisionModel` looks exactly like a projection (`eventQuery()`, optionally `initQuery()`,
+A `DecisionModel` looks exactly like a projection (`eventFilter()`, optionally `initQuery()`,
 `when(...)`) but is not registered anywhere. The command constructs it and passes it to
 `CommandContext.decisionModels(...)`, which projects it inline during `execute()` — and, crucially,
 makes the events it was projected from the command's **consistency boundary**: if a concurrent
@@ -161,7 +167,7 @@ append against stale history and nothing will ever say so.
 
 The in-tree example is [`ActivePeriodDecisionModel`](sliceworkz-eventmodeling-examples/src/main/java/org/sliceworkz/eventmodeling/examples/banking/features/currentperiod/ActivePeriodDecisionModel.java):
 the deposit, withdraw and close-month commands all project it via `context.decisionModels(...)`, and
-its `eventQuery()` doubles as the conflict filter. Note that it uses the same savepoint pattern
+its `eventFilter()` doubles as the conflict filter. Note that it uses the same savepoint pattern
 chapter 4 teaches — decision models and read models share the whole projection vocabulary; they
 differ only in *who* runs them and what the projection *guards*.
 
@@ -174,7 +180,7 @@ When a live model gets slow, the reflex is to cache it. The framework's position
 expensive answer to a problem the *domain* usually solves more cheaply. Two techniques, both of which
 keep you at chapter 2's cost model:
 
-**a) Narrow `eventQuery()` by tags.** Tags are the query dimension of this event store; a model that
+**a) Narrow `eventFilter()` by tags.** Tags are the query dimension of this event store; a model that
 filters by entity tag replays one entity's events, not the stream.
 [`MonthStatementReadModel`](sliceworkz-eventmodeling-examples/src/main/java/org/sliceworkz/eventmodeling/examples/banking/features/monthstatement/MonthStatementReadModel.java)
 goes one further and filters by account **and** month, so one statement replays one period — and for
@@ -191,26 +197,27 @@ backwards `limit(1)` query and replays only what came after:
 // CurrentPeriodReadModel — the savepoint pattern
 @Override
 public EventQuery initQuery ( ) {
-    return EventQuery.of(EventFilter.forTypes(AccountOpened.class, MonthOpened.class).tagged(// the savepoints
-        ACCOUNT.tags(accountId))).backwards().limit(1);
+    return EventQuery.of(EventFilter.forTypes(AccountOpened.class, MonthOpened.class)   // the savepoints
+        .tagged(ACCOUNT.tags(accountId))).backwards().limit(1);
 }
 
 @Override
-public EventQuery eventQuery ( ) {
-    return EventQuery.of(EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class).tagged(ACCOUNT.tags(accountId)               // movements only));
+public EventFilter eventFilter ( ) {
+    return EventFilter.forTypes(MoneyDeposited.class, MoneyWithdrawn.class, MonthClosed.class)   // movements only
+        .tagged(ACCOUNT.tags(accountId));
 }
 ```
 
-The framework runs `initQuery()` first, feeds its result through `when(...)`, then starts
-`eventQuery()` from that event's position. With no savepoint yet, the init query finds nothing and
+The framework runs `initQuery()` first, feeds its result through `when(...)`, then reads what
+`eventFilter()` matches from that event's position. With no savepoint yet, the init query finds nothing and
 the model gracefully replays from the beginning. Rules that keep it healthy:
 
-- **Query disjoint event types from the two methods.** The savepoint types belong to `initQuery()`
+- **Name disjoint event types in the two methods.** The savepoint types belong to `initQuery()`
   only — otherwise they are double-processed, and a buggy savepoint cannot be recovered from by
   ignoring it. This holds for a `DecisionModel` too, and needs no exception for the consistency
   boundary: the framework locks on the union of **both** queries, so a savepoint landing between the
   read and the append raises `OptimisticLockingException` without the savepoint types appearing in
-  `eventQuery()`.
+  `eventFilter()`.
 - **`initQuery()` is a live-model device.** A bookmarked background projection must see every event,
   so eventually consistent read models ignore it (with a build-time warning).
 - The savepoint is written by the domain — a `CloseMonthCommand` deciding the books are closed — not
@@ -257,8 +264,8 @@ public class AccountBalancesReadModel
     }
 
     @Override
-    public EventQuery eventQuery ( ) {
-        return EventQuery.of(EventFilter.matchAll());
+    public EventFilter eventFilter ( ) {
+        return EventFilter.matchAll();
     }
 }
 ```
@@ -317,8 +324,8 @@ public class OrderCountProjector extends SqlReadModelProjector<Order> {
     }
 
     @Override
-    public EventQuery eventQuery ( ) {
-        return EventQuery.of(EventFilter.matchAll());
+    public EventFilter eventFilter ( ) {
+        return EventFilter.matchAll();
     }
 
     @Override
@@ -426,8 +433,8 @@ public class CurrentBalanceReadModel implements SeededReadModel<BankingEvent> {
     }
 
     @Override
-    public EventQuery eventQuery ( ) {          // only this account -> the delta stays tiny
-        return EventQuery.of(EventFilter.forTags(ACCOUNT.tags(accountId)));
+    public EventFilter eventFilter ( ) {        // only this account -> the delta stays tiny
+        return EventFilter.forTags(ACCOUNT.tags(accountId));
     }
 
     @Override

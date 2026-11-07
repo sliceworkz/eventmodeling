@@ -30,7 +30,6 @@ import org.sliceworkz.eventmodeling.testing.InboundLiveModelTest;
 import org.sliceworkz.eventmodeling.testing.OutboundLiveModelTest;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.testing.ForEachBackend;
 
 /**
@@ -63,8 +62,8 @@ public class OutboundLiveModelTestRunsOnEveryBackendTest extends OutboundLiveMod
 		private int count;
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.matchAll());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.matchAll();
 		}
 
 		@Override

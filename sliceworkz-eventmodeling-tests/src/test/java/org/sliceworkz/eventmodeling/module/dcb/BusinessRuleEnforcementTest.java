@@ -62,7 +62,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.Tag;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.stream.EventStream;
 import org.sliceworkz.eventstore.stream.OptimisticLockingException;
@@ -103,8 +102,8 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 
 	static class AllFirstEvents implements DecisionModel<MockDomainEvent> {
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTypes(FirstDomainEvent.class);
 		}
 
 		@Override
@@ -405,8 +404,8 @@ public class BusinessRuleEnforcementTest extends AbstractMockDomainTest {
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.forTags(RuleTags.overriddenBy(actor, PRE_AUTHORIZED)));
+		public EventFilter eventFilter ( ) {
+			return EventFilter.forTags(RuleTags.overriddenBy(actor, PRE_AUTHORIZED));
 		}
 
 		@Override

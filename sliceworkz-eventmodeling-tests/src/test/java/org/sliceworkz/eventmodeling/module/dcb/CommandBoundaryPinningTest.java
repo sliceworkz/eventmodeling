@@ -110,7 +110,7 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 
 	static class Firsts implements DecisionModel<MockDomainEvent> {
 		int seen;
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(FirstDomainEvent.class)); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.forTypes(FirstDomainEvent.class); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 
@@ -118,7 +118,7 @@ public class CommandBoundaryPinningTest extends AbstractMockDomainTest {
 	static class SecondsSinceSavepoint implements DecisionModel<MockDomainEvent> {
 		int seen;
 		@Override public EventQuery initQuery ( ) { return EventQuery.of(EventFilter.forTypes(ThirdDomainEvent.class)).backwards().limit(1); }
-		@Override public EventQuery eventQuery ( ) { return EventQuery.of(EventFilter.forTypes(SecondDomainEvent.class)); }
+		@Override public EventFilter eventFilter ( ) { return EventFilter.forTypes(SecondDomainEvent.class); }
 		@Override public void when ( Event<MockDomainEvent> event ) { seen++; }
 	}
 

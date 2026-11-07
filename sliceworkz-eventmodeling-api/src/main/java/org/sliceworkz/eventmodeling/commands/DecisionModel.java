@@ -20,20 +20,20 @@ package org.sliceworkz.eventmodeling.commands;
 import org.sliceworkz.eventstore.projection.Projection;
 
 /**
- * A projection a command instantiates inline to decide on: {@code eventQuery()} scoped by tags to the
+ * A projection a command instantiates inline to decide on: {@code eventFilter()} scoped by tags to the
  * entity, {@code when(...)} folding the state, accessors for the rules to check.
  * <p>
  * What makes it more than a lookup is that {@code context.decisionModels(...)} puts the events it was
  * projected from inside the command's consistency boundary. Every read is bounded at the domain
  * stream's head, that head is the append's expected reference, and the optimistic-lock filter is the
- * union of <em>every</em> filter the models were read with &mdash; each {@code eventQuery()}, and the
+ * union of <em>every</em> filter the models were read with &mdash; each {@code eventFilter()}, and the
  * {@code initQuery()} of a model using the savepoint pattern. So the DCB check at append time re-asks
  * exactly the question the command decided on, and an event landing in between raises
  * {@link org.sliceworkz.eventstore.stream.OptimisticLockingException}.
  * <p>
  * Two consequences worth knowing:
  * <ul>
- * <li><b>The savepoint types stay out of {@code eventQuery()}.</b> The savepoint pattern asks for the
+ * <li><b>The savepoint types stay out of {@code eventFilter()}.</b> The savepoint pattern asks for the
  * two queries to name disjoint event types, or the savepoint is double-processed &mdash; and nothing
  * is given up by that: "the newest savepoint is X" is a fact the command decided on, so the framework
  * locks on {@code initQuery()} too, whether or not a savepoint was found.</li>

@@ -39,7 +39,6 @@ import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventId;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.Limit;
 
 /**
@@ -79,8 +78,8 @@ public class AutomationBatchTest {
 		}
 
 		@Override
-		public EventQuery eventQuery ( ) {
-			return EventQuery.of(EventFilter.matchNone());
+		public EventFilter eventFilter ( ) {
+			return EventFilter.matchNone();
 		}
 
 		@Override

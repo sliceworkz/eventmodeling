@@ -37,7 +37,6 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 
@@ -66,8 +65,8 @@ public class RequiredShippingLabels implements TodoListReadModel<OrderProcessing
 	}
 	
 	@Override
-	public EventQuery eventQuery() {
-		return EventQuery.of(EventFilter.forTypes(OrderReceived.class, ShippingLabelCreated.class));
+	public EventFilter eventFilter() {
+		return EventFilter.forTypes(OrderReceived.class, ShippingLabelCreated.class);
 	}
 
 	@Override

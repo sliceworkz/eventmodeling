@@ -40,7 +40,6 @@ import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.projection.BatchAwareProjection;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 import org.sliceworkz.eventstore.query.Limit;
 
@@ -72,8 +71,8 @@ public class OrdersReadyToDispatch implements TodoListReadModel<OrderProcessingD
 	}
 	
 	@Override
-	public EventQuery eventQuery() {
-		return EventQuery.of(EventFilter.forTypes(OrderPackaged.class, ShipmentAnnounced.class, OrderDispatched.class));
+	public EventFilter eventFilter() {
+		return EventFilter.forTypes(OrderPackaged.class, ShipmentAnnounced.class, OrderDispatched.class);
 	}
 
 	@Override

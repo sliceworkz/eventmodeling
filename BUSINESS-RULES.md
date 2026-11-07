@@ -159,10 +159,10 @@ command, with `overridableWhen(authorized, whyNot)`:
 
 The history a quota counts is written by the kernel, not by the domain: every event raised with an
 override carries `x-rule-overridden:<rule>`, and every event carries `x-actor`. So a per-actor count
-across all accounts is one tag query:
+across all accounts is one tag filter, the decision model's `eventFilter()`:
 
 ```java
-EventQuery.of(EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.overriddenBy(teller, NO_OVERDRAFT)))
+EventFilter.forTypes(MoneyWithdrawn.class).tagged(RuleTags.overriddenBy(teller, NO_OVERDRAFT))
 ```
 
 ## 6. Overrides are an input of the command

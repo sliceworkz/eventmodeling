@@ -26,7 +26,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountOpened;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
-import org.sliceworkz.eventstore.query.EventQuery;
 import org.sliceworkz.eventstore.query.EventTypesFilter;
 
 /**
@@ -49,8 +48,8 @@ public class AccountStandingDecisionModel implements DecisionModel<BankingEvent>
 	}
 
 	@Override
-	public EventQuery eventQuery ( ) {
-		return EventQuery.of(EventFilter.forTypes(AccountOpened.class, AccountFrozen.class, AccountClosed.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId)));
+	public EventFilter eventFilter ( ) {
+		return EventFilter.forTypes(AccountOpened.class, AccountFrozen.class, AccountClosed.class).tagged(BankingDomainWithClosingTheBooks.ACCOUNT.tags(accountId));
 	}
 
 	@Override

@@ -312,6 +312,12 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 		}
 
 		@Override
+		public EventFilter eventFilter ( ) {
+			return initQuery.filter();
+		}
+
+		/** The savepoint read as the model declared it: backwards and limited, which a filter does not say. */
+		@Override
 		public EventQuery eventQuery ( ) {
 			return initQuery;
 		}
@@ -340,6 +346,12 @@ public class DCBCommandContextImpl<CONSUMED_EVENT_TYPE, PRODUCED_EVENT_TYPE> imp
 			this.handled = new long[models.size()];
 		}
 
+		@Override
+		public EventFilter eventFilter ( ) {
+			return mergedQuery.filter();
+		}
+
+		/** The merged read with its direction and read bound, which a filter does not carry. */
 		@Override
 		public EventQuery eventQuery ( ) {
 			return mergedQuery;

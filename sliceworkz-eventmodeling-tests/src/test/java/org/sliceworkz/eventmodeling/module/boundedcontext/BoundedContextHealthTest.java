@@ -284,7 +284,10 @@ public class BoundedContextHealthTest extends AbstractMockDomainTest {
 	private static EventStorage hangingOnHead ( EventStorage delegate, AtomicBoolean hang, CountDownLatch release, AtomicInteger heads ) {
 		return (EventStorage) Proxy.newProxyInstance(EventStorage.class.getClassLoader(), new Class<?>[] { EventStorage.class },
 			(proxy, method, args) -> {
-				if ( method.getName().equals("head") && hang.get() ) {
+				// only the health report's lag measurement hangs and is counted: the read model's projector
+				// takes the head at the start of every run too, and a run of it landing while the test asks
+				// would otherwise be counted as a second measurement
+				if ( method.getName().equals("head") && hang.get() && Thread.currentThread().getName().startsWith("health-lag-") ) {
 					heads.incrementAndGet();
 					release.await();
 				}

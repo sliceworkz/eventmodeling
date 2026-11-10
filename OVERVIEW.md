@@ -6,7 +6,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 |---|---|---|---:|---:|---:|---:|---:|---:|---|---|
 | [`develop`](#develop) | 2026-11-09T14:50:11+01:00 (dry run) | `5dba69eb77` | 0 | 0 | 0 | 0 | 0 | 0 | - | ci-artifact (run 42621153572) |
 | [`release/0.8`](#release08) | 2026-11-10T09:19:36+01:00 | `837f0f553f` | 0 | 0 | 0 | 0 | 0 | 1 | **2 since v0.8.0** | saved by the previous run (branch head unchanged) |
-| [`release/0.7`](#release07) | 2026-11-09T14:00:56+01:00 (dry run) | `51f63040c9` | 0 | 0 | 0 | 0 | 0 | 0 | none since v0.7.2 | built by this run |
+| [`release/0.7`](#release07) | 2026-11-10T09:19:37+01:00 | `51f63040c9` | 0 | 0 | 0 | 0 | 0 | 1 | none since v0.7.2 | saved by the previous run (branch head unchanged) |
 
 ## develop
 
@@ -25,3 +25,5 @@ Pipeline PRs open: [#240](https://github.com/sliceworkz/eventmodeling/pull/240) 
 No dependency updates since v0.7.2 (2026-11-08).
 
 No critical or high findings.
+
+Pipeline PRs open: [#241](https://github.com/sliceworkz/eventmodeling/pull/241) (review, CI none)

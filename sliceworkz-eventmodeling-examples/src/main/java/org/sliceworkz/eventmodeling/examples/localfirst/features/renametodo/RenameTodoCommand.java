@@ -15,14 +15,14 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.examples.localfirst.features.resolvetodoconflict;
+package org.sliceworkz.eventmodeling.examples.localfirst.features.renametodo;
 
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent;
-import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoConflictResolved;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoRenamed;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoStatus;
 import org.sliceworkz.eventmodeling.examples.localfirst.crdt.OperationStamp;
@@ -30,28 +30,26 @@ import org.sliceworkz.eventmodeling.examples.localfirst.crdt.ReplicaId;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.replicastate.ReplicaStateDecisionModel;
 
 /**
- * A person decides which of the conflicting changes stands. Only one of the statuses that were in conflict
- * can be chosen: the resolution picks a side, it is no new change in disguise.
- *
- * <p>Like every command, it is decided on this replica's knowledge alone. Two offices resolving the same
- * conflict while apart is possible: choosing the same status settles it, choosing differently is a new
- * conflict between the two resolutions, to be resolved again.
+ * Renames a to-do on one replica. Two offices renaming the same to-do to different titles while apart is a
+ * conflict no rule can settle: which wording is right is for a person to say ({@code SettleTodoTitle}).
  */
-public record ResolveTodoConflictCommand ( ReplicaId replica, TodoId todoId, TodoStatus chosen ) implements Command<TodoEvent> {
+public record RenameTodoCommand ( ReplicaId replica, TodoId todoId, String title ) implements Command<TodoEvent> {
 
 	@Override
 	public void execute ( CommandContext<TodoEvent, TodoEvent> context ) {
 		var state = new ReplicaStateDecisionModel();
 		var result = context.decisionModels(state);
 
+		BusinessException.when(title == null || title.isBlank(), "A to-do needs a title");
 		var todo = state.todo(todoId);
 		BusinessException.when(todo.isEmpty(), "To-do " + todoId.value() + " does not exist");
-		BusinessException.when(!todo.get().inConflict(), "To-do '" + todo.get().title() + "' has no conflict to resolve");
-		BusinessException.when(!todo.get().status().values().contains(chosen),
-				"To-do '" + todo.get().title() + "' can only be resolved to one of " + todo.get().status().values());
+		BusinessException.when(todo.get().inConflict(), "To-do '" + todo.get().displayTitle() + "' was renamed concurrently; settle its title first");
+		BusinessException.when(todo.get().resolvedStatus() == TodoStatus.DROPPED, "To-do '" + todo.get().displayTitle() + "' is DROPPED");
+		BusinessException.when(title.strip().equals(todo.get().agreedTitle()), "To-do is already called '" + title.strip() + "'");
+		BusinessException.when(state.titleTakenByAnother(title.strip(), todoId), "There already is a to-do '" + title.strip() + "'");
 
 		OperationStamp stamp = state.nextStamp(replica);
-		result.raiseEvent(new TodoConflictResolved(todoId, chosen, stamp),
+		result.raiseEvent(new TodoRenamed(todoId, title.strip(), stamp),
 				TodoListDomain.tagsOf(todoId, replica), stamp.operationId());
 	}
 

@@ -43,9 +43,9 @@ public record MarkTodoPlannedCommand ( ReplicaId replica, TodoId todoId ) implem
 
 		var todo = state.todo(todoId);
 		BusinessException.when(todo.isEmpty(), "To-do " + todoId.value() + " does not exist");
-		BusinessException.when(todo.get().inConflict(), "To-do '" + todo.get().title() + "' has conflicting changes; resolve the conflict first");
+		BusinessException.when(todo.get().inConflict(), "To-do '" + todo.get().displayTitle() + "' was renamed concurrently; settle its title first");
 		TodoStatus current = todo.get().resolvedStatus();
-		BusinessException.when(!ALLOWED_FROM.contains(current), "To-do '" + todo.get().title() + "' is " + current);
+		BusinessException.when(!ALLOWED_FROM.contains(current), "To-do '" + todo.get().displayTitle() + "' is " + current);
 
 		OperationStamp stamp = state.nextStamp(replica);
 		result.raiseEvent(new TodoMarkedPlanned(todoId, stamp),

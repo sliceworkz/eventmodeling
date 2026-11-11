@@ -18,7 +18,6 @@
 package org.sliceworkz.eventmodeling.examples.localfirst;
 
 import java.util.Comparator;
-import java.util.Set;
 
 import org.sliceworkz.eventmodeling.domain.Entity;
 import org.sliceworkz.eventmodeling.domain.EntityId;
@@ -49,27 +48,18 @@ public interface TodoListDomain {
 		PLANNED, ONGOING, DONE, DROPPED;
 
 		/**
-		 * Whether concurrent status changes are a <b>business conflict</b>: two offices took the to-do in
-		 * different directions without knowing about each other, and a person has to decide which one
-		 * stands. Until then the to-do has no agreed status and nothing else may be done with it.
+		 * How concurrent status changes resolve, automatically and alike on every replica: <b>a drop wins,
+		 * and otherwise the earliest state wins</b>. Whoever puts a to-do back on the plan, or keeps it
+		 * ongoing, has a reason the office that finished it did not know about, so the step back counts
+		 * for more than the step forward. A drop wins over everything: whoever dropped it meant it gone.
 		 *
-		 * <p>A drop is not a conflict: whoever dropped it meant it gone, whatever else happened to it, so a
-		 * drop settles concurrent changes on its own ({@link #CONCURRENT_PRIORITY}).
-		 */
-		public static boolean conflicting ( Set<TodoStatus> concurrent ) {
-			return concurrent.size() > 1 && !concurrent.contains(DROPPED);
-		}
-
-		/**
-		 * How concurrent status changes that are no conflict resolve: drop wins. Applied to a conflict, the
-		 * order only decides what the to-do would show if nobody looked at the conflict; it never does,
-		 * since a conflict has no agreed status. Any total order works, as long as every replica uses the
-		 * same one.
+		 * <p>Any total order would converge, as long as every replica uses the same one; this one is the
+		 * business decision. So concurrent status changes are never a conflict a person has to settle.
 		 */
 		public static final Comparator<TodoStatus> CONCURRENT_PRIORITY = Comparator.comparingInt(status -> switch ( status ) {
-			case PLANNED -> 0;
+			case DONE -> 0;
 			case ONGOING -> 1;
-			case DONE -> 2;
+			case PLANNED -> 2;
 			case DROPPED -> 3;
 		});
 	}
@@ -83,6 +73,8 @@ public interface TodoListDomain {
 		/** A new to-do, planned. Its id is minted by the replica that adds it, so two adds never collide. */
 		record TodoAdded ( TodoId todoId, String title, OperationStamp stamp ) implements TodoEvent { }
 
+		record TodoRenamed ( TodoId todoId, String title, OperationStamp stamp ) implements TodoEvent { }
+
 		record TodoMarkedPlanned ( TodoId todoId, OperationStamp stamp ) implements TodoEvent { }
 
 		record TodoMarkedOngoing ( TodoId todoId, OperationStamp stamp ) implements TodoEvent { }
@@ -92,28 +84,16 @@ public interface TodoListDomain {
 		record TodoDropped ( TodoId todoId, OperationStamp stamp ) implements TodoEvent { }
 
 		/**
-		 * Someone who saw the conflicting changes chose the status that stands. Its clock covers every
-		 * change it settles, so it replaces them all on every replica it reaches.
+		 * Someone who saw the concurrent renames settled the title: one of them, or a new one. Its clock
+		 * covers every rename it settles, so it replaces them all on every replica it reaches.
 		 */
-		record TodoConflictResolved ( TodoId todoId, TodoStatus status, OperationStamp stamp ) implements TodoEvent { }
+		record TodoTitleSettled ( TodoId todoId, String title, OperationStamp stamp ) implements TodoEvent { }
 
 	}
 
 	/** The tags of an operation: the to-do it is about and the replica that decided it. */
 	static Tags tagsOf ( TodoId todoId, ReplicaId replica ) {
 		return Tags.of(TODO.tag(todoId), REPLICA.tag(replica));
-	}
-
-	/** The status every operation writes into a to-do's status register. */
-	static TodoStatus statusWrittenBy ( TodoEvent event ) {
-		return switch ( event ) {
-			case TodoEvent.TodoAdded ignored -> TodoStatus.PLANNED;
-			case TodoEvent.TodoMarkedPlanned ignored -> TodoStatus.PLANNED;
-			case TodoEvent.TodoMarkedOngoing ignored -> TodoStatus.ONGOING;
-			case TodoEvent.TodoMarkedDone ignored -> TodoStatus.DONE;
-			case TodoEvent.TodoDropped ignored -> TodoStatus.DROPPED;
-			case TodoEvent.TodoConflictResolved resolved -> resolved.status();
-		};
 	}
 
 	sealed interface TodoListInboundEvent {

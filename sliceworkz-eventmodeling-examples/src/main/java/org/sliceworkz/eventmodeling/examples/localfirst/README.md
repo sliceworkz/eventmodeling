@@ -17,7 +17,7 @@ replicas talk.
 | causal delivery | `TodoListServer.receive` buffers an operation until what it was decided on is there |
 | anti-entropy | `ReplicationLogReadModel.missingAt(peerClock)`, exchanged by `Network.sync` |
 | state | `TodoListFold`, shared by the decision model and the `TodoListReadModel` |
-| conflict resolution | a `MultiValueRegister` per to-do status; a drop wins automatically, other concurrent writes are a business conflict a person resolves |
+| conflict resolution | a `MultiValueRegister` per to-do title and per status; concurrent statuses settled by a business rule, concurrent renames a conflict a person settles |
 
 **Operations are replicated, not commands.** The command runs once, where the user is, against what that
 replica knows. The event it raises is a decided fact, and the other replicas take it in as it is through
@@ -26,17 +26,21 @@ differently (the to-do might be dropped there already), and the replicas would d
 
 **Statuses.** Adding a to-do makes it `PLANNED`; `MarkTodoOngoing` needs `PLANNED`, `MarkTodoDone` needs
 `ONGOING`, `MarkTodoPlanned` needs `ONGOING` or `DONE`, `DropTodo` anything but `DROPPED`. These rules are
-checked locally. Concurrent changes are all kept (`concurrentStatuses`).
+checked locally. Concurrent status changes are all kept (`concurrentStatuses`) and settle themselves by a
+business rule every replica applies alike (`TodoStatus.CONCURRENT_PRIORITY`): a drop wins, otherwise the
+**earliest state wins**. An office that puts a to-do back on the plan, or keeps it ongoing, has a reason the
+office that finished it did not know about, so the step back counts for more than the step forward.
 
-**Conflicts.** Concurrent status changes that disagree (one office finished an ongoing to-do, another
-put it back on the plan) are a *business conflict* (`TodoStatus.conflicting`): the to-do has no agreed
-status, `TodoConflictsReadModel` lists it with the change each office made, and every command on it is
-refused until a person runs `ResolveTodoConflict`, choosing one of the conflicting statuses. The
-resolution is an operation like any other: its clock covers both sides, so it replaces them everywhere.
-Two things follow from deciding locally. A conflict holds back only the replicas that know of it; an
-office that has not synced yet works on, and its change joins one of the sides. And two offices can
-resolve the same conflict while apart: choosing alike settles it, choosing differently is a new conflict.
-A drop is no conflict: it wins over whatever happened concurrently.
+**Titles, and the conflict a person settles.** `RenameTodo` changes a to-do's title. Two offices renaming
+the same to-do differently while apart is a conflict no rule can settle: which wording is right is for a
+person to say. Until then the to-do has no agreed title (`TodoView.title` is `null`, `concurrentTitles`
+holds both), `TodoConflictsReadModel` lists it with the rename each office made, and every command on it is
+refused until someone runs `SettleTodoTitle`, with one of the titles or a new one. The settlement is an
+operation like any other: its clock covers both renames, so it replaces them everywhere. Renaming the same
+way is no conflict. Two things follow from deciding locally. A conflict holds back only the replicas that
+know of it; an office that has not synced yet works on, and its status changes count. And two offices can
+settle the same conflict while apart: on the same title that ends it, on different titles it is a new
+conflict, to be settled again.
 
 **What local first cannot give you.** A rule over one replica's own operations holds. A rule over several
 (no two open to-dos with the same title) holds per replica, but two offices adding the same title while
@@ -48,8 +52,8 @@ shows it: such a rule needs coordination, or a compensating step once the confli
 - `PeerToPeerTodoListTest`: three offices linked directly; partitions, concurrent changes, drop versus
   change, an operation arriving before its cause, duplicate delivery
 - `CentralServerTodoListTest`: offices linked to a central replica only, which relays and decides nothing
-- `TodoConflictTest`: a business conflict shown everywhere, actions refused, resolved, resolved twice
-  alike and differently, and the offices that had not heard of it
+- `TodoConflictTest`: a title conflict shown everywhere, actions refused, settled on one of the titles or a
+  new one, settled twice alike and differently, and the offices that had not heard of it
 - `ConvergenceTest`: random work under random partitions in both topologies, and the operations of a run
   delivered to fresh replicas in shuffled, duplicated batches; every replica ends in the same state
 - `crdt/VectorClockTest`, `crdt/MultiValueRegisterTest`: the building blocks

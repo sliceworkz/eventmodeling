@@ -22,35 +22,52 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoAdded;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoDropped;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoMarkedDone;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoMarkedOngoing;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoMarkedPlanned;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoRenamed;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoTitleSettled;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoStatus;
 import org.sliceworkz.eventmodeling.examples.localfirst.crdt.MultiValueRegister;
 import org.sliceworkz.eventmodeling.examples.localfirst.crdt.VectorClock;
 
 /**
- * The one fold of the to-do list, used by the decision model a command decides on and by the read model a
- * user reads, so the two cannot disagree on what the operations mean.
+ * The one fold of the to-do list, used by the decision model a command decides on and by the read models a
+ * user reads, so they cannot disagree on what the operations mean.
  *
- * <p>A to-do is its title (written once) and a status register; the replica's vector clock is the merge of
- * every operation's clock it holds.
+ * <p>A to-do is two registers, each written by operations: its title and its status. They differ in what
+ * concurrent writes mean. Concurrent status changes resolve by a business rule, automatically
+ * ({@link TodoStatus#CONCURRENT_PRIORITY}). Concurrent renames to different titles have no rule that could
+ * pick the right one: they are a <b>conflict</b>, which a person settles, and until then nothing else may be
+ * done with the to-do. The replica's vector clock is the merge of every operation's clock it holds.
  */
 public final class TodoListFold {
 
 	/** One to-do as the fold holds it. */
-	public record Todo ( TodoId todoId, String title, MultiValueRegister<TodoStatus> status ) {
+	public record Todo ( TodoId todoId, MultiValueRegister<String> title, MultiValueRegister<TodoStatus> status ) {
 
-		/** The status every replica agrees on; {@code null} while the to-do is in conflict. */
-		public TodoStatus resolvedStatus ( ) {
-			return inConflict() ? null : status.resolved(TodoStatus.CONCURRENT_PRIORITY);
+		/** Whether concurrent renames are waiting for someone to settle the title. */
+		public boolean inConflict ( ) {
+			return title.values().size() > 1;
 		}
 
-		/** Whether concurrent changes are waiting for someone to decide which one stands. */
-		public boolean inConflict ( ) {
-			return TodoStatus.conflicting(status.values());
+		/** The title every replica agrees on; {@code null} while renames are in conflict. */
+		public String agreedTitle ( ) {
+			return inConflict() ? null : title.values().iterator().next();
+		}
+
+		/** The title to show and sort by: the agreed one, or the first candidate while in conflict. */
+		public String displayTitle ( ) {
+			return title.values().stream().sorted().findFirst().orElseThrow();
+		}
+
+		public TodoStatus resolvedStatus ( ) {
+			return status.resolved(TodoStatus.CONCURRENT_PRIORITY);
 		}
 
 		public boolean dropped ( ) {
@@ -64,11 +81,25 @@ public final class TodoListFold {
 
 	public void apply ( TodoEvent event ) {
 		seen = seen.mergedWith(event.stamp().clock());
-		if ( event instanceof TodoAdded added ) {
-			todos.putIfAbsent(added.todoId(), new Todo(added.todoId(), added.title(), MultiValueRegister.empty()));
+		switch ( event ) {
+			case TodoAdded e -> todos.putIfAbsent(e.todoId(), new Todo(e.todoId(),
+					MultiValueRegister.<String>empty().write(e.stamp(), e.title()),
+					MultiValueRegister.<TodoStatus>empty().write(e.stamp(), TodoStatus.PLANNED)));
+			case TodoRenamed e -> writeTitle(e, e.title());
+			case TodoTitleSettled e -> writeTitle(e, e.title());
+			case TodoMarkedPlanned e -> writeStatus(e, TodoStatus.PLANNED);
+			case TodoMarkedOngoing e -> writeStatus(e, TodoStatus.ONGOING);
+			case TodoMarkedDone e -> writeStatus(e, TodoStatus.DONE);
+			case TodoDropped e -> writeStatus(e, TodoStatus.DROPPED);
 		}
-		todos.computeIfPresent(event.todoId(), (id, todo) -> new Todo(id, todo.title(),
-				todo.status().write(event.stamp(), TodoListDomain.statusWrittenBy(event))));
+	}
+
+	private void writeTitle ( TodoEvent event, String title ) {
+		todos.computeIfPresent(event.todoId(), (id, t) -> new Todo(id, t.title().write(event.stamp(), title), t.status()));
+	}
+
+	private void writeStatus ( TodoEvent event, TodoStatus status ) {
+		todos.computeIfPresent(event.todoId(), (id, t) -> new Todo(id, t.title(), t.status().write(event.stamp(), status)));
 	}
 
 	public VectorClock seen ( ) {
@@ -82,12 +113,8 @@ public final class TodoListFold {
 	/** Every to-do, the dropped ones included, in an order every replica agrees on. */
 	public List<Todo> todos ( ) {
 		return todos.values().stream()
-				.sorted(Comparator.comparing(Todo::title).thenComparing(t -> t.todoId().value()))
+				.sorted(Comparator.comparing(Todo::displayTitle).thenComparing(t -> t.todoId().value()))
 				.toList();
-	}
-
-	public Set<TodoStatus> concurrentStatuses ( TodoId todoId ) {
-		return todo(todoId).map(t -> t.status().values()).orElse(Set.of());
 	}
 
 }

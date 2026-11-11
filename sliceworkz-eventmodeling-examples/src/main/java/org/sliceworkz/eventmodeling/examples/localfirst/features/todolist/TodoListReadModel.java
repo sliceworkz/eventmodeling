@@ -35,12 +35,16 @@ import org.sliceworkz.eventstore.query.EventFilter;
 public class TodoListReadModel implements ReadModel<TodoEvent> {
 
 	/**
-	 * One to-do. {@code concurrentStatuses} holds more than one status when replicas changed it without
-	 * knowing about each other. When that is a business conflict, {@code inConflict} is set and
-	 * {@code status} is {@code null}: there is no agreed status until someone resolves it. Otherwise
-	 * {@code status} is the one the resolution rule picked (a drop).
+	 * One to-do.
+	 *
+	 * <p>{@code concurrentStatuses} holds more than one status when replicas changed it without knowing
+	 * about each other; {@code status} is the one the business rule picked, so there always is one.
+	 *
+	 * <p>{@code concurrentTitles} holds more than one title when replicas renamed it differently without
+	 * knowing about each other. That is a conflict: {@code inConflict} is set and {@code title} is
+	 * {@code null}, as there is no agreed title until a person settles it.
 	 */
-	public record TodoView ( TodoId todoId, String title, TodoStatus status, Set<TodoStatus> concurrentStatuses, boolean inConflict ) { }
+	public record TodoView ( TodoId todoId, String title, Set<String> concurrentTitles, TodoStatus status, Set<TodoStatus> concurrentStatuses, boolean inConflict ) { }
 
 	private final TodoListFold fold = new TodoListFold();
 
@@ -62,7 +66,7 @@ public class TodoListReadModel implements ReadModel<TodoEvent> {
 	/** Every to-do, the dropped ones included: what two replicas compare to tell they converged. */
 	public List<TodoView> everything ( ) {
 		return fold.todos().stream()
-				.map(t -> new TodoView(t.todoId(), t.title(), t.resolvedStatus(), t.status().values(), t.inConflict()))
+				.map(t -> new TodoView(t.todoId(), t.agreedTitle(), t.title().values(), t.resolvedStatus(), t.status().values(), t.inConflict()))
 				.toList();
 	}
 

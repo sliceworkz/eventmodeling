@@ -15,19 +15,19 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.sliceworkz.eventmodeling.examples.localfirst.features.resolvetodoconflict;
+package org.sliceworkz.eventmodeling.examples.localfirst.features.renametodo;
 
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoList;
 import org.sliceworkz.eventmodeling.slices.FeatureSlice;
 import org.sliceworkz.eventmodeling.slices.Slice;
 
-@FeatureSlice(chapter = "Conflicts")
-public class ResolveTodoConflictFeatureSlice implements Slice<TodoList> {
+@FeatureSlice(chapter = "Planning")
+public class RenameTodoFeatureSlice implements Slice<TodoList> {
 
 	@Override
 	public void configureCommand ( BoundedContextBuilder<TodoList> builder ) {
-		builder.command(ResolveTodoConflictCommand.class);
+		builder.command(RenameTodoCommand.class);
 	}
 
 }

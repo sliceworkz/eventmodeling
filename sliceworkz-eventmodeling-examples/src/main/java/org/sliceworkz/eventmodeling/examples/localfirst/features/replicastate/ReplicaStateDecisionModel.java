@@ -56,9 +56,11 @@ public class ReplicaStateDecisionModel implements DecisionModel<TodoEvent> {
 		return fold.todo(todoId);
 	}
 
-	/** Whether a to-do not dropped carries this title, as far as this replica knows. */
-	public boolean activeTitle ( String title ) {
-		return fold.todos().stream().anyMatch(t -> !t.dropped() && t.title().equalsIgnoreCase(title));
+	/** Whether another to-do, not dropped, carries this title (or has it among its candidates), as far as this replica knows. */
+	public boolean titleTakenByAnother ( String title, TodoId self ) {
+		return fold.todos().stream()
+				.filter(t -> !t.dropped() && !t.todoId().equals(self))
+				.anyMatch(t -> t.title().values().stream().anyMatch(title::equalsIgnoreCase));
 	}
 
 	/** The stamp of the operation this replica raises next, based on everything it has seen. */

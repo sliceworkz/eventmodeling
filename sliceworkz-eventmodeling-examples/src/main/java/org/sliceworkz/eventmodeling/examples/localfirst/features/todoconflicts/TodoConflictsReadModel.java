@@ -22,25 +22,24 @@ import java.util.List;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
-import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoStatus;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListFold;
 import org.sliceworkz.eventmodeling.examples.localfirst.crdt.ReplicaId;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
- * The to-dos waiting for a person to resolve a conflict, as far as this replica knows: for each, the
- * changes that were made without knowledge of each other, and which office made them.
+ * The to-dos waiting for a person to settle their title, as far as this replica knows: for each, the
+ * renames that were made without knowledge of each other, and which office made them.
  *
  * <p>A conflict shows here on every replica that holds both sides; an office that has not synced yet
  * does not know of it, and is not held back by it either.
  */
 public class TodoConflictsReadModel implements ReadModel<TodoEvent> {
 
-	/** One side of a conflict: the status an office chose, and its operation on that office. */
-	public record ConflictingChange ( TodoStatus status, ReplicaId decidedBy, long operation ) { }
+	/** One side of a conflict: the title an office chose, and its operation on that office. */
+	public record ConflictingRename ( String title, ReplicaId decidedBy, long operation ) { }
 
-	public record TodoConflict ( TodoId todoId, String title, List<ConflictingChange> changes ) { }
+	public record TodoConflict ( TodoId todoId, List<ConflictingRename> renames ) { }
 
 	private final TodoListFold fold = new TodoListFold();
 
@@ -57,8 +56,8 @@ public class TodoConflictsReadModel implements ReadModel<TodoEvent> {
 	public List<TodoConflict> conflicts ( ) {
 		return fold.todos().stream()
 				.filter(TodoListFold.Todo::inConflict)
-				.map(t -> new TodoConflict(t.todoId(), t.title(), t.status().writes().stream()
-						.map(w -> new ConflictingChange(w.value(), w.stamp().origin(), w.stamp().counter()))
+				.map(t -> new TodoConflict(t.todoId(), t.title().writes().stream()
+						.map(w -> new ConflictingRename(w.value(), w.stamp().origin(), w.stamp().counter()))
 						.toList()))
 				.toList();
 	}

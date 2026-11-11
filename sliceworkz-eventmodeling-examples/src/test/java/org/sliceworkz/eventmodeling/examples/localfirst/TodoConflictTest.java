@@ -31,15 +31,14 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoStatus;
-import org.sliceworkz.eventmodeling.examples.localfirst.features.todoconflicts.TodoConflictsReadModel.ConflictingChange;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.todoconflicts.TodoConflictsReadModel.ConflictingRename;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.todoconflicts.TodoConflictsReadModel.TodoConflict;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.todolist.TodoListReadModel.TodoView;
 
 /**
- * An ongoing to-do, finished by one office and put back on the plan by another while they could not
- * reach each other: a business conflict. It shows on every replica that knows both sides, nothing more
- * can be done with the to-do until a person picks the side that stands, and that choice replicates like
- * any other operation.
+ * A to-do renamed by two offices, differently, while they could not reach each other: a conflict no rule
+ * can settle. It shows on every replica that knows both renames, nothing more can be done with the to-do
+ * until a person settles its title, and that settlement replicates like any other operation.
  */
 class TodoConflictTest extends ReplicaTestSupport {
 
@@ -48,19 +47,18 @@ class TodoConflictTest extends ReplicaTestSupport {
 	private final TodoListServer antwerp = replica("antwerp");
 	private final Network network = Network.peerToPeer(brussels, ghent, antwerp);
 
-	private TodoId coffee;
+	private TodoId paper;
 
 	@BeforeEach
-	void anOngoingTodoTakenInTwoDirectionsDuringAnOutage ( ) {
-		coffee = brussels.addTodo("Order coffee");
-		brussels.markTodoOngoing(coffee);
+	void aTodoRenamedDifferentlyByTwoOfficesDuringAnOutage ( ) {
+		paper = brussels.addTodo("Buy paper");
 		network.synchronize();
 
 		network.isolate(brussels);
-		brussels.markTodoDone(coffee);
-		ghent.markTodoPlanned(coffee);
+		brussels.renameTodo(paper, "Buy printer paper");
+		ghent.renameTodo(paper, "Buy A4 paper");
 		assertTrue(brussels.conflicts().isEmpty(), "while apart, neither office knows of a conflict");
-		assertTrue(ghent.conflicts().isEmpty());
+		assertEquals("Buy A4 paper", ghent.todo(paper).title());
 	}
 
 	@Test
@@ -68,15 +66,15 @@ class TodoConflictTest extends ReplicaTestSupport {
 		network.healAll();
 		network.synchronize();
 
-		TodoConflict expected = new TodoConflict(coffee, "Order coffee", List.of(
-				new ConflictingChange(TodoStatus.DONE, brussels.replica(), 3),
-				new ConflictingChange(TodoStatus.PLANNED, ghent.replica(), 1)));
+		TodoConflict expected = new TodoConflict(paper, List.of(
+				new ConflictingRename("Buy printer paper", brussels.replica(), 2),
+				new ConflictingRename("Buy A4 paper", ghent.replica(), 1)));
 		for ( TodoListServer replica : List.of(brussels, ghent, antwerp) ) {
 			assertEquals(List.of(expected), replica.conflicts(), "on " + replica.replica());
-			TodoView view = replica.todo(coffee);
+			TodoView view = replica.todo(paper);
 			assertTrue(view.inConflict());
-			assertNull(view.status(), "no agreed status until someone resolves it");
-			assertEquals(Set.of(TodoStatus.DONE, TodoStatus.PLANNED), view.concurrentStatuses());
+			assertNull(view.title(), "no agreed title until someone settles it");
+			assertEquals(Set.of("Buy printer paper", "Buy A4 paper"), view.concurrentTitles());
 		}
 		assertConverged(brussels, ghent, antwerp);
 	}
@@ -87,80 +85,103 @@ class TodoConflictTest extends ReplicaTestSupport {
 		network.synchronize();
 
 		for ( TodoListServer replica : List.of(brussels, ghent, antwerp) ) {
-			assertThrows(BusinessException.class, () -> replica.markTodoPlanned(coffee));
-			assertThrows(BusinessException.class, () -> replica.markTodoOngoing(coffee));
-			assertThrows(BusinessException.class, () -> replica.markTodoDone(coffee));
-			assertThrows(BusinessException.class, () -> replica.dropTodo(coffee));
+			assertThrows(BusinessException.class, () -> replica.renameTodo(paper, "Buy paper, any kind"));
+			assertThrows(BusinessException.class, () -> replica.markTodoOngoing(paper));
+			assertThrows(BusinessException.class, () -> replica.dropTodo(paper));
 		}
-		assertEquals(4, brussels.operations().size(), "the refused actions decided nothing, so nothing was replicated");
+		assertEquals(3, brussels.operations().size(), "the refused actions decided nothing, so nothing was replicated");
 	}
 
 	@Test
-	void aPersonResolvesItAndTheResolutionReachesEveryone ( ) {
+	void aPersonSettlesItOnOneOfTheTitlesAndTheSettlementReachesEveryone ( ) {
 		network.healAll();
 		network.synchronize();
 
-		ghent.resolveConflict(coffee, TodoStatus.DONE);       // ghent accepts brussels' version
-		assertFalse(ghent.todo(coffee).inConflict(), "settled locally at once");
+		ghent.settleTitle(paper, "Buy printer paper");     // ghent accepts brussels' wording
+		assertFalse(ghent.todo(paper).inConflict(), "settled locally at once");
 		assertEquals(1, antwerp.conflicts().size(), "antwerp has not heard yet");
 
 		network.synchronize();
 
 		for ( TodoListServer replica : List.of(brussels, ghent, antwerp) ) {
 			assertTrue(replica.conflicts().isEmpty());
-			assertEquals(TodoStatus.DONE, replica.todo(coffee).status());
+			assertEquals("Buy printer paper", replica.todo(paper).title());
 		}
-		antwerp.markTodoPlanned(coffee);                     // and the to-do can be worked on again
+		antwerp.markTodoOngoing(paper);                     // and the to-do can be worked on again
 		network.synchronize();
-		assertEquals(TodoStatus.PLANNED, brussels.todo(coffee).status());
+		assertEquals(TodoStatus.ONGOING, brussels.todo(paper).status());
 		assertConverged(brussels, ghent, antwerp);
 	}
 
 	@Test
-	void aResolutionPicksOneOfTheConflictingSides ( ) {
+	void aSettlementMayBeANewTitleThatDoesJusticeToBoth ( ) {
 		network.healAll();
 		network.synchronize();
 
-		assertThrows(BusinessException.class, () -> ghent.resolveConflict(coffee, TodoStatus.ONGOING), "neither office chose ongoing");
-		TodoId paper = ghent.addTodo("Buy paper");
-		assertThrows(BusinessException.class, () -> ghent.resolveConflict(paper, TodoStatus.PLANNED), "no conflict to resolve");
-	}
-
-	@Test
-	void twoOfficesResolvingTheSameWayWhileApartSettleIt ( ) {
-		network.healAll();
-		network.synchronize();
-		network.isolate(antwerp);
-
-		ghent.resolveConflict(coffee, TodoStatus.PLANNED);
-		antwerp.resolveConflict(coffee, TodoStatus.PLANNED);
-		network.healAll();
+		antwerp.settleTitle(paper, "Buy A4 printer paper");
 		network.synchronize();
 
-		assertTrue(brussels.conflicts().isEmpty(), "two concurrent resolutions agreeing are no conflict");
-		assertEquals(TodoStatus.PLANNED, brussels.todo(coffee).status());
+		assertEquals("Buy A4 printer paper", brussels.todo(paper).title());
 		assertConverged(brussels, ghent, antwerp);
 	}
 
 	@Test
-	void twoOfficesResolvingDifferentlyWhileApartConflictAgain ( ) {
+	void onlyATodoInConflictIsSettled ( ) {
+		network.healAll();
+		network.synchronize();
+		TodoId keys = ghent.addTodo("Copy keys");
+
+		assertThrows(BusinessException.class, () -> ghent.settleTitle(keys, "Copy the keys"), "nothing to settle: that is a rename");
+		assertThrows(BusinessException.class, () -> ghent.settleTitle(paper, "Copy keys"), "another to-do has that title");
+	}
+
+	@Test
+	void statusChangesMadeBeforeTheConflictWasKnownStillCount ( ) {
+		ghent.markTodoOngoing(paper);           // ghent works on it, unaware brussels renamed it too
+		network.healAll();
+		network.synchronize();
+
+		TodoView view = brussels.todo(paper);
+		assertTrue(view.inConflict());
+		assertEquals(TodoStatus.ONGOING, view.status(), "the conflict is about the title only");
+		assertConverged(brussels, ghent, antwerp);
+	}
+
+	@Test
+	void twoOfficesSettlingTheSameWayWhileApartEndIt ( ) {
 		network.healAll();
 		network.synchronize();
 		network.isolate(antwerp);
 
-		ghent.resolveConflict(coffee, TodoStatus.PLANNED);
-		antwerp.resolveConflict(coffee, TodoStatus.DONE);
+		ghent.settleTitle(paper, "Buy A4 paper");
+		antwerp.settleTitle(paper, "Buy A4 paper");
+		network.healAll();
+		network.synchronize();
+
+		assertTrue(brussels.conflicts().isEmpty(), "two concurrent settlements agreeing are no conflict");
+		assertEquals("Buy A4 paper", brussels.todo(paper).title());
+		assertConverged(brussels, ghent, antwerp);
+	}
+
+	@Test
+	void twoOfficesSettlingDifferentlyWhileApartConflictAgain ( ) {
+		network.healAll();
+		network.synchronize();
+		network.isolate(antwerp);
+
+		ghent.settleTitle(paper, "Buy A4 paper");
+		antwerp.settleTitle(paper, "Buy printer paper");
 		network.healAll();
 		network.synchronize();
 
 		TodoConflict again = brussels.conflicts().get(0);
-		assertEquals(List.of(antwerp.replica(), ghent.replica()), again.changes().stream().map(ConflictingChange::decidedBy).toList(),
-				"the conflict is now between the two resolutions");
+		assertEquals(List.of(antwerp.replica(), ghent.replica()), again.renames().stream().map(ConflictingRename::decidedBy).toList(),
+				"the conflict is now between the two settlements");
 
-		brussels.resolveConflict(coffee, TodoStatus.DONE);
+		brussels.settleTitle(paper, "Buy A4 printer paper");
 		network.synchronize();
 		assertTrue(antwerp.conflicts().isEmpty());
-		assertEquals(TodoStatus.DONE, ghent.todo(coffee).status());
+		assertEquals("Buy A4 printer paper", ghent.todo(paper).title());
 		assertConverged(brussels, ghent, antwerp);
 	}
 
@@ -171,28 +192,30 @@ class TodoConflictTest extends ReplicaTestSupport {
 		network.synchronize();
 		assertEquals(1, ghent.conflicts().size());
 
-		antwerp.markTodoDone(coffee);           // antwerp has not heard of either side, and goes ahead
+		antwerp.markTodoOngoing(paper);         // antwerp has not heard of either rename, and goes ahead
 		network.healAll();
 		network.synchronize();
 
-		assertEquals(Set.of(TodoStatus.DONE, TodoStatus.PLANNED), brussels.todo(coffee).concurrentStatuses(),
-				"antwerp's change joins brussels' side; ghent's is still against it");
-		assertEquals(3, brussels.conflicts().get(0).changes().size());
+		assertEquals(TodoStatus.ONGOING, brussels.todo(paper).status());
+		assertEquals(1, brussels.conflicts().size(), "the title still waits to be settled");
 		assertConverged(brussels, ghent, antwerp);
 	}
 
 	@Test
-	void aDropMadeWithoutKnowingOfTheConflictSettlesIt ( ) {
+	void aDropMadeWithoutKnowingOfTheConflictLeavesTheTitleToSettle ( ) {
 		network.healAll();
 		network.isolate(antwerp);
 		network.synchronize();
 
-		antwerp.dropTodo(coffee);
+		antwerp.dropTodo(paper);
 		network.healAll();
 		network.synchronize();
 
-		assertTrue(brussels.conflicts().isEmpty(), "drop wins, whatever else happened to it");
-		assertTrue(brussels.todos().isEmpty());
+		assertEquals(TodoStatus.DROPPED, brussels.todo(paper).status());
+		assertEquals(1, brussels.conflicts().size(), "dropped, but its title still in conflict");
+		brussels.settleTitle(paper, "Buy paper");
+		network.synchronize();
+		assertTrue(ghent.conflicts().isEmpty());
 		assertConverged(brussels, ghent, antwerp);
 	}
 

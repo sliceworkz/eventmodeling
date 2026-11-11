@@ -28,8 +28,8 @@ import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
-import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoStatus;
-import org.sliceworkz.eventmodeling.examples.localfirst.features.resolvetodoconflict.ResolveTodoConflictCommand;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.renametodo.RenameTodoCommand;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.settletodotitle.SettleTodoTitleCommand;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.todoconflicts.TodoConflictsReadModel;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.todoconflicts.TodoConflictsReadModel.TodoConflict;
 import org.sliceworkz.eventmodeling.examples.localfirst.crdt.ReplicaId;
@@ -108,13 +108,18 @@ public final class TodoListServer implements AutoCloseable {
 		context.execute(new DropTodoCommand(replica, todoId), Execution.retrying());
 	}
 
-	public void resolveConflict ( TodoId todoId, TodoStatus chosen ) {
-		context.execute(new ResolveTodoConflictCommand(replica, todoId, chosen), Execution.retrying());
+	public void renameTodo ( TodoId todoId, String title ) {
+		context.execute(new RenameTodoCommand(replica, todoId, title), Execution.retrying());
+	}
+
+	/** Settles the title of a to-do renamed concurrently: one of the conflicting titles, or a new one. */
+	public void settleTitle ( TodoId todoId, String title ) {
+		context.execute(new SettleTodoTitleCommand(replica, todoId, title), Execution.retrying());
 	}
 
 	// ------------------------------------------------------------------------------------- reads
 
-	/** The to-dos waiting for someone to resolve a conflict, as far as this replica knows. */
+	/** The to-dos waiting for someone to settle their title, as far as this replica knows. */
 	public List<TodoConflict> conflicts ( ) {
 		TodoConflictsReadModel conflicts = context.read(TodoConflictsReadModel.class);
 		return conflicts.conflicts();

@@ -43,7 +43,7 @@ public record AddTodoCommand ( ReplicaId replica, String title ) implements Comm
 		var result = context.decisionModels(state);
 
 		BusinessException.when(title == null || title.isBlank(), "A to-do needs a title");
-		BusinessException.when(state.activeTitle(title.strip()), "There already is a to-do '" + title.strip() + "'");
+		BusinessException.when(state.titleTakenByAnother(title.strip(), null), "There already is a to-do '" + title.strip() + "'");
 
 		TodoId todoId = TodoListDomain.TODO.newId();
 		OperationStamp stamp = state.nextStamp(replica);

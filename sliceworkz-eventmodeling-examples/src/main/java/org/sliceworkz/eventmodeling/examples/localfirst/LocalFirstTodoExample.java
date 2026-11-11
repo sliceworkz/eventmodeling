@@ -17,8 +17,10 @@
  */
 package org.sliceworkz.eventmodeling.examples.localfirst;
 
+import java.util.TreeSet;
+
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
-import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoStatus;
 
 /**
  * Three offices, each with its own to-do list server, working through a network outage.
@@ -44,22 +46,27 @@ public class LocalFirstTodoExample {
 
 			network.isolate(antwerp);
 			brussels.markTodoDone(coffee);
-			antwerp.markTodoPlanned(coffee);   // antwerp does not know it is done
-			antwerp.dropTodo(paper);
-			TodoId keys = antwerp.addTodo("Copy keys");
-			ghent.markTodoOngoing(paper);
+			antwerp.markTodoPlanned(coffee);              // antwerp does not know it is done, and has a reason to replan
+			brussels.renameTodo(paper, "Buy printer paper");
+			antwerp.renameTodo(paper, "Buy A4 paper");    // the same to-do, renamed differently
+			antwerp.addTodo("Copy keys");
 			network.synchronize();
 			print("2. antwerp cut off, everyone keeps working", brussels, ghent, antwerp);
 
 			network.rejoin(antwerp);
 			network.synchronize();
-			print("3. connection back: one state everywhere, one conflict to resolve", brussels, ghent, antwerp);
-			brussels.conflicts().forEach(c -> System.out.println("  conflict on '" + c.title() + "': " + c.changes()));
+			print("3. connection back: the status settled itself (earliest state wins), the title is a conflict", brussels, ghent, antwerp);
+			brussels.conflicts().forEach(c -> System.out.println("  conflicting renames: " + c.renames()));
+			try {
+				ghent.markTodoOngoing(paper);
+			} catch ( BusinessException refused ) {
+				System.out.println("  ghent tries to start it: " + refused.getMessage());
+			}
 
-			ghent.markTodoOngoing(keys);
-			ghent.resolveConflict(coffee, TodoStatus.PLANNED);   // a person decides which side stands
+			ghent.settleTitle(paper, "Buy A4 printer paper");  // a person settles it, here on a new title
+			ghent.markTodoOngoing(paper);
 			network.synchronize();
-			print("4. ghent resolved the conflict; the resolution reached everyone", brussels, ghent, antwerp);
+			print("4. ghent settled the title and started the to-do; everyone has it", brussels, ghent, antwerp);
 		}
 	}
 
@@ -68,9 +75,10 @@ public class LocalFirstTodoExample {
 		System.out.println(title);
 		for ( TodoListServer replica : replicas ) {
 			System.out.println("  " + replica);
-			replica.state().forEach(t -> System.out.println("     " + t.title() + ": "
-					+ (t.inConflict() ? "IN CONFLICT " + t.concurrentStatuses()
-							: t.status() + (t.concurrentStatuses().size() > 1 ? "   (concurrent: " + t.concurrentStatuses() + ")" : ""))));
+			replica.state().forEach(t -> System.out.println("     "
+					+ (t.inConflict() ? "TITLE IN CONFLICT " + new TreeSet<>(t.concurrentTitles()) : t.title())
+					+ ": " + t.status()
+					+ (t.concurrentStatuses().size() > 1 ? "   (concurrent statuses: " + new TreeSet<>(t.concurrentStatuses()) + ")" : "")));
 		}
 	}
 

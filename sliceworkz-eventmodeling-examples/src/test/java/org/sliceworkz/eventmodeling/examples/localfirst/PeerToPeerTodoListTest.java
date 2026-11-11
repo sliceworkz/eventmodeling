@@ -43,7 +43,7 @@ class PeerToPeerTodoListTest extends ReplicaTestSupport {
 	void aChangeIsVisibleLocallyAtOnceAndEverywhereAfterSync ( ) {
 		TodoId todo = brussels.addTodo("Order coffee");
 
-		assertEquals(List.of(new TodoView(todo, "Order coffee", TodoStatus.PLANNED, Set.of(TodoStatus.PLANNED), false)), brussels.todos());
+		assertEquals(List.of(new TodoView(todo, "Order coffee", Set.of("Order coffee"), TodoStatus.PLANNED, Set.of(TodoStatus.PLANNED), false)), brussels.todos());
 		assertTrue(ghent.todos().isEmpty(), "nothing is sent until the replicas sync");
 
 		network.synchronize();
@@ -94,6 +94,28 @@ class PeerToPeerTodoListTest extends ReplicaTestSupport {
 	}
 
 	@Test
+	void concurrentStatusChangesSettleThemselvesOnTheEarliestState ( ) {
+		TodoId coffee = brussels.addTodo("Order coffee");
+		brussels.markTodoOngoing(coffee);
+		network.synchronize();
+
+		network.isolate(brussels);
+		brussels.markTodoDone(coffee);     // brussels finishes it ...
+		ghent.markTodoPlanned(coffee);     // ... while ghent, not knowing, puts it back on the plan
+		network.healAll();
+		network.synchronize();
+
+		TodoView seen = antwerp.todo(coffee);
+		assertEquals(TodoStatus.PLANNED, seen.status(), "the step back counts for more than the step forward");
+		assertEquals(Set.of(TodoStatus.DONE, TodoStatus.PLANNED), seen.concurrentStatuses(), "both changes are kept, visibly");
+		assertFalse(seen.inConflict(), "a business rule settled it: nobody has to");
+		brussels.markTodoOngoing(coffee);  // and work goes on at once
+		network.synchronize();
+		assertEquals(TodoStatus.ONGOING, ghent.todo(coffee).status());
+		assertConverged(brussels, ghent, antwerp);
+	}
+
+	@Test
 	void aDropWinsOverAConcurrentChange ( ) {
 		TodoId coffee = brussels.addTodo("Order coffee");
 		network.synchronize();
@@ -105,7 +127,7 @@ class PeerToPeerTodoListTest extends ReplicaTestSupport {
 
 		assertTrue(brussels.todos().isEmpty());
 		assertEquals(Set.of(TodoStatus.ONGOING, TodoStatus.DROPPED), brussels.todo(coffee).concurrentStatuses());
-		assertFalse(brussels.todo(coffee).inConflict(), "a drop is no business conflict: it settles concurrent changes itself");
+		assertFalse(brussels.todo(coffee).inConflict());
 		assertTrue(brussels.conflicts().isEmpty());
 		assertThrows(BusinessException.class, () -> ghent.markTodoDone(coffee), "dropped, as far as ghent now knows");
 		assertConverged(brussels, ghent, antwerp);

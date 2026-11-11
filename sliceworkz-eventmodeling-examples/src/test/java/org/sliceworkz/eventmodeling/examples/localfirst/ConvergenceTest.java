@@ -103,12 +103,15 @@ class ConvergenceTest extends ReplicaTestSupport {
 			var conflicts = replica.conflicts();
 			if ( !conflicts.isEmpty() && random.nextInt(3) == 0 ) {
 				var conflict = conflicts.get(random.nextInt(conflicts.size()));
-				var sides = conflict.changes();
-				replica.resolveConflict(conflict.todoId(), sides.get(random.nextInt(sides.size())).status());
+				var sides = conflict.renames();
+				replica.settleTitle(conflict.todoId(), random.nextBoolean()
+						? sides.get(random.nextInt(sides.size())).title()
+						: "Settled " + random.nextInt(12));
 				return;
 			}
 			TodoId todo = known.get(random.nextInt(known.size()));
-			switch ( random.nextInt(4) ) {
+			switch ( random.nextInt(5) ) {
+				case 4 -> replica.renameTodo(todo, "Renamed " + random.nextInt(12));
 				case 0 -> replica.markTodoPlanned(todo);
 				case 1 -> replica.markTodoOngoing(todo);
 				case 2 -> replica.markTodoDone(todo);

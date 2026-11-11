@@ -151,6 +151,18 @@ card issued while the account is being frozen conflicts rather than slipping pas
 `BlockCardsOfAccountPolicyTest` (on the published `PolicyTest`) is the reference for testing a policy; the
 `issuecard`, `freezeaccount` and `closeaccount` slices raise the facts it reacts to.
 
+**Local-first to-do list — an operation-based CRDT on the framework (proof of concept, main method):**
+```bash
+cd sliceworkz-eventmodeling-examples
+mvn compile exec:java -Dexec.mainClass="org.sliceworkz.eventmodeling.examples.localfirst.LocalFirstTodoExample"
+```
+
+Several replicas of one `TodoList` context, each on its own event store, decide locally and replicate their
+domain events (not their commands) as CRDT operations stamped with a vector clock; delivery is causal and
+exactly once through the operation id as idempotency key. `localfirst/README.md` maps the CRDT concepts onto
+the framework's; `PeerToPeerTodoListTest`, `CentralServerTodoListTest` and `ConvergenceTest` pin convergence
+under partitions, concurrent changes and any delivery order.
+
 ## Architecture Patterns
 
 ### BoundedContext Pattern

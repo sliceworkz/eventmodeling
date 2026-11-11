@@ -6,7 +6,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 |---|---|---|---:|---:|---:|---:|---:|---:|---|---|
 | [`develop`](#develop) | 2026-11-10T09:49:39+01:00 | `d6b390d99c` | 0 | 0 | 0 | 0 | 0 | 1 | - | ci-artifact (run 42652393742) |
 | [`release/0.8`](#release08) | 2026-11-10T09:19:36+01:00 | `837f0f553f` | 0 | 0 | 0 | 0 | 0 | 1 | **2 since v0.8.0** | saved by the previous run (branch head unchanged) |
-| [`release/0.7`](#release07) | 2026-11-10T09:19:37+01:00 | `51f63040c9` | 0 | 0 | 0 | 0 | 0 | 1 | none since v0.7.2 | saved by the previous run (branch head unchanged) |
+| [`release/0.7`](#release07) | 2026-11-11T08:42:17+01:00 | `51f63040c9` | 0 | 0 | 0 | 0 | 0 | 1 | none since v0.7.2 | saved by the previous run (branch head unchanged) |
 
 ## develop
 

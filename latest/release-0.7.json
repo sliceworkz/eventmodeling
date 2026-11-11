@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-10T09:19:37+01:00",
+  "runAt": "2026-11-11T08:42:17+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.7",
   "commit": "51f63040c9d94d20d97933b7529dceec18f06fc7",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/42781703234",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/42981387592",
   "dryRun": false,
   "policy": {
     "pattern": "release/*",
@@ -397,10 +397,10 @@
       "own": false,
       "group": null,
       "level": "minor",
-      "target": "2.24.0",
+      "target": "2.25.1",
       "action": "pr",
       "batch": "minor",
-      "published": "2026-11-06",
+      "published": "2026-11-09",
       "outcome": "planned"
     },
     {
@@ -501,9 +501,9 @@
       "action": "pr",
       "level": "minor",
       "transitive": false,
-      "commit": "3b6e216957ced1f350d3ca81be6e3dc8599b1d9c",
+      "commit": "777d516bf6ac87beec2d780cd174aab654760e1a",
       "error": null,
-      "outcome": "pr-opened",
+      "outcome": "pr-updated",
       "pr": 241,
       "changes": [
         {
@@ -512,7 +512,7 @@
           "where": "pom.xml",
           "level": "minor",
           "from": "2.23.0",
-          "to": "2.24.0",
+          "to": "2.25.1",
           "applied": true,
           "error": null
         },
@@ -566,7 +566,7 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-10T06:21:20Z",
+    "dbBuilt": "2026-11-11T06:21:32Z",
     "sbomOrigin": "saved by the previous run (branch head unchanged)",
     "sboms": [
       "maven"

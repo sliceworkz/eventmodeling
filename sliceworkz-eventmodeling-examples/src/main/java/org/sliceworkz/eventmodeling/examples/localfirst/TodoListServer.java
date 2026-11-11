@@ -34,6 +34,11 @@ import org.sliceworkz.eventmodeling.examples.localfirst.TodoListFold.PendingRevi
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListFold.SetAside;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.compromisereview.CompromiseReviewReadModel;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.distrustreplica.DistrustReplicaCommand;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListFold.Member;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.joinnetwork.JoinNetworkCommand;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.membership.MembershipReadModel;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.pruneretiredoffice.PruneRetiredOfficeCommand;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.retireoffice.RetireOfficeCommand;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.renametodo.RenameTodoCommand;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.reviewtodochange.ReviewTodoChangeCommand;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.settletodotitle.SettleTodoTitleCommand;
@@ -89,6 +94,18 @@ public final class TodoListServer implements AutoCloseable {
 		return new TodoListServer(ReplicaId.of(replica));
 	}
 
+	/**
+	 * A new office: it catches up from {@code sponsor} with everything the sponsor holds, in the sponsor's
+	 * order (causal, and complete, which is what lets it read stamps whose pruned entries it never saw
+	 * itself), and then says it has joined.
+	 */
+	public static TodoListServer joining ( String replica, TodoListServer sponsor ) {
+		TodoListServer newcomer = named(replica);
+		newcomer.receive(sponsor.operations());
+		newcomer.context.execute(new JoinNetworkCommand(newcomer.replica, sponsor.replica), Execution.retrying());
+		return newcomer;
+	}
+
 	public ReplicaId replica ( ) {
 		return replica;
 	}
@@ -134,7 +151,41 @@ public final class TodoListServer implements AutoCloseable {
 		context.execute(new ReviewTodoChangeCommand(replica, todoId, operationId, verdict), Execution.retrying());
 	}
 
+	/** This office leaves: its last operation. It makes no more, and should sync once more so others learn it. */
+	public void retire ( ) {
+		context.execute(new RetireOfficeCommand(replica), Execution.retrying());
+	}
+
+	/**
+	 * The security office removes an office that is lost and cannot retire: what it did up to
+	 * {@code lastOperation} stands, anything later is set aside should it ever turn up. The same mechanism as
+	 * a compromised office, with no suspicion attached.
+	 */
+	public void removeOffice ( ReplicaId lost, long lastOperation, String reason ) {
+		distrustReplica(lost, lastOperation, reason);
+	}
+
+	/** Prunes every retired office not pruned yet, as far as this office knows; a retired office prunes nothing. Answers how many. */
+	public int pruneRetiredOffices ( ) {
+		MembershipReadModel membership = context.read(MembershipReadModel.class);
+		boolean retired = membership.members().stream().anyMatch(m -> m.replica().equals(replica) && m.status() != TodoListFold.MemberStatus.ACTIVE);
+		if ( retired ) {
+			return 0;
+		}
+		int pruned = 0;
+		for ( ReplicaId retiredOffice : membership.prunable().keySet() ) {
+			context.execute(new PruneRetiredOfficeCommand(replica, retiredOffice), Execution.retrying());
+			pruned++;
+		}
+		return pruned;
+	}
+
 	// ------------------------------------------------------------------------------------- reads
+
+	public List<Member> members ( ) {
+		MembershipReadModel membership = context.read(MembershipReadModel.class);
+		return membership.members();
+	}
 
 	public List<Distrust> distrusted ( ) {
 		return review().distrusted();

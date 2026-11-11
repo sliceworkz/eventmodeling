@@ -17,6 +17,7 @@ replicas talk.
 | causal delivery | `TodoListServer.receive` buffers an operation until what it was decided on is there |
 | anti-entropy | `ReplicationLogReadModel.missingAt(peerClock)`, exchanged by `Network.sync` |
 | state | `TodoListFold`, shared by the decision model and the `TodoListReadModel` |
+| membership | a sparse vector clock; joining, retiring and pruning as replicated operations, compared on effective clocks |
 | a compromised replica | `ReplicaDistrusted` from the security office; its later operations set aside, dependent honest changes reviewed |
 | conflict resolution | a `MultiValueRegister` per to-do title and per status; concurrent statuses settled by a business rule, concurrent renames a conflict a person settles |
 
@@ -70,6 +71,26 @@ office; without each office's operations chained by hash, it can send different 
 to different offices, which never converge. Effects outside the system (an e-mail, a payment) are not undone
 by setting an operation aside, and need compensating actions.
 
+**Offices joining and leaving.** Correctness needs no membership: a vector clock is a sparse map, and a
+replica nobody has heard of counts as 0. So:
+
+- **joining** (`TodoListServer.joining`, `JoinNetwork`): a newcomer catches up from a sponsor with everything
+  the sponsor holds, in its causal order, then says it joined (`OfficeJoined`). Nobody has to agree or even be
+  reachable
+- **an office away for a long time** is not gone: nothing ended it, and when it comes back it merges
+- **retiring** (`RetireOffice`): the office's last operation; every command on it is refused afterwards, and
+  anything stamped later by it is set aside
+- **removing a lost office** (`removeOffice`): the security office's distrust declaration, without the suspicion
+  - what it did up to the cut stands, anything later is set aside should it ever turn up
+- **pruning** (`PruneRetiredOffice`, `RetiredOfficePruned`): new stamps leave a retired office's entry out, so
+  clocks stop growing with every office that ever existed. A stamp without the entry would look *concurrent*
+  with the retired office's operations, so every operation is compared on its **effective** clock: its own,
+  with the retired office's last operation filled back in for every pruning in its causal past. Because the
+  pruning is itself an operation, no office has to wait for the others: its stamp still carries the entry, and
+  causal delivery hands every replica the retired office's operations, then the pruning, then any stamp
+  relying on it. A removed (distrusted) office is not pruned, as honest operations may have seen it beyond the
+  cut; stamps already stored keep their full clocks, since history is never rewritten
+
 **What local first cannot give you.** A rule over one replica's own operations holds. A rule over several
 (no two open to-dos with the same title) holds per replica, but two offices adding the same title while
 apart both succeed. `PeerToPeerTodoListTest.aRuleOverSeveralOperationsHoldsLocallyButNotAcrossAPartition`
@@ -84,9 +105,13 @@ shows it: such a rule needs coordination, or a compensating step once the confli
   new one, settled twice alike and differently, and the offices that had not heard of it
 - `CompromisedReplicaTest`: an office taken over, its operations set aside, honest work standing or waiting
   for review, confirmed, reverted, judged again, and declarations from anyone but the security office ignored
+- `MembershipTest`: an office joining through a sponsor while another is unreachable, retiring, pruned from
+  new stamps with later changes still read as later, a newcomer after a pruning, a pruning arriving only after
+  what it relies on, a lost office removed, and one that was away a long time merging
 - `ConvergenceTest`: random work under random partitions in both topologies, and the operations of a run
   delivered to fresh replicas in shuffled, duplicated batches, and random work with an office taken over
-  partway and reviews along the way; every replica ends in the same state
+  partway and reviews along the way, and with an office retiring, a newcomer joining and prunings along the
+  way; every replica ends in the same state
 - `crdt/VectorClockTest`, `crdt/MultiValueRegisterTest`: the building blocks
 
 ## Where this would go next

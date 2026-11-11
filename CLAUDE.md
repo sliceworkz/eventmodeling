@@ -165,9 +165,11 @@ earliest state); concurrent renames to different titles are a conflict, listed b
 blocking every command on the to-do until `SettleTodoTitleCommand` settles the title. The security office can
 declare a replica taken over from one of its operations on (`DistrustReplicaCommand`): its later operations are
 set aside everywhere, and honest changes built on them that no longer hold wait for `ReviewTodoChangeCommand`.
-`PeerToPeerTodoListTest`, `CentralServerTodoListTest`, `TodoConflictTest`, `CompromisedReplicaTest` and
-`ConvergenceTest` pin convergence under partitions, concurrent changes, conflicts, a compromised replica and any
-delivery order.
+Offices join through a sponsor, retire, and are pruned from new stamps by a replicated operation, every operation
+being compared on its effective clock (pruned entries filled back in). `PeerToPeerTodoListTest`,
+`CentralServerTodoListTest`, `TodoConflictTest`, `CompromisedReplicaTest`, `MembershipTest` and `ConvergenceTest`
+pin convergence under partitions, concurrent changes, conflicts, a compromised replica, offices joining and
+leaving, and any delivery order.
 
 ## Architecture Patterns
 

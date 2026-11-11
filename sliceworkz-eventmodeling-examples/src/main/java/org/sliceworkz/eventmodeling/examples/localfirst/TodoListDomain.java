@@ -117,6 +117,24 @@ public interface TodoListDomain {
 		 */
 		record ReplicaDistrusted ( ReplicaId replica, long trustedUpTo, String reason, OperationStamp stamp ) implements TodoEvent { }
 
+		/**
+		 * A new office joined, having caught up from {@code sponsoredBy}. Nobody has to agree first: a
+		 * replica nobody has heard of counts as 0 in every vector clock. The event says who it is and where it
+		 * came from; it is raised by the newcomer itself.
+		 */
+		record OfficeJoined ( ReplicaId replica, ReplicaId sponsoredBy, OperationStamp stamp ) implements TodoEvent { }
+
+		/** An office leaves, cleanly: this is its last operation, and it makes no more. */
+		record OfficeRetired ( ReplicaId replica, OperationStamp stamp ) implements TodoEvent { }
+
+		/**
+		 * Every office still active has seen the retired {@code replica} up to its last operation, so new
+		 * stamps can leave its entry out. A replicated operation rather than a local decision, because the
+		 * entry going missing must not make a later operation look concurrent with the retired office's: any
+		 * operation that has seen this one is read as having seen {@code replica} up to {@code lastOperation}.
+		 */
+		record RetiredOfficePruned ( ReplicaId replica, long lastOperation, OperationStamp stamp ) implements TodoEvent { }
+
 	}
 
 	/** The tags of an operation: the to-do it is about and the replica that decided it. */
@@ -128,7 +146,10 @@ public interface TodoListDomain {
 	static Tags tagsOf ( TodoEvent event ) {
 		return switch ( event ) {
 			case TodoEvent.TodoChange change -> tagsOf(change.todoId(), change.stamp().origin());
-			case TodoEvent.ReplicaDistrusted distrust -> Tags.of(REPLICA.tag(distrust.stamp().origin()));
+			case TodoEvent.ReplicaDistrusted e -> Tags.of(REPLICA.tag(e.stamp().origin()));
+			case TodoEvent.OfficeJoined e -> Tags.of(REPLICA.tag(e.stamp().origin()));
+			case TodoEvent.OfficeRetired e -> Tags.of(REPLICA.tag(e.stamp().origin()));
+			case TodoEvent.RetiredOfficePruned e -> Tags.of(REPLICA.tag(e.stamp().origin()));
 		};
 	}
 

@@ -58,6 +58,11 @@ public record OperationStamp ( ReplicaId origin, long counter, VectorClock clock
 				.allMatch(e -> local.counters().getOrDefault(e.getKey(), 0L) >= e.getValue());
 	}
 
+	/** This stamp read with another clock: how an operation is compared once pruned entries are filled back in. */
+	public OperationStamp withClock ( VectorClock other ) {
+		return new OperationStamp(origin, counter, other);
+	}
+
 	public boolean happenedBefore ( OperationStamp other ) {
 		return clock.happenedBefore(other.clock);
 	}

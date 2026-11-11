@@ -17,7 +17,10 @@
  */
 package org.sliceworkz.eventmodeling.examples.localfirst.features.replicastate;
 
+import java.util.Map;
 import java.util.Optional;
+
+import org.sliceworkz.eventmodeling.commands.BusinessException;
 
 import org.sliceworkz.eventmodeling.commands.DecisionModel;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent;
@@ -73,9 +76,23 @@ public class ReplicaStateDecisionModel implements DecisionModel<TodoEvent> {
 		return fold.pendingReviews().stream().anyMatch(p -> p.todoId().equals(todoId) && p.operationId().equals(operationId));
 	}
 
-	/** The stamp of the operation this replica raises next, based on everything it has seen. */
+	/**
+	 * The stamp of the operation this replica raises next, based on everything it has seen, leaving out the
+	 * entries of the retired offices that were pruned. A retired office makes no more operations, so every
+	 * command on it is refused here.
+	 */
 	public OperationStamp nextStamp ( ReplicaId replica ) {
-		return OperationStamp.next(replica, fold.seen());
+		BusinessException.when(fold.retired(replica), "Office " + replica + " has retired");
+		return OperationStamp.next(replica, fold.seen().without(fold.pruned()));
+	}
+
+	public boolean joined ( ReplicaId replica ) {
+		return fold.members().stream().anyMatch(m -> m.replica().equals(replica) && m.sponsoredBy() != null);
+	}
+
+	/** The retired offices not pruned yet, with their last operation. */
+	public Map<ReplicaId, Long> prunable ( ) {
+		return fold.prunable();
 	}
 
 }

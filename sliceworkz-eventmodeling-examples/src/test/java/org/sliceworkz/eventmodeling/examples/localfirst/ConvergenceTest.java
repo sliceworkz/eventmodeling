@@ -109,6 +109,43 @@ class ConvergenceTest extends ReplicaTestSupport {
 	}
 
 	@Test
+	void randomWorkWithOfficesJoiningRetiringAndBeingPrunedConverges ( ) {
+		int pruned = 0;
+		for ( long seed = 1; seed <= RUNS; seed++ ) {
+			Random random = new Random(seed);
+			List<TodoListServer> offices = new ArrayList<>(List.of(replica("m" + seed + "a"), replica("m" + seed + "b"), replica("m" + seed + "c")));
+			Network network = Network.peerToPeer(offices.toArray(TodoListServer[]::new));
+			TodoListServer retiring = offices.get(2);
+
+			for ( int step = 0; step < 2 * STEPS; step++ ) {
+				if ( step == STEPS / 2 ) {
+					retiring.retire();
+				}
+				if ( step == STEPS ) {
+					TodoListServer sponsor = offices.get(random.nextInt(2));
+					TodoListServer newcomer = joining("m" + seed + "d", sponsor);
+					network.join(newcomer, offices.toArray(TodoListServer[]::new));
+					offices.add(newcomer);
+				}
+				TodoListServer office = offices.get(random.nextInt(offices.size()));
+				switch ( random.nextInt(10) ) {
+					case 0 -> network.isolate(office);
+					case 1 -> network.rejoin(office);
+					case 2, 3 -> network.synchronize();
+					case 4 -> office.pruneRetiredOffices();
+					default -> work(office, random);
+				}
+			}
+
+			network.healAll();
+			network.synchronize();
+			assertConverged(offices.toArray(TodoListServer[]::new));
+			pruned += (int) offices.get(0).operations().stream().filter(op -> op instanceof TodoListDomain.TodoEvent.RetiredOfficePruned).count();
+		}
+		assertTrue(pruned > 0, "the runs pruned a retired office (" + pruned + ")");
+	}
+
+	@Test
 	void theOrderOperationsArriveInDoesNotMatter ( ) {
 		Random random = new Random(42);
 		TodoListServer[] writers = { replica("w1"), replica("w2"), replica("w3") };

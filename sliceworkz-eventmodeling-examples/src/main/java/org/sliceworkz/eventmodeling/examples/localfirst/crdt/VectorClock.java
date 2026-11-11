@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.examples.localfirst.crdt;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -58,6 +59,13 @@ public record VectorClock ( Map<String, Long> counters ) {
 		TreeMap<String, Long> merged = new TreeMap<>(counters);
 		other.counters.forEach((replica, counter) -> merged.merge(replica, counter, Math::max));
 		return new VectorClock(merged);
+	}
+
+	/** This clock without the entries of the given replicas: what a stamp carries once their entries are pruned. */
+	public VectorClock without ( Set<ReplicaId> replicas ) {
+		TreeMap<String, Long> kept = new TreeMap<>(counters);
+		replicas.forEach(r -> kept.remove(r.value()));
+		return new VectorClock(kept);
 	}
 
 	/** Whether this clock knows at least everything the other knows. */

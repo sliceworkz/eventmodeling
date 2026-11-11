@@ -37,6 +37,13 @@ abstract class ReplicaTestSupport {
 		return server;
 	}
 
+	/** A new office, caught up from its sponsor, closed after the test like the others. */
+	protected TodoListServer joining ( String name, TodoListServer sponsor ) {
+		TodoListServer server = TodoListServer.joining(name, sponsor);
+		started.add(server);
+		return server;
+	}
+
 	@AfterEach
 	void closeReplicas ( ) {
 		started.forEach(TodoListServer::close);
@@ -56,6 +63,7 @@ abstract class ReplicaTestSupport {
 			assertEquals(first.distrusted(), other.distrusted(), "the replicas distrusted by " + first.replica() + " and " + other.replica());
 			assertEquals(first.setAside(), other.setAside(), "the operations set aside by " + first.replica() + " and " + other.replica());
 			assertEquals(first.pendingReviews(), other.pendingReviews(), "the changes awaiting review on " + first.replica() + " and " + other.replica());
+			assertEquals(first.members(), other.members(), "the offices known to " + first.replica() + " and " + other.replica());
 			assertEquals(0, other.waitingOperations(), "operations still waiting on " + other.replica());
 		}
 	}

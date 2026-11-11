@@ -26,9 +26,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.OfficeJoined;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.OfficeRetired;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.ReplicaDistrusted;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.RetiredOfficePruned;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoAdded;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoChange;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent.TodoChangeReviewed;
@@ -66,6 +70,18 @@ import org.sliceworkz.eventmodeling.examples.localfirst.crdt.VectorClock;
  * whole set of operations held: declarations and reviews first, then the to-do changes in the order this
  * replica stored them, which is causally consistent. Everything decided about a change depends only on its
  * causal past and on the declarations and reviews held, so replicas holding the same operations agree.
+ *
+ * <p><b>Offices joining and leaving.</b> A newcomer needs nothing from anyone: it counts as 0 until it
+ * operates. A retired office makes no more operations, and any office that knows of the retirement may
+ * prune its entry from new stamps ({@link RetiredOfficePruned}). Since a stamp without the entry would
+ * otherwise look concurrent with the retired office's operations, every operation is compared on its
+ * <i>effective</i> clock: its own, with the retired office's last operation filled back in for every pruning
+ * it has seen.
+ *
+ * <p>Pruning needs no wait for every office to have seen the retirement, because it is an operation: its own
+ * stamp still carries the retired office's entry, and a stamp leaving the entry out has the pruning in its
+ * causal past. Causal delivery therefore hands every replica the retired office's operations before the
+ * pruning, and the pruning before any stamp that relies on it.
  */
 public final class TodoListFold {
 
@@ -106,7 +122,17 @@ public final class TodoListFold {
 	/** An honest change made on compromised input that no longer holds without it, waiting for a reviewer. */
 	public record PendingReview ( TodoId todoId, String operationId, ReplicaId decidedBy, String change ) { }
 
-	private record State ( Map<TodoId, Todo> todos, List<Distrust> distrusted, List<SetAside> setAside, List<PendingReview> pending ) { }
+	/** Where an office stands in the network. */
+	public enum MemberStatus { ACTIVE, RETIRED, PRUNED, REMOVED }
+
+	/**
+	 * One office as this replica knows it: who sponsored it (null for a founder, or one that never said),
+	 * and the last operation of a retired or removed one.
+	 */
+	public record Member ( ReplicaId replica, MemberStatus status, ReplicaId sponsoredBy, Long lastOperation ) { }
+
+	private record State ( Map<TodoId, Todo> todos, List<Distrust> distrusted, List<SetAside> setAside, List<PendingReview> pending,
+			List<Member> members, Map<ReplicaId, Long> retired, Set<ReplicaId> pruned ) { }
 
 	private final List<TodoEvent> operations = new ArrayList<>();
 	private VectorClock seen = VectorClock.empty();
@@ -150,6 +176,31 @@ public final class TodoListFold {
 		return state().pending();
 	}
 
+	public List<Member> members ( ) {
+		return state().members();
+	}
+
+	public boolean retired ( ReplicaId replica ) {
+		return state().retired().containsKey(replica);
+	}
+
+	/** The retired offices whose entries new stamps leave out. */
+	public Set<ReplicaId> pruned ( ) {
+		return state().pruned();
+	}
+
+	/** The retired offices not pruned yet, with their last operation: any office knowing of a retirement may prune it. */
+	public Map<ReplicaId, Long> prunable ( ) {
+		State state = state();
+		Map<ReplicaId, Long> prunable = new TreeMap<>(Comparator.comparing(ReplicaId::value));
+		state.retired().forEach(( retired, last ) -> {
+			if ( !state.pruned().contains(retired) ) {
+				prunable.put(retired, last);
+			}
+		});
+		return prunable;
+	}
+
 	// ----------------------------------------------------------------------------------------- computation
 
 	private State state ( ) {
@@ -161,6 +212,8 @@ public final class TodoListFold {
 
 	private State compute ( ) {
 		Map<ReplicaId, Distrust> cuts = distrustDeclarations();
+		Map<ReplicaId, Long> retirements = retirements(cuts);
+		Map<String, OperationStamp> effective = effectiveStamps(cuts);
 		Map<String, Verdict> verdicts = reviewVerdicts(cuts);
 
 		Map<TodoId, Todo> todos = new LinkedHashMap<>();
@@ -175,7 +228,11 @@ public final class TodoListFold {
 				continue;
 			}
 			TodoId todo = change.todoId();
-			OperationStamp stamp = change.stamp();
+			OperationStamp stamp = effective.get(change.stamp().operationId());
+			if ( afterRetirement(stamp, retirements) ) {
+				setAside.add(setAside(change, "made after its office retired"));
+				continue;
+			}
 			if ( compromised(stamp, cuts) ) {
 				setAside.add(setAside(change, "decided by a distrusted replica"));
 				suspicious.computeIfAbsent(todo, t -> new ArrayList<>()).add(stamp);
@@ -194,12 +251,12 @@ public final class TodoListFold {
 				setAside.add(setAside(change, "about a to-do only distrusted operations created"));
 				continue;
 			}
-			if ( suspect && verdict == null && !holdsWithoutWhatWasSetAside(change, kept.getOrDefault(todo, List.of())) ) {
+			if ( suspect && verdict == null && !holdsWithoutWhatWasSetAside(change, stamp, kept.getOrDefault(todo, List.of()), effective) ) {
 				pending.add(new PendingReview(todo, stamp.operationId(), stamp.origin(), describe(change)));
 				blocked.add(todo);
 			}
 			kept.computeIfAbsent(todo, t -> new ArrayList<>()).add(change);
-			write(todos, change);
+			write(todos, change, stamp);
 		}
 
 		todos.replaceAll((id, t) -> new Todo(id, t.title(), t.status(), blocked.contains(id)));
@@ -208,7 +265,91 @@ public final class TodoListFold {
 		return new State(todos,
 				cuts.values().stream().sorted(Comparator.comparing(d -> d.replica().value())).toList(),
 				setAside.stream().sorted(bySetAside).toList(),
-				pending.stream().sorted(byPending).toList());
+				pending.stream().sorted(byPending).toList(),
+				members(cuts, retirements, effective), retirements, prunedOffices(cuts));
+	}
+
+	/** Retirements, from the retiring office itself; a compromised office's word does not count. */
+	private Map<ReplicaId, Long> retirements ( Map<ReplicaId, Distrust> cuts ) {
+		Map<ReplicaId, Long> retired = new HashMap<>();
+		for ( TodoEvent operation : operations ) {
+			if ( operation instanceof OfficeRetired r && r.stamp().origin().equals(r.replica()) && !compromised(r.stamp(), cuts) ) {
+				retired.merge(r.replica(), r.stamp().counter(), Math::min);
+			}
+		}
+		return retired;
+	}
+
+	private Set<ReplicaId> prunedOffices ( Map<ReplicaId, Distrust> cuts ) {
+		Set<ReplicaId> pruned = new HashSet<>();
+		for ( TodoEvent operation : operations ) {
+			if ( operation instanceof RetiredOfficePruned p && !compromised(p.stamp(), cuts) ) {
+				pruned.add(p.replica());
+			}
+		}
+		return pruned;
+	}
+
+	/**
+	 * Every operation's stamp with the entries it left out filled back in: for every pruning in its causal
+	 * past, the pruned office up to its last operation. A pruning's own origin may be pruned later, so this
+	 * repeats until nothing changes. It depends on the operation's causal past only, so every replica comes
+	 * to the same effective clock for it.
+	 */
+	private Map<String, OperationStamp> effectiveStamps ( Map<ReplicaId, Distrust> cuts ) {
+		List<RetiredOfficePruned> prunings = operations.stream()
+				.filter(o -> o instanceof RetiredOfficePruned p && !compromised(p.stamp(), cuts))
+				.map(o -> (RetiredOfficePruned) o)
+				.toList();
+		Map<String, OperationStamp> effective = new HashMap<>();
+		for ( TodoEvent operation : operations ) {
+			OperationStamp stamp = operation.stamp();
+			VectorClock clock = stamp.clock();
+			boolean changed = !prunings.isEmpty();
+			while ( changed ) {
+				changed = false;
+				for ( RetiredOfficePruned p : prunings ) {
+					boolean seenIt = clock.counterOf(p.stamp().origin()) >= p.stamp().counter();
+					if ( seenIt && clock.counterOf(p.replica()) < p.lastOperation() ) {
+						clock = clock.mergedWith(new VectorClock(Map.of(p.replica().value(), p.lastOperation())));
+						changed = true;
+					}
+				}
+			}
+			effective.put(stamp.operationId(), stamp.withClock(clock));
+		}
+		return effective;
+	}
+
+	/** Every office this replica has heard of: in any clock, joined, or distrusted. */
+	private List<Member> members ( Map<ReplicaId, Distrust> cuts, Map<ReplicaId, Long> retirements, Map<String, OperationStamp> effective ) {
+		Map<ReplicaId, ReplicaId> sponsors = new HashMap<>();
+		Set<ReplicaId> known = new HashSet<>(cuts.keySet());
+		for ( TodoEvent operation : operations ) {
+			effective.get(operation.stamp().operationId()).clock().counters().keySet().forEach(r -> known.add(ReplicaId.of(r)));
+			if ( operation instanceof OfficeJoined j && j.stamp().origin().equals(j.replica()) ) {
+				sponsors.putIfAbsent(j.replica(), j.sponsoredBy());
+				known.add(j.replica());
+			}
+		}
+		Set<ReplicaId> pruned = prunedOffices(cuts);
+		return known.stream()
+				.sorted(Comparator.comparing(ReplicaId::value))
+				.map(r -> {
+					if ( cuts.containsKey(r) ) {
+						return new Member(r, MemberStatus.REMOVED, sponsors.get(r), cuts.get(r).trustedUpTo());
+					}
+					if ( retirements.containsKey(r) ) {
+						return new Member(r, pruned.contains(r) ? MemberStatus.PRUNED : MemberStatus.RETIRED, sponsors.get(r), retirements.get(r));
+					}
+					return new Member(r, MemberStatus.ACTIVE, sponsors.get(r), null);
+				})
+				.toList();
+	}
+
+	private static boolean afterRetirement ( OperationStamp stamp, Map<ReplicaId, Long> retirements ) {
+		Long last = retirements.get(stamp.origin());
+		return last != null && stamp.counter() > last;
 	}
 
 	/** The declarations of the security office, the earliest cut per replica winning: they only ever move earlier. */
@@ -246,9 +387,14 @@ public final class TodoListFold {
 	 * Whether the change would still have been allowed on its to-do as it stood in its causal past, without
 	 * the operations set aside: the same rules the commands check.
 	 */
-	private static boolean holdsWithoutWhatWasSetAside ( TodoChange change, List<TodoChange> keptOnTodo ) {
+	private static boolean holdsWithoutWhatWasSetAside ( TodoChange change, OperationStamp stamp, List<TodoChange> keptOnTodo, Map<String, OperationStamp> effective ) {
 		Map<TodoId, Todo> past = new LinkedHashMap<>();
-		keptOnTodo.stream().filter(k -> k.stamp().happenedBefore(change.stamp())).forEach(k -> write(past, k));
+		for ( TodoChange k : keptOnTodo ) {
+			OperationStamp kStamp = effective.get(k.stamp().operationId());
+			if ( kStamp.happenedBefore(stamp) ) {
+				write(past, k, kStamp);
+			}
+		}
 		Todo todo = past.get(change.todoId());
 		if ( change instanceof TodoAdded ) {
 			return true;
@@ -268,28 +414,27 @@ public final class TodoListFold {
 		};
 	}
 
-	private static void write ( Map<TodoId, Todo> todos, TodoChange change ) {
-		OperationStamp stamp = change.stamp();
+	private static void write ( Map<TodoId, Todo> todos, TodoChange change, OperationStamp stamp ) {
 		switch ( change ) {
 			case TodoAdded e -> todos.putIfAbsent(e.todoId(), new Todo(e.todoId(),
 					MultiValueRegister.<String>empty().write(stamp, e.title()),
 					MultiValueRegister.<TodoStatus>empty().write(stamp, TodoStatus.PLANNED), false));
-			case TodoRenamed e -> writeTitle(todos, e, e.title());
-			case TodoTitleSettled e -> writeTitle(todos, e, e.title());
-			case TodoMarkedPlanned e -> writeStatus(todos, e, TodoStatus.PLANNED);
-			case TodoMarkedOngoing e -> writeStatus(todos, e, TodoStatus.ONGOING);
-			case TodoMarkedDone e -> writeStatus(todos, e, TodoStatus.DONE);
-			case TodoDropped e -> writeStatus(todos, e, TodoStatus.DROPPED);
+			case TodoRenamed e -> writeTitle(todos, e, stamp, e.title());
+			case TodoTitleSettled e -> writeTitle(todos, e, stamp, e.title());
+			case TodoMarkedPlanned e -> writeStatus(todos, e, stamp, TodoStatus.PLANNED);
+			case TodoMarkedOngoing e -> writeStatus(todos, e, stamp, TodoStatus.ONGOING);
+			case TodoMarkedDone e -> writeStatus(todos, e, stamp, TodoStatus.DONE);
+			case TodoDropped e -> writeStatus(todos, e, stamp, TodoStatus.DROPPED);
 			case TodoChangeReviewed e -> { }
 		}
 	}
 
-	private static void writeTitle ( Map<TodoId, Todo> todos, TodoChange change, String title ) {
-		todos.computeIfPresent(change.todoId(), (id, t) -> new Todo(id, t.title().write(change.stamp(), title), t.status(), false));
+	private static void writeTitle ( Map<TodoId, Todo> todos, TodoChange change, OperationStamp stamp, String title ) {
+		todos.computeIfPresent(change.todoId(), (id, t) -> new Todo(id, t.title().write(stamp, title), t.status(), false));
 	}
 
-	private static void writeStatus ( Map<TodoId, Todo> todos, TodoChange change, TodoStatus status ) {
-		todos.computeIfPresent(change.todoId(), (id, t) -> new Todo(id, t.title(), t.status().write(change.stamp(), status), false));
+	private static void writeStatus ( Map<TodoId, Todo> todos, TodoChange change, OperationStamp stamp, TodoStatus status ) {
+		todos.computeIfPresent(change.todoId(), (id, t) -> new Todo(id, t.title(), t.status().write(stamp, status), false));
 	}
 
 	private static SetAside setAside ( TodoChange change, String why ) {

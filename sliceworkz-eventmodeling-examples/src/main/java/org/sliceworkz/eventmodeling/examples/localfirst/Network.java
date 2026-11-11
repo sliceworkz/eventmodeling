@@ -75,6 +75,19 @@ public final class Network {
 		return network;
 	}
 
+	/** A new office comes on the network, linked to the offices given. */
+	public void join ( TodoListServer newcomer, TodoListServer... linkedTo ) {
+		replicas.put(newcomer.replica(), newcomer);
+		for ( TodoListServer other : linkedTo ) {
+			links.add(Link.between(newcomer.replica(), other.replica()));
+		}
+	}
+
+	/** Every office on the network. */
+	public List<TodoListServer> offices ( ) {
+		return List.copyOf(replicas.values());
+	}
+
 	public void disconnect ( TodoListServer x, TodoListServer y ) {
 		down.add(existing(x, y));
 	}

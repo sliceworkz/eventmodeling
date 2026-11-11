@@ -86,6 +86,21 @@ public class LocalFirstTodoExample {
 			antwerp.reviewChange(coffee, ghent.pendingReviews().get(0).operationId(), Verdict.REVERTED);
 			network.synchronize();
 			print("6. antwerp reverted ghent's change; nothing of the takeover is left", brussels, ghent, antwerp);
+
+			try ( TodoListServer leuven = TodoListServer.joining("leuven", ghent) ) {
+				network.join(leuven, brussels, ghent, antwerp, security);
+				leuven.markTodoOngoing(coffee);
+				antwerp.retire();
+				network.synchronize();
+				ghent.pruneRetiredOffices();
+				network.synchronize();
+				ghent.markTodoDone(coffee);
+				network.synchronize();
+				print("7. leuven joined through ghent, antwerp retired and was pruned from new stamps", brussels, ghent, leuven);
+				ghent.members().forEach(m -> System.out.println("  office " + m.replica() + ": " + m.status()
+						+ (m.sponsoredBy() == null ? "" : ", sponsored by " + m.sponsoredBy())));
+				System.out.println("  ghent's latest stamp: " + ghent.operations().getLast().stamp());
+			}
 		}
 	}
 

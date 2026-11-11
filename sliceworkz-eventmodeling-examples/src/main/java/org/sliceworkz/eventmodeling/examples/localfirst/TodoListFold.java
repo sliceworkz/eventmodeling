@@ -43,8 +43,14 @@ public final class TodoListFold {
 	/** One to-do as the fold holds it. */
 	public record Todo ( TodoId todoId, String title, MultiValueRegister<TodoStatus> status ) {
 
+		/** The status every replica agrees on; {@code null} while the to-do is in conflict. */
 		public TodoStatus resolvedStatus ( ) {
-			return status.resolved(TodoStatus.CONCURRENT_PRIORITY);
+			return inConflict() ? null : status.resolved(TodoStatus.CONCURRENT_PRIORITY);
+		}
+
+		/** Whether concurrent changes are waiting for someone to decide which one stands. */
+		public boolean inConflict ( ) {
+			return TodoStatus.conflicting(status.values());
 		}
 
 		public boolean dropped ( ) {

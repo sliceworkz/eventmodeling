@@ -43,7 +43,7 @@ class PeerToPeerTodoListTest extends ReplicaTestSupport {
 	void aChangeIsVisibleLocallyAtOnceAndEverywhereAfterSync ( ) {
 		TodoId todo = brussels.addTodo("Order coffee");
 
-		assertEquals(List.of(new TodoView(todo, "Order coffee", TodoStatus.PLANNED, Set.of(TodoStatus.PLANNED))), brussels.todos());
+		assertEquals(List.of(new TodoView(todo, "Order coffee", TodoStatus.PLANNED, Set.of(TodoStatus.PLANNED), false)), brussels.todos());
 		assertTrue(ghent.todos().isEmpty(), "nothing is sent until the replicas sync");
 
 		network.synchronize();
@@ -94,47 +94,6 @@ class PeerToPeerTodoListTest extends ReplicaTestSupport {
 	}
 
 	@Test
-	void concurrentStatusChangesAreKeptAndResolvedTheSameOnEveryReplica ( ) {
-		TodoId coffee = brussels.addTodo("Order coffee");
-		brussels.markTodoOngoing(coffee);
-		network.synchronize();
-
-		network.disconnect(brussels, ghent);
-		network.isolate(antwerp);
-		brussels.markTodoDone(coffee);     // brussels finishes it ...
-		ghent.markTodoPlanned(coffee);     // ... while ghent, not knowing, puts it back on the plan
-
-		network.healAll();
-		network.synchronize();
-
-		TodoView seen = antwerp.todo(coffee);
-		assertEquals(TodoStatus.DONE, seen.status(), "the status that got furthest wins");
-		assertEquals(Set.of(TodoStatus.DONE, TodoStatus.PLANNED), seen.concurrentStatuses());
-		assertTrue(seen.inConflict());
-		assertConverged(brussels, ghent, antwerp);
-	}
-
-	@Test
-	void aChangeMadeAfterSeeingAConflictSettlesIt ( ) {
-		TodoId coffee = brussels.addTodo("Order coffee");
-		brussels.markTodoOngoing(coffee);
-		network.synchronize();
-		network.isolate(brussels);
-		brussels.markTodoDone(coffee);
-		ghent.markTodoPlanned(coffee);
-		network.healAll();
-		network.synchronize();
-
-		ghent.markTodoPlanned(coffee);     // ghent sees DONE, and reopens it deliberately
-		network.synchronize();
-
-		TodoView settled = brussels.todo(coffee);
-		assertEquals(TodoStatus.PLANNED, settled.status());
-		assertFalse(settled.inConflict(), "the reopen saw both concurrent writes, so it replaces them");
-		assertConverged(brussels, ghent, antwerp);
-	}
-
-	@Test
 	void aDropWinsOverAConcurrentChange ( ) {
 		TodoId coffee = brussels.addTodo("Order coffee");
 		network.synchronize();
@@ -146,6 +105,8 @@ class PeerToPeerTodoListTest extends ReplicaTestSupport {
 
 		assertTrue(brussels.todos().isEmpty());
 		assertEquals(Set.of(TodoStatus.ONGOING, TodoStatus.DROPPED), brussels.todo(coffee).concurrentStatuses());
+		assertFalse(brussels.todo(coffee).inConflict(), "a drop is no business conflict: it settles concurrent changes itself");
+		assertTrue(brussels.conflicts().isEmpty());
 		assertThrows(BusinessException.class, () -> ghent.markTodoDone(coffee), "dropped, as far as ghent now knows");
 		assertConverged(brussels, ghent, antwerp);
 	}

@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.examples.localfirst;
 
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoStatus;
 
 /**
  * Three offices, each with its own to-do list server, working through a network outage.
@@ -52,12 +53,13 @@ public class LocalFirstTodoExample {
 
 			network.rejoin(antwerp);
 			network.synchronize();
-			print("3. connection back: one state everywhere", brussels, ghent, antwerp);
+			print("3. connection back: one state everywhere, one conflict to resolve", brussels, ghent, antwerp);
+			brussels.conflicts().forEach(c -> System.out.println("  conflict on '" + c.title() + "': " + c.changes()));
 
 			ghent.markTodoOngoing(keys);
-			ghent.markTodoPlanned(coffee);     // seen the conflict, settles it deliberately
+			ghent.resolveConflict(coffee, TodoStatus.PLANNED);   // a person decides which side stands
 			network.synchronize();
-			print("4. a change made after seeing the conflict settles it", brussels, ghent, antwerp);
+			print("4. ghent resolved the conflict; the resolution reached everyone", brussels, ghent, antwerp);
 		}
 	}
 
@@ -66,8 +68,9 @@ public class LocalFirstTodoExample {
 		System.out.println(title);
 		for ( TodoListServer replica : replicas ) {
 			System.out.println("  " + replica);
-			replica.state().forEach(t -> System.out.println("     " + t.title() + ": " + t.status()
-					+ (t.inConflict() ? "   (concurrent: " + t.concurrentStatuses() + ")" : "")));
+			replica.state().forEach(t -> System.out.println("     " + t.title() + ": "
+					+ (t.inConflict() ? "IN CONFLICT " + t.concurrentStatuses()
+							: t.status() + (t.concurrentStatuses().size() > 1 ? "   (concurrent: " + t.concurrentStatuses() + ")" : ""))));
 		}
 	}
 

@@ -63,6 +63,13 @@ public final class MultiValueRegister<V> {
 		return new MultiValueRegister<>(next);
 	}
 
+	/** The writes no other write has seen, in an order every replica agrees on. */
+	public List<Write<V>> writes ( ) {
+		return heads.stream()
+				.sorted(Comparator.comparing((Write<V> w) -> w.stamp().origin().value()).thenComparingLong(w -> w.stamp().counter()))
+				.toList();
+	}
+
 	/** The values of the writes no other write has seen: one, unless replicas wrote concurrently. */
 	public Set<V> values ( ) {
 		return heads.stream().map(Write::value).collect(Collectors.toUnmodifiableSet());

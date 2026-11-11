@@ -28,6 +28,10 @@ import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoStatus;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.resolvetodoconflict.ResolveTodoConflictCommand;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.todoconflicts.TodoConflictsReadModel;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.todoconflicts.TodoConflictsReadModel.TodoConflict;
 import org.sliceworkz.eventmodeling.examples.localfirst.crdt.ReplicaId;
 import org.sliceworkz.eventmodeling.examples.localfirst.crdt.VectorClock;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.addtodo.AddTodoCommand;
@@ -104,9 +108,19 @@ public final class TodoListServer implements AutoCloseable {
 		context.execute(new DropTodoCommand(replica, todoId), Execution.retrying());
 	}
 
+	public void resolveConflict ( TodoId todoId, TodoStatus chosen ) {
+		context.execute(new ResolveTodoConflictCommand(replica, todoId, chosen), Execution.retrying());
+	}
+
 	// ------------------------------------------------------------------------------------- reads
 
-	/** The to-dos not dropped, as this replica knows them now. */
+	/** The to-dos waiting for someone to resolve a conflict, as far as this replica knows. */
+	public List<TodoConflict> conflicts ( ) {
+		TodoConflictsReadModel conflicts = context.read(TodoConflictsReadModel.class);
+		return conflicts.conflicts();
+	}
+
+	/** The to-dos not dropped (those in conflict included), as this replica knows them now. */
 	public List<TodoView> todos ( ) {
 		TodoListReadModel list = context.read(TodoListReadModel.class);
 		return list.todos();

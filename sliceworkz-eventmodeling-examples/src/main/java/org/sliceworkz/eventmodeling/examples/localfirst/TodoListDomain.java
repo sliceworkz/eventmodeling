@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.examples.localfirst;
 
 import java.util.Comparator;
+import java.util.Set;
 
 import org.sliceworkz.eventmodeling.domain.Entity;
 import org.sliceworkz.eventmodeling.domain.EntityId;
@@ -48,8 +49,22 @@ public interface TodoListDomain {
 		PLANNED, ONGOING, DONE, DROPPED;
 
 		/**
-		 * The conflict resolution rule for concurrent status changes: drop wins, otherwise the status that
-		 * got furthest. Any total order works, as long as every replica uses the same one.
+		 * Whether concurrent status changes are a <b>business conflict</b>: two offices took the to-do in
+		 * different directions without knowing about each other, and a person has to decide which one
+		 * stands. Until then the to-do has no agreed status and nothing else may be done with it.
+		 *
+		 * <p>A drop is not a conflict: whoever dropped it meant it gone, whatever else happened to it, so a
+		 * drop settles concurrent changes on its own ({@link #CONCURRENT_PRIORITY}).
+		 */
+		public static boolean conflicting ( Set<TodoStatus> concurrent ) {
+			return concurrent.size() > 1 && !concurrent.contains(DROPPED);
+		}
+
+		/**
+		 * How concurrent status changes that are no conflict resolve: drop wins. Applied to a conflict, the
+		 * order only decides what the to-do would show if nobody looked at the conflict; it never does,
+		 * since a conflict has no agreed status. Any total order works, as long as every replica uses the
+		 * same one.
 		 */
 		public static final Comparator<TodoStatus> CONCURRENT_PRIORITY = Comparator.comparingInt(status -> switch ( status ) {
 			case PLANNED -> 0;
@@ -76,6 +91,12 @@ public interface TodoListDomain {
 
 		record TodoDropped ( TodoId todoId, OperationStamp stamp ) implements TodoEvent { }
 
+		/**
+		 * Someone who saw the conflicting changes chose the status that stands. Its clock covers every
+		 * change it settles, so it replaces them all on every replica it reaches.
+		 */
+		record TodoConflictResolved ( TodoId todoId, TodoStatus status, OperationStamp stamp ) implements TodoEvent { }
+
 	}
 
 	/** The tags of an operation: the to-do it is about and the replica that decided it. */
@@ -91,6 +112,7 @@ public interface TodoListDomain {
 			case TodoEvent.TodoMarkedOngoing ignored -> TodoStatus.ONGOING;
 			case TodoEvent.TodoMarkedDone ignored -> TodoStatus.DONE;
 			case TodoEvent.TodoDropped ignored -> TodoStatus.DROPPED;
+			case TodoEvent.TodoConflictResolved resolved -> resolved.status();
 		};
 	}
 

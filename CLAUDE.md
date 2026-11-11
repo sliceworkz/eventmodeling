@@ -160,8 +160,10 @@ mvn compile exec:java -Dexec.mainClass="org.sliceworkz.eventmodeling.examples.lo
 Several replicas of one `TodoList` context, each on its own event store, decide locally and replicate their
 domain events (not their commands) as CRDT operations stamped with a vector clock; delivery is causal and
 exactly once through the operation id as idempotency key. `localfirst/README.md` maps the CRDT concepts onto
-the framework's; `PeerToPeerTodoListTest`, `CentralServerTodoListTest` and `ConvergenceTest` pin convergence
-under partitions, concurrent changes and any delivery order.
+the framework's. Concurrent status changes that disagree are a business conflict: listed by
+`TodoConflictsReadModel`, blocking every command on the to-do until `ResolveTodoConflictCommand` picks a side.
+`PeerToPeerTodoListTest`, `CentralServerTodoListTest`, `TodoConflictTest` and `ConvergenceTest` pin convergence
+under partitions, concurrent changes, conflicts and any delivery order.
 
 ## Architecture Patterns
 

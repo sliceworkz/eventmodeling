@@ -100,6 +100,13 @@ class ConvergenceTest extends ReplicaTestSupport {
 				replica.addTodo("Task " + random.nextInt(12));
 				return;
 			}
+			var conflicts = replica.conflicts();
+			if ( !conflicts.isEmpty() && random.nextInt(3) == 0 ) {
+				var conflict = conflicts.get(random.nextInt(conflicts.size()));
+				var sides = conflict.changes();
+				replica.resolveConflict(conflict.todoId(), sides.get(random.nextInt(sides.size())).status());
+				return;
+			}
 			TodoId todo = known.get(random.nextInt(known.size()));
 			switch ( random.nextInt(4) ) {
 				case 0 -> replica.markTodoPlanned(todo);

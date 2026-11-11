@@ -17,7 +17,7 @@ replicas talk.
 | causal delivery | `TodoListServer.receive` buffers an operation until what it was decided on is there |
 | anti-entropy | `ReplicationLogReadModel.missingAt(peerClock)`, exchanged by `Network.sync` |
 | state | `TodoListFold`, shared by the decision model and the `TodoListReadModel` |
-| conflict resolution | a `MultiValueRegister` per to-do status; concurrent writes resolved by `TodoStatus.CONCURRENT_PRIORITY` |
+| conflict resolution | a `MultiValueRegister` per to-do status; a drop wins automatically, other concurrent writes are a business conflict a person resolves |
 
 **Operations are replicated, not commands.** The command runs once, where the user is, against what that
 replica knows. The event it raises is a decided fact, and the other replicas take it in as it is through
@@ -26,9 +26,17 @@ differently (the to-do might be dropped there already), and the replicas would d
 
 **Statuses.** Adding a to-do makes it `PLANNED`; `MarkTodoOngoing` needs `PLANNED`, `MarkTodoDone` needs
 `ONGOING`, `MarkTodoPlanned` needs `ONGOING` or `DONE`, `DropTodo` anything but `DROPPED`. These rules are
-checked locally. Concurrent changes are all kept (`concurrentStatuses`) and the one that counts is picked
-by one rule every replica applies alike: a drop wins, otherwise the status that got furthest. A change made
-after seeing the conflict replaces all the concurrent ones.
+checked locally. Concurrent changes are all kept (`concurrentStatuses`).
+
+**Conflicts.** Concurrent status changes that disagree (one office finished an ongoing to-do, another
+put it back on the plan) are a *business conflict* (`TodoStatus.conflicting`): the to-do has no agreed
+status, `TodoConflictsReadModel` lists it with the change each office made, and every command on it is
+refused until a person runs `ResolveTodoConflict`, choosing one of the conflicting statuses. The
+resolution is an operation like any other: its clock covers both sides, so it replaces them everywhere.
+Two things follow from deciding locally. A conflict holds back only the replicas that know of it; an
+office that has not synced yet works on, and its change joins one of the sides. And two offices can
+resolve the same conflict while apart: choosing alike settles it, choosing differently is a new conflict.
+A drop is no conflict: it wins over whatever happened concurrently.
 
 **What local first cannot give you.** A rule over one replica's own operations holds. A rule over several
 (no two open to-dos with the same title) holds per replica, but two offices adding the same title while
@@ -40,6 +48,8 @@ shows it: such a rule needs coordination, or a compensating step once the confli
 - `PeerToPeerTodoListTest`: three offices linked directly; partitions, concurrent changes, drop versus
   change, an operation arriving before its cause, duplicate delivery
 - `CentralServerTodoListTest`: offices linked to a central replica only, which relays and decides nothing
+- `TodoConflictTest`: a business conflict shown everywhere, actions refused, resolved, resolved twice
+  alike and differently, and the offices that had not heard of it
 - `ConvergenceTest`: random work under random partitions in both topologies, and the operations of a run
   delivered to fresh replicas in shuffled, duplicated batches; every replica ends in the same state
 - `crdt/VectorClockTest`, `crdt/MultiValueRegisterTest`: the building blocks

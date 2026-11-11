@@ -36,15 +36,11 @@ public class TodoListReadModel implements ReadModel<TodoEvent> {
 
 	/**
 	 * One to-do. {@code concurrentStatuses} holds more than one status when replicas changed it without
-	 * knowing about each other; {@code status} is the one the conflict resolution rule picked.
+	 * knowing about each other. When that is a business conflict, {@code inConflict} is set and
+	 * {@code status} is {@code null}: there is no agreed status until someone resolves it. Otherwise
+	 * {@code status} is the one the resolution rule picked (a drop).
 	 */
-	public record TodoView ( TodoId todoId, String title, TodoStatus status, Set<TodoStatus> concurrentStatuses ) {
-
-		public boolean inConflict ( ) {
-			return concurrentStatuses.size() > 1;
-		}
-
-	}
+	public record TodoView ( TodoId todoId, String title, TodoStatus status, Set<TodoStatus> concurrentStatuses, boolean inConflict ) { }
 
 	private final TodoListFold fold = new TodoListFold();
 
@@ -66,7 +62,7 @@ public class TodoListReadModel implements ReadModel<TodoEvent> {
 	/** Every to-do, the dropped ones included: what two replicas compare to tell they converged. */
 	public List<TodoView> everything ( ) {
 		return fold.todos().stream()
-				.map(t -> new TodoView(t.todoId(), t.title(), t.resolvedStatus(), t.status().values()))
+				.map(t -> new TodoView(t.todoId(), t.title(), t.resolvedStatus(), t.status().values(), t.inConflict()))
 				.toList();
 	}
 

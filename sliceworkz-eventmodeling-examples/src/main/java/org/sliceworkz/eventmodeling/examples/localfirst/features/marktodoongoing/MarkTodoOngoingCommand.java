@@ -43,6 +43,7 @@ public record MarkTodoOngoingCommand ( ReplicaId replica, TodoId todoId ) implem
 
 		var todo = state.todo(todoId);
 		BusinessException.when(todo.isEmpty(), "To-do " + todoId.value() + " does not exist");
+		BusinessException.when(todo.get().inConflict(), "To-do '" + todo.get().title() + "' has conflicting changes; resolve the conflict first");
 		TodoStatus current = todo.get().resolvedStatus();
 		BusinessException.when(!ALLOWED_FROM.contains(current), "To-do '" + todo.get().title() + "' is " + current);
 

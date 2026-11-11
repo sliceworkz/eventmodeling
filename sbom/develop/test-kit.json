@@ -4,7 +4,7 @@
   "serialNumber" : "urn:uuid:ee453e80-4d9d-3d29-a8e7-2affd8e2abad",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-11-09T16:13:44Z",
+    "timestamp" : "2026-11-10T16:41:12Z",
     "lifecycles" : [
       {
         "phase" : "build"
@@ -110,35 +110,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "cedccaa3d47e59a1eb2b42a452594fac"
+          "content" : "699ae04a8289c727368f75e5b85e084b"
         },
         {
           "alg" : "SHA-1",
-          "content" : "801ea1bbf01d55b8b073de6fb820a3b072bc23ee"
+          "content" : "6f471a21ded75073d8d288498bf01dbbac271cfe"
         },
         {
           "alg" : "SHA-256",
-          "content" : "f5bc2a6c3ba5a115ed99d463afd74ab82b15a0ad947f98acd9a73c519c369011"
+          "content" : "0a4c03acbcdbf5cd1791ffdfa2142b34b9ef703b5f62ab9e8d161420da2bdb2b"
         },
         {
           "alg" : "SHA-512",
-          "content" : "5e75773b90baad807fbe77739f1fcc02f4b73fb70d8180f607af0810b172d5a5be3bc0b574111879a98983aacc26fa4e908b760ec52e155cae3ed0df6cd43bba"
+          "content" : "c4c8c7bf421c754aa5a74666fc10fd472b9ee2de9adcf9e23b6cf2132976b6b8e9e7a04ef5c67e184896e1a26e8c3bb307ca0e159208eb53ca4438fcda3f79c0"
         },
         {
           "alg" : "SHA-384",
-          "content" : "4bb31e1e4fa3a0d5b0ee4bb455973df996a319503568c51b613196ac9f409d18c1a438d619a0ad97bad15647bd9e42ae"
+          "content" : "8ccf0a30d44a17e90ab844a85ab0d602bfb0f28eeffe611419a79b5a66600c1eca8bcba7dd177b014221865c3e8360c9"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "f599a337cf49f54cc03100ebae931ef1bbe7fa6ffae265e67c37ad840e154143ddeefc941f9b6a474d019f002c52bc09"
+          "content" : "6fe7759918195334a72d7b62aa76bfe295c3453d751a1af8d9d61bd154fcb9bfa8b9d156602b99e76c3655eb78e9fa2d"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "194f0a2cefbbd99c21109f778e476a0eeb69dad4f895f76d9f1f9f97cad9a428"
+          "content" : "4808141171ea8f6c4b68a55791b8c719c7c1e5b5edc02c17dfcbbf0cf0c54044"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "9fb14fb5a3edd759281721c607edd25bd440d0af0e1bd8f739794a9755528d0bd6a00fd116d2ba7cfef94851c5e27aa62bb60c8d1815d8f25accad9bec5b2321"
+          "content" : "5ceee8ae534f38c6020de7bb66cfd0d42e7559dda533787dfb8bec24c34e27c8f8397d03a58e99e082ef1e38fbbcfd0d5993de6e83f35cfabec4e10fa36fe62b"
         }
       ],
       "licenses" : [
@@ -239,35 +239,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "7002650cce900add622faa8f31ac2b21"
+          "content" : "d8436662f3fafef51f1ffe4413f39fd3"
         },
         {
           "alg" : "SHA-1",
-          "content" : "88f59dbf5c1569d802c7dd6b6071cd304f2c3ff9"
+          "content" : "d4915866982874a7f88e7e931b15dd65e474af18"
         },
         {
           "alg" : "SHA-256",
-          "content" : "39df05753d0b6189ce91cf997238c355d85140e4019508356295a69fa910f920"
+          "content" : "f13d9b00bd89d30734f931e777af36941fca1acc5fd5f6f1b27d9709d3cb5a11"
         },
         {
           "alg" : "SHA-512",
-          "content" : "72c24047e38bf69634f0385602f8e34325c3c3510fc680fbab342d4b3254046d418c33f86d766b2cad7138551942a9579aad927f7222a9793ffb07bba60e3ba2"
+          "content" : "6c4de2f894b5e23315be03052a5014bf0ec5d0e4fd5d18c1c1ebf264a89eddcd941b58faa1a0e4dfe53c5425ccd81b3206ab49742f86bd15972692175c9db554"
         },
         {
           "alg" : "SHA-384",
-          "content" : "03064813969e8ae466c19a9bb8a6c069ae8f28fc87fbc960b83819967f6b848fb2cb16677de469b5913f4090b2699b48"
+          "content" : "4b748054cdcf3c1f7946fd3f7e9eb6b14470fdb6f58a080e7d61d5abe751ba36be33f031f5efbce2c1cf7ca7dee3efdb"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "b30b999b265b2d4300395827124c283c3454086ba229924ee742260fd6b4af4accf4012883020dcc2973674d8dc39e12"
+          "content" : "d6b422b194761fccc86e252d04b38cfd0c7d85cac81d3b83f47ab2a6cf75fca63d331e1408337636ada0e7ac272e7f31"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "b50f89a76696f86bbacdf0c2f27975ed57588c490371855ac0a7a793927325ee"
+          "content" : "5c8d733da345040e337d3955e8d2afc6167762487708285d7eb19ef659339999"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "d7b734eb7502b367eacd7b66fdf6668de184447139ee292e49a4a25ec6bb23b0786765792e74a70fdc9428c9a2f18f28afca9ce9887964c45df32063e98fe083"
+          "content" : "0dc9f7862557d0d1d9fc75497cd0e640a2881248d89e359dde07bce8e0089330234712f4370c77c5824f195cde963ebc2500d69f292fabe27c64f22da00a8592"
         }
       ],
       "licenses" : [
@@ -301,35 +301,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "aaa49728956f09b7938d0b6c07f186c8"
+          "content" : "68112af6eda5d7753757c7102f1eed47"
         },
         {
           "alg" : "SHA-1",
-          "content" : "5de8c1a35b1a61d66ed99ea522fd50cf1408a67a"
+          "content" : "6915a27c301ce34a57e7ab0f4ade0d772f31a11c"
         },
         {
           "alg" : "SHA-256",
-          "content" : "d22a8f4fde1ee5dc06bf658704aa723baa89dac605ded8d008da863d721a591a"
+          "content" : "2902c5f6d1270fea03317ecd8e35587df64dc45aa5e4a65e7cd6ef740e83e02d"
         },
         {
           "alg" : "SHA-512",
-          "content" : "1bc26e207923d16f4e056c06eadb219e60a173f14eb36eeb855245d53246e6278149647114315d9cf64e4362ba4c05237cfbd07f3cd478e89ae66991124deb9b"
+          "content" : "b2a974b1321e1e3306b26a8e756f23139f06c44065c78524ca5d354166bc46cb3588c097afa68a77ad3a8299b393426397827ff7f93b9b169527c077c115d885"
         },
         {
           "alg" : "SHA-384",
-          "content" : "85b9edaf2ab1b97aac946e6dbc0a9cf91ffd13f534338a2e112b8024bfc7079ad0363e68c284082d8a1752adaf9d78ae"
+          "content" : "7d207869132ea20e4cb4a0778c218d05cfef18b3cd38571dbfe3884f165d44afb58b367f7b7b2961ebaf8fb43faa38af"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "7c4eaf510f5b1533d022b69ef863e6677b08fde26b8aa6c9fd20067e01905b3f4a28832e32a672c843a2d9d21d41c208"
+          "content" : "ecc85933c2a297edd6675d4c7c7d4bc2af114f1bcf3cecac9712b46bae84961164e7b71cdd8d8b7f9d362021984f7af1"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "5cd2ad8fd075746f85f7396950636398970218f4f6cd9bfa6d526c90cdb2f308"
+          "content" : "801df32f3d2590683fdb3d042fa917bbfd5a100a9af886ab2dde21bb18734cbe"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "35af4bade293a71e2c93e59f3ce5b0addc7cc7bf577f9686ec97fc9a720f62c025a0d014c2f4136b45dc43a55cce6e31008de47ea25ecce68d21b9e528150ef8"
+          "content" : "6b52d000704fc1ecebe29ca6a144fac15e25327fe6452c2ec1053b64256af7d601df4933adc667f044a982f0b7536fcfcd7ff2d2455c61a4b8db507702ec6ac8"
         }
       ],
       "licenses" : [
@@ -363,35 +363,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "6983bad7bf70cd82228ece585b04d198"
+          "content" : "8347ef360fbb0d64832d6ab06276b5d9"
         },
         {
           "alg" : "SHA-1",
-          "content" : "e012540ef164382fc6002acae007379cdbfdad66"
+          "content" : "ccbbd93a8f66ffe159fc131913fac629b7410c27"
         },
         {
           "alg" : "SHA-256",
-          "content" : "279c78cbbc1f55136dc92fe0d482c1ff208fbabffe50591161a0a602d28080c5"
+          "content" : "6b0bef813bd7e4ebe1ddba52d44829853e28355eaa55e325cbed7389c80b6ff2"
         },
         {
           "alg" : "SHA-512",
-          "content" : "733d79a04f92ad76083864c13e94a67905fee0d2920768b02f0968991d96ff2f6978a48f0360469f0faef9fa09f909a597dd44234d70e6327e55abda9c79dd74"
+          "content" : "ee478ad8266d62924b0dc6a72f280ed194522e59440b0ec5661f1940943078d617c556dab8391e0fa858e1fbd55853934d3871825f1e4a1e94652b1a65b67858"
         },
         {
           "alg" : "SHA-384",
-          "content" : "44a34a084c61fc4b8dde664021318d02d9981f7a39e53544759642b4c1391b58d81957c9575ea465a2c8c298807a0395"
+          "content" : "55f19c730449705a18e97b91813b985ddb5367e0bc020d563a94a33654090b29594a189a445c254b73aed1e562fa4de5"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "237e23b7475144afbf371bbdcb45f99886ef07e502340831eff78499fbc282b49c4b8d78aac33bd69450a67d8d9c67b6"
+          "content" : "28cad87dcf296ce515ce9bab8dac200abcc0a3bf5fd567fabeef5360d7e68bc42ab8bbf738dff677fc07161640967946"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "5a487f0e351a0645ecc3f3884f3f94b5b0eaecbfb07ac4ea6a4967f29e6cf416"
+          "content" : "5f6fa86d4d156b4b1a949ab5955efc5cd07d10797d6227bb51846e935ab50194"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "359b3e378d4280ad125f07e69ae1d80107e5ab3e5057538fc82aed86831c1463447e43398d572ab7b66494eeb1bcba11265d988a805372e597441ba56b934e1c"
+          "content" : "9090871f76300e47bc1d3a33fab916071f4d15e315e8902104a31c725628b7e4d9ffa5eaaa3f2edfde1d4b9d746bc7f8de717fe42f3875dfb6f4cdd6b2bf52f3"
         }
       ],
       "licenses" : [
@@ -425,35 +425,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "89f25fb65e8a5b96aa067a15499adf45"
+          "content" : "ca6735bcd103fb9b2a9adf56fb514576"
         },
         {
           "alg" : "SHA-1",
-          "content" : "4e54d217a439ceee9c7cd3189ae633164ec805bb"
+          "content" : "7a1e2aa5967ae1b277786e2d746628c2f3284acf"
         },
         {
           "alg" : "SHA-256",
-          "content" : "c7bdfc99ca1a7f875c172af1aad233dca02e6530ca629cad8ca04f58412e64a1"
+          "content" : "a917db611efec5e4e12d7b36c31cbfd08ece38b6e72a823c9982c93cefe6ad7e"
         },
         {
           "alg" : "SHA-512",
-          "content" : "76d2a6da8ce45cc39eed7e37012f502582139039105eead75453668f4a745e0929cb935d4d699f7f4bd9b64a20363aae2e25ba49d236b747801763e16e1cc56f"
+          "content" : "06ec06f25fed6a1d9a529260836368d38e5c4337b0a71571d315a71219d32e1020892603701939f2dca680126ec645d9422bec4894d108298ca585911b0fe949"
         },
         {
           "alg" : "SHA-384",
-          "content" : "c4ffcbfe9ee5410b4c6194115ab5e124db15bc4abca589657e4ee0afe0dfeb31e10c56c5be30ea3881533e535aa91e48"
+          "content" : "1e80bb780213e5da6ad2cc6c5c8dc43a0daec048b62e7e2df7f07918640dfc8dff07f8be253c755f9af031db58ac68d0"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "c46216344e5895322103733afb3a9c37bfbe2bf1548b4c4165387a5580d13b6e15fc3bee6a08fe94ec3ceae6f76c3c0d"
+          "content" : "8f214f343020c5793d7084ce2b2561b0d08272556729d796b9abf4d1958a47566a14c6d6bb67cc090585cc0f48f92b0f"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "59155cc4cb5836f323e3760fb419a4f6f62a9a79e40e16c58d1d6c2971424364"
+          "content" : "18ba2ec925fb086f47e87fdc1b3b400c60e77a0b9080a5829378418ac4c8e93f"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "a1aaab85b6e58ab5034eb6728d7fc0270a9d3c165112fa606ac598ee577017020d0186fa749bb4b6dbe48600a862437b6c7d2af427d3c6fc2ce95678230b3e64"
+          "content" : "bba1dac16f04f481060a175c3dd08c999a7b11639dc6ecf1326f9d9f7619e4a7768043a8a8b0572df65f5f2c986b42b7fe99bfbda32c45261f2e04c37e5fecec"
         }
       ],
       "licenses" : [
@@ -487,35 +487,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "0f4592349b5d8ba59fed8d907ad978c3"
+          "content" : "cf4df5cb962eefe5368862687da21094"
         },
         {
           "alg" : "SHA-1",
-          "content" : "2f3d813724d94d7547aebc254b76d4c893b7b862"
+          "content" : "e21fa95ac7ff72a49475fa313e9413da9a952c02"
         },
         {
           "alg" : "SHA-256",
-          "content" : "2d4c5e4bd6b03d21fbf6bf7d901c7e4f3277703a36a2025554ba570f166e328b"
+          "content" : "b4d8ceb9cafc768183954ccfe25eb79599b5da15b347c088b680ae5d79847456"
         },
         {
           "alg" : "SHA-512",
-          "content" : "05752129f926ed09fce87650f12bfb1e1d74ff0639324a574d4882ee79b8e276bdb4b6d7d4ac3b4554b0fb0595ea8e30d14916fb779b53bab460a6349d913f46"
+          "content" : "40e97154f29196f97e23edb787a6a7dae72ab9198426ad37fd987150fc21a7ba15b83e1b7bd67362648ca29dcdbf3ad47be93ee32edd1f3ca792f54ecfb8df43"
         },
         {
           "alg" : "SHA-384",
-          "content" : "97fd53f68c79191364c7ef5de0f448258341edad6ba68f57e5db69b54a74ee9a80d3438584531fc7cef882a681f40bc5"
+          "content" : "a37a8efe92dd36d284374f99f670ad56c6c75d6973e13b6e86133d82924008637a8e909d13bbd61afb38eeb3226e1db9"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "b91e3f4da275f7116d0841d90b7e2e8cca3b554405f3279e4b01d88bfc89860cb8d82fa37ef0d9b585f137583f15e746"
+          "content" : "41773062a7d9094107a14eb7790818551bfe824f653998113c9927cad283f6d4b6e5c0587319e6247acf291f2f3a42d0"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "69ad8026f65a8e834310dbc4d3af10e1d07855b55a08dcf73e87451b2950bd15"
+          "content" : "337d74a8917486d75fe778c528cce34ac0f54a2dc7118e1a554af2bb84f635b6"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "bf8dce2a4faaac59421db9d1565522df400dfc669d2e878a3f1840c435067da0a10d26b29ce52ba8f7e0acc89be9c75b0ddd6751b787babe86c2d635fa175750"
+          "content" : "6c93ac2307770e07bd1d5e8cc484cc6aa47f70ad28e48668d3dd8260e003db2ce601e3ea0a95be14765f9a7147e5a9f2b99ac448edf603238e8766dc207e0cd3"
         }
       ],
       "licenses" : [
@@ -1089,45 +1089,45 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/tools.jackson.core/jackson-databind@3.2.4?type=jar",
+      "bom-ref" : "pkg:maven/tools.jackson.core/jackson-databind@3.3.0?type=jar",
       "publisher" : "FasterXML",
       "group" : "tools.jackson.core",
       "name" : "jackson-databind",
-      "version" : "3.2.4",
+      "version" : "3.3.0",
       "description" : "General data-binding functionality for Jackson: works on core streaming API",
       "scope" : "required",
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "63eae1d7fa8d26621ef938d7267c2722"
+          "content" : "bb4fc49acb822827f3ded051f7f1e6da"
         },
         {
           "alg" : "SHA-1",
-          "content" : "73cd5c393378036c5b556355e5257128796b9a9a"
+          "content" : "03adf043af5f653a88e92473895771e0d701d982"
         },
         {
           "alg" : "SHA-256",
-          "content" : "c4af37223d5024f1294a5450598b01b65f30c53d9e906f02c3955ba1fb14a67d"
+          "content" : "856b7348bd08efe5791cf617cc3bed21f5f4a02569507c61e946666d13c33ba4"
         },
         {
           "alg" : "SHA-512",
-          "content" : "3b879f3f270ca12ce1b89f67898655dcefe3673cc36f598fbbe91fddef6f5bed59d15902ac7de79f23ebc0f72c8d27189f0bef2b3b9c90006a27328b98a101e8"
+          "content" : "212b06338a352fd11cc226aff03cb9fc2fc131c1652343d7089af7db7432258c4242221858d28a8ac661026b148d31367ed858f14e19f85daf07eb9b41d78609"
         },
         {
           "alg" : "SHA-384",
-          "content" : "5dbdf4e1282de8135b5290ac71e26966921d3379af8c475baf222a0afab0daede2c0f59f0f3e314e4d9292f43547a4ac"
+          "content" : "f44b20547faa17f499508fc8bae97baa18c726c6d677cb1632d35edd33b473a7dd7ea6aae404d96f650d0d1694a8aefc"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "9c4578d09a927dbc9c81daea466521ac22342568c2e350f6ba1107451a2354e2ae80a57fb0d72019f9725caada62177a"
+          "content" : "b4b6ee6f9940bd8ee238a63d29f5c7c25269a464dcd3c85ef7919c5e651d3b5593dc02ee6fc3217672ffc9f97c0e6390"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "cd14fcd2ecb0cd6bbebec5721d9c6532d5160c68f495a24eb2cc86dc9ac15b4f"
+          "content" : "8556b7d4146197ad850b987abd688c3bfbffab813adee8f6fd656950ec25a589"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "441135c725515017b6493d0e36fc88000a976713506924f30a7be38d570073c7d64ff88e60cc5d0abbb6704ccfc943d39271704efd064feed91ee2ce1eb81675"
+          "content" : "0bdac4872de74802afb7209340dde3579b984cfa7113ab591837ae9d94fad8b8f915a6cbc97fada1ec9f1adda8dc52f2534eb149c8db8064e8eec1323ccf6413"
         }
       ],
       "licenses" : [
@@ -1137,7 +1137,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/tools.jackson.core/jackson-databind@3.2.4?type=jar",
+      "purl" : "pkg:maven/tools.jackson.core/jackson-databind@3.3.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -1229,45 +1229,45 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/tools.jackson.core/jackson-core@3.2.4?type=jar",
+      "bom-ref" : "pkg:maven/tools.jackson.core/jackson-core@3.3.0?type=jar",
       "publisher" : "FasterXML",
       "group" : "tools.jackson.core",
       "name" : "jackson-core",
-      "version" : "3.2.4",
+      "version" : "3.3.0",
       "description" : "Core Jackson processing abstractions (aka Streaming API), implementation for JSON",
       "scope" : "required",
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "024e68187ce475a2a668cb5944e71d88"
+          "content" : "53850566791686fc3c6c5b1e6476b812"
         },
         {
           "alg" : "SHA-1",
-          "content" : "025beaee139ae32025c5f189e4fb39c5b1f78653"
+          "content" : "f5be074915f20d6ba1f25a7cc1ce9d24595720f4"
         },
         {
           "alg" : "SHA-256",
-          "content" : "494b9f5fccf008042d5a72c5bf00629b144c0ba7362a9864cbb02234c9772651"
+          "content" : "1496eda4c353276416bd4f672fb3f98be95fb4c86707e8ffcebe04425d63aa63"
         },
         {
           "alg" : "SHA-512",
-          "content" : "7322b44920244c1b799c4952d3472eb9dc86836a3264a517bc74be81c8f38baaff6d805e237bc52b04a51f91fc40b2222ada4cda9906e1d1b43753f8d5661841"
+          "content" : "a11be3ca10043c9470381bd5800c11d21fd6c90942f2ebf27c128088bd3e4d4546bec51c3c6e67c1a4805dccccf20b0d18daf3381266ce7ebc18889821caed9d"
         },
         {
           "alg" : "SHA-384",
-          "content" : "91b62f9b11b7801835e5f9a41036114877f5592efb0b6ca6a5b9328efe10f9a1b3c1247ef4e13dd1785881a7b4b08250"
+          "content" : "36b58a7988f4aa64f66ebf88bbe209b34c882d9bdef26b9f9ba6db646c1597556921e10c7ad0591a2ddfc21a09ec63d2"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "b59c067f42f8ac3dec34589b78290ad2ed0ca94c9cfa42d285c9f6095f707c6558a735ac75ce8b13148368bac9d049d1"
+          "content" : "4f4a3d1b667e0855ce6a627451903b3b5f24b6cecb232aa15069afa2becb28ba9ccba770f27b8638bc07b9a89fdd591e"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "7624e27628d60e029c51fe65f82ef86773af00dfed24f6785c42ef4a6c5dfb82"
+          "content" : "0e5e80bb52176dd9f33052ae69c00e740b8bb3063dbfeeddb85503c667ea86c9"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "865947e2983856165fca5ad74077c6d66f73cc17e5ca02c65fdeaed437f4f95b1a9fba550737b343a96a7b819a813c2fecf13155366a5415794e37b7ac108086"
+          "content" : "551d93f34ecb29f504b368e132a9dfb49ead4be5a94e2ba45c49dd25dca7060703a831a57c78b259875156df47e850cb064f27a067b95728a6387196e814ab7e"
         }
       ],
       "licenses" : [
@@ -1277,7 +1277,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/tools.jackson.core/jackson-core@3.2.4?type=jar",
+      "purl" : "pkg:maven/tools.jackson.core/jackson-core@3.3.0?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -2832,7 +2832,7 @@
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-infra-inmem@0.13.0-SNAPSHOT?type=jar",
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-testing@0.13.0-SNAPSHOT?type=jar",
         "pkg:maven/org.junit.jupiter/junit-jupiter-api@6.1.3?type=jar",
-        "pkg:maven/tools.jackson.core/jackson-databind@3.2.4?type=jar",
+        "pkg:maven/tools.jackson.core/jackson-databind@3.3.0?type=jar",
         "pkg:maven/com.tngtech.archunit/archunit-junit5@1.5.1?type=jar",
         "pkg:maven/com.h2database/h2@2.5.252?type=jar",
         "pkg:maven/org.postgresql/postgresql@42.7.14?type=jar",
@@ -2870,7 +2870,7 @@
       "dependsOn" : [
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.13.0-SNAPSHOT?type=jar",
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-impl@0.13.0-SNAPSHOT?type=jar",
-        "pkg:maven/tools.jackson.core/jackson-databind@3.2.4?type=jar",
+        "pkg:maven/tools.jackson.core/jackson-databind@3.3.0?type=jar",
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar"
       ]
     },
@@ -2878,15 +2878,15 @@
       "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-impl@0.13.0-SNAPSHOT?type=jar",
       "dependsOn" : [
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.13.0-SNAPSHOT?type=jar",
-        "pkg:maven/tools.jackson.core/jackson-databind@3.2.4?type=jar",
+        "pkg:maven/tools.jackson.core/jackson-databind@3.3.0?type=jar",
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar"
       ]
     },
     {
-      "ref" : "pkg:maven/tools.jackson.core/jackson-databind@3.2.4?type=jar",
+      "ref" : "pkg:maven/tools.jackson.core/jackson-databind@3.3.0?type=jar",
       "dependsOn" : [
         "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar",
-        "pkg:maven/tools.jackson.core/jackson-core@3.2.4?type=jar"
+        "pkg:maven/tools.jackson.core/jackson-core@3.3.0?type=jar"
       ]
     },
     {
@@ -2894,7 +2894,7 @@
       "dependsOn" : [ ]
     },
     {
-      "ref" : "pkg:maven/tools.jackson.core/jackson-core@3.2.4?type=jar",
+      "ref" : "pkg:maven/tools.jackson.core/jackson-core@3.3.0?type=jar",
       "dependsOn" : [ ]
     },
     {

@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-10T09:49:39+01:00",
+  "runAt": "2026-11-11T09:23:20+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "develop",
-  "commit": "d6b390d99c9a4d2404ff53fa110c34c7f1461b0e",
+  "commit": "6bfc851ccb5f86d3e39ca16e927fd4eeccae0508",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/42785633736",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/42986584644",
   "dryRun": false,
   "policy": {
     "pattern": "develop",
@@ -133,7 +133,7 @@
       "ecosystem": "maven",
       "name": "jackson.version",
       "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-      "current": "3.2.4",
+      "current": "3.3.0",
       "kind": "property",
       "artifacts": [
         "tools.jackson.core:jackson-databind"
@@ -393,26 +393,9 @@
       "group": null,
       "level": "minor",
       "target": "2.25.1",
-      "outcome": "held-back",
-      "eligibleFrom": "2026-11-10T19:36:50+00:00",
-      "reason": "cooldown"
-    },
-    {
-      "ecosystem": "maven",
-      "name": "jackson.version",
-      "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-      "current": "3.2.4",
-      "kind": "property",
-      "artifacts": [
-        "tools.jackson.core:jackson-databind"
-      ],
-      "own": false,
-      "group": null,
-      "level": "minor",
-      "target": "3.3.0",
       "action": "merge",
       "batch": "auto",
-      "published": "2026-11-08",
+      "published": "2026-11-09",
       "outcome": "planned"
     }
   ],
@@ -423,18 +406,18 @@
       "action": "merge",
       "level": "merge",
       "transitive": false,
-      "commit": "055a189fa6925056405f6f2aa0591ce59d79450f",
+      "commit": "2e2bf01ea7473cf864fa616932b18322a39c4ef5",
       "error": null,
       "outcome": "pr-opened",
-      "pr": 244,
+      "pr": 248,
       "changes": [
         {
           "ecosystem": "maven",
-          "name": "jackson.version",
-          "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
+          "name": "maven.maven-versions-plugin.version",
+          "where": "pom.xml",
           "level": "minor",
-          "from": "3.2.4",
-          "to": "3.3.0",
+          "from": "2.24.0",
+          "to": "2.25.1",
           "applied": true,
           "error": null
         }
@@ -444,8 +427,8 @@
   ],
   "pullRequests": [
     {
-      "number": 244,
-      "url": "https://github.com/sliceworkz/eventmodeling/pull/244",
+      "number": 248,
+      "url": "https://github.com/sliceworkz/eventmodeling/pull/248",
       "head": "deps/develop/auto",
       "title": "Dependency updates on develop",
       "ci": "pending",
@@ -458,8 +441,8 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-10T06:21:20Z",
-    "sbomOrigin": "ci-artifact (run 42652393742)",
+    "dbBuilt": "2026-11-11T06:21:32Z",
+    "sbomOrigin": "ci-artifact (run 42856844082)",
     "sboms": [
       "library",
       "test-kit"

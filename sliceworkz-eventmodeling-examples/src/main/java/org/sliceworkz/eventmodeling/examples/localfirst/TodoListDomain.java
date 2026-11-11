@@ -64,36 +64,72 @@ public interface TodoListDomain {
 		});
 	}
 
-	sealed interface TodoEvent {
+	/**
+	 * The replica that may declare another replica compromised. A declaration from anywhere else counts for
+	 * nothing, on every replica, so a taken-over office cannot turn the mechanism against the honest ones.
+	 *
+	 * <p>A proof of concept trusts the origin an operation claims. In earnest, that only holds with every
+	 * operation signed by its office and chained by hash; see the README.
+	 */
+	ReplicaId SECURITY_OFFICE = ReplicaId.of("security");
 
-		TodoId todoId ( );
+	/** What a reviewer decided about an honest change made on input that turned out to be compromised. */
+	enum Verdict { CONFIRMED, REVERTED }
+
+	sealed interface TodoEvent {
 
 		OperationStamp stamp ( );
 
+		/** An operation on one to-do. */
+		sealed interface TodoChange extends TodoEvent {
+			TodoId todoId ( );
+		}
+
 		/** A new to-do, planned. Its id is minted by the replica that adds it, so two adds never collide. */
-		record TodoAdded ( TodoId todoId, String title, OperationStamp stamp ) implements TodoEvent { }
+		record TodoAdded ( TodoId todoId, String title, OperationStamp stamp ) implements TodoChange { }
 
-		record TodoRenamed ( TodoId todoId, String title, OperationStamp stamp ) implements TodoEvent { }
+		record TodoRenamed ( TodoId todoId, String title, OperationStamp stamp ) implements TodoChange { }
 
-		record TodoMarkedPlanned ( TodoId todoId, OperationStamp stamp ) implements TodoEvent { }
+		record TodoMarkedPlanned ( TodoId todoId, OperationStamp stamp ) implements TodoChange { }
 
-		record TodoMarkedOngoing ( TodoId todoId, OperationStamp stamp ) implements TodoEvent { }
+		record TodoMarkedOngoing ( TodoId todoId, OperationStamp stamp ) implements TodoChange { }
 
-		record TodoMarkedDone ( TodoId todoId, OperationStamp stamp ) implements TodoEvent { }
+		record TodoMarkedDone ( TodoId todoId, OperationStamp stamp ) implements TodoChange { }
 
-		record TodoDropped ( TodoId todoId, OperationStamp stamp ) implements TodoEvent { }
+		record TodoDropped ( TodoId todoId, OperationStamp stamp ) implements TodoChange { }
 
 		/**
 		 * Someone who saw the concurrent renames settled the title: one of them, or a new one. Its clock
 		 * covers every rename it settles, so it replaces them all on every replica it reaches.
 		 */
-		record TodoTitleSettled ( TodoId todoId, String title, OperationStamp stamp ) implements TodoEvent { }
+		record TodoTitleSettled ( TodoId todoId, String title, OperationStamp stamp ) implements TodoChange { }
+
+		/**
+		 * A reviewer decided about an honest change made on compromised input: it stands, or it is reverted,
+		 * which leaves it out of the to-do list everywhere, exactly like a compromised operation.
+		 */
+		record TodoChangeReviewed ( TodoId todoId, String operationId, Verdict verdict, OperationStamp stamp ) implements TodoChange { }
+
+		/**
+		 * The security office declares that {@code replica} was taken over after its operation number
+		 * {@code trustedUpTo}: every later operation of it counts for nothing. The cut is in CRDT coordinates,
+		 * since event ids differ per replica and the compromised office's clock cannot be believed.
+		 */
+		record ReplicaDistrusted ( ReplicaId replica, long trustedUpTo, String reason, OperationStamp stamp ) implements TodoEvent { }
 
 	}
 
 	/** The tags of an operation: the to-do it is about and the replica that decided it. */
 	static Tags tagsOf ( TodoId todoId, ReplicaId replica ) {
 		return Tags.of(TODO.tag(todoId), REPLICA.tag(replica));
+	}
+
+	/** The tags of any operation, as its origin raised them. */
+	static Tags tagsOf ( TodoEvent event ) {
+		return switch ( event ) {
+			case TodoEvent.TodoChange change -> tagsOf(change.todoId(), change.stamp().origin());
+			case TodoEvent.ReplicaDistrusted distrust -> Tags.of(REPLICA.tag(distrust.stamp().origin()));
+		};
 	}
 
 	sealed interface TodoListInboundEvent {

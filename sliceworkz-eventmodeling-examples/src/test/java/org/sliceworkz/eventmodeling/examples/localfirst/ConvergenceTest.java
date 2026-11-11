@@ -18,6 +18,7 @@
 package org.sliceworkz.eventmodeling.examples.localfirst;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.Verdict;
 
 /**
  * The property itself: whatever the users do, wherever the network is cut, and in whatever order and
@@ -65,6 +67,48 @@ class ConvergenceTest extends ReplicaTestSupport {
 	}
 
 	@Test
+	void randomWorkWithAnOfficeTakenOverPartwayConverges ( ) {
+		int setAside = 0;
+		int reviewed = 0;
+		for ( long seed = 1; seed <= RUNS; seed++ ) {
+			Random random = new Random(seed);
+			TodoListServer[] offices = { replica("x" + seed + "a"), replica("x" + seed + "b"), replica("x" + seed + "c") };
+			TodoListServer security = replica(TodoListDomain.SECURITY_OFFICE.value());
+			TodoListServer compromised = offices[1];
+			Network network = Network.peerToPeer(offices[0], offices[1], offices[2], security);
+			long takenOverAfter = -1;
+
+			int steps = 3 * STEPS;
+			for ( int step = 0; step < steps; step++ ) {
+				if ( step == steps / 3 ) {
+					takenOverAfter = compromised.versionVector().counterOf(compromised.replica());
+				}
+				if ( step == 2 * steps / 3 ) {
+					security.distrustReplica(compromised.replica(), takenOverAfter, "taken over at step " + steps / 3);
+				}
+				TodoListServer office = offices[random.nextInt(offices.length)];
+				switch ( random.nextInt(10) ) {
+					case 0 -> network.isolate(office);
+					case 1 -> network.rejoin(office);
+					case 2, 3 -> network.synchronize();
+					case 4, 5 -> review(office, random);
+					default -> {
+						work(compromised, random);       // the office that will turn is busy, before and after
+						work(office, random);
+					}
+				}
+			}
+
+			network.healAll();
+			network.synchronize();
+			assertConverged(offices[0], offices[1], offices[2], security);
+			setAside += security.setAside().size();
+			reviewed += (int) security.operations().stream().filter(op -> op instanceof TodoListDomain.TodoEvent.TodoChangeReviewed).count();
+		}
+		assertTrue(setAside > 0 && reviewed > 0, "the runs set operations aside (" + setAside + ") and reviewed changes (" + reviewed + ")");
+	}
+
+	@Test
 	void theOrderOperationsArriveInDoesNotMatter ( ) {
 		Random random = new Random(42);
 		TodoListServer[] writers = { replica("w1"), replica("w2"), replica("w3") };
@@ -89,6 +133,15 @@ class ConvergenceTest extends ReplicaTestSupport {
 			}
 			assertEquals(writers[0].state(), reader.state(), "the list after delivery order " + run);
 			assertConverged(writers[0], reader);
+		}
+	}
+
+	/** A reviewer on this office settles one change waiting for review, if there is one. */
+	private static void review ( TodoListServer office, Random random ) {
+		var pending = office.pendingReviews();
+		if ( !pending.isEmpty() ) {
+			var change = pending.get(random.nextInt(pending.size()));
+			office.reviewChange(change.todoId(), change.operationId(), random.nextBoolean() ? Verdict.CONFIRMED : Verdict.REVERTED);
 		}
 	}
 

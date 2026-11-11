@@ -43,7 +43,7 @@ class PeerToPeerTodoListTest extends ReplicaTestSupport {
 	void aChangeIsVisibleLocallyAtOnceAndEverywhereAfterSync ( ) {
 		TodoId todo = brussels.addTodo("Order coffee");
 
-		assertEquals(List.of(new TodoView(todo, "Order coffee", Set.of("Order coffee"), TodoStatus.PLANNED, Set.of(TodoStatus.PLANNED), false)), brussels.todos());
+		assertEquals(List.of(new TodoView(todo, "Order coffee", Set.of("Order coffee"), TodoStatus.PLANNED, Set.of(TodoStatus.PLANNED), false, false)), brussels.todos());
 		assertTrue(ghent.todos().isEmpty(), "nothing is sent until the replicas sync");
 
 		network.synchronize();

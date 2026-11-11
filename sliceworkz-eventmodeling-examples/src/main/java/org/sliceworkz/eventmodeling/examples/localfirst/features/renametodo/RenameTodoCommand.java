@@ -43,6 +43,7 @@ public record RenameTodoCommand ( ReplicaId replica, TodoId todoId, String title
 		BusinessException.when(title == null || title.isBlank(), "A to-do needs a title");
 		var todo = state.todo(todoId);
 		BusinessException.when(todo.isEmpty(), "To-do " + todoId.value() + " does not exist");
+		BusinessException.when(todo.get().underReview(), "To-do '" + todo.get().displayTitle() + "' has changes made on compromised input awaiting review");
 		BusinessException.when(todo.get().inConflict(), "To-do '" + todo.get().displayTitle() + "' was renamed concurrently; settle its title first");
 		BusinessException.when(todo.get().resolvedStatus() == TodoStatus.DROPPED, "To-do '" + todo.get().displayTitle() + "' is DROPPED");
 		BusinessException.when(title.strip().equals(todo.get().agreedTitle()), "To-do is already called '" + title.strip() + "'");

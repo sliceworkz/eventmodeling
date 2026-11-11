@@ -46,6 +46,7 @@ public record SettleTodoTitleCommand ( ReplicaId replica, TodoId todoId, String 
 		BusinessException.when(title == null || title.isBlank(), "A to-do needs a title");
 		var todo = state.todo(todoId);
 		BusinessException.when(todo.isEmpty(), "To-do " + todoId.value() + " does not exist");
+		BusinessException.when(todo.get().underReview(), "To-do '" + todo.get().displayTitle() + "' has changes made on compromised input awaiting review");
 		BusinessException.when(!todo.get().inConflict(), "To-do '" + todo.get().displayTitle() + "' has no conflicting titles to settle");
 		BusinessException.when(state.titleTakenByAnother(title.strip(), todoId), "There already is a to-do '" + title.strip() + "'");
 

@@ -21,6 +21,7 @@ import java.util.TreeSet;
 
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.Verdict;
 
 /**
  * Three offices, each with its own to-do list server, working through a network outage.
@@ -34,9 +35,10 @@ public class LocalFirstTodoExample {
 	public static void main ( String[] args ) {
 		try ( TodoListServer brussels = TodoListServer.named("brussels");
 			  TodoListServer ghent = TodoListServer.named("ghent");
-			  TodoListServer antwerp = TodoListServer.named("antwerp") ) {
+			  TodoListServer antwerp = TodoListServer.named("antwerp");
+			  TodoListServer security = TodoListServer.named(TodoListDomain.SECURITY_OFFICE.value()) ) {
 
-			Network network = Network.peerToPeer(brussels, ghent, antwerp);
+			Network network = Network.peerToPeer(brussels, ghent, antwerp, security);
 
 			TodoId coffee = brussels.addTodo("Order coffee");
 			TodoId paper = ghent.addTodo("Buy paper");
@@ -67,6 +69,23 @@ public class LocalFirstTodoExample {
 			ghent.markTodoOngoing(paper);
 			network.synchronize();
 			print("4. ghent settled the title and started the to-do; everyone has it", brussels, ghent, antwerp);
+
+			long takenOverAfter = brussels.versionVector().counterOf(brussels.replica());
+			TodoId keys = antwerp.todos().stream().filter(t -> "Copy keys".equals(t.title())).findFirst().orElseThrow().todoId();
+			brussels.renameTodo(keys, "Copy the master keys");  // brussels has been taken over
+			brussels.markTodoOngoing(coffee);
+			network.synchronize();
+			ghent.markTodoDone(coffee);                           // honest, but possible only because brussels started it
+			network.synchronize();
+			security.distrustReplica(brussels.replica(), takenOverAfter, "office taken over");
+			network.synchronize();
+			print("5. brussels was taken over; the security office distrusts it from operation " + (takenOverAfter + 1) + " on", brussels, ghent, antwerp);
+			ghent.setAside().forEach(a -> System.out.println("  set aside: " + a.decidedBy() + " " + a.change() + " (" + a.why() + ")"));
+			ghent.pendingReviews().forEach(p -> System.out.println("  awaiting review: " + p.decidedBy() + " " + p.change() + " (" + p.operationId() + ")"));
+
+			antwerp.reviewChange(coffee, ghent.pendingReviews().get(0).operationId(), Verdict.REVERTED);
+			network.synchronize();
+			print("6. antwerp reverted ghent's change; nothing of the takeover is left", brussels, ghent, antwerp);
 		}
 	}
 
@@ -78,7 +97,8 @@ public class LocalFirstTodoExample {
 			replica.state().forEach(t -> System.out.println("     "
 					+ (t.inConflict() ? "TITLE IN CONFLICT " + new TreeSet<>(t.concurrentTitles()) : t.title())
 					+ ": " + t.status()
-					+ (t.concurrentStatuses().size() > 1 ? "   (concurrent statuses: " + new TreeSet<>(t.concurrentStatuses()) + ")" : "")));
+					+ (t.concurrentStatuses().size() > 1 ? "   (concurrent statuses: " + new TreeSet<>(t.concurrentStatuses()) + ")" : "")
+					+ (t.underReview() ? "   UNDER REVIEW" : "")));
 		}
 	}
 

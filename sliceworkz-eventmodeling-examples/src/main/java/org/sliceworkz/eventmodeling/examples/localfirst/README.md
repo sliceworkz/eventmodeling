@@ -17,6 +17,7 @@ replicas talk.
 | causal delivery | `TodoListServer.receive` buffers an operation until what it was decided on is there |
 | anti-entropy | `ReplicationLogReadModel.missingAt(peerClock)`, exchanged by `Network.sync` |
 | state | `TodoListFold`, shared by the decision model and the `TodoListReadModel` |
+| a compromised replica | `ReplicaDistrusted` from the security office; its later operations set aside, dependent honest changes reviewed |
 | conflict resolution | a `MultiValueRegister` per to-do title and per status; concurrent statuses settled by a business rule, concurrent renames a conflict a person settles |
 
 **Operations are replicated, not commands.** The command runs once, where the user is, against what that
@@ -42,6 +43,33 @@ know of it; an office that has not synced yet works on, and its status changes c
 settle the same conflict while apart: on the same title that ends it, on different titles it is a new
 conflict, to be settled again.
 
+**A replica taken over.** The security office (`TodoListDomain.SECURITY_OFFICE`) can declare an office
+distrusted from one of its operations on (`DistrustReplica`, raising `ReplicaDistrusted`). The cut is in
+CRDT coordinates, `(replica, operation number)`: event ids differ per replica, and the compromised office's
+clock cannot be believed. A declaration from any other replica counts for nothing, and a cut only ever
+moves earlier, so declarations converge like everything else. What follows, all computed by
+`TodoListFold` from the set of operations held, so every replica agrees:
+
+- every later operation of the distrusted office is **set aside**: kept in every store as forensic record,
+  left out of the to-do list. A write it had overwritten counts again
+- an honest change whose causal past holds a set-aside operation on the same to-do is **suspect**, and so is
+  one built on a suspect change. The vector clock says what was *seen*; narrowing it to the change's own
+  to-do is what keeps the list short (a to-do is these commands' consistency boundary, apart from the title
+  uniqueness check)
+- a suspect change whose rule still holds on its to-do as it stood in its causal past, without the set-aside
+  operations, **stands** unreviewed: starting a to-do the attacker only renamed
+- one whose rule no longer holds **waits for a reviewer** (`CompromiseReviewReadModel`) and blocks its to-do,
+  like a title conflict: finishing a to-do only the attacker had started, settling a title on the attacker's
+  rename. `ReviewTodoChange` confirms it or reverts it; a reverted change is set aside too, and what was built
+  on it is judged again. Two reviewers disagreeing while apart: revert wins
+- honest work on a to-do only the attacker created is set aside with it
+
+What this proof of concept trusts, and a real one cannot: the origin an operation claims. Without every
+operation signed by its office, an attacker can stamp operations as another office, or as the security
+office; without each office's operations chained by hash, it can send different operations under one number
+to different offices, which never converge. Effects outside the system (an e-mail, a payment) are not undone
+by setting an operation aside, and need compensating actions.
+
 **What local first cannot give you.** A rule over one replica's own operations holds. A rule over several
 (no two open to-dos with the same title) holds per replica, but two offices adding the same title while
 apart both succeed. `PeerToPeerTodoListTest.aRuleOverSeveralOperationsHoldsLocallyButNotAcrossAPartition`
@@ -54,8 +82,11 @@ shows it: such a rule needs coordination, or a compensating step once the confli
 - `CentralServerTodoListTest`: offices linked to a central replica only, which relays and decides nothing
 - `TodoConflictTest`: a title conflict shown everywhere, actions refused, settled on one of the titles or a
   new one, settled twice alike and differently, and the offices that had not heard of it
+- `CompromisedReplicaTest`: an office taken over, its operations set aside, honest work standing or waiting
+  for review, confirmed, reverted, judged again, and declarations from anyone but the security office ignored
 - `ConvergenceTest`: random work under random partitions in both topologies, and the operations of a run
-  delivered to fresh replicas in shuffled, duplicated batches; every replica ends in the same state
+  delivered to fresh replicas in shuffled, duplicated batches, and random work with an office taken over
+  partway and reviews along the way; every replica ends in the same state
 - `crdt/VectorClockTest`, `crdt/MultiValueRegisterTest`: the building blocks
 
 ## Where this would go next

@@ -28,7 +28,14 @@ import org.sliceworkz.eventmodeling.commands.Execution;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoEvent;
 import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.TodoId;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListDomain.Verdict;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListFold.Distrust;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListFold.PendingReview;
+import org.sliceworkz.eventmodeling.examples.localfirst.TodoListFold.SetAside;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.compromisereview.CompromiseReviewReadModel;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.distrustreplica.DistrustReplicaCommand;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.renametodo.RenameTodoCommand;
+import org.sliceworkz.eventmodeling.examples.localfirst.features.reviewtodochange.ReviewTodoChangeCommand;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.settletodotitle.SettleTodoTitleCommand;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.todoconflicts.TodoConflictsReadModel;
 import org.sliceworkz.eventmodeling.examples.localfirst.features.todoconflicts.TodoConflictsReadModel.TodoConflict;
@@ -117,7 +124,35 @@ public final class TodoListServer implements AutoCloseable {
 		context.execute(new SettleTodoTitleCommand(replica, todoId, title), Execution.retrying());
 	}
 
+	/** The security office declares {@code distrusted} taken over after its operation number {@code trustedUpTo}. */
+	public void distrustReplica ( ReplicaId distrusted, long trustedUpTo, String reason ) {
+		context.execute(new DistrustReplicaCommand(replica, distrusted, trustedUpTo, reason), Execution.retrying());
+	}
+
+	/** A reviewer confirms or reverts a change made on compromised input. */
+	public void reviewChange ( TodoId todoId, String operationId, Verdict verdict ) {
+		context.execute(new ReviewTodoChangeCommand(replica, todoId, operationId, verdict), Execution.retrying());
+	}
+
 	// ------------------------------------------------------------------------------------- reads
+
+	public List<Distrust> distrusted ( ) {
+		return review().distrusted();
+	}
+
+	/** The operations held but left out: decided by a distrusted replica, reverted, or about a to-do only those created. */
+	public List<SetAside> setAside ( ) {
+		return review().setAside();
+	}
+
+	/** The changes made on compromised input that wait for a reviewer, as far as this replica knows. */
+	public List<PendingReview> pendingReviews ( ) {
+		return review().pendingReviews();
+	}
+
+	private CompromiseReviewReadModel review ( ) {
+		return context.read(CompromiseReviewReadModel.class);
+	}
 
 	/** The to-dos waiting for someone to settle their title, as far as this replica knows. */
 	public List<TodoConflict> conflicts ( ) {
@@ -178,7 +213,7 @@ public final class TodoListServer implements AutoCloseable {
 					waiting.remove(operation.stamp().operationId());
 				} else if ( operation.stamp().deliverableAt(local) ) {
 					String key = operation.stamp().operationId();
-					context.event(EphemeralEvent.of(operation, TodoListDomain.tagsOf(operation.todoId(), operation.stamp().origin()))
+					context.event(EphemeralEvent.of(operation, TodoListDomain.tagsOf(operation))
 							.withIdempotencyKey(key));
 					local = local.mergedWith(operation.stamp().clock());
 					waiting.remove(key);

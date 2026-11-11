@@ -43,8 +43,11 @@ public class TodoListReadModel implements ReadModel<TodoEvent> {
 	 * <p>{@code concurrentTitles} holds more than one title when replicas renamed it differently without
 	 * knowing about each other. That is a conflict: {@code inConflict} is set and {@code title} is
 	 * {@code null}, as there is no agreed title until a person settles it.
+	 *
+	 * <p>{@code underReview} says a change was made on it on input from a replica since found compromised,
+	 * and no longer holds without that input: a reviewer has to confirm or revert it first.
 	 */
-	public record TodoView ( TodoId todoId, String title, Set<String> concurrentTitles, TodoStatus status, Set<TodoStatus> concurrentStatuses, boolean inConflict ) { }
+	public record TodoView ( TodoId todoId, String title, Set<String> concurrentTitles, TodoStatus status, Set<TodoStatus> concurrentStatuses, boolean inConflict, boolean underReview ) { }
 
 	private final TodoListFold fold = new TodoListFold();
 
@@ -66,7 +69,7 @@ public class TodoListReadModel implements ReadModel<TodoEvent> {
 	/** Every to-do, the dropped ones included: what two replicas compare to tell they converged. */
 	public List<TodoView> everything ( ) {
 		return fold.todos().stream()
-				.map(t -> new TodoView(t.todoId(), t.agreedTitle(), t.title().values(), t.resolvedStatus(), t.status().values(), t.inConflict()))
+				.map(t -> new TodoView(t.todoId(), t.agreedTitle(), t.title().values(), t.resolvedStatus(), t.status().values(), t.inConflict(), t.underReview()))
 				.toList();
 	}
 

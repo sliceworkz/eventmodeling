@@ -63,6 +63,16 @@ public class ReplicaStateDecisionModel implements DecisionModel<TodoEvent> {
 				.anyMatch(t -> t.title().values().stream().anyMatch(title::equalsIgnoreCase));
 	}
 
+	/** The cut from which the security office distrusts a replica, if it does. */
+	public Optional<Long> distrustedAfter ( ReplicaId replica ) {
+		return fold.distrust(replica).map(TodoListFold.Distrust::trustedUpTo);
+	}
+
+	/** Whether this change waits for a reviewer, as far as this replica knows. */
+	public boolean pendingReview ( TodoId todoId, String operationId ) {
+		return fold.pendingReviews().stream().anyMatch(p -> p.todoId().equals(todoId) && p.operationId().equals(operationId));
+	}
+
 	/** The stamp of the operation this replica raises next, based on everything it has seen. */
 	public OperationStamp nextStamp ( ReplicaId replica ) {
 		return OperationStamp.next(replica, fold.seen());

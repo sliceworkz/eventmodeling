@@ -53,6 +53,9 @@ abstract class ReplicaTestSupport {
 			assertEquals(first.versionVector(), other.versionVector(), "the version vectors of " + first.replica() + " and " + other.replica());
 			assertEquals(first.state(), other.state(), "the to-do lists of " + first.replica() + " and " + other.replica());
 			assertEquals(first.conflicts(), other.conflicts(), "the conflicts known to " + first.replica() + " and " + other.replica());
+			assertEquals(first.distrusted(), other.distrusted(), "the replicas distrusted by " + first.replica() + " and " + other.replica());
+			assertEquals(first.setAside(), other.setAside(), "the operations set aside by " + first.replica() + " and " + other.replica());
+			assertEquals(first.pendingReviews(), other.pendingReviews(), "the changes awaiting review on " + first.replica() + " and " + other.replica());
 			assertEquals(0, other.waitingOperations(), "operations still waiting on " + other.replica());
 		}
 	}

@@ -162,9 +162,12 @@ domain events (not their commands) as CRDT operations stamped with a vector cloc
 exactly once through the operation id as idempotency key. `localfirst/README.md` maps the CRDT concepts onto
 the framework's. Concurrent status changes settle themselves by a business rule (a drop wins, otherwise the
 earliest state); concurrent renames to different titles are a conflict, listed by `TodoConflictsReadModel`,
-blocking every command on the to-do until `SettleTodoTitleCommand` settles the title.
-`PeerToPeerTodoListTest`, `CentralServerTodoListTest`, `TodoConflictTest` and `ConvergenceTest` pin convergence
-under partitions, concurrent changes, conflicts and any delivery order.
+blocking every command on the to-do until `SettleTodoTitleCommand` settles the title. The security office can
+declare a replica taken over from one of its operations on (`DistrustReplicaCommand`): its later operations are
+set aside everywhere, and honest changes built on them that no longer hold wait for `ReviewTodoChangeCommand`.
+`PeerToPeerTodoListTest`, `CentralServerTodoListTest`, `TodoConflictTest`, `CompromisedReplicaTest` and
+`ConvergenceTest` pin convergence under partitions, concurrent changes, conflicts, a compromised replica and any
+delivery order.
 
 ## Architecture Patterns
 

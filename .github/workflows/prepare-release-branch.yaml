@@ -32,9 +32,17 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+          server-id: cloudrepo
+          server-username-env-var: CLOUDREPO_USERNAME
+          server-password-env-var: CLOUDREPO_PASSWORD
       
+      # The cloudrepo credentials for every step running Maven: the eventstore this project builds on is a
+      # SNAPSHOT that only the sliceworkz cloudrepo holds (see the repository in pom.xml)
       - name: Extract current version
         id: current_version
+        env:
+          CLOUDREPO_USERNAME: ${{ secrets.CLOUDREPO_USERNAME }}
+          CLOUDREPO_PASSWORD: ${{ secrets.CLOUDREPO_PASSWORD }}
         run: |
           CURRENT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout | grep -v '\[')
           echo "Current version: $CURRENT_VERSION"
@@ -103,6 +111,9 @@ jobs:
           git checkout develop
       
       - name: Set next development version on develop
+        env:
+          CLOUDREPO_USERNAME: ${{ secrets.CLOUDREPO_USERNAME }}
+          CLOUDREPO_PASSWORD: ${{ secrets.CLOUDREPO_PASSWORD }}
         run: |
           NEXT_VERSION="${{ steps.new_versions.outputs.next_major }}.${{ steps.new_versions.outputs.next_minor }}.0-SNAPSHOT"
           mvn versions:set -DnewVersion=$NEXT_VERSION -DprocessAllModules

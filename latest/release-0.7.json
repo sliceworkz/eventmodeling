@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-11T08:42:17+01:00",
+  "runAt": "2026-11-12T09:12:50+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.7",
   "commit": "51f63040c9d94d20d97933b7529dceec18f06fc7",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/42981387592",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43181053361",
   "dryRun": false,
   "policy": {
     "pattern": "release/*",
@@ -501,9 +501,9 @@
       "action": "pr",
       "level": "minor",
       "transitive": false,
-      "commit": "777d516bf6ac87beec2d780cd174aab654760e1a",
+      "commit": "a5c23485f079347753296180f3bc8d949a4fecf5",
       "error": null,
-      "outcome": "pr-updated",
+      "outcome": "unchanged",
       "pr": 241,
       "changes": [
         {
@@ -556,7 +556,7 @@
       "url": "https://github.com/sliceworkz/eventmodeling/pull/241",
       "head": "deps/release/0.7/minor",
       "title": "Minor dependency updates on release/0.7",
-      "ci": "none",
+      "ci": "green",
       "autoMerge": false
     }
   ],
@@ -566,7 +566,7 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-11T06:21:32Z",
+    "dbBuilt": "2026-11-12T06:20:58Z",
     "sbomOrigin": "saved by the previous run (branch head unchanged)",
     "sboms": [
       "maven"

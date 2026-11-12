@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-11T09:23:20+01:00",
+  "runAt": "2026-11-12T09:50:05+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "develop",
-  "commit": "6bfc851ccb5f86d3e39ca16e927fd4eeccae0508",
+  "commit": "88f3f084c3e0e18d096c4a2f0fb4a0708d8dcea2",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/42986584644",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43186150366",
   "dryRun": false,
   "policy": {
     "pattern": "develop",
@@ -42,7 +42,7 @@
       "ecosystem": "maven",
       "name": "maven.maven-versions-plugin.version",
       "where": "pom.xml",
-      "current": "2.24.0",
+      "current": "2.25.1",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:versions-maven-plugin"
@@ -379,70 +379,17 @@
       "newest": "3.6.2"
     }
   ],
-  "updates": [
-    {
-      "ecosystem": "maven",
-      "name": "maven.maven-versions-plugin.version",
-      "where": "pom.xml",
-      "current": "2.24.0",
-      "kind": "property",
-      "artifacts": [
-        "org.codehaus.mojo:versions-maven-plugin"
-      ],
-      "own": false,
-      "group": null,
-      "level": "minor",
-      "target": "2.25.1",
-      "action": "merge",
-      "batch": "auto",
-      "published": "2026-11-09",
-      "outcome": "planned"
-    }
-  ],
-  "batches": [
-    {
-      "key": "auto",
-      "branch": "deps/develop/auto",
-      "action": "merge",
-      "level": "merge",
-      "transitive": false,
-      "commit": "2e2bf01ea7473cf864fa616932b18322a39c4ef5",
-      "error": null,
-      "outcome": "pr-opened",
-      "pr": 248,
-      "changes": [
-        {
-          "ecosystem": "maven",
-          "name": "maven.maven-versions-plugin.version",
-          "where": "pom.xml",
-          "level": "minor",
-          "from": "2.24.0",
-          "to": "2.25.1",
-          "applied": true,
-          "error": null
-        }
-      ],
-      "lockfileChanges": []
-    }
-  ],
-  "pullRequests": [
-    {
-      "number": 248,
-      "url": "https://github.com/sliceworkz/eventmodeling/pull/248",
-      "head": "deps/develop/auto",
-      "title": "Dependency updates on develop",
-      "ci": "pending",
-      "autoMerge": true
-    }
-  ],
+  "updates": [],
+  "batches": [],
+  "pullRequests": [],
   "closedPullRequests": [],
   "deletedBranches": [],
   "declined": [],
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-11T06:21:32Z",
-    "sbomOrigin": "ci-artifact (run 42856844082)",
+    "dbBuilt": "2026-11-12T06:20:58Z",
+    "sbomOrigin": "ci-artifact (run 42987472618)",
     "sboms": [
       "library",
       "test-kit"

@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-12T09:12:52+01:00",
+  "runAt": "2026-11-13T08:49:10+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.8",
-  "commit": "d6ddac63d6d1e465928e6024db84b259c639f4fd",
+  "commit": "f55dbe93b277796d9159d890738dc88a9d82e7c8",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43181053361",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43388428747",
   "dryRun": false,
   "policy": {
     "pattern": "release/*",
@@ -41,6 +41,10 @@
     "tagDate": "2026-10-23T06:26:02Z",
     "dependencyUpdates": [
       {
+        "commit": "f55dbe93b277796d9159d890738dc88a9d82e7c8",
+        "subject": "Minor dependency updates (#247)"
+      },
+      {
         "commit": "d6ddac63d6d1e465928e6024db84b259c639f4fd",
         "subject": "Minor dependency updates (#240)"
       },
@@ -60,7 +64,7 @@
       "ecosystem": "maven",
       "name": "maven.maven-versions-plugin.version",
       "where": "pom.xml",
-      "current": "2.24.0",
+      "current": "2.25.1",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:versions-maven-plugin"
@@ -158,7 +162,7 @@
       ],
       "own": true,
       "group": null,
-      "newest": "0.12.0"
+      "newest": "0.13.0"
     },
     {
       "ecosystem": "maven",
@@ -400,67 +404,33 @@
   "updates": [
     {
       "ecosystem": "maven",
-      "name": "maven.maven-versions-plugin.version",
+      "name": "sliceworkz.eventstore.version",
       "where": "pom.xml",
-      "current": "2.24.0",
+      "current": "0.12.0",
       "kind": "property",
       "artifacts": [
-        "org.codehaus.mojo:versions-maven-plugin"
+        "org.sliceworkz:sliceworkz-eventstore-bom"
       ],
-      "own": false,
+      "own": true,
       "group": null,
-      "level": "minor",
-      "target": "2.25.1",
-      "action": "pr",
-      "batch": "minor",
-      "published": "2026-11-09",
-      "outcome": "planned"
+      "level": "major",
+      "target": "0.13.0",
+      "action": "mention",
+      "batch": null,
+      "published": null,
+      "outcome": "mentioned"
     }
   ],
-  "batches": [
-    {
-      "key": "minor",
-      "branch": "deps/release/0.8/minor",
-      "action": "pr",
-      "level": "minor",
-      "transitive": false,
-      "commit": "2dca97095af634c578838ad10fea82cd71e1f9e9",
-      "error": null,
-      "outcome": "unchanged",
-      "pr": 247,
-      "changes": [
-        {
-          "ecosystem": "maven",
-          "name": "maven.maven-versions-plugin.version",
-          "where": "pom.xml",
-          "level": "minor",
-          "from": "2.24.0",
-          "to": "2.25.1",
-          "applied": true,
-          "error": null
-        }
-      ],
-      "lockfileChanges": []
-    }
-  ],
-  "pullRequests": [
-    {
-      "number": 247,
-      "url": "https://github.com/sliceworkz/eventmodeling/pull/247",
-      "head": "deps/release/0.8/minor",
-      "title": "Minor dependency updates on release/0.8",
-      "ci": "green",
-      "autoMerge": false
-    }
-  ],
+  "batches": [],
+  "pullRequests": [],
   "closedPullRequests": [],
   "deletedBranches": [],
   "declined": [],
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-12T06:20:58Z",
-    "sbomOrigin": "saved by the previous run (branch head unchanged)",
+    "dbBuilt": "2026-11-13T06:20:21Z",
+    "sbomOrigin": "built by this run",
     "sboms": [
       "maven"
     ],

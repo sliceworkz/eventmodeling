@@ -20,6 +20,8 @@ package org.sliceworkz.eventmodeling.examples.banking;
 import java.time.LocalDate;
 import org.sliceworkz.eventmodeling.domain.Entity;
 import org.sliceworkz.eventmodeling.domain.EntityId;
+import org.sliceworkz.eventstore.events.Tagged;
+import org.sliceworkz.eventstore.events.Tags;
 
 
 public interface BankingDomain {
@@ -31,9 +33,15 @@ public interface BankingDomain {
 	public static final Entity<CustomerId> CUSTOMER = Entity.of("customer", CustomerId::new);
 	
 	
-	public sealed interface BankingDomainEvent {
+	/** Every domain event states the tags it is about, so a command raises it without repeating them. */
+	public sealed interface BankingDomainEvent extends Tagged {
 		
-		public record AccountOpened ( AccountId accountId, CustomerId customerId, LocalDate date ) implements BankingDomainEvent { } 
+		public record AccountOpened ( AccountId accountId, CustomerId customerId, LocalDate date ) implements BankingDomainEvent {
+			@Override
+			public Tags eventTags ( ) {
+				return Tags.of(ACCOUNT.tag(accountId), CUSTOMER.tag(customerId));
+			}
+		}
 		
 	}
 

@@ -79,6 +79,13 @@ acceptable. It belongs in the command's constructor (or the top of `execute`, be
 `CommandFailed` that anyone needs to alert on. `IllegalArgumentException` is the right type: the
 caller sent garbage, and retrying the identical request can never succeed.
 
+The tags an event is stored with are part of the request too. An event that states its own tags
+(the eventstore's `Tagged`) declares how many it must carry per key, and a command that raises it
+without a tag its payload does not hold — a channel, an entity the event is about but does not carry —
+fails with `IllegalArgumentException` where it raised the event, before anything is appended. Without
+the requirement that mistake is silent: the event is stored, matches no consistency boundary that
+selects by the missing tag, and a later decision that should have conflicted is admitted.
+
 If the check needs a value object anyway, step 1 already did the work — a constructor taking
 `EmailAddress` instead of `String` cannot receive a malformed email.
 
@@ -285,6 +292,7 @@ retries the design promises will happen.
 | Business rule with an enforcement level | judged after the command ran | a rule people may break under conditions | `RuleViolationException` (a `BusinessException`) unless overridden, or recorded on the events — see [BUSINESS-RULES.md](BUSINESS-RULES.md) | no — override, or change the request |
 | DCB append check | inside the append | facts newer than the decision | `OptimisticLockingException` | yes — re-execute (`Execution.retrying()`, bounded attempts) |
 | Empty boundary (uniqueness) | inside the append | a concurrent duplicate claim | `OptimisticLockingException` | re-execute; then rejected by the check — under `Execution.retrying()` the re-decide's `BusinessException` propagates as the outcome |
+| Tag requirement (`Tagged.tagRequirements()`) | where the command raises the event, and again on append | an event missing a tag its consistency boundaries select it by, or carrying one too many | `IllegalArgumentException`, nothing stored | no — pass the tag |
 | Idempotency key | inside the append | the same request twice | empty result, silently | no — already done |
 | Automation `onFailure` | after an effect failed | a failing external effect | `AutomationFailureAction` + an event | per the action |
 

@@ -20,7 +20,6 @@ package org.sliceworkz.eventmodeling.examples.banking.features.freezeaccount;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountAccess.AccountFrozen;
@@ -53,7 +52,7 @@ public record FreezeAccountCommand ( AccountId accountId, String reason ) implem
 		BusinessException.when(account.closed(), "Account " + accountId.value() + " is closed");
 		BusinessException.when(account.frozen(), "Account " + accountId.value() + " is already frozen");
 
-		result.raiseEvent(new AccountFrozen(accountId, reason.strip()), BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
+		result.raiseEvent(new AccountFrozen(accountId, reason.strip()));
 	}
 
 }

@@ -28,6 +28,8 @@ import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.EnforcementLevel;
 import org.sliceworkz.eventmodeling.rules.RuleFollowUp;
 import org.sliceworkz.eventmodeling.rules.RuleViolation;
+import org.sliceworkz.eventstore.events.Tagged;
+import org.sliceworkz.eventstore.events.Tags;
 
 
 /**
@@ -180,7 +182,12 @@ public interface BankingDomainWithClosingTheBooks {
 	 * Notice how the events form a natural lifecycle:
 	 * AccountOpened → (MoneyDeposited | MoneyWithdrawn)* → MonthClosed → MonthOpened → ...
 	 */
-	sealed interface BankingEvent {
+	/**
+	 * Every domain event states the tags it is about ({@link Tagged#eventTags()}): its account, and the
+	 * month or card it concerns. The store merges them into whatever a command passes, so a command raises
+	 * an event without repeating them, and a test seeding history tags it as production does.
+	 */
+	sealed interface BankingEvent extends Tagged {
 
 		/**
 		 * An account was opened. This is also the implicit start of the first period.
@@ -190,7 +197,12 @@ public interface BankingDomainWithClosingTheBooks {
 			CustomerId customerId,
 			YearMonth initialMonth,
 			LocalDate date
-		) implements BankingEvent {}
+		) implements BankingEvent {
+			@Override
+			public Tags eventTags ( ) {
+				return Tags.of(ACCOUNT.tag(accountId), MONTH.tag(monthId(initialMonth)));
+			}
+		}
 
 		/**
 		 * Money was deposited into the account during the current period.
@@ -215,6 +227,11 @@ public interface BankingDomainWithClosingTheBooks {
 			/** A deposit that violated no rule. */
 			public MoneyDeposited ( AccountId accountId, YearMonth month, BigDecimal amount, String description ) {
 				this(accountId, month, amount, description, List.of());
+			}
+
+			@Override
+			public Tags eventTags ( ) {
+				return Tags.of(ACCOUNT.tag(accountId), MONTH.tag(monthId(month)));
 			}
 		}
 
@@ -242,6 +259,11 @@ public interface BankingDomainWithClosingTheBooks {
 			public MoneyWithdrawn ( AccountId accountId, YearMonth month, BigDecimal amount, String description ) {
 				this(accountId, month, amount, description, List.of());
 			}
+
+			@Override
+			public Tags eventTags ( ) {
+				return Tags.of(ACCOUNT.tag(accountId), MONTH.tag(monthId(month)));
+			}
 		}
 
 		// ── Closing The Books events ─────────────────────────────────
@@ -263,7 +285,12 @@ public interface BankingDomainWithClosingTheBooks {
 			BigDecimal totalWithdrawals,
 			int transactionCount,
 			LocalDate closedOn
-		) implements BankingEvent {}
+		) implements BankingEvent {
+			@Override
+			public Tags eventTags ( ) {
+				return Tags.of(ACCOUNT.tag(accountId), MONTH.tag(monthId(month)));
+			}
+		}
 
 		/**
 		 * A new month was opened, carrying forward the balance from the previous period.
@@ -274,7 +301,12 @@ public interface BankingDomainWithClosingTheBooks {
 			YearMonth month,
 			BigDecimal carryForwardBalance,
 			YearMonth previousMonth
-		) implements BankingEvent {}
+		) implements BankingEvent {
+			@Override
+			public Tags eventTags ( ) {
+				return Tags.of(ACCOUNT.tag(accountId), MONTH.tag(monthId(month)));
+			}
+		}
 
 		// ── Rulebook follow-ups ──────────────────────────────────────
 
@@ -287,6 +319,11 @@ public interface BankingDomainWithClosingTheBooks {
 
 			/** @return the account the follow-up concerns */
 			AccountId accountId();
+
+			@Override
+			default Tags eventTags ( ) {
+				return Tags.of(ACCOUNT.tag(accountId()));
+			}
 
 			/**
 			 * A teller justified, afterwards, a withdrawal that went ahead under a post-justified override.
@@ -333,12 +370,22 @@ public interface BankingDomainWithClosingTheBooks {
 			/** @return the account the fact concerns */
 			AccountId accountId();
 
+			@Override
+			default Tags eventTags ( ) {
+				return Tags.of(ACCOUNT.tag(accountId()));
+			}
+
 			/** A card was issued on the account. Tagged with the account and the card. */
 			record CardIssued(
 				AccountId accountId,
 				CardId cardId,
 				LocalDate issuedOn
-			) implements AccountAccess {}
+			) implements AccountAccess {
+				@Override
+				public Tags eventTags ( ) {
+					return Tags.of(ACCOUNT.tag(accountId), CARD.tag(cardId));
+				}
+			}
 
 			/** The account was frozen: no new cards, and the cards it has are blocked. */
 			record AccountFrozen(
@@ -357,7 +404,12 @@ public interface BankingDomainWithClosingTheBooks {
 				AccountId accountId,
 				CardId cardId,
 				String reason
-			) implements AccountAccess {}
+			) implements AccountAccess {
+				@Override
+				public Tags eventTags ( ) {
+					return Tags.of(ACCOUNT.tag(accountId), CARD.tag(cardId));
+				}
+			}
 		}
 	}
 

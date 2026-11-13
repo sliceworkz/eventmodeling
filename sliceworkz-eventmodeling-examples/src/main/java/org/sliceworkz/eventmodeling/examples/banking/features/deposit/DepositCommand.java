@@ -27,7 +27,6 @@ import java.math.BigDecimal;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MoneyDeposited;
@@ -96,9 +95,7 @@ public record DepositCommand ( AccountId accountId, BigDecimal amount, String de
 
 		// Tag with both account identity AND period identity
 		result.raiseEvent(
-			new MoneyDeposited(accountId, period.activeMonth(), amount, description, context.ruleViolations()),
-			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
-				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(period.activeMonth()))
+			new MoneyDeposited(accountId, period.activeMonth(), amount, description, context.ruleViolations())   // tagged by the event itself
 			);
 	}
 }

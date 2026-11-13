@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-12T09:12:50+01:00",
+  "runAt": "2026-11-13T08:49:07+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.7",
-  "commit": "51f63040c9d94d20d97933b7529dceec18f06fc7",
+  "commit": "3f8f174499a4df11ab0fb982b72c826f2ada43fb",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43181053361",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43388428747",
   "dryRun": false,
   "policy": {
     "pattern": "release/*",
@@ -39,7 +39,12 @@
   "release": {
     "lastTag": "v0.7.2",
     "tagDate": "2026-11-08T19:59:56Z",
-    "dependencyUpdates": [],
+    "dependencyUpdates": [
+      {
+        "commit": "3f8f174499a4df11ab0fb982b72c826f2ada43fb",
+        "subject": "Minor dependency updates (#241)"
+      }
+    ],
     "otherChanges": 0
   },
   "inventory": [
@@ -47,7 +52,7 @@
       "ecosystem": "maven",
       "name": "maven.maven-versions-plugin.version",
       "where": "pom.xml",
-      "current": "2.23.0",
+      "current": "2.25.1",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:versions-maven-plugin"
@@ -112,7 +117,7 @@
       "ecosystem": "maven",
       "name": "maven.flatten-plugin.version",
       "where": "pom.xml",
-      "current": "1.8.0",
+      "current": "1.9.0",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:flatten-maven-plugin"
@@ -145,13 +150,13 @@
       ],
       "own": true,
       "group": null,
-      "newest": "0.12.0"
+      "newest": "0.13.0"
     },
     {
       "ecosystem": "maven",
       "name": "jackson.version",
       "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-      "current": "3.2.4",
+      "current": "3.3.0",
       "kind": "property",
       "artifacts": [
         "tools.jackson.core:jackson-databind"
@@ -164,7 +169,7 @@
       "ecosystem": "maven",
       "name": "jackson-annotations.version",
       "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-      "current": "2.22",
+      "current": "2.23",
       "kind": "property",
       "artifacts": [
         "com.fasterxml.jackson.core:jackson-annotations"
@@ -387,24 +392,6 @@
   "updates": [
     {
       "ecosystem": "maven",
-      "name": "maven.maven-versions-plugin.version",
-      "where": "pom.xml",
-      "current": "2.23.0",
-      "kind": "property",
-      "artifacts": [
-        "org.codehaus.mojo:versions-maven-plugin"
-      ],
-      "own": false,
-      "group": null,
-      "level": "minor",
-      "target": "2.25.1",
-      "action": "pr",
-      "batch": "minor",
-      "published": "2026-11-09",
-      "outcome": "planned"
-    },
-    {
-      "ecosystem": "maven",
       "name": "maven.maven-central-publishing-plugin.version",
       "where": "pom.xml",
       "current": "0.11.1",
@@ -423,24 +410,6 @@
     },
     {
       "ecosystem": "maven",
-      "name": "maven.flatten-plugin.version",
-      "where": "pom.xml",
-      "current": "1.8.0",
-      "kind": "property",
-      "artifacts": [
-        "org.codehaus.mojo:flatten-maven-plugin"
-      ],
-      "own": false,
-      "group": null,
-      "level": "minor",
-      "target": "1.9.0",
-      "action": "pr",
-      "batch": "minor",
-      "published": "2026-11-06",
-      "outcome": "planned"
-    },
-    {
-      "ecosystem": "maven",
       "name": "sliceworkz.eventstore.version",
       "where": "pom.xml",
       "current": "0.11.4",
@@ -451,123 +420,23 @@
       "own": true,
       "group": null,
       "level": "major",
-      "target": "0.12.0",
+      "target": "0.13.0",
       "action": "mention",
       "batch": null,
       "published": null,
       "outcome": "mentioned"
-    },
-    {
-      "ecosystem": "maven",
-      "name": "jackson.version",
-      "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-      "current": "3.2.4",
-      "kind": "property",
-      "artifacts": [
-        "tools.jackson.core:jackson-databind"
-      ],
-      "own": false,
-      "group": null,
-      "level": "minor",
-      "target": "3.3.0",
-      "action": "pr",
-      "batch": "minor",
-      "published": "2026-11-08",
-      "outcome": "planned"
-    },
-    {
-      "ecosystem": "maven",
-      "name": "jackson-annotations.version",
-      "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-      "current": "2.22",
-      "kind": "property",
-      "artifacts": [
-        "com.fasterxml.jackson.core:jackson-annotations"
-      ],
-      "own": false,
-      "group": null,
-      "level": "minor",
-      "target": "2.23",
-      "action": "pr",
-      "batch": "minor",
-      "published": "2026-11-07",
-      "outcome": "planned"
     }
   ],
-  "batches": [
-    {
-      "key": "minor",
-      "branch": "deps/release/0.7/minor",
-      "action": "pr",
-      "level": "minor",
-      "transitive": false,
-      "commit": "a5c23485f079347753296180f3bc8d949a4fecf5",
-      "error": null,
-      "outcome": "unchanged",
-      "pr": 241,
-      "changes": [
-        {
-          "ecosystem": "maven",
-          "name": "maven.maven-versions-plugin.version",
-          "where": "pom.xml",
-          "level": "minor",
-          "from": "2.23.0",
-          "to": "2.25.1",
-          "applied": true,
-          "error": null
-        },
-        {
-          "ecosystem": "maven",
-          "name": "maven.flatten-plugin.version",
-          "where": "pom.xml",
-          "level": "minor",
-          "from": "1.8.0",
-          "to": "1.9.0",
-          "applied": true,
-          "error": null
-        },
-        {
-          "ecosystem": "maven",
-          "name": "jackson.version",
-          "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-          "level": "minor",
-          "from": "3.2.4",
-          "to": "3.3.0",
-          "applied": true,
-          "error": null
-        },
-        {
-          "ecosystem": "maven",
-          "name": "jackson-annotations.version",
-          "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-          "level": "minor",
-          "from": "2.22",
-          "to": "2.23",
-          "applied": true,
-          "error": null
-        }
-      ],
-      "lockfileChanges": []
-    }
-  ],
-  "pullRequests": [
-    {
-      "number": 241,
-      "url": "https://github.com/sliceworkz/eventmodeling/pull/241",
-      "head": "deps/release/0.7/minor",
-      "title": "Minor dependency updates on release/0.7",
-      "ci": "green",
-      "autoMerge": false
-    }
-  ],
+  "batches": [],
+  "pullRequests": [],
   "closedPullRequests": [],
   "deletedBranches": [],
   "declined": [],
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-12T06:20:58Z",
-    "sbomOrigin": "saved by the previous run (branch head unchanged)",
+    "dbBuilt": "2026-11-13T06:20:21Z",
+    "sbomOrigin": "built by this run",
     "sboms": [
       "maven"
     ],

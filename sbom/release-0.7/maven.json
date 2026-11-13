@@ -4,7 +4,7 @@
   "serialNumber" : "urn:uuid:ccf510f3-ee00-3687-ae68-b3a7f734d03c",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-11-09T13:01:26Z",
+    "timestamp" : "2026-11-13T07:49:32Z",
     "lifecycles" : [
       {
         "phase" : "build"
@@ -307,45 +307,45 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.22?type=jar",
+      "bom-ref" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar",
       "publisher" : "FasterXML",
       "group" : "com.fasterxml.jackson.core",
       "name" : "jackson-annotations",
-      "version" : "2.22",
+      "version" : "2.23",
       "description" : "Core annotations used for value types, used by Jackson data binding package.",
       "scope" : "optional",
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "04c11c456fd1e21b9a21c25c665109cc"
+          "content" : "78850750b7547966b8257217f9bd163d"
         },
         {
           "alg" : "SHA-1",
-          "content" : "15c67f9498d6934cff9510fc70c5a12e52290457"
+          "content" : "cce49304a57c900364a727847c98993ca332b7d5"
         },
         {
           "alg" : "SHA-256",
-          "content" : "21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0"
+          "content" : "e5b60c3088e0887b290ff9226394354589a1dad583743944b7f5538661056b4c"
         },
         {
           "alg" : "SHA-512",
-          "content" : "63b597ec02b4e31c57266d9b96f05f301f217bc12ffb7ba046a5658d2829728930a559947b98eb6c3cc448413a96b4939427aa669ae1e2dc3597ab5d5d287f9f"
+          "content" : "7c804e37df49c6485e84b5887d1a3173a11db53267aa29668b07537a901cc86882047552350e2e3457baf096783501bbd15ea4ffdab13cf57396d6f6d14d0d98"
         },
         {
           "alg" : "SHA-384",
-          "content" : "35b6fe651afeed54d1e6f7a39ac6cf6fdbafacdf2e3bdff7b29b965ccb79a0c53342a56bf0ecea4d6c4c4651b1d6aa19"
+          "content" : "5df8857d35b2453f46662ed43b18967fb19f6d98ba6c8877b1ccc031fd5fac223f086bdf4e855ab1d42bd1176a1ae8e0"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "72267dc54c4175c42ca0dd430a87b12cc68619a8777be2048e1d2f0747db884a568b5c346c77c9c8c0714ab96018f5f7"
+          "content" : "a0ee4a4b27433b7d55064f8f249ddbd5fd9cfddfdec37b3b54476925472107dd20bd0bf3d2beaf23c4226be63f40ae46"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "6bfc7b4ba70779fe5f0b1e2af585abab982f7929a68beb2c0e62ea2e2a321de0"
+          "content" : "89e30ffbe2ffac2f3bb874eee515acfdfe132f553a728b57952bd6e4fb943d1c"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "3f1bdfa32f7df76ac14cd2a3e689b65066fa0a6a760a9b8b1121773bb1b043a44587d4148c67f361dc6c630e6b31f29b2691a57d47caabea5ca23ae44af34a5e"
+          "content" : "b37733585b940b93806105598f7e4c613c9a0c534c5c38c47f4e45624a30f7803c9c5116405ff8a845bcacda1b5a2f44a4fde8441c03c001bc36b842f9e0601c"
         }
       ],
       "licenses" : [
@@ -355,7 +355,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.22?type=jar",
+      "purl" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -431,7 +431,7 @@
       "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.7.3-SNAPSHOT?type=jar",
       "dependsOn" : [
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.11.4?type=jar",
-        "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.22?type=jar",
+        "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar",
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar"
       ]
     },
@@ -442,7 +442,7 @@
       ]
     },
     {
-      "ref" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.22?type=jar",
+      "ref" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar",
       "dependsOn" : [ ]
     },
     {

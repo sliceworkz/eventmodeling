@@ -1,0 +1,456 @@
+{
+  "bomFormat" : "CycloneDX",
+  "specVersion" : "1.6",
+  "serialNumber" : "urn:uuid:8a0ed87f-a44f-3005-a5d3-e2d2e27cab3b",
+  "version" : 1,
+  "metadata" : {
+    "timestamp" : "2026-11-12T12:18:22Z",
+    "lifecycles" : [
+      {
+        "phase" : "build"
+      }
+    ],
+    "tools" : {
+      "components" : [
+        {
+          "type" : "library",
+          "author" : "OWASP Foundation",
+          "group" : "org.cyclonedx",
+          "name" : "cyclonedx-maven-plugin",
+          "version" : "2.9.3",
+          "description" : "CycloneDX Maven plugin",
+          "hashes" : [
+            {
+              "alg" : "MD5",
+              "content" : "e7c87ab327b65b23c681fc9dc8bb620b"
+            },
+            {
+              "alg" : "SHA-1",
+              "content" : "fa3f0f04f4d5077b5e085d4d09aa2e68aeba5260"
+            },
+            {
+              "alg" : "SHA-256",
+              "content" : "c452d5eebe28bc86bef2e7c72d129f04f60877bef843eac8120f01fb655be293"
+            },
+            {
+              "alg" : "SHA-512",
+              "content" : "ec0344ed2ffe62d565aaf936a37140d04c7fffa8669a666be0366cd44eec3195232d79841cdec47030b79068216ac7e1a8c805255758e3d418dae32a4b9b9beb"
+            },
+            {
+              "alg" : "SHA-384",
+              "content" : "3df26b2a00d87fe090851975ebcc30217f98634e7c47d07128e148f325ebfe3bc0790b2f52ad4591734b7b0de738f003"
+            },
+            {
+              "alg" : "SHA3-384",
+              "content" : "470c1b4962379b5b6494c75bd1475da3519bbe2543999c95f26b4021164d3d05419b0c3f704443162fe5433a204250e9"
+            },
+            {
+              "alg" : "SHA3-256",
+              "content" : "900e9c4edb18940ed3c4a4ba6946957fa613ef0d4b0c380551638f229206373c"
+            },
+            {
+              "alg" : "SHA3-512",
+              "content" : "5e36433e18ae24f7460902da27818874df5d1d73df1a97e49e7369335f7cc61ca595466a2d37789fba7eaa7f7f251b29216c3d7a78910b2ec38e2ed68ea84876"
+            }
+          ]
+        }
+      ]
+    },
+    "component" : {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling@0.9.1-SNAPSHOT?type=pom",
+      "group" : "org.sliceworkz",
+      "name" : "sliceworkz-eventmodeling",
+      "version" : "0.9.1-SNAPSHOT",
+      "description" : "An opinionated Event Modeling framework in Java",
+      "licenses" : [
+        {
+          "license" : {
+            "name" : "LGPL License",
+            "url" : "https://opensource.org/license/lgpl-3-0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling@0.9.1-SNAPSHOT?type=pom",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://sliceworkz.github.io/eventmodeling"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/sliceworkz/eventmodeling"
+        }
+      ]
+    },
+    "properties" : [
+      {
+        "name" : "maven.goal",
+        "value" : "makeAggregateBom"
+      },
+      {
+        "name" : "maven.scopes",
+        "value" : "compile,provided,runtime,system"
+      }
+    ]
+  },
+  "components" : [
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.9.1-SNAPSHOT?type=pom",
+      "group" : "org.sliceworkz",
+      "name" : "sliceworkz-eventmodeling-bom",
+      "version" : "0.9.1-SNAPSHOT",
+      "description" : "An opinionated Event Modeling framework in Java",
+      "licenses" : [
+        {
+          "license" : {
+            "name" : "LGPL License",
+            "url" : "https://opensource.org/license/lgpl-3-0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.9.1-SNAPSHOT?type=pom",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://sliceworkz.github.io/eventmodeling"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/sliceworkz/eventmodeling/sliceworkz-eventmodeling-bom"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.9.1-SNAPSHOT?type=pom",
+      "group" : "org.sliceworkz",
+      "name" : "sliceworkz-eventmodeling-parent-pom",
+      "version" : "0.9.1-SNAPSHOT",
+      "description" : "An opinionated Event Modeling framework in Java",
+      "licenses" : [
+        {
+          "license" : {
+            "name" : "LGPL License",
+            "url" : "https://opensource.org/license/lgpl-3-0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.9.1-SNAPSHOT?type=pom",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://sliceworkz.github.io/eventmodeling"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/sliceworkz/eventmodeling/sliceworkz-eventmodeling-parent-pom"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
+      "publisher" : "QOS.ch",
+      "group" : "org.slf4j",
+      "name" : "slf4j-api",
+      "version" : "2.0.20",
+      "description" : "The slf4j API",
+      "scope" : "required",
+      "hashes" : [
+        {
+          "alg" : "MD5",
+          "content" : "a7a6798aa78b29152479f89565f57446"
+        },
+        {
+          "alg" : "SHA-1",
+          "content" : "7fea9d92ba67e9b3c8f03515fb202b86a1fe44f6"
+        },
+        {
+          "alg" : "SHA-256",
+          "content" : "7e1446499b359675d8aabe6af2de86b85e72ae8a2a932c0b40d0e5ba57097439"
+        },
+        {
+          "alg" : "SHA-512",
+          "content" : "6abf6218c2558a0059f35cecc24db3ef1552dbccdfb8f32d6c9d1d8b11fd545405e04e79673219d19e17b99ca6a2a3da7d92006bcaedaa15646bf07737115d17"
+        },
+        {
+          "alg" : "SHA-384",
+          "content" : "26e4fcbbda8d1037d722e04af82efacf58e28ab93b002921eadb426387c61031d80c9574f45f6a42b423b550424b9323"
+        },
+        {
+          "alg" : "SHA3-384",
+          "content" : "2fbe14046e3b0ffc759d8fd91cccd6913174de77085e294a10375fc453427c040b4a0b4c3d003cc1cee8263013513f31"
+        },
+        {
+          "alg" : "SHA3-256",
+          "content" : "3514a97b9dbec95fe329f277628bc4b2c542c5ec33727aa781d590d5dcfad3d9"
+        },
+        {
+          "alg" : "SHA3-512",
+          "content" : "0dcb60d4abbe2b2474585b0512d3c83c993e79872dfb49ae1880468cb875898e1eeb71d05e7537ad057f8ca666007aa85c0f51d4e272432cd30e320c0710908e"
+        }
+      ],
+      "licenses" : [
+        {
+          "license" : {
+            "id" : "MIT",
+            "url" : "https://opensource.org/license/mit/"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "http://www.slf4j.org"
+        },
+        {
+          "type" : "distribution-intake",
+          "url" : "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/qos-ch/slf4j/slf4j-parent/slf4j-api"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.9.1-SNAPSHOT?type=jar",
+      "group" : "org.sliceworkz",
+      "name" : "sliceworkz-eventmodeling-api",
+      "version" : "0.9.1-SNAPSHOT",
+      "description" : "An opinionated Event Modeling framework in Java",
+      "licenses" : [
+        {
+          "license" : {
+            "name" : "LGPL License",
+            "url" : "https://opensource.org/license/lgpl-3-0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.9.1-SNAPSHOT?type=jar",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://sliceworkz.github.io/eventmodeling"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/sliceworkz/eventmodeling/sliceworkz-eventmodeling-parent-pom/sliceworkz-eventmodeling-api"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.13.0?type=jar",
+      "group" : "org.sliceworkz",
+      "name" : "sliceworkz-eventstore-api",
+      "version" : "0.13.0",
+      "description" : "DCB (Dynamic Consistency Boundary) compliant EventStore (Java/Postgres)",
+      "scope" : "required",
+      "hashes" : [
+        {
+          "alg" : "MD5",
+          "content" : "f33fa820ed6248763dfe6e55cefc9e79"
+        },
+        {
+          "alg" : "SHA-1",
+          "content" : "730312eacec43152f57d64a89da03bf37274949c"
+        },
+        {
+          "alg" : "SHA-256",
+          "content" : "a69f0fa2d5125e33871e9211889c939a6f17478129d3f63244496f771cb5fd05"
+        },
+        {
+          "alg" : "SHA-512",
+          "content" : "50a9fc3c08a780c3ec67137dba14fff389acc55ac67aa97ceb84666912d28b69356a05a4f01cab80e46a1f90a93b57e8590b62a69cf3b40e5595110acc784c0c"
+        },
+        {
+          "alg" : "SHA-384",
+          "content" : "d2907cd42eb3c3fb21b36d2b339069a5678cc813af079986f0cbd549086f704e67b216b63e5fc475fc2ba5166eab6a1e"
+        },
+        {
+          "alg" : "SHA3-384",
+          "content" : "b8f2e1fc26bbdec04724370592f9f3bd6f7a5f4ab91dc64b4de64b2fe950458c82e31aa422047e03a68d19e56c0e1e29"
+        },
+        {
+          "alg" : "SHA3-256",
+          "content" : "39b7f5da26b4a765c9e455e1ae9ccbf841c39a4c35d0c35fe3826d21e3fa117b"
+        },
+        {
+          "alg" : "SHA3-512",
+          "content" : "69b6b70680e534f6494ef763ecbd9e0f63677827b59c0296c6455a5e6b034ec158271aedfcd84aa1ff6975d8ad3e14bdc0b62d0ca0c8984d7d28f0a8042bd6c2"
+        }
+      ],
+      "licenses" : [
+        {
+          "license" : {
+            "name" : "LGPL License",
+            "url" : "https://opensource.org/license/lgpl-3-0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.13.0?type=jar",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://sliceworkz.github.io/eventstore"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/sliceworkz/eventstore/sliceworkz-eventstore-parent-pom/sliceworkz-eventstore-api"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar",
+      "publisher" : "FasterXML",
+      "group" : "com.fasterxml.jackson.core",
+      "name" : "jackson-annotations",
+      "version" : "2.23",
+      "description" : "Core annotations used for value types, used by Jackson data binding package.",
+      "scope" : "optional",
+      "hashes" : [
+        {
+          "alg" : "MD5",
+          "content" : "78850750b7547966b8257217f9bd163d"
+        },
+        {
+          "alg" : "SHA-1",
+          "content" : "cce49304a57c900364a727847c98993ca332b7d5"
+        },
+        {
+          "alg" : "SHA-256",
+          "content" : "e5b60c3088e0887b290ff9226394354589a1dad583743944b7f5538661056b4c"
+        },
+        {
+          "alg" : "SHA-512",
+          "content" : "7c804e37df49c6485e84b5887d1a3173a11db53267aa29668b07537a901cc86882047552350e2e3457baf096783501bbd15ea4ffdab13cf57396d6f6d14d0d98"
+        },
+        {
+          "alg" : "SHA-384",
+          "content" : "5df8857d35b2453f46662ed43b18967fb19f6d98ba6c8877b1ccc031fd5fac223f086bdf4e855ab1d42bd1176a1ae8e0"
+        },
+        {
+          "alg" : "SHA3-384",
+          "content" : "a0ee4a4b27433b7d55064f8f249ddbd5fd9cfddfdec37b3b54476925472107dd20bd0bf3d2beaf23c4226be63f40ae46"
+        },
+        {
+          "alg" : "SHA3-256",
+          "content" : "89e30ffbe2ffac2f3bb874eee515acfdfe132f553a728b57952bd6e4fb943d1c"
+        },
+        {
+          "alg" : "SHA3-512",
+          "content" : "b37733585b940b93806105598f7e4c613c9a0c534c5c38c47f4e45624a30f7803c9c5116405ff8a845bcacda1b5a2f44a4fde8441c03c001bc36b842f9e0601c"
+        }
+      ],
+      "licenses" : [
+        {
+          "license" : {
+            "id" : "Apache-2.0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://github.com/FasterXML/jackson"
+        },
+        {
+          "type" : "distribution-intake",
+          "url" : "https://central.sonatype.com/api/v1/publisher"
+        },
+        {
+          "type" : "issue-tracker",
+          "url" : "https://github.com/FasterXML/jackson-annotations/issues"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/FasterXML/jackson-annotations"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.9.1-SNAPSHOT?type=jar",
+      "group" : "org.sliceworkz",
+      "name" : "sliceworkz-eventmodeling-impl",
+      "version" : "0.9.1-SNAPSHOT",
+      "description" : "An opinionated Event Modeling framework in Java",
+      "licenses" : [
+        {
+          "license" : {
+            "name" : "LGPL License",
+            "url" : "https://opensource.org/license/lgpl-3-0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.9.1-SNAPSHOT?type=jar",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://sliceworkz.github.io/eventmodeling"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/sliceworkz/eventmodeling/sliceworkz-eventmodeling-parent-pom/sliceworkz-eventmodeling-impl"
+        }
+      ]
+    }
+  ],
+  "dependencies" : [
+    {
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling@0.9.1-SNAPSHOT?type=pom",
+      "dependsOn" : [
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.9.1-SNAPSHOT?type=pom",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.9.1-SNAPSHOT?type=pom"
+      ]
+    },
+    {
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.9.1-SNAPSHOT?type=pom",
+      "dependsOn" : [ ]
+    },
+    {
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.9.1-SNAPSHOT?type=pom",
+      "dependsOn" : [
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.9.1-SNAPSHOT?type=jar",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.9.1-SNAPSHOT?type=jar"
+      ]
+    },
+    {
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.9.1-SNAPSHOT?type=jar",
+      "dependsOn" : [
+        "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.13.0?type=jar",
+        "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar"
+      ]
+    },
+    {
+      "ref" : "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
+      "dependsOn" : [ ]
+    },
+    {
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.13.0?type=jar",
+      "dependsOn" : [
+        "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar"
+      ]
+    },
+    {
+      "ref" : "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar",
+      "dependsOn" : [ ]
+    },
+    {
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.9.1-SNAPSHOT?type=jar",
+      "dependsOn" : [
+        "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.13.0?type=jar",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.9.1-SNAPSHOT?type=jar"
+      ]
+    }
+  ]
+}

@@ -70,8 +70,7 @@ public record JustifyWithdrawalCommand ( AccountId accountId, String withdrawal,
 
 		result.raiseEvent(
 			new WithdrawalJustified(accountId, withdrawal,
-				context.justifies(LARGE_WITHDRAWAL_JUSTIFIED, EventId.of(withdrawal), justification.strip())),
-			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
+				context.justifies(LARGE_WITHDRAWAL_JUSTIFIED, EventId.of(withdrawal), justification.strip())));   // tagged by the event itself
 	}
 
 	/**

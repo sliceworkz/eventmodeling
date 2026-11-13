@@ -64,9 +64,7 @@ public class OpenBankAccountCommand implements CommandWithResult<BankingEvent, A
 		AccountId accountId = BankingDomainWithClosingTheBooks.ACCOUNT.newId();
 
 		result.raiseEvent(
-			new AccountOpened(accountId, customerId, initialMonth, LocalDate.now()),
-			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
-				BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(initialMonth))
+			new AccountOpened(accountId, customerId, initialMonth, LocalDate.now())   // tagged by the event itself
 			);
 
 		return accountId;

@@ -22,7 +22,6 @@ import java.time.LocalDate;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountAccess.AccountClosed;
@@ -50,7 +49,7 @@ public record CloseAccountCommand ( AccountId accountId, LocalDate closedOn ) im
 		BusinessException.when(!account.opened(), "Account " + accountId.value() + " does not exist");
 		BusinessException.when(account.closed(), "Account " + accountId.value() + " is already closed");
 
-		result.raiseEvent(new AccountClosed(accountId, closedOn), BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId));
+		result.raiseEvent(new AccountClosed(accountId, closedOn));
 	}
 
 }

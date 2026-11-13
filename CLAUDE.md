@@ -445,6 +445,27 @@ ACCOUNT.idsIn(transfer.tags());                                         // an ev
   natural alternative — lose because they would duplicate these methods under a second name and
   cannot be typed by the entity they are handed. A tag whose value is not the identity of anything
   (a region, a channel) is an ordinary `Tag.of("region", "EU")`; not every tag is an entity
+- **An event states its own tags: the domain's sealed root extends the eventstore's `Tagged`**, and
+  each event answers `eventTags()` through its entities — `Tags.of(ACCOUNT.tag(accountId),
+  MONTH.tag(monthId(month)))` — so a command raises it with only the tags its payload does not carry
+  (`result.raiseEvent(event)`, or `raiseEvent(event, Tag.of("channel", "atm"))`). The store merges the
+  two (a union: the kernel's `x-*` tags are kept), and checks the event's `tagRequirements()` (an
+  eventstore `TagRequirement` per key: one or more, `exactlyOne()`, `exactly(n)`, `between`,
+  `atMostOne()`) for every append. `CommandResultImpl.raiseEvent` runs the same check
+  (`TaggedEvents.checkRaised`), so a tag the command forgot fails where it raised the event; the
+  store's check is the one that decides, and covers aggregates, `event(...)`, translators and seeded
+  test history alike — which is why a test's `given()` events need no tags the event states. `TRANSFER.tag(transferId)` stays the one
+  spelling: the alternative — `transferId.tag()` on the id record — loses because it is a second
+  spelling of one call, and a registry from id class to entity would depend on class-initialisation
+  order. **An event about two of one entity carries the entity's key twice** (`account:A`,
+  `account:B`, read back with `idsIn`); a role is a key of its own **beside** it, declared as an
+  `Entity` of the same id type (`FROM_ACCOUNT = Entity.of("from-account", AccountId::new)`), never
+  instead of it: a decision about everything that happened to an account reads `account`, one
+  genuinely about the role reads `from-account` and is not conflicted by the other role. A count is of
+  distinct tags, so a transfer to the same account carries one `account` tag and both role tags.
+  Tags are stored with the event: changing `eventTags()` re-tags nothing already stored.
+  `TaggedEventsTest` pins the raise-time check, the merge, the seeded history and the role boundary per
+  backend; the eventstore's `docs/design/tagged-events.md` has the rejected alternatives
 - **Two entities are equal when their names are equal**, whatever id type each was declared with:
   the name is what an event carries, the id type is a compile-time convenience of the declaring code.
   A name containing `':'` is rejected at declaration, since the eventstore's `Tag` rejects it as a key

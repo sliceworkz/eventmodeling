@@ -68,7 +68,9 @@ implements CommandResult<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> {
 
 	@Override
 	public CommandResultImpl<DOMAIN_EVENT_TYPE, PRODUCED_EVENT_TYPE> raiseEvent ( PRODUCED_EVENT_TYPE event, Tags tags, String idempotencyKey ) {
-		events.add(tracing.storeOn(Event.of(event, tags).withIdempotencyKey(idempotencyKey)));
+		EphemeralEvent<? extends PRODUCED_EVENT_TYPE> raised = tracing.storeOn(Event.of(event, tags).withIdempotencyKey(idempotencyKey));
+		TaggedEvents.checkRaised(raised);
+		events.add(raised);
 		return this;
 	}
 

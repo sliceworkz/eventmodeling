@@ -18,7 +18,6 @@
 package org.sliceworkz.eventmodeling.examples.banking.features.blockcardsofaccount;
 
 import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.ACCOUNT;
-import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CARD;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -32,7 +31,6 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.AccountAccess.CardIssued;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CardId;
 import org.sliceworkz.eventstore.events.Event;
-import org.sliceworkz.eventstore.events.Tags;
 import org.sliceworkz.eventstore.query.EventFilter;
 
 /**
@@ -63,7 +61,7 @@ public record BlockCardsOfAccountCommand ( AccountId accountId, String reason ) 
 		var result = context.decisionModels(cards);
 
 		for ( CardId cardId : cards.usable() ) {
-			result.raiseEvent(new CardBlocked(accountId, cardId, reason), ACCOUNT.tag(accountId), CARD.tag(cardId));
+			result.raiseEvent(new CardBlocked(accountId, cardId, reason));
 		}
 	}
 

@@ -23,7 +23,6 @@ import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClo
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.RulebookFollowUp.ExcessBalanceReported;
@@ -53,7 +52,7 @@ public record ReportExcessBalanceCommand ( AccountId accountId, String deposit )
 
 		result.raiseEvent(new ExcessBalanceReported(accountId, deposit, period.balance(),
 					context.enforces(BALANCE_WITHIN_GUARANTEE, EventId.of(deposit), "customer told the balance is " + period.balance())),
-				Tags.of(BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId)),
+				Tags.none(),   // tagged by the event itself
 				"excess-balance-reported/" + deposit);
 	}
 }

@@ -23,13 +23,11 @@ import java.time.YearMonth;
 import org.sliceworkz.eventmodeling.commands.BusinessException;
 import org.sliceworkz.eventmodeling.commands.Command;
 import org.sliceworkz.eventmodeling.commands.CommandContext;
-import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.AccountId;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthClosed;
 import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.BankingEvent.MonthOpened;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActivePeriodDecisionModel;
-import org.sliceworkz.eventstore.events.Tags;
 
 /**
  * Closes the current month's books and opens the next month.
@@ -80,11 +78,6 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 
 		// ── Close the current month ──────────────────────────────────
 
-		Tags currentMonthTags = Tags.of(
-			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
-			BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(monthToClose))
-		);
-
 		result.raiseEvent(
 			new MonthClosed(
 				accountId,
@@ -95,18 +88,12 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 				period.periodWithdrawals(),
 				period.periodTransactionCount(),
 				LocalDate.now()
-			),
-			currentMonthTags
+			)   // tagged by the event itself: the account and the month it closes
 		);
 
 		// ── Open the next month with carry-forward ───────────────────
 
 		YearMonth nextMonth = monthToClose.plusMonths(1);
-
-		Tags nextMonthTags = Tags.of(
-			BankingDomainWithClosingTheBooks.ACCOUNT.tag(accountId),
-			BankingDomainWithClosingTheBooks.MONTH.tag(BankingDomainWithClosingTheBooks.monthId(nextMonth))
-		);
 
 		result.raiseEvent(
 			new MonthOpened(
@@ -114,8 +101,7 @@ public class CloseMonthCommand implements Command<BankingEvent> {
 				nextMonth,
 				period.balance(),       // carry forward the closing balance
 				monthToClose
-			),
-			nextMonthTags
+			)   // tagged by the event itself: the account and the month it opens
 		);
 	}
 }

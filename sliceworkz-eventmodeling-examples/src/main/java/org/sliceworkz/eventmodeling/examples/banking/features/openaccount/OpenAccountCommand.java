@@ -42,10 +42,7 @@ public class OpenAccountCommand implements Command<BankingDomainEvent> {
 
 		AccountId accountId = BankingDomain.ACCOUNT.newId();
 
-		result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()),
-				BankingDomain.ACCOUNT.tag(accountId),
-						BankingDomain.CUSTOMER.tag(customerId)
-				);
+		result.raiseEvent(new AccountOpened(accountId, customerId, LocalDate.now()));   // tagged by the event itself
 	}
 	
 }

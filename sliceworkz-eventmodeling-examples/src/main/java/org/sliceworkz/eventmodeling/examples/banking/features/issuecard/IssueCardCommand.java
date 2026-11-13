@@ -17,7 +17,6 @@
  */
 package org.sliceworkz.eventmodeling.examples.banking.features.issuecard;
 
-import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.ACCOUNT;
 import static org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingTheBooks.CARD;
 
 import java.time.LocalDate;
@@ -55,7 +54,7 @@ public record IssueCardCommand ( AccountId accountId, CardId cardId, LocalDate i
 		BusinessException.when(account.closed(), "Account " + accountId.value() + " is closed");
 		BusinessException.when(account.frozen(), "Account " + accountId.value() + " is frozen");
 
-		result.raiseEvent(new CardIssued(accountId, cardId, issuedOn), ACCOUNT.tag(accountId), CARD.tag(cardId));
+		result.raiseEvent(new CardIssued(accountId, cardId, issuedOn));
 	}
 
 }

@@ -1,13 +1,14 @@
 {
   "schema": 1,
-  "runAt": "2026-11-14T08:32:35+01:00",
+  "runAt": "2026-11-14T14:59:24+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.8",
   "commit": "f55dbe93b277796d9159d890738dc88a9d82e7c8",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43571561294",
-  "dryRun": false,
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43602460715",
+  "dryRun": true,
+  "projectVersion": "0.8.1-SNAPSHOT",
   "policy": {
     "pattern": "release/*",
     "schedule": "10 1 * * *",
@@ -27,6 +28,10 @@
     "transitive": {
       "action": "pr",
       "cooldownDays": 1
+    },
+    "own": {
+      "action": "merge",
+      "cooldownDays": 0
     },
     "filter": "default+0",
     "ecosystems": [
@@ -59,6 +64,31 @@
     ],
     "otherChanges": 1
   },
+  "releaseScan": {
+    "tag": "v0.8.0",
+    "tagDate": "2026-10-23T06:26:02Z",
+    "origin": "attached to the release",
+    "assets": [
+      "sliceworkz-eventmodeling-0.8.0.cdx.json",
+      "sliceworkz-eventmodeling-testing-0.8.0.cdx.json"
+    ],
+    "reason": null,
+    "sboms": [
+      "sliceworkz-eventmodeling-0.8.0",
+      "sliceworkz-eventmodeling-testing-0.8.0"
+    ],
+    "notScanned": [],
+    "findings": [],
+    "counts": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "negligible": 0,
+      "unknown": 0,
+      "blocking": 0
+    }
+  },
   "inventory": [
     {
       "ecosystem": "maven",
@@ -71,7 +101,7 @@
       ],
       "own": false,
       "group": null,
-      "newest": "2.25.1"
+      "newest": "2.25.2"
     },
     {
       "ecosystem": "maven",
@@ -402,6 +432,23 @@
     }
   ],
   "updates": [
+    {
+      "ecosystem": "maven",
+      "name": "maven.maven-versions-plugin.version",
+      "where": "pom.xml",
+      "current": "2.25.1",
+      "kind": "property",
+      "artifacts": [
+        "org.codehaus.mojo:versions-maven-plugin"
+      ],
+      "own": false,
+      "group": null,
+      "level": "patch",
+      "target": "2.25.2",
+      "outcome": "held-back",
+      "eligibleFrom": "2026-11-15T10:49:44+00:00",
+      "reason": "cooldown"
+    },
     {
       "ecosystem": "maven",
       "name": "sliceworkz.eventstore.version",

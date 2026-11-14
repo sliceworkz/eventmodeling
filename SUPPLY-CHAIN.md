@@ -166,8 +166,10 @@ schedule of the policy, and its runs and logs are there. What it does is in `.gi
 | minor | the same PR | a PR for review |
 | major | a PR per update, for review | only mentioned |
 
-- **Our own libraries** (the event store) are SNAPSHOTs on `develop` and left alone there; on a release line
-  their released versions are updated like any other dependency.
+- **Our own libraries** (the event store) are followed on `develop`: a SNAPSHOT of ours moves to the newest SNAPSHOT
+  deployed, which is what that library's `develop` builds now, in a PR of its own (`deps/develop/own`) merged when
+  CI is green. On a release line a SNAPSHOT of ours becomes the newest release of its line, the same way, and
+  released versions are updated like any other dependency.
 - **Cooldown**: a version is proposed once it has been out for a day.
 - **Declining**: close a pipeline PR without merging, and its versions are not proposed again until a newer one comes.
   A commit of your own on a pipeline PR branch stops the pipeline from rewriting it.

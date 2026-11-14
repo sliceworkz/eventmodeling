@@ -18,12 +18,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+<project xmlns="http://maven.apache.org/POM/4.1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.1.0 https://maven.apache.org/xsd/maven-4.1.0.xsd">
 	<parent>
-		<groupId>org.sliceworkz</groupId>
 		<artifactId>sliceworkz-eventmodeling-parent-pom</artifactId>
-		<version>0.10.0-SNAPSHOT</version>
 		<relativePath>../sliceworkz-eventmodeling-parent-pom</relativePath>
 	</parent>
 	<name>${project.artifactId}</name>
@@ -53,7 +50,6 @@
 			<artifactId>slf4j-api</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.sliceworkz</groupId>
 			<artifactId>sliceworkz-eventmodeling-impl</artifactId>
 		</dependency>
 		<dependency>
@@ -98,6 +94,9 @@
 							<goal>shade</goal>
 						</goals>
 						<configuration>
+							<!-- the benchmark jar is never published, so it needs no dependency-reduced POM; shade
+							     cannot write one for a 4.1.0 model whose parent is inferred -->
+							<createDependencyReducedPom>false</createDependencyReducedPom>
 							<filters>
 								<filter>
 									<artifact>*:*</artifact>

@@ -1,13 +1,13 @@
 {
   "schema": 1,
-  "runAt": "2026-11-14T14:59:24+01:00",
+  "runAt": "2026-11-15T08:46:30+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.8",
   "commit": "f55dbe93b277796d9159d890738dc88a9d82e7c8",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43602460715",
-  "dryRun": true,
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43691411910",
+  "dryRun": false,
   "projectVersion": "0.8.1-SNAPSHOT",
   "policy": {
     "pattern": "release/*",
@@ -415,7 +415,7 @@
       ],
       "own": false,
       "group": null,
-      "newest": "1.6.6"
+      "newest": "1.6.7"
     },
     {
       "ecosystem": "maven",
@@ -466,6 +466,23 @@
       "batch": null,
       "published": null,
       "outcome": "mentioned"
+    },
+    {
+      "ecosystem": "maven",
+      "name": "logback.version",
+      "where": "sliceworkz-eventmodeling-benchmark/pom.xml",
+      "current": "1.6.6",
+      "kind": "property",
+      "artifacts": [
+        "ch.qos.logback:logback-classic"
+      ],
+      "own": false,
+      "group": null,
+      "level": "patch",
+      "target": "1.6.7",
+      "outcome": "held-back",
+      "eligibleFrom": "2026-11-15T16:05:06+00:00",
+      "reason": "cooldown"
     }
   ],
   "batches": [],
@@ -476,7 +493,7 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-14T06:19:25Z",
+    "dbBuilt": "2026-11-15T06:19:39Z",
     "sbomOrigin": "saved by the previous run (branch head unchanged)",
     "sboms": [
       "maven"

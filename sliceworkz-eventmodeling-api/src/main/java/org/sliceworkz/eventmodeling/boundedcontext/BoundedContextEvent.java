@@ -24,6 +24,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.sliceworkz.eventmodeling.automation.AutomationStatus;
+import org.sliceworkz.eventmodeling.ports.Consumption;
 import org.sliceworkz.eventmodeling.ports.PortCaller;
 import org.sliceworkz.eventmodeling.rules.BusinessRule;
 import org.sliceworkz.eventmodeling.rules.RuleJudgement;
@@ -1175,9 +1176,21 @@ public sealed interface BoundedContextEvent {
 	 * @param caller who called it
 	 * @param durationMicros how long the caller was blocked in the call, in microseconds
 	 * @param slice the caller's feature slice, {@code null} when it has none (or the call is unattributed)
+	 * @param consumption what the call consumed of a paid service, as its adapter reported it through
+	 *        {@code PortCall.current()}; empty when it reported nothing, and on an event stored before it existed
 	 */
 	record PortCalled ( String boundedContext, String port, String qualification, String method,
-			PortCaller caller, long durationMicros, FeatureSlice slice ) implements BoundedContextEvent { }
+			PortCaller caller, long durationMicros, FeatureSlice slice, List<Consumption> consumption ) implements BoundedContextEvent {
+
+		public PortCalled {
+			consumption = consumption == null ? List.of() : List.copyOf(consumption);
+		}
+
+		public PortCalled ( String boundedContext, String port, String qualification, String method,
+				PortCaller caller, long durationMicros, FeatureSlice slice ) {
+			this(boundedContext, port, qualification, method, caller, durationMicros, slice, List.of());
+		}
+	}
 
 	/**
 	 * A call through a monitored port that threw a <em>business</em> exception: the port answered "no" —
@@ -1189,9 +1202,22 @@ public sealed interface BoundedContextEvent {
 	 *
 	 * @param exceptionType the fully qualified class name of what was thrown
 	 * @param reason its message, {@code null} when it had none
+	 * @param consumption what the call consumed of a paid service, as its adapter reported it through
+	 *        {@code PortCall.current()}; empty when it reported nothing, and on an event stored before it existed
 	 */
 	record PortCallRejected ( String boundedContext, String port, String qualification, String method,
-			PortCaller caller, long durationMicros, String exceptionType, String reason, FeatureSlice slice ) implements BoundedContextEvent { }
+			PortCaller caller, long durationMicros, String exceptionType, String reason, FeatureSlice slice,
+			List<Consumption> consumption ) implements BoundedContextEvent {
+
+		public PortCallRejected {
+			consumption = consumption == null ? List.of() : List.copyOf(consumption);
+		}
+
+		public PortCallRejected ( String boundedContext, String port, String qualification, String method,
+				PortCaller caller, long durationMicros, String exceptionType, String reason, FeatureSlice slice ) {
+			this(boundedContext, port, qualification, method, caller, durationMicros, exceptionType, reason, slice, List.of());
+		}
+	}
 
 	/**
 	 * A call through a monitored port that threw anything but a business exception: something is wrong —
@@ -1203,9 +1229,23 @@ public sealed interface BoundedContextEvent {
 	 *
 	 * @param summarized whether this call is also counted in a {@link PortCallsSummarized} — true for a
 	 *        failure of a summarized method, which a reader adding up calls must then not count twice
+	 * @param consumption what the call consumed of a paid service, as its adapter reported it; empty when it
+	 *        reported nothing. On a summarized method it is counted in the window's {@link PortCallsSummarized}
+	 *        too, so a reader adding up consumption skips it when {@code summarized} is true
 	 */
 	record PortCallFailed ( String boundedContext, String port, String qualification, String method,
-			PortCaller caller, long durationMicros, Failure failure, FeatureSlice slice, boolean summarized ) implements BoundedContextEvent { }
+			PortCaller caller, long durationMicros, Failure failure, FeatureSlice slice, boolean summarized,
+			List<Consumption> consumption ) implements BoundedContextEvent {
+
+		public PortCallFailed {
+			consumption = consumption == null ? List.of() : List.copyOf(consumption);
+		}
+
+		public PortCallFailed ( String boundedContext, String port, String qualification, String method,
+				PortCaller caller, long durationMicros, Failure failure, FeatureSlice slice, boolean summarized ) {
+			this(boundedContext, port, qualification, method, caller, durationMicros, failure, slice, summarized, List.of());
+		}
+	}
 
 	/**
 	 * What a summarized port did in one interval, per method and caller: how many calls returned, were
@@ -1219,14 +1259,25 @@ public sealed interface BoundedContextEvent {
 	 * @param windowEnd the end of the window, exclusive; earlier than a full interval for the last window
 	 *        before a stop
 	 * @param latencyBuckets the calls per latency bucket, {@code PortLatencyBuckets.COUNT} long, all outcomes
+	 * @param consumption what the window's calls consumed, summed per provider and billed product (the
+	 *        quantities added up, references and attributes left out); empty when nothing was reported
 	 */
 	record PortCallsSummarized ( String boundedContext, String port, String qualification, String method,
 			PortCaller caller, Instant windowStart, Instant windowEnd,
 			long called, long rejected, long failed, long totalMicros, long maxMicros,
-			List<Long> latencyBuckets, FeatureSlice slice ) implements BoundedContextEvent {
+			List<Long> latencyBuckets, FeatureSlice slice, List<Consumption> consumption ) implements BoundedContextEvent {
 
 		public PortCallsSummarized {
 			latencyBuckets = latencyBuckets == null ? List.of() : List.copyOf(latencyBuckets);
+			consumption = consumption == null ? List.of() : List.copyOf(consumption);
+		}
+
+		public PortCallsSummarized ( String boundedContext, String port, String qualification, String method,
+				PortCaller caller, Instant windowStart, Instant windowEnd,
+				long called, long rejected, long failed, long totalMicros, long maxMicros,
+				List<Long> latencyBuckets, FeatureSlice slice ) {
+			this(boundedContext, port, qualification, method, caller, windowStart, windowEnd, called, rejected, failed,
+					totalMicros, maxMicros, latencyBuckets, slice, List.of());
 		}
 
 		/** @return every call of the window, whatever its outcome */

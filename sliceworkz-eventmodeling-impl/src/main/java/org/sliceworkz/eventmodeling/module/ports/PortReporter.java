@@ -38,6 +38,7 @@ import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmi
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
 import org.sliceworkz.eventmodeling.observability.Outcome;
+import org.sliceworkz.eventmodeling.ports.Consumption;
 import org.sliceworkz.eventmodeling.ports.PortCaller;
 import org.sliceworkz.eventmodeling.ports.PortLatencyBuckets;
 
@@ -201,6 +202,8 @@ public final class PortReporter {
 		private final String method;
 		private final PortCallerScope.Current caller;
 		private final Observation.Scope<Outcome.PortCallOutcome> scope;
+		/** what the adapter reported it consumed; reported from any thread the adapter hands work to */
+		private final List<Consumption> consumption = new java.util.concurrent.CopyOnWriteArrayList<>();
 
 		private Call ( MonitoredPort port, String method, PortCallerScope.Current caller, Observation.Scope<Outcome.PortCallOutcome> scope ) {
 			this.port = port;
@@ -209,8 +212,21 @@ public final class PortReporter {
 			this.scope = scope;
 		}
 
+		/** Records what the call consumed, as its adapter reported it. */
+		void consumed ( Consumption reported ) {
+			consumption.add(reported);
+		}
+
+		/** Hands what was consumed to the observation, on the caller's thread, before it completes or fails. */
+		private void observeConsumption ( ) {
+			for ( Consumption reported : consumption ) {
+				scope.consumed(reported);
+			}
+		}
+
 		void returned ( long micros ) {
 			try {
+				observeConsumption();
 				scope.completed(new Outcome.PortReturned());
 			} finally {
 				scope.close();
@@ -220,7 +236,7 @@ public final class PortReporter {
 					count(Kind.CALLED, micros, null);
 				} else {
 					emitter.emit(new BoundedContextEvent.PortCalled(boundedContext, portName(), port.qualification(), method,
-							caller.caller(), micros, slice()), caller.tracing());
+							caller.caller(), micros, slice(), List.copyOf(consumption)), caller.tracing());
 				}
 			});
 		}
@@ -228,6 +244,7 @@ public final class PortReporter {
 		void threw ( Throwable thrown, long micros ) {
 			boolean business = port.monitoring().isBusinessException(thrown);
 			try {
+				observeConsumption();
 				if ( business ) {
 					scope.completed(new Outcome.PortRejected(thrown.getClass().getName(), thrown.getMessage()));
 				} else {
@@ -243,13 +260,13 @@ public final class PortReporter {
 						count(Kind.REJECTED, micros, null);
 					} else {
 						emitter.emit(new BoundedContextEvent.PortCallRejected(boundedContext, portName(), port.qualification(), method,
-								caller.caller(), micros, thrown.getClass().getName(), thrown.getMessage(), slice()), caller.tracing());
+								caller.caller(), micros, thrown.getClass().getName(), thrown.getMessage(), slice(), List.copyOf(consumption)), caller.tracing());
 					}
 				} else {
 					boolean emitOnItsOwn = !summarized || count(Kind.FAILED, micros, thrown.getClass().getName());
 					if ( emitOnItsOwn ) {
 						emitter.emit(new BoundedContextEvent.PortCallFailed(boundedContext, portName(), port.qualification(), method,
-								caller.caller(), micros, BoundedContextEvent.Failure.of(thrown), slice(), summarized), caller.tracing());
+								caller.caller(), micros, BoundedContextEvent.Failure.of(thrown), slice(), summarized, List.copyOf(consumption)), caller.tracing());
 					}
 				}
 			});
@@ -270,7 +287,7 @@ public final class PortReporter {
 		private boolean count ( Kind kind, long micros, String failureType ) {
 			WindowKey key = new WindowKey(port, method, caller.caller(), caller.componentClass());
 			Window window = windows.computeIfAbsent(key, k -> new Window(port.monitoring().interval()));
-			return window.count(key, clock.instant(), kind, micros, failureType);
+			return window.count(key, clock.instant(), kind, micros, failureType, consumption);
 		}
 
 		private String portName ( ) {
@@ -318,12 +335,14 @@ public final class PortReporter {
 		private long maxMicros;
 		private long[] buckets = new long[PortLatencyBuckets.COUNT];
 		private final Set<String> failureTypesReported = new HashSet<>();
+		/** what the window's calls consumed, summed per provider and billed product */
+		private final Map<String, Consumption> consumed = new java.util.LinkedHashMap<>();
 
 		Window ( Duration interval ) {
 			this.interval = interval;
 		}
 
-		synchronized boolean count ( WindowKey key, Instant now, Kind kind, long micros, String failureType ) {
+		synchronized boolean count ( WindowKey key, Instant now, Kind kind, long micros, String failureType, List<Consumption> consumption ) {
 			Instant current = windowStart(now, interval);
 			if ( start == null ) {
 				start = current;
@@ -344,6 +363,11 @@ public final class PortReporter {
 			totalMicros += micros;
 			maxMicros = Math.max(maxMicros, micros);
 			buckets[PortLatencyBuckets.indexOf(micros)]++;
+			for ( Consumption reported : consumption ) {
+				// summed per provider and billed product: one call's reference and attributes do not add up
+				Consumption alone = new Consumption(reported.provider(), reported.billedProduct(), null, reported.quantities(), null, Map.of());
+				consumed.merge(reported.provider() + "\u0000" + reported.billedProduct(), alone, Consumption::plus);
+			}
 			return failureType != null && failureTypesReported.add(failureType);
 		}
 
@@ -377,7 +401,7 @@ public final class PortReporter {
 			}
 			return new BoundedContextEvent.PortCallsSummarized(boundedContext, key.port().portType().getSimpleName(), key.port().qualification(),
 					key.method(), key.caller(), start, end, called, rejected, failed, totalMicros, maxMicros, histogram,
-					key.componentClass() == null ? null : emitter.sliceFor(key.componentClass()));
+					key.componentClass() == null ? null : emitter.sliceFor(key.componentClass()), List.copyOf(consumed.values()));
 		}
 
 		private void reset ( Instant newStart ) {
@@ -389,6 +413,7 @@ public final class PortReporter {
 			maxMicros = 0;
 			buckets = new long[PortLatencyBuckets.COUNT];
 			failureTypesReported.clear();
+			consumed.clear();
 		}
 	}
 

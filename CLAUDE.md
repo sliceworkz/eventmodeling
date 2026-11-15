@@ -2491,6 +2491,27 @@ a `DataSource` proxy would time `getConnection()`, which is pool checkout, not t
 - **`BoundedContextStarting.ports` is the inventory**: every binding, monitored or not, with the slices that
   asked for it while being configured — what a deployment depends on, announced before any call. `null` on an
   event written before contexts announced it
+- **What a call consumed of a paid service travels with it: `PortCall.current().consumed(Consumption)`.** An
+  adapter reports what the provider billed — `Consumption.of(provider, product)` with named quantities in the
+  provider's own billing units (`input_tokens`, `segments`, `requests`), the served product when it differs from
+  the one asked for (a fallback model), the provider's id for the call, a few low-cardinality attributes — and the
+  framework puts it on the call's `PortCalled`/`PortCallRejected`/`PortCallFailed` (`consumption`), sums it per
+  provider and billed product in `PortCallsSummarized`, and hands it to the observation through
+  `Observation.Scope.consumed`, on the caller's thread before the scope completes, so a tracer puts it on the span
+  and a metrics binding counts it. The proxy opens the `PortCall` around the adapter (`PortCall.open`, public so an
+  adapter's own test can capture what it reports); outside a monitored call `current()` records nothing, so an
+  adapter reports unconditionally. Several reports per call are kept (a retry, a fallback); a report from another
+  thread goes through the handle taken on the calling thread; one arriving after the call ended is dropped with a
+  WARN, never attached to a later call; a refusal is billed too, so an adapter reports before it throws.
+  **The framework knows no kind of service**: a convention such as the model token names lives with whoever uses
+  it (the plugins' `ModelConsumption`), and prices are no part of it — quantities only, checkable against the
+  provider's invoice. The alternatives — the port's return type carrying the consumption, or an annotation saying
+  where to find it — lose because a call that throws is billed too and has no return value, and because what a
+  call costs is a property of one adapter rather than of the port every adapter implements. The `consumption`
+  component is empty on an event stored before it existed, and the events keep their earlier constructors.
+  `PortConsumptionTest` pins every outcome, several reports and another thread, the summed window per billed
+  product, the observer, an unmonitored binding, a late report and the round trip through a monitoring stream;
+  `ConsumptionTest` in the api module the value and the handle
 - **Not in this phase:** a circuit breaker and a `CommandUnavailable` outcome for a `PortUnavailableException`.
   `PortUnavailableException` exists already so an adapter's own "cannot reach" exception can extend it and be
   matched by type — by an automation's `onFailure` to retry, and by an HTTP binding to answer `503`
@@ -2872,7 +2893,7 @@ what it answered, which is what an observation is.
   every kind end to end and that the contract was kept, `AggregateObservationTest`,
   `AggregateSnapshotObservationTest` and `LiveModelSnapshotObservationTest` the aggregate and snapshot
   paths, `MonitoredPortTest.theObserverSeesEveryCallNestedInTheOperationThatMadeIt` the port calls (all
-  three endings, the nesting under a command, on a summarized port), `BoundedContextListenerFailureTest` the listener failures, and `ContainedObserverTest` in the api
+  three endings, the nesting under a command, on a summarized port), `PortConsumptionTest` what a call consumed, `BoundedContextListenerFailureTest` the listener failures, and `ContainedObserverTest` in the api
   module the containment
 
 ## Important Design Principles

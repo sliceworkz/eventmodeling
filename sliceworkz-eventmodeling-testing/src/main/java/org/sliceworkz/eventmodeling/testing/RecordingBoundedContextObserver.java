@@ -27,6 +27,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
 import org.sliceworkz.eventmodeling.observability.Outcome;
+import org.sliceworkz.eventmodeling.ports.Consumption;
 
 /**
  * A {@link BoundedContextObserver} that keeps everything it is told, for a test to assert on.
@@ -165,6 +166,7 @@ public final class RecordingBoundedContextObserver implements BoundedContextObse
 		private volatile Outcome outcome;
 		private volatile Throwable failure;
 		private volatile boolean closed;
+		private final List<Consumption> consumption = new CopyOnWriteArrayList<>();
 
 		private Recording ( Observation<?> observation, Recording parent, String thread ) {
 			this.observation = observation;
@@ -208,6 +210,14 @@ public final class RecordingBoundedContextObserver implements BoundedContextObse
 						observation, kind.getSimpleName(), outcome != null ? "completed as " + outcome : failure != null ? "failed with " + failure : "did not complete"));
 			}
 			return kind.cast(outcome);
+		}
+
+		/**
+		 * @return what the operation consumed of a paid service, in the order it was reported; empty for an
+		 *         operation that reported nothing, which is every operation but a port call
+		 */
+		public List<Consumption> consumption ( ) {
+			return List.copyOf(consumption);
 		}
 
 		/**
@@ -264,6 +274,19 @@ public final class RecordingBoundedContextObserver implements BoundedContextObse
 		public void failed ( Throwable failure ) {
 			if ( checkReportable("failed") ) {
 				recording.failure = failure;
+			}
+		}
+
+		@Override
+		public void consumed ( Consumption consumption ) {
+			if ( !(recording.observation instanceof Observation.PortCall) ) {
+				violations.add("%s told of consumption, which only a port call reports".formatted(recording.observation));
+			}
+			if ( recording.outcome != null || recording.failure != null ) {
+				violations.add("%s told of consumption after it completed or failed".formatted(recording.observation));
+			}
+			if ( checkReportable("consumed") ) {
+				recording.consumption.add(consumption);
 			}
 		}
 

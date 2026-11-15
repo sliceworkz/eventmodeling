@@ -22,6 +22,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
+import org.sliceworkz.eventmodeling.ports.PortCall;
+
 import org.sliceworkz.eventmodeling.module.timing.Elapsed;
 import org.sliceworkz.eventmodeling.ports.PortMonitoring;
 
@@ -134,14 +136,21 @@ public final class MonitoredPort implements InvocationHandler {
 		}
 		PortReporter.Call call = current.start(this, method.getName(), fallback);
 		long started = Elapsed.start();
+		// what the adapter reports it consumed, through PortCall.current(), belongs to this call
+		PortCall.Opened opened = PortCall.open(call::consumed);
+		Object result;
 		try {
-			Object result = invokeAdapter(method, args);
-			call.returned(Elapsed.microsSince(started));
-			return result;
+			result = invokeAdapter(method, args);
 		} catch ( Throwable thrown ) {
-			call.threw(thrown, Elapsed.microsSince(started));
+			long micros = Elapsed.microsSince(started);
+			opened.close();
+			call.threw(thrown, micros);
 			throw thrown;
 		}
+		long micros = Elapsed.microsSince(started);
+		opened.close();
+		call.returned(micros);
+		return result;
 	}
 
 	private Object invokeAdapter ( Method method, Object[] args ) throws Throwable {

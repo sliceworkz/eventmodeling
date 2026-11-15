@@ -19,6 +19,7 @@ package org.sliceworkz.eventmodeling.observability;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.sliceworkz.eventmodeling.ports.Consumption;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
@@ -97,6 +98,11 @@ final class ContainedObserver implements BoundedContextObserver {
 		@Override
 		public void failed ( Throwable failure ) {
 			contain("failed", () -> scope.failed(failure));
+		}
+
+		@Override
+		public void consumed ( Consumption consumption ) {
+			contain("consumed", () -> scope.consumed(consumption));
 		}
 
 		@Override

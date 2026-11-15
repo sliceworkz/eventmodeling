@@ -20,6 +20,7 @@ package org.sliceworkz.eventmodeling.observability;
 import java.util.Map;
 
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.ports.Consumption;
 import org.sliceworkz.eventmodeling.ports.PortCaller;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventstore.events.Event;
@@ -326,6 +327,14 @@ public sealed interface Observation<O extends Outcome> {
 		 * @param failure what the operation failed with
 		 */
 		void failed ( Throwable failure );
+
+		/**
+		 * What the operation consumed of a paid service — only ever called on a {@link PortCall} scope, as its
+		 * adapter reported it, zero or more times, before {@link #completed} or {@link #failed}, on the same thread.
+		 * Ignored unless an observer cares: a tracer puts it on the span, a metrics binding counts it.
+		 */
+		default void consumed ( Consumption consumption ) {
+		}
 
 		/**
 		 * Ends the observation. Declared without a checked exception, unlike {@link AutoCloseable#close()}.

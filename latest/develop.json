@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-15T09:27:11+01:00",
+  "runAt": "2026-11-16T09:35:30+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "develop",
-  "commit": "01a44a2f4f85b5eb70b427824c232ff01e8031dc",
+  "commit": "6a36f17235f719a56194c3f038551f80483291fe",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43694546715",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43832411220",
   "dryRun": false,
   "projectVersion": "0.10.0-SNAPSHOT",
   "policy": {
@@ -412,9 +412,10 @@
       "group": null,
       "level": "patch",
       "target": "2.25.2",
-      "outcome": "held-back",
-      "eligibleFrom": "2026-11-15T10:49:44+00:00",
-      "reason": "cooldown"
+      "action": "merge",
+      "batch": "auto",
+      "published": "2026-11-14",
+      "outcome": "planned"
     },
     {
       "ecosystem": "maven",
@@ -429,21 +430,66 @@
       "group": null,
       "level": "patch",
       "target": "1.6.7",
-      "outcome": "held-back",
-      "eligibleFrom": "2026-11-15T16:05:06+00:00",
-      "reason": "cooldown"
+      "action": "merge",
+      "batch": "auto",
+      "published": "2026-11-14",
+      "outcome": "planned"
     }
   ],
-  "batches": [],
-  "pullRequests": [],
+  "batches": [
+    {
+      "key": "auto",
+      "branch": "deps/develop/auto",
+      "action": "merge",
+      "level": "merge",
+      "transitive": false,
+      "commit": "0c02edaa6a568eb086a19efea8bf1998ac94c892",
+      "error": null,
+      "outcome": "pr-opened",
+      "pr": 261,
+      "changes": [
+        {
+          "ecosystem": "maven",
+          "name": "maven.maven-versions-plugin.version",
+          "where": "pom.xml",
+          "level": "patch",
+          "from": "2.25.1",
+          "to": "2.25.2",
+          "applied": true,
+          "error": null
+        },
+        {
+          "ecosystem": "maven",
+          "name": "logback.version",
+          "where": "sliceworkz-eventmodeling-benchmark/pom.xml",
+          "level": "patch",
+          "from": "1.6.6",
+          "to": "1.6.7",
+          "applied": true,
+          "error": null
+        }
+      ],
+      "lockfileChanges": []
+    }
+  ],
+  "pullRequests": [
+    {
+      "number": 261,
+      "url": "https://github.com/sliceworkz/eventmodeling/pull/261",
+      "head": "deps/develop/auto",
+      "title": "Dependency updates on develop",
+      "ci": "pending",
+      "autoMerge": true
+    }
+  ],
   "closedPullRequests": [],
   "deletedBranches": [],
   "declined": [],
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-15T06:19:39Z",
-    "sbomOrigin": "ci-artifact (run 43600768724)",
+    "dbBuilt": "2026-11-16T06:30:54Z",
+    "sbomOrigin": "ci-artifact (run 43731474756)",
     "sboms": [
       "library",
       "test-kit"

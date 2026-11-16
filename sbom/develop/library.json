@@ -4,7 +4,7 @@
   "serialNumber" : "urn:uuid:e09e2cd2-b184-3eab-9bec-7082583b475a",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-11-14T13:38:49Z",
+    "timestamp" : "2026-11-15T15:44:06Z",
     "lifecycles" : [
       {
         "phase" : "build"
@@ -270,35 +270,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "026d1098810aa36cb037ed4af6dfcf4e"
+          "content" : "f48c9cbee9460dc24ad3a285e37b1e74"
         },
         {
           "alg" : "SHA-1",
-          "content" : "af98e39569d63b62ed2f78575e474c47db30b127"
+          "content" : "f4ceed4390d12dc67d5aaeecbb9c30e21eb83398"
         },
         {
           "alg" : "SHA-256",
-          "content" : "fba382d1a5c83d6d71261b22c793518f8a1a36fb1f296d9e67c405a2fdc9df14"
+          "content" : "c66241c5874aab8d99fbe3cef9c6cb0c49f1aab3fca363bc71e7d336a38e5cb9"
         },
         {
           "alg" : "SHA-512",
-          "content" : "17b06e8d3179a2c311fe7a3842245b7deae1aadbbe6dca427a37d319ddf9ecd33c85e4b5b6bc9052045b46340b677a2c4b37ff201564c066779a590d562e32c9"
+          "content" : "cbe785bbbd2648eb83f6b410721bc52bef2fb3d68b24038516c22a1d217dde6a286149b0f88cd97c87be1186968103006170649343f338f99138fc87503c2691"
         },
         {
           "alg" : "SHA-384",
-          "content" : "bfbd5429c588e2b6ee159d2e1ed344237bd0d427139a0766b21e0b1835028801444a98d3e86671764877a8c22858a54c"
+          "content" : "7776535bcf4392c1469b7d08b2b18aba8a32fea040f6d33e1dd7861f25954f42b6650f0eb9c4758f6ec5c0059d7d4072"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "6e2b3a08854140e5e935dccbb31dce22171e992d69fbd1fde4d962c96888eb22ba016a5639acc6ea300211bb710b7294"
+          "content" : "fa018b7548f8688957b561589690a1b260da275db575447e3f67fa6089aa323e10b24889c1f16b6a389e49c6ad754b8d"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "0af85d5791ddcf9f0d34a78c814bece72f636c28e5688afe9140fe4b582f8b56"
+          "content" : "cfc9ace3488757c9f4b87bd3becb5308737562509bc9fdb55db2e2d1723bda23"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "b771f212465543be6b3f934d9af18a8417ef3052986120cc7404d80410e128e37f0c9450eb31a3ec14362ae86bef5f1a349055363d23cec7cd275d015237f04b"
+          "content" : "a87c0e1c9db907ee87895aba48176ba2238ae2840b71cc199f2f610292fcab582e9f27342bb8ff7ce959c52e763f1443cfcc7c577468d98b41c70a8c9bcf589e"
         }
       ],
       "licenses" : [

@@ -5,7 +5,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 | Branch | Last run | Head | Critical | High | Medium | Low | Blocking | Released version | Open PRs | Unreleased updates | SBOMs |
 |---|---|---|---:|---:|---:|---:|---:|---|---:|---|---|
 | [`develop`](#develop) | 2026-11-15T09:27:11+01:00 | `01a44a2f4f` | 0 | 0 | 0 | 0 | 0 | - | 0 | - | ci-artifact (run 43600768724) |
-| [`release/0.9`](#release09) | 2026-11-15T08:46:29+01:00 | `651f0d28fa` | 0 | 0 | 0 | 0 | 0 | v0.9.0: none critical/high | 0 | none since v0.9.0 | ci-artifact (run 43216604393) |
+| [`release/0.9`](#release09) | 2026-11-16T08:53:21+01:00 | `651f0d28fa` | 0 | 0 | 0 | 0 | 0 | v0.9.0: none critical/high | 1 | none since v0.9.0 | ci-artifact (run 43216604393) |
 | [`release/0.8`](#release08) | 2026-11-16T08:53:19+01:00 | `f55dbe93b2` | 0 | 0 | 0 | 0 | 0 | v0.8.0: none critical/high | 1 | **4 since v0.8.0** | saved by the previous run (branch head unchanged) |
 | [`release/0.7`](#release07) | 2026-11-16T08:53:20+01:00 | `3f8f174499` | 0 | 0 | 0 | 0 | 0 | v0.7.2: none critical/high | 1 | **1 since v0.7.2** | saved by the previous run (branch head unchanged) |
 
@@ -20,6 +20,8 @@ No dependency updates since v0.9.0 (2026-11-12).
 No critical or high findings in the released v0.9.0 (scanned from the SBOMs attached to it).
 
 No critical or high findings on the branch head.
+
+Pipeline PRs open: [#258](https://github.com/sliceworkz/eventmodeling/pull/258) (auto-merge, CI pending)
 
 ## release/0.8
 

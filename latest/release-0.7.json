@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-16T08:53:20+01:00",
+  "runAt": "2026-11-17T10:04:51+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.7",
-  "commit": "3f8f174499a4df11ab0fb982b72c826f2ada43fb",
+  "commit": "19148fc2897ec4b03fefe266080438e3ad467141",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/43826931826",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44052196004",
   "dryRun": false,
   "projectVersion": "0.7.3-SNAPSHOT",
   "policy": {
@@ -46,6 +46,10 @@
     "tagDate": "2026-11-08T19:59:56Z",
     "dependencyUpdates": [
       {
+        "commit": "19148fc2897ec4b03fefe266080438e3ad467141",
+        "subject": "Dependency updates (#260)"
+      },
+      {
         "commit": "3f8f174499a4df11ab0fb982b72c826f2ada43fb",
         "subject": "Minor dependency updates (#241)"
       }
@@ -82,7 +86,7 @@
       "ecosystem": "maven",
       "name": "maven.maven-versions-plugin.version",
       "where": "pom.xml",
-      "current": "2.25.1",
+      "current": "2.25.2",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:versions-maven-plugin"
@@ -396,7 +400,7 @@
       "ecosystem": "maven",
       "name": "logback.version",
       "where": "sliceworkz-eventmodeling-benchmark/pom.xml",
-      "current": "1.6.6",
+      "current": "1.6.7",
       "kind": "property",
       "artifacts": [
         "ch.qos.logback:logback-classic"
@@ -420,24 +424,6 @@
     }
   ],
   "updates": [
-    {
-      "ecosystem": "maven",
-      "name": "maven.maven-versions-plugin.version",
-      "where": "pom.xml",
-      "current": "2.25.1",
-      "kind": "property",
-      "artifacts": [
-        "org.codehaus.mojo:versions-maven-plugin"
-      ],
-      "own": false,
-      "group": null,
-      "level": "patch",
-      "target": "2.25.2",
-      "action": "merge",
-      "batch": "auto",
-      "published": "2026-11-14",
-      "outcome": "planned"
-    },
     {
       "ecosystem": "maven",
       "name": "maven.maven-central-publishing-plugin.version",
@@ -473,80 +459,18 @@
       "batch": null,
       "published": null,
       "outcome": "mentioned"
-    },
-    {
-      "ecosystem": "maven",
-      "name": "logback.version",
-      "where": "sliceworkz-eventmodeling-benchmark/pom.xml",
-      "current": "1.6.6",
-      "kind": "property",
-      "artifacts": [
-        "ch.qos.logback:logback-classic"
-      ],
-      "own": false,
-      "group": null,
-      "level": "patch",
-      "target": "1.6.7",
-      "action": "merge",
-      "batch": "auto",
-      "published": "2026-11-14",
-      "outcome": "planned"
     }
   ],
-  "batches": [
-    {
-      "key": "auto",
-      "branch": "deps/release/0.7/auto",
-      "action": "merge",
-      "level": "merge",
-      "transitive": false,
-      "commit": "e9d2a3859f1975dfce8fdad46bc78835b2bb887d",
-      "error": null,
-      "outcome": "pr-opened",
-      "pr": 260,
-      "changes": [
-        {
-          "ecosystem": "maven",
-          "name": "maven.maven-versions-plugin.version",
-          "where": "pom.xml",
-          "level": "patch",
-          "from": "2.25.1",
-          "to": "2.25.2",
-          "applied": true,
-          "error": null
-        },
-        {
-          "ecosystem": "maven",
-          "name": "logback.version",
-          "where": "sliceworkz-eventmodeling-benchmark/pom.xml",
-          "level": "patch",
-          "from": "1.6.6",
-          "to": "1.6.7",
-          "applied": true,
-          "error": null
-        }
-      ],
-      "lockfileChanges": []
-    }
-  ],
-  "pullRequests": [
-    {
-      "number": 260,
-      "url": "https://github.com/sliceworkz/eventmodeling/pull/260",
-      "head": "deps/release/0.7/auto",
-      "title": "Dependency updates on release/0.7",
-      "ci": "pending",
-      "autoMerge": true
-    }
-  ],
+  "batches": [],
+  "pullRequests": [],
   "closedPullRequests": [],
   "deletedBranches": [],
   "declined": [],
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-16T06:30:54Z",
-    "sbomOrigin": "saved by the previous run (branch head unchanged)",
+    "dbBuilt": "2026-11-17T06:20:58Z",
+    "sbomOrigin": "built by this run",
     "sboms": [
       "maven"
     ],

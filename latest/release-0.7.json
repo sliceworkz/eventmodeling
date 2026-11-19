@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-19T09:40:25+01:00",
+  "runAt": "2026-11-19T15:27:27+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.7",
   "commit": "19148fc2897ec4b03fefe266080438e3ad467141",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44489545376",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44543864957",
   "dryRun": false,
   "projectVersion": "0.7.3-SNAPSHOT",
   "policy": {
@@ -42,6 +42,10 @@
       "ltsOnly": true,
       "scanImages": true
     },
+    "containerImages": {
+      "scanImages": true,
+      "images": []
+    },
     "hold": [],
     "groups": []
   },
@@ -69,7 +73,6 @@
       "sliceworkz-eventmodeling-testing-0.7.2.cdx.json"
     ],
     "reason": null,
-    "images": [],
     "sboms": [
       "sliceworkz-eventmodeling-0.7.2",
       "sliceworkz-eventmodeling-testing-0.7.2"
@@ -412,7 +415,7 @@
       ],
       "own": false,
       "group": null,
-      "newest": "1.6.7"
+      "newest": "1.6.8"
     },
     {
       "ecosystem": "maven",
@@ -464,11 +467,28 @@
       "batch": null,
       "published": null,
       "outcome": "mentioned"
+    },
+    {
+      "ecosystem": "maven",
+      "name": "logback.version",
+      "where": "sliceworkz-eventmodeling-benchmark/pom.xml",
+      "current": "1.6.7",
+      "kind": "property",
+      "artifacts": [
+        "ch.qos.logback:logback-classic"
+      ],
+      "own": false,
+      "group": null,
+      "level": "patch",
+      "target": "1.6.8",
+      "outcome": "held-back",
+      "eligibleFrom": "2026-11-20T11:14:55+00:00",
+      "reason": "cooldown"
     }
   ],
   "batches": [],
   "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-19T08:41:59+00:00",
+  "pullRequestsReadAt": "2026-11-19T14:29:12+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],

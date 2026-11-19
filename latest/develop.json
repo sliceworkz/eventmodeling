@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-18T10:06:29+01:00",
+  "runAt": "2026-11-19T10:29:45+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "develop",
-  "commit": "bf6227eb204d0cb51dd9cf74ef9edf08ed358482",
+  "commit": "531719acc0d036b71879c0d42942f610cc493721",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44272755357",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44496869445",
   "dryRun": false,
   "projectVersion": "0.10.0-SNAPSHOT",
   "policy": {
@@ -22,7 +22,7 @@
       "cooldownDays": 1
     },
     "major": {
-      "action": "pr-each",
+      "action": "merge-each",
       "cooldownDays": 1
     },
     "transitive": {
@@ -38,6 +38,10 @@
       "maven"
     ],
     "ownLibraryCooldownDays": 0,
+    "jdk": {
+      "ltsOnly": true,
+      "scanImages": true
+    },
     "hold": [],
     "groups": []
   },
@@ -401,14 +405,16 @@
   "updates": [],
   "batches": [],
   "pullRequests": [],
+  "pullRequestsReadAt": "2026-11-19T09:31:20+00:00",
+  "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
   "declined": [],
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-18T06:21:08Z",
-    "sbomOrigin": "ci-artifact (run 44058574569)",
+    "dbBuilt": "2026-11-19T06:23:17Z",
+    "sbomOrigin": "ci-artifact (run 44485381778)",
     "sboms": [
       "library",
       "test-kit"

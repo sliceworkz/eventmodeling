@@ -167,7 +167,7 @@ schedule of the policy, and its runs and logs are there. What it does is in `.gi
 |---|---|---|
 | patch | a PR, merged automatically when CI is green | a PR, merged automatically when CI is green |
 | minor | the same PR | a PR for review |
-| major | a PR per update, for review | only mentioned |
+| major | a PR per update, merged automatically when its own CI is green | only mentioned |
 
 - **Our own libraries** (the event store) are followed on `develop`: a SNAPSHOT of ours moves to the newest SNAPSHOT
   deployed, which is what that library's `develop` builds now, in a PR of its own (`deps/develop/own`) merged when

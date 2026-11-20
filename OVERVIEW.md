@@ -6,7 +6,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 |---|---|---|---:|---:|---:|---:|---:|---|---:|---|---|
 | [`develop`](#develop) | 2026-11-20T10:10:52+01:00 | `531719acc0` | 0 | 0 | 0 | 0 | 0 | - | 0 | - | ci-artifact (run 44485381778) |
 | [`release/0.9`](#release09) | 2026-11-20T09:25:16+01:00 | `af6b936141` | 0 | 0 | 0 | 0 | 0 | v0.9.0: none critical/high | 0 | **1 since v0.9.0** | ci-artifact (run 43827739319) |
-| [`release/0.8`](#release08) | 2026-11-20T09:25:15+01:00 | `f55dbe93b2` | 0 | 0 | 0 | 0 | 0 | v0.8.0: none critical/high | 1 | **4 since v0.8.0** | saved by the previous run (branch head unchanged) |
+| [`release/0.8`](#release08) | 2026-11-20T18:29:59+01:00 | `aa4d7fc060` | 0 | 0 | 0 | 0 | 0 | v0.8.0: none critical/high | 1 | **5 since v0.8.0** | built by this run |
 | [`release/0.7`](#release07) | 2026-11-20T18:30:16+01:00 | `19148fc289` | 0 | 0 | 0 | 0 | 0 | v0.7.2: none critical/high | 0 | **2 since v0.7.2** | saved by the previous run (branch head unchanged) |
 
 ## develop
@@ -23,13 +23,13 @@ No critical or high findings on the branch head.
 
 ## release/0.8
 
-**4 dependency update(s) merged since v0.8.0 (2026-10-23), not released yet**: release a patch (`create-release-tag-and-bump` on this line) to ship them. 1 other change(s) are unreleased too.
+**5 dependency update(s) merged since v0.8.0 (2026-10-23), not released yet**: release a patch (`create-release-tag-and-bump` on this line) to ship them. 1 other change(s) are unreleased too.
 
 No critical or high findings in the released v0.8.0 (scanned from the SBOMs attached to it).
 
 No critical or high findings on the branch head.
 
-Pipeline PRs open: [#259](https://github.com/sliceworkz/eventmodeling/pull/259) (auto-merge, CI red)
+Pipeline PRs open: [#265](https://github.com/sliceworkz/eventmodeling/pull/265) (auto-merge, CI green)
 
 ## release/0.7
 

@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-20T09:25:15+01:00",
+  "runAt": "2026-11-20T18:30:16+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.7",
   "commit": "19148fc2897ec4b03fefe266080438e3ad467141",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44702336085",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44783800815",
   "dryRun": false,
   "projectVersion": "0.7.3-SNAPSHOT",
   "policy": {
@@ -481,14 +481,42 @@
       "group": null,
       "level": "patch",
       "target": "1.6.8",
-      "outcome": "held-back",
-      "eligibleFrom": "2026-11-20T11:14:55+00:00",
-      "reason": "cooldown"
+      "action": "merge",
+      "batch": "auto",
+      "published": "2026-11-19",
+      "outcome": "planned"
     }
   ],
-  "batches": [],
+  "batches": [
+    {
+      "key": "auto",
+      "branch": "deps/release/0.7/auto",
+      "action": "merge",
+      "level": "merge",
+      "transitive": false,
+      "commit": "a2fd2c54b7d70d485b5efa4b818f9989fa0e395e",
+      "error": null,
+      "outcome": "pr-opened",
+      "pr": 267,
+      "changes": [
+        {
+          "ecosystem": "maven",
+          "name": "logback.version",
+          "where": "sliceworkz-eventmodeling-benchmark/pom.xml",
+          "level": "patch",
+          "from": "1.6.7",
+          "to": "1.6.8",
+          "applied": true,
+          "error": null,
+          "follows": null
+        }
+      ],
+      "lockfileChanges": [],
+      "mergedAt": "2026-11-20T17:34:08Z"
+    }
+  ],
   "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-20T08:26:28+00:00",
+  "pullRequestsReadAt": "2026-11-20T17:34:13+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],

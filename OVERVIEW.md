@@ -7,7 +7,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 | [`develop`](#develop) | 2026-11-20T19:39:12+01:00 | `f6a6187f9f` | 0 | 0 | 0 | 0 | 0 | - | 0 | - | ci-artifact (run 44784858669) |
 | [`release/0.9`](#release09) | 2026-11-20T18:34:35+01:00 | `af6b936141` | 0 | 0 | 0 | 0 | 0 | v0.9.0: none critical/high | 0 | **1 since v0.9.0** | ci-artifact (run 43827739319) |
 | [`release/0.8`](#release08) | 2026-11-20T19:39:10+01:00 | `4413986721` | 0 | 0 | 0 | 0 | 0 | v0.8.0: none critical/high | 0 | **6 since v0.8.0** | built by this run |
-| [`release/0.7`](#release07) | 2026-11-20T18:30:16+01:00 | `19148fc289` | 0 | 0 | 0 | 0 | 0 | v0.7.2: none critical/high | 0 | **2 since v0.7.2** | saved by the previous run (branch head unchanged) |
+| [`release/0.7`](#release07) | 2026-11-20T19:39:09+01:00 | `ec2480cd24` | 0 | 0 | 0 | 0 | 0 | v0.7.2: none critical/high | 0 | **3 since v0.7.2** | built by this run |
 
 ## develop
 
@@ -31,7 +31,7 @@ No critical or high findings on the branch head.
 
 ## release/0.7
 
-**2 dependency update(s) merged since v0.7.2 (2026-11-08), not released yet**: release a patch (`create-release-tag-and-bump` on this line) to ship them.
+**3 dependency update(s) merged since v0.7.2 (2026-11-08), not released yet**: release a patch (`create-release-tag-and-bump` on this line) to ship them.
 
 No critical or high findings in the released v0.7.2 (scanned from the SBOMs attached to it).
 

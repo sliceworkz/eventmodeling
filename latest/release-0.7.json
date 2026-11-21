@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-20T19:39:09+01:00",
+  "runAt": "2026-11-21T09:12:49+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.7",
   "commit": "ec2480cd248713fa560f5b464ade28663f0c33b4",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44794730098",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44883780045",
   "dryRun": false,
   "projectVersion": "0.7.3-SNAPSHOT",
   "policy": {
@@ -196,7 +196,7 @@
       ],
       "own": true,
       "group": null,
-      "newest": "0.13.0"
+      "newest": "0.14.0"
     },
     {
       "ecosystem": "maven",
@@ -466,7 +466,7 @@
       "own": true,
       "group": null,
       "level": "major",
-      "target": "0.13.0",
+      "target": "0.14.0",
       "action": "mention",
       "batch": null,
       "published": null,
@@ -475,7 +475,7 @@
   ],
   "batches": [],
   "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-20T18:41:36+00:00",
+  "pullRequestsReadAt": "2026-11-21T08:14:42+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -483,8 +483,8 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-20T06:21:00Z",
-    "sbomOrigin": "built by this run",
+    "dbBuilt": "2026-11-21T06:20:06Z",
+    "sbomOrigin": "saved by the previous run (branch head unchanged)",
     "sboms": [
       "maven"
     ],

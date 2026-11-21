@@ -4,7 +4,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 
 | Branch | Last run | Head | Critical | High | Medium | Low | Blocking | Released version | Open PRs | Unreleased updates | SBOMs |
 |---|---|---|---:|---:|---:|---:|---:|---|---:|---|---|
-| [`develop`](#develop) | 2026-11-20T19:39:12+01:00 | `f6a6187f9f` | 0 | 0 | 0 | 0 | 0 | - | 0 | - | ci-artifact (run 44784858669) |
+| [`develop`](#develop) | 2026-11-21T09:45:43+01:00 | `0400de7b29` | 0 | 0 | 0 | 0 | 0 | - | 0 | - | ci-artifact (run 44804819751) |
 | [`release/0.10`](#release010) | 2026-11-21T09:12:47+01:00 | `b44b34a02c` | 0 | 0 | 0 | 0 | 0 | v0.10.0: none critical/high | 0 | none since v0.10.0 | ci-artifact (run 44806918038) |
 | [`release/0.9`](#release09) | 2026-11-21T09:15:02+01:00 | `7f8ab059c7` | 0 | 0 | 0 | 0 | 0 | v0.9.0: none critical/high | 0 | **2 since v0.9.0** | ci-artifact (run 44785573953) |
 | [`release/0.8`](#release08) | 2026-11-21T09:12:48+01:00 | `4413986721` | 0 | 0 | 0 | 0 | 0 | v0.8.0: none critical/high | 0 | **6 since v0.8.0** | saved by the previous run (branch head unchanged) |

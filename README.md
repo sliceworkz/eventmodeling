@@ -1,4 +1,4 @@
-[![ci build - mvn package](https://github.com/sliceworkz/eventmodeling/actions/workflows/ci.yaml/badge.svg)](https://github.com/sliceworkz/eventmodeling/actions/workflows/ci.yaml)
+[![CI](https://github.com/sliceworkz/eventmodeling/actions/workflows/ci.yaml/badge.svg)](https://github.com/sliceworkz/eventmodeling/actions/workflows/ci.yaml)
 [![Status: Release Candidate](https://img.shields.io/badge/status-release%20candidate-yellowgreen)](#project-status)
 [![Maven Central](https://img.shields.io/maven-central/v/org.sliceworkz/sliceworkz-eventmodeling-bom)](https://central.sonatype.com/search?q=g:org.sliceworkz)
 [![Quickstart](https://img.shields.io/badge/Event%20Modeling%20Quickstart%20Guide-0b5fff)](https://sliceworkz.github.io/posts/eventmodeling-quickstart/)

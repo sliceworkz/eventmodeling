@@ -1,5 +1,5 @@
-name: build-and-deploy-from-release-tag
-run-name: "build-and-deploy-from-release-tag [${{ github.ref_name }}]"
+name: "🚀 🤖 Release 3 · Publish"
+run-name: "Publish ${{ github.ref_name }}"
 
 on:
   push:
@@ -52,7 +52,7 @@ jobs:
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
       # Tests run here, against the exact tree being published. The tag is cut by
-      # create-release-tag-and-bump, which commits a version change of its own, so the
+      # Release 2 · Tag, which commits a version change of its own, so the
       # commit this builds is not one any CI run has necessarily seen -- skipping tests
       # here meant nothing ever tested what went to Maven Central.
       - name: Build and test with Maven
@@ -144,7 +144,7 @@ jobs:
           sbom-path: sbom/sliceworkz-eventmodeling-testing-${{ steps.get_version.outputs.VERSION }}.cdx.json
           subject-path: sliceworkz-eventmodeling-testing/target/sliceworkz-eventmodeling-testing-${{ steps.get_version.outputs.VERSION }}.jar
 
-      # Report only: the gate ran before the tag was created (create-release-tag-and-bump), and a release
+      # Report only: the gate ran before the tag was created (Release 2 · Tag), and a release
       # that is already tagged is not stopped here. The findings are in the job summary and the
       # vulnerability-reports artifact.
       - name: Report known vulnerabilities in the release

@@ -1,32 +1,32 @@
 {
   "schema": 1,
-  "runAt": "2026-11-20T19:39:10+01:00",
+  "runAt": "2026-11-21T19:43:48+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
-  "branch": "release/0.8",
-  "commit": "44139867213366692fb76ae91c5406c70e3c9510",
+  "branch": "develop",
+  "commit": "fcabec82474baad77643910402255edeea2c0f9c",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44794730098",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44937069003",
   "dryRun": false,
-  "projectVersion": "0.8.1-SNAPSHOT",
+  "projectVersion": "0.11.0-SNAPSHOT",
   "policy": {
-    "pattern": "release/*",
-    "schedule": "10 1 * * *",
-    "ownLibraries": "include",
+    "pattern": "develop",
+    "schedule": "40 1 * * *",
+    "ownLibraries": "follow",
     "patch": {
       "action": "merge",
       "cooldownDays": 1
     },
     "minor": {
-      "action": "pr",
+      "action": "merge",
       "cooldownDays": 1
     },
     "major": {
-      "action": "mention",
+      "action": "merge-each",
       "cooldownDays": 1
     },
     "transitive": {
-      "action": "pr",
+      "action": "merge",
       "cooldownDays": 1
     },
     "own": {
@@ -47,64 +47,13 @@
       "images": []
     },
     "hold": [],
-    "groups": []
+    "groups": [],
+    "assignees": [
+      "vanrogu"
+    ]
   },
-  "release": {
-    "lastTag": "v0.8.0",
-    "tagDate": "2026-10-23T06:26:02Z",
-    "dependencyUpdates": [
-      {
-        "commit": "44139867213366692fb76ae91c5406c70e3c9510",
-        "subject": "Dependency updates (#265)"
-      },
-      {
-        "commit": "aa4d7fc0603bde9c98c92ab143e77cf7dae23261",
-        "subject": "Dependency updates (#259)"
-      },
-      {
-        "commit": "f55dbe93b277796d9159d890738dc88a9d82e7c8",
-        "subject": "Minor dependency updates (#247)"
-      },
-      {
-        "commit": "d6ddac63d6d1e465928e6024db84b259c639f4fd",
-        "subject": "Minor dependency updates (#240)"
-      },
-      {
-        "commit": "7c1510720ce325e7e2c26b7eb1b932b050c3a6ca",
-        "subject": "Dependency updates 2026-11-05 on release/0.8: minor (#211)"
-      },
-      {
-        "commit": "ce84aa9ea698a30be18176f98af607609b1b02b2",
-        "subject": "Dependency updates 2026-11-05 on release/0.8 (patch)"
-      }
-    ],
-    "otherChanges": 1
-  },
-  "releaseScan": {
-    "tag": "v0.8.0",
-    "tagDate": "2026-10-23T06:26:02Z",
-    "origin": "attached to the release",
-    "assets": [
-      "sliceworkz-eventmodeling-0.8.0.cdx.json",
-      "sliceworkz-eventmodeling-testing-0.8.0.cdx.json"
-    ],
-    "reason": null,
-    "sboms": [
-      "sliceworkz-eventmodeling-0.8.0",
-      "sliceworkz-eventmodeling-testing-0.8.0"
-    ],
-    "notScanned": [],
-    "findings": [],
-    "counts": {
-      "critical": 0,
-      "high": 0,
-      "medium": 0,
-      "low": 0,
-      "negligible": 0,
-      "unknown": 0,
-      "blocking": 0
-    }
-  },
+  "release": null,
+  "releaseScan": null,
   "inventory": [
     {
       "ecosystem": "maven",
@@ -201,14 +150,14 @@
       "ecosystem": "maven",
       "name": "sliceworkz.eventstore.version",
       "where": "pom.xml",
-      "current": "0.12.0",
+      "current": "0.15.0-SNAPSHOT",
       "kind": "property",
       "artifacts": [
         "org.sliceworkz:sliceworkz-eventstore-bom"
       ],
       "own": true,
       "group": null,
-      "newest": "0.13.0"
+      "newest": "0.15.0-SNAPSHOT"
     },
     {
       "ecosystem": "maven",
@@ -396,6 +345,19 @@
     },
     {
       "ecosystem": "maven",
+      "name": "maven.maven-jar-plugin.version",
+      "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
+      "current": "3.5.1",
+      "kind": "property",
+      "artifacts": [
+        "org.apache.maven.plugins:maven-jar-plugin"
+      ],
+      "own": false,
+      "group": null,
+      "newest": "3.5.1"
+    },
+    {
+      "ecosystem": "maven",
       "name": "maven.maven-source-plugin.version",
       "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
       "current": "3.4.0",
@@ -447,29 +409,10 @@
       "newest": "3.6.2"
     }
   ],
-  "updates": [
-    {
-      "ecosystem": "maven",
-      "name": "sliceworkz.eventstore.version",
-      "where": "pom.xml",
-      "current": "0.12.0",
-      "kind": "property",
-      "artifacts": [
-        "org.sliceworkz:sliceworkz-eventstore-bom"
-      ],
-      "own": true,
-      "group": null,
-      "level": "major",
-      "target": "0.13.0",
-      "action": "mention",
-      "batch": null,
-      "published": null,
-      "outcome": "mentioned"
-    }
-  ],
+  "updates": [],
   "batches": [],
   "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-20T18:41:18+00:00",
+  "pullRequestsReadAt": "2026-11-21T18:45:21+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -477,10 +420,11 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-20T06:21:00Z",
-    "sbomOrigin": "built by this run",
+    "dbBuilt": "2026-11-21T06:20:06Z",
+    "sbomOrigin": "ci-artifact (run 44922256534)",
     "sboms": [
-      "maven"
+      "library",
+      "test-kit"
     ],
     "notScanned": [],
     "findings": [],

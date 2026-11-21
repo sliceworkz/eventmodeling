@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-21T16:06:49+01:00",
+  "runAt": "2026-11-21T19:43:48+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "develop",
-  "commit": "22c615663ac147fff5e390f4432e1e1d1b4cb7af",
+  "commit": "fcabec82474baad77643910402255edeea2c0f9c",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44917398810",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44937069003",
   "dryRun": false,
   "projectVersion": "0.11.0-SNAPSHOT",
   "policy": {
@@ -47,7 +47,10 @@
       "images": []
     },
     "hold": [],
-    "groups": []
+    "groups": [],
+    "assignees": [
+      "vanrogu"
+    ]
   },
   "release": null,
   "releaseScan": null,
@@ -409,7 +412,7 @@
   "updates": [],
   "batches": [],
   "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-21T15:08:02+00:00",
+  "pullRequestsReadAt": "2026-11-21T18:45:21+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -418,7 +421,7 @@
   "vulnerabilities": {
     "grype": "v0.121.0",
     "dbBuilt": "2026-11-21T06:20:06Z",
-    "sbomOrigin": "ci-artifact (run 44892646838)",
+    "sbomOrigin": "ci-artifact (run 44922256534)",
     "sboms": [
       "library",
       "test-kit"

@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-20T19:41:28+01:00",
+  "runAt": "2026-11-21T09:15:02+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.9",
   "commit": "7f8ab059c77c1ed364d600e35d57e8f5ac491b66",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44794730098",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44883780045",
   "dryRun": false,
   "projectVersion": "0.9.1-SNAPSHOT",
   "policy": {
@@ -192,7 +192,7 @@
       ],
       "own": true,
       "group": null,
-      "newest": "0.13.0"
+      "newest": "0.14.0"
     },
     {
       "ecosystem": "maven",
@@ -444,10 +444,29 @@
       "newest": "3.6.2"
     }
   ],
-  "updates": [],
+  "updates": [
+    {
+      "ecosystem": "maven",
+      "name": "sliceworkz.eventstore.version",
+      "where": "pom.xml",
+      "current": "0.13.0",
+      "kind": "property",
+      "artifacts": [
+        "org.sliceworkz:sliceworkz-eventstore-bom"
+      ],
+      "own": true,
+      "group": null,
+      "level": "major",
+      "target": "0.14.0",
+      "action": "mention",
+      "batch": null,
+      "published": null,
+      "outcome": "mentioned"
+    }
+  ],
   "batches": [],
   "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-20T18:43:23+00:00",
+  "pullRequestsReadAt": "2026-11-21T08:16:57+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -455,7 +474,7 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-20T06:21:00Z",
+    "dbBuilt": "2026-11-21T06:20:06Z",
     "sbomOrigin": "ci-artifact (run 44785573953)",
     "sboms": [
       "library",

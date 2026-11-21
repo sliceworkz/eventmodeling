@@ -174,6 +174,8 @@ schedule of the policy, and its runs and logs are there. What it does is in `.gi
   CI is green. On a release line a SNAPSHOT of ours becomes the newest release of its line, the same way, and
   released versions are updated like any other dependency.
 - **Cooldown**: a version is proposed once it has been out for a day.
+- **Assigned**: a PR for review is assigned to the maintainer by the pipeline (`assignees` in the policy); one
+  that merges by itself is assigned to nobody.
 - **Declining**: close a pipeline PR without merging, and its versions are not proposed again until a newer one comes.
   A commit of your own on a pipeline PR branch stops the pipeline from rewriting it.
 - **What it found** is on the `dependency-status` branch: `OVERVIEW.md` there shows every branch side by side (its

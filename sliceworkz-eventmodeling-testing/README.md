@@ -2,7 +2,8 @@
 
 Base classes for testing an application built on the framework: `CommandTest`, `AggregateTest`,
 `LiveModelTest` (and `InboundLiveModelTest` / `OutboundLiveModelTest` for a read model over the inbound
-or outbound stream), `AutomationTest`, `TranslatorTest`, `DispatcherTest` and `SqlReadModelTest`.
+or outbound stream), `CachingReadModelTest`, `AutomationTest`, `TranslatorTest`, `DispatcherTest` and
+`SqlReadModelTest`.
 
 ```xml
 <dependency>
@@ -14,7 +15,7 @@ or outbound stream), `AutomationTest`, `TranslatorTest`, `DispatcherTest` and `S
 
 ## Running against every event storage
 
-`CommandTest`, `AggregateTest`, `LiveModelTest` (with its inbound and outbound twins), `AutomationTest`, `TranslatorTest` and
+`CommandTest`, `AggregateTest`, `LiveModelTest` (with its inbound and outbound twins), `CachingReadModelTest`, `AutomationTest`, `TranslatorTest` and
 `DispatcherTest` all extend `AbstractBoundedContextTest`, which
 builds a bounded context over a storage and releases both around every test method. **Which storage
 that is depends on how the test method is annotated** — the same choice the framework's own suite
@@ -233,6 +234,40 @@ class InboundTrafficReadModelTest extends InboundLiveModelTest<BankingDomainEven
 A read model the slice registers eventually consistent is tested the same way: projected live, it folds
 the same events through the same code, with no background thread to wait for. `InboundTrafficReadModelTest`
 in `sliceworkz-eventmodeling-examples` is the worked example.
+
+## Testing a caching read model
+
+`CachingReadModelTest` tests a `CachingReadModel`: given events, read a key, and say when the projector
+delivers. The read model is not registered — a registered one projects on a thread of its own, which
+would race the test — but attached to the context's domain stream and projected by a `Projector` that
+runs only when the test says `projected()`. So whether a read was answered from memory or loaded, and
+what a held key shows before and after the projector got to an event, are assertions, not timings:
+
+```java
+class CachedBalanceReadModelTest extends CachingReadModelTest<BankingEvent, BankingInboundEvent, BankingOutboundEvent, AccountId, BigDecimal> {
+
+    @Override
+    public CachingReadModel<BankingEvent, AccountId, BigDecimal> readModel ( ) {
+        return new CachedBalanceReadModel(CachePolicy.maxEntries(2));
+    }
+
+    @Test
+    void aHeldAccountIsKeptCurrentByTheProjector ( ) {
+        given()
+            .events(opened(CHECKING), deposited(CHECKING, "1000"))
+            .whenRead(CHECKING).loaded().is(new BigDecimal("1000"))
+        .and()
+            .event(deposited(CHECKING, "2500"))
+            .whenRead(CHECKING).fromMemory().is(new BigDecimal("1000"))   // not delivered yet
+        .and()
+            .projected()
+            .whenRead(CHECKING).fromMemory().is(new BigDecimal("3500"));  // delivered, nothing loaded again
+    }
+}
+```
+
+`readModelUnderTest().statistics()` gives the hits, loads and evictions. `CachedBalanceReadModelTest` in
+`sliceworkz-eventmodeling-examples` is the worked example.
 
 ## Testing a translator
 

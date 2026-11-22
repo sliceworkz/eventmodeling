@@ -87,7 +87,9 @@ Two ways of keeping a read cheap on a long history, side by side. The domain one
 replays one month rather than one account's lifetime. The framework one is step 3b — `CurrentBalanceReadModel`,
 the file to read when a live model is impractical but an eventually consistent read is not current enough to
 decide on. It seeds from `AccountBalancesReadModel` (a `PublishingReadModel` projected in the background) and
-projects only what has not reached it, usually nothing. Note that both share one `BalanceFold`: the base and
+projects only what has not reached it, usually nothing. Step 11 adds the third reader,
+`CachedBalanceReadModel` — a `CachingReadModel` holding only the accounts being read, tested with the
+published `CachingReadModelTest` in `CachedBalanceReadModelTest`. Note that all of them share one `BalanceFold`: the base and
 the delta are folded by different code paths, and the moment they disagree the answer starts depending on how
 far the projector got.
 
@@ -1188,14 +1190,27 @@ processor:**
   and `projectionStopped()` (`onStopped`, `onStoppedByOperator`, the module's `stop()`; cleared only by
   `projectionStarted()` from `onStarted`, since a run under way when the stop came completes after it).
   While either holds, nothing is held and every read loads without keeping what it loaded
+- **A read of a key being loaded waits for that load** (`loading`, a future per key): one replay per
+  key however many reads miss it at once; what the load threw reaches every waiter, and the next read
+  loads afresh. `getIncluding` loads the key itself when the answer misses the write, never joining a
+  load that may have read the stream before it
+- **Every read is observed as `Observation.CachedRead`**, on the caller's thread, answering `CacheHit`,
+  `CacheLoaded` (events read and folded, `caughtUp`, `held`) or `CacheLoadShared`; `ReadModelModule`
+  hands the read model its observer and context name with `attach(source, observer, boundedContext)`
 - **A fold that throws in the projector lets that key go** (`failedUpdates`) instead of failing the
   run: retrying the event would hold up every key; the key's next read replays it and fails to the caller
 - **`STATE` is immutable**, as for `PublishingReadModel`; one `ReentrantLock` guards the entries and
   `delivered`, held per delivered event, per hit, and around a load's insert (with its catch-up) — a
   lock, not a monitor, because the catch-up reads from the store while holding it
-- `CachingReadModelTest` pins each rule by driving the read model by hand — the overtaken load through
-  a stream whose `head()` answers an older reference, the double delivery, two keys in one event, LRU
-  and expiry, a failing fold, failing against stopped; `CachingReadModelInABoundedContextTest` pins it
+- `CachingReadModelRulesTest` pins each rule by driving the read model by hand — the overtaken load
+  through a stream whose `head()` answers an older reference, the double delivery, two keys in one event,
+  LRU and expiry, a failing fold, failing against stopped, a shared load (and a failed one) through a
+  stream whose `head()` blocks until released, `getIncluding` not settling for a load that started before
+  the write, the observation; the published `CachingReadModelTest` base (testing module) drives it with a
+  `Projector` the test runs, and `CachingReadModelTestRunsOnEveryBackendTest` is this repository's copy of
+  what its user gets; the examples' `CachedBalanceReadModel` (on `BalanceFold`, step 11 of the
+  closing-the-books example) and `CachedBalanceReadModelTest` are the worked example;
+  `CachingReadModelInABoundedContextTest` pins it
   per backend through a context: kept current, no replay at start (the bookmark handled nothing), an
   operator stop degrading it and a restart restoring it, the live registration refused
 
@@ -2610,7 +2625,7 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 
 **Base Classes:**
 - `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves. The release *terminates* the context rather than stopping it, because terminating is what closes the `EventStore` the context built and drains its processor threads — see "Shutdown — who closes what" below
-- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest` — with `InboundLiveModelTest` and `OutboundLiveModelTest` for a read model over the inbound or outbound stream — `AutomationTest`, `PolicyTest`, `TranslatorTest`, `PublisherTest`, `DispatcherTest`, `SqlReadModelTest`)
+- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest` — with `InboundLiveModelTest` and `OutboundLiveModelTest` for a read model over the inbound or outbound stream — `CachingReadModelTest`, `AutomationTest`, `PolicyTest`, `TranslatorTest`, `PublisherTest`, `DispatcherTest`, `SqlReadModelTest`)
 - `CommandTest` tests business rules with `as(actor)` (seeded events and the execution carry the actor),
   `whenEvaluated(command).thenEvaluation()` (fails if anything was appended) and
   `then().rulesViolated()`, both handing out `EvaluationAssertions`

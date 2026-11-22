@@ -64,6 +64,36 @@ public sealed interface Outcome {
 	 */
 	sealed interface ReactionResult extends Outcome { }
 
+	/** What a read of a {@code CachingReadModel} answered. */
+	sealed interface CachedReadResult extends Outcome { }
+
+	/**
+	 * The key was held: answered from memory, nothing read.
+	 *
+	 * @param upTo the last event folded into the answer, empty when no event is about the key
+	 */
+	record CacheHit ( Optional<EventReference> upTo ) implements CachedReadResult { }
+
+	/**
+	 * The key was not held, and this read loaded it.
+	 *
+	 * @param eventsStreamed how many events the load read, its catch-up included
+	 * @param eventsHandled how many of them were folded into the key's state
+	 * @param caughtUp how many of those the catch-up read: the events the projector delivered while the
+	 *                 replay ran, which the load read again before it inserted the key
+	 * @param upTo the last event folded into the answer, empty when no event is about the key
+	 * @param held whether the key is held now; {@code false} while the projector is failing or stopped
+	 */
+	record CacheLoaded ( long eventsStreamed, long eventsHandled, long caughtUp, Optional<EventReference> upTo, boolean held ) implements CachedReadResult { }
+
+	/**
+	 * The key was not held, and another read was loading it: this read waited for that load and answers
+	 * what it loaded, reading nothing itself.
+	 *
+	 * @param upTo the last event folded into the answer, empty when no event is about the key
+	 */
+	record CacheLoadShared ( Optional<EventReference> upTo ) implements CachedReadResult { }
+
 	/** What a call through a monitored port answered. */
 	sealed interface PortCallOutcome extends Outcome { }
 

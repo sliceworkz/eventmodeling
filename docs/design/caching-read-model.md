@@ -103,11 +103,32 @@ key's next read, where its caller sees it.
 - **A monitor instead of a `ReentrantLock`.** The catch-up reads from the store while holding the lock,
   and a virtual thread blocking inside a monitor pins its carrier on Java 21.
 
-## Not done yet
+## Two reads of one key
 
-- Concurrent misses on one key each replay it; the second insert finds the first and keeps it. A
-  per-key in-flight load would save the duplicate replay under a stampede.
-- A miss is observed by the event store's own observer (its queries) but not as an observation of the
-  framework's own, as a live read is (`Observation.LiveModelRead`).
-- No published test base: a test attaches a stream and calls `when` itself, as
-  `CachingReadModelTest` does.
+A read that finds its key not held, while another read is loading it, waits for that load and answers
+what it loaded (`loading`, one `CompletableFuture` per key under the same lock). Without it a key read by
+twenty requests at once after a restart would be replayed twenty times. What the load threw reaches
+every read that waited for it, and the future is gone once the load ends, so the next read loads afresh.
+
+`getIncluding` is the exception: when the held or shared answer does not include the caller's write, it
+loads the key itself rather than joining a load under way, which may have read the stream before the
+write.
+
+## Observed like a live read
+
+Every read is an `Observation.CachedRead` on the caller's thread, answering `CacheHit`, `CacheLoaded`
+(events read, events folded, how many of them the catch-up read, whether the key is held now) or
+`CacheLoadShared`. The event store's queries of a load nest beneath it. The key travels as its
+`toString()`, which is data: a metrics binding must bound it. The alternative — reporting a load as a
+`LiveModelRead` — loses because a hit is an answer worth counting too, and the hit rate is the number
+that says whether the read model is worth having.
+
+## Testing
+
+`CachingReadModelTest` in the testing module, beside the other bases. It does not register the read
+model, for the reason `AutomationTest` does not register an automation: a registered one projects on a
+thread of its own, racing the test. It attaches the read model to the context's domain stream, starts it
+with `resumeFrom()` as a deployment does, and projects it with an eventstore `Projector` when the test
+says `projected()`. So the lag between an append and a held key seeing it is a step of the test. The
+read model is created before the given events, so a load reads them and the projector then delivers them
+again, and every test exercises the rule that counts an event once.

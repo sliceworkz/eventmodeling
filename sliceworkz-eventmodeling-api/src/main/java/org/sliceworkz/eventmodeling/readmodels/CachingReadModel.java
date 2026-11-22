@@ -21,16 +21,24 @@ import java.time.Instant;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sliceworkz.eventmodeling.events.TracingScope;
+import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.projection.Projection;
 import org.sliceworkz.eventstore.projection.Projector;
+import org.sliceworkz.eventstore.projection.Projector.ProjectorMetrics;
 import org.sliceworkz.eventstore.query.EventFilter;
 import org.sliceworkz.eventstore.stream.EventSource;
 
@@ -92,6 +100,10 @@ import org.sliceworkz.eventstore.stream.EventSource;
  *       over far more keys than it holds. {@link #statistics()} says which, through hits against misses.</li>
  *   <li>The projector reads every relevant event appended, held or not, as any eventually consistent read
  *       model does, but folds only those for held keys.</li>
+ *   <li>Reads that miss the same key at once make one load: the later ones wait for it and answer what
+ *       it loaded ({@link CacheStatistics#sharedLoads()}).</li>
+ *   <li>Every read is observed as an {@link org.sliceworkz.eventmodeling.observability.Observation.CachedRead},
+ *       answering a hit, a load or a shared load, so a metrics binding can chart the hit rate.</li>
  *   <li>Nothing is warmed: after a start, and after the projector is restarted, every key is a miss
  *       once. Starting does not replay the history either — the projector starts at the stream head,
  *       since nothing is held that the history could update.</li>
@@ -155,12 +167,19 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 	private volatile boolean stopped;
 
 	private volatile EventSource<DOMAIN_EVENT_TYPE> source;
+	private volatile BoundedContextObserver observer = BoundedContextObserver.NOOP;
+	private volatile String boundedContext;
+
+	// guarded by lock: the loads under way, per key. A read of a key being loaded waits for that load
+	// rather than replaying the key's history a second time
+	private final Map<KEY, CompletableFuture<ReadModelResult<STATE>>> loading = new HashMap<>();
 
 	private final AtomicLong hits = new AtomicLong();
 	private final AtomicLong misses = new AtomicLong();
 	private final AtomicLong evictions = new AtomicLong();
 	private final AtomicLong expirations = new AtomicLong();
 	private final AtomicLong failedUpdates = new AtomicLong();
+	private final AtomicLong sharedLoads = new AtomicLong();
 
 	private static final class Entry<STATE> {
 		private STATE state;
@@ -220,35 +239,16 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 	 * write about this key is in it.
 	 */
 	public final ReadModelResult<STATE> result ( KEY key ) {
-		if ( key == null ) {
-			throw new IllegalArgumentException("key must not be null");
-		}
-		EventSource<DOMAIN_EVENT_TYPE> source = attachedSource();
-		if ( !halted() ) {
-			Instant now = policy.clock().instant();
-			lock.lock();
-			try {
-				expire(now);
-				Entry<STATE> entry = entries.remove(key);
-				if ( entry != null ) {
-					entry.lastRead = now;
-					entries.put(key, entry);
-					hits.incrementAndGet();
-					return new ReadModelResult<>(entry.state, entry.upTo);
-				}
-			} finally {
-				lock.unlock();
-			}
-		}
-		misses.incrementAndGet();
-		return load(key, source);
+		return observedRead(key, true);
 	}
 
 	/**
 	 * The state of {@code key}, including {@code write}: a held entry that does not include it yet is
-	 * loaded again. {@code write} must be an event about {@code key}; a write about another key is never
-	 * in this one, and costs a load on every call. On PostgreSQL a write still behind the visibility
-	 * barrier is not readable yet, by a load or by anything else, and is not in what this answers.
+	 * loaded again, by a load of this read's own — never one another read had already started, which may
+	 * have read the stream before the write. {@code write} must be an event about {@code key}; a write
+	 * about another key is never in this one, and costs a load on every call. On PostgreSQL a write still
+	 * behind the visibility barrier is not readable yet, by a load or by anything else, and is not in what
+	 * this answers.
 	 */
 	public final STATE getIncluding ( KEY key, EventReference write ) {
 		ReadModelResult<STATE> held = result(key);
@@ -256,7 +256,106 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 			return held.data();
 		}
 		invalidate(key);
-		return result(key).data();
+		return observedRead(key, false).data();
+	}
+
+	private ReadModelResult<STATE> observedRead ( KEY key, boolean mayShareALoad ) {
+		if ( key == null ) {
+			throw new IllegalArgumentException("key must not be null");
+		}
+		EventSource<DOMAIN_EVENT_TYPE> source = attachedSource();
+		try ( Observation.Scope<Outcome.CachedReadResult> scope = observer.start(new Observation.CachedRead(
+				boundedContext, readmodelName(), getClass(), String.valueOf(key), TracingScope.current().orElse(null))) ) {
+			try {
+				Answer<STATE> answer = read(key, source, mayShareALoad);
+				scope.completed(answer.outcome());
+				return answer.result();
+			} catch ( RuntimeException e ) {
+				scope.failed(e);
+				throw e;
+			}
+		}
+	}
+
+	private record Answer<STATE> ( ReadModelResult<STATE> result, Outcome.CachedReadResult outcome ) { }
+
+	private Answer<STATE> read ( KEY key, EventSource<DOMAIN_EVENT_TYPE> source, boolean mayShareALoad ) {
+		CompletableFuture<ReadModelResult<STATE>> underWay = null;
+		CompletableFuture<ReadModelResult<STATE>> ours = null;
+		Instant now = policy.clock().instant();
+		lock.lock();
+		try {
+			if ( !halted() ) {
+				expire(now);
+				Entry<STATE> entry = entries.remove(key);
+				if ( entry != null ) {
+					entry.lastRead = now;
+					entries.put(key, entry);
+					hits.incrementAndGet();
+					return new Answer<>(new ReadModelResult<>(entry.state, entry.upTo), new Outcome.CacheHit(Optional.ofNullable(entry.upTo)));
+				}
+			}
+			if ( mayShareALoad ) {
+				underWay = loading.get(key);
+				if ( underWay == null ) {
+					ours = new CompletableFuture<>();
+					loading.put(key, ours);
+				}
+			}
+		} finally {
+			lock.unlock();
+		}
+
+		if ( underWay != null ) {
+			sharedLoads.incrementAndGet();
+			ReadModelResult<STATE> shared = awaitLoad(underWay);
+			return new Answer<>(shared, new Outcome.CacheLoadShared(Optional.ofNullable(shared.upTo())));
+		}
+
+		misses.incrementAndGet();
+		Loaded<STATE> loaded;
+		try {
+			loaded = load(key, source);
+		} catch ( RuntimeException | Error e ) {
+			loadDone(key, ours);
+			if ( ours != null ) {
+				ours.completeExceptionally(e);
+			}
+			throw e;
+		}
+		loadDone(key, ours);
+		if ( ours != null ) {
+			ours.complete(loaded.result());
+		}
+		return new Answer<>(loaded.result(), new Outcome.CacheLoaded(loaded.streamed(), loaded.handled(), loaded.caughtUp(),
+				Optional.ofNullable(loaded.result().upTo()), loaded.held()));
+	}
+
+	// the waiter gets what the load threw, as itself: the same exception the reader that loaded got
+	private static <STATE> ReadModelResult<STATE> awaitLoad ( CompletableFuture<ReadModelResult<STATE>> load ) {
+		try {
+			return load.join();
+		} catch ( CompletionException e ) {
+			if ( e.getCause() instanceof RuntimeException runtime ) {
+				throw runtime;
+			}
+			if ( e.getCause() instanceof Error error ) {
+				throw error;
+			}
+			throw e;
+		}
+	}
+
+	private void loadDone ( KEY key, CompletableFuture<ReadModelResult<STATE>> ours ) {
+		if ( ours == null ) {
+			return;
+		}
+		lock.lock();
+		try {
+			loading.remove(key, ours);
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	/** Lets {@code key} go, so its next read loads it from the event store. */
@@ -298,7 +397,7 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 			lock.unlock();
 		}
 		return new CacheStatistics(size, policy.maxEntries(), hits.get(), misses.get(), evictions.get(),
-				expirations.get(), failedUpdates.get(), halted());
+				expirations.get(), failedUpdates.get(), sharedLoads.get(), halted());
 	}
 
 	public final CachePolicy policy ( ) {
@@ -351,40 +450,41 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 		return Projector.from(source).into(fold);
 	}
 
-	private ReadModelResult<STATE> load ( KEY key, EventSource<DOMAIN_EVENT_TYPE> source ) {
+	private record Loaded<STATE> ( ReadModelResult<STATE> result, long streamed, long handled, long caughtUp, boolean held ) { }
+
+	private Loaded<STATE> load ( KEY key, EventSource<DOMAIN_EVENT_TYPE> source ) {
 		Fold fold = new Fold(key);
 
 		// the key's history up to the head of this moment, without holding anything up
 		EventReference head = source.head().orElse(null);
-		if ( head != null ) {
-			replay(source, fold).build().runUntil(head);
-		}
+		ProjectorMetrics replayed = head == null ? ProjectorMetrics.empty() : replay(source, fold).build().runUntil(head);
 
 		if ( halted() ) {
-			return fold.result();
+			return new Loaded<>(fold.result(), replayed.eventsStreamed(), replayed.eventsHandled(), 0, false);
 		}
 
 		Instant now = policy.clock().instant();
 		lock.lock();
 		try {
 			if ( halted() ) {
-				return fold.result();
+				return new Loaded<>(fold.result(), replayed.eventsStreamed(), replayed.eventsHandled(), 0, false);
 			}
 			Entry<STATE> concurrentlyLoaded = entries.remove(key);
 			if ( concurrentlyLoaded != null ) {
-				// another read loaded it meanwhile and the projector keeps that entry current, so it stays;
+				// another load inserted it meanwhile and the projector keeps that entry current, so it stays;
 				// this read answers what it replayed itself, which may be further along than what the
 				// projector has delivered to that entry yet
 				concurrentlyLoaded.lastRead = now;
 				entries.put(key, concurrentlyLoaded);
-				return fold.result();
+				return new Loaded<>(fold.result(), replayed.eventsStreamed(), replayed.eventsHandled(), 0, true);
 			}
+			ProjectorMetrics caughtUp = ProjectorMetrics.empty();
 			if ( delivered != null && ( head == null || delivered.storedEventHappenedAfter(head) ) ) {
 				// The projector got past the head the replay read up to, at a moment this key was not
 				// held: the key's events in between were delivered to nobody. Read them now, with the
 				// projector held at the lock, so it delivers nothing further before the entry exists. The
 				// stretch is what was appended during the replay, usually nothing.
-				replay(source, fold).startingAfter(head).build().runUntil(delivered);
+				caughtUp = replay(source, fold).startingAfter(head).build().runUntil(delivered);
 			}
 			entries.put(key, new Entry<>(fold.state, fold.upTo, now));
 			while ( entries.size() > policy.maxEntries() ) {
@@ -393,7 +493,10 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 				eldest.remove();
 				evictions.incrementAndGet();
 			}
-			return fold.result();
+			return new Loaded<>(fold.result(),
+					replayed.eventsStreamed() + caughtUp.eventsStreamed(),
+					replayed.eventsHandled() + caughtUp.eventsHandled(),
+					caughtUp.eventsHandled(), true);
 		} finally {
 			lock.unlock();
 		}
@@ -473,6 +576,23 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 	 * model is attached to one stream: attaching it to another is refused.
 	 */
 	public final void attach ( EventSource<DOMAIN_EVENT_TYPE> source ) {
+		attach(source, BoundedContextObserver.NOOP, null);
+	}
+
+	/**
+	 * Hands this read model its stream, and the observer and bounded context its reads are observed
+	 * under ({@link Observation.CachedRead}). What the bounded context registering it calls.
+	 */
+	public final void attach ( EventSource<DOMAIN_EVENT_TYPE> source, BoundedContextObserver observer, String boundedContext ) {
+		if ( observer == null ) {
+			throw new IllegalArgumentException("observer must not be null");
+		}
+		attachSource(source);
+		this.observer = observer;
+		this.boundedContext = boundedContext;
+	}
+
+	private void attachSource ( EventSource<DOMAIN_EVENT_TYPE> source ) {
 		if ( source == null ) {
 			throw new IllegalArgumentException("source must not be null");
 		}

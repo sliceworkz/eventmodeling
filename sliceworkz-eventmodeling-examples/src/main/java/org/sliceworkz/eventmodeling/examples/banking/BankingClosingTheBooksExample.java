@@ -28,6 +28,7 @@ import org.sliceworkz.eventmodeling.examples.banking.BankingDomainWithClosingThe
 import org.sliceworkz.eventmodeling.examples.banking.features.closemonth.CloseMonthCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.ActiveMonthReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentbalance.AccountBalancesReadModel;
+import org.sliceworkz.eventmodeling.examples.banking.features.currentbalance.CachedBalanceReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentbalance.CurrentBalanceReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.currentperiod.CurrentPeriodReadModel;
 import org.sliceworkz.eventmodeling.examples.banking.features.deposit.DepositCommand;
@@ -35,6 +36,7 @@ import org.sliceworkz.eventmodeling.examples.banking.features.monthstatement.Mon
 import org.sliceworkz.eventmodeling.examples.banking.features.monthstatement.MonthStatementReadModel.MonthStatement;
 import org.sliceworkz.eventmodeling.examples.banking.features.openbankaccount.OpenBankAccountCommand;
 import org.sliceworkz.eventmodeling.examples.banking.features.withdraw.WithdrawCommand;
+import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.infra.inmem.InMemoryEventStorage;
 import org.sliceworkz.eventstore.spi.EventStorage;
 
@@ -95,6 +97,12 @@ public class BankingClosingTheBooksExample {
 		AccountBalancesReadModel balances = new AccountBalancesReadModel();
 		builder.readmodel(balances).eventuallyConsistent();
 		builder.readmodel(CurrentBalanceReadModel.class).live();
+
+		/*
+		 * The caching read: the balance of the accounts being worked with, held in memory and kept
+		 * current by a projector, the rest loaded on their first read. See step 11.
+		 */
+		builder.readmodel(new CachedBalanceReadModel()).eventuallyConsistent();
 
 		builder.features()
 			.rootPackage(BankingClosingTheBooksExample.class.getPackage())
@@ -286,6 +294,24 @@ public class BankingClosingTheBooksExample {
 		 * Shut down from the outside in: the bounded context (which closes the EventStore it built for
 		 * itself), then the storage behind it -- it is ours, and nothing else closes it.
 		 */
+		// ── Step 11: The balance again, from a cache of the accounts in use ──
+		//
+		// The first read loads the account's events and keeps the balance; reads after it are lookups in
+		// memory. A deposit made after that is folded in by the projector, not by a second load -- unless
+		// the read comes before the projector got there, which getIncluding notices and loads for.
+
+		System.out.println("=== STEP 11: Current balance (caching read model) ===");
+		System.out.println();
+
+		CachedBalanceReadModel cachedBalances = bc.read(CachedBalanceReadModel.class);
+		System.out.println("  First read (loaded):    " + cachedBalances.get(accountId));
+		System.out.println("  Second read (memory):   " + cachedBalances.get(accountId));
+
+		EventReference bonus = bc.execute(new DepositCommand(accountId, new BigDecimal("100.00"), "Bonus")).orElseThrow();
+		System.out.println("  After a 100.00 bonus:   " + cachedBalances.getIncluding(accountId, bonus));
+		System.out.println("  Cache:                  " + cachedBalances.statistics());
+		System.out.println();
+
 		bc.terminate();
 		eventStorage.close();
 	}

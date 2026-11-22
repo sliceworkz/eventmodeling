@@ -134,7 +134,11 @@ misses, and this is a live model with a projector beside it: `statistics()` says
 against misses. The projector reads every relevant event appended, as step 3 does, but starts at the
 stream head rather than replaying the history, so nothing is warmed by a start. While its projector is
 stopped or failing nothing is held and every read loads: it degrades into a live model, never into a
-stale one.
+stale one. Reads that miss the same key at once share one load. Every read is observed
+(`Observation.CachedRead`: hit, loaded or shared), so a metrics binding can chart the hit rate.
+
+Test it with the published `CachingReadModelTest`, which runs its projector only when the test says so;
+the banking example's `CachedBalanceReadModel` and its test are the shape to copy.
 
 ## 4. Eventually consistent, durable
 

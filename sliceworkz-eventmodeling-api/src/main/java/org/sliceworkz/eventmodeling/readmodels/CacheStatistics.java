@@ -27,7 +27,9 @@ package org.sliceworkz.eventmodeling.readmodels;
  * @param size           entries held now
  * @param maxEntries     entries the policy allows
  * @param hits           reads answered from memory
- * @param misses         reads that loaded the key from the event store
+ * @param misses         loads: reads that found the key not held and loaded it from the event store
+ * @param sharedLoads    reads that found the key not held while another read was loading it, and waited
+ *                       for that load instead of making one of their own
  * @param evictions      entries let go because a load needed the room
  * @param expirations    entries let go because they had not been read for the policy's idle time
  * @param failedUpdates  entries let go because folding an event into them threw: the next read of the key
@@ -43,5 +45,6 @@ public record CacheStatistics (
 		long evictions,
 		long expirations,
 		long failedUpdates,
+		long sharedLoads,
 		boolean halted ) {
 }

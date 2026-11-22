@@ -30,6 +30,10 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -39,9 +43,12 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractMockDomainTest;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.ThirdDomainEvent;
+import org.sliceworkz.eventmodeling.observability.Observation;
+import org.sliceworkz.eventmodeling.observability.Outcome;
 import org.sliceworkz.eventmodeling.module.readmodels.CustomerValuesReadModel.CustomerId;
 import org.sliceworkz.eventmodeling.readmodels.CachePolicy;
 import org.sliceworkz.eventmodeling.readmodels.CacheStatistics;
+import org.sliceworkz.eventmodeling.testing.RecordingBoundedContextObserver;
 import org.sliceworkz.eventstore.events.Event;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -56,7 +63,7 @@ import org.sliceworkz.eventstore.testing.ForEachBackend;
  * That is what lets each rule be pinned on its own — above all the one that is otherwise a race: a load
  * whose replay the projector overtakes.
  */
-public class CachingReadModelTest extends AbstractMockDomainTest {
+public class CachingReadModelRulesTest extends AbstractMockDomainTest {
 
 	private static final CustomerId C1 = CUSTOMER.id("c1");
 	private static final CustomerId C2 = CUSTOMER.id("c2");
@@ -142,6 +149,118 @@ public class CachingReadModelTest extends AbstractMockDomainTest {
 
 		readModel.when(append(C1, "e"));
 		assertEquals(List.of("a", "b", "c", "e"), readModel.get(C1));
+	}
+
+	/**
+	 * Two reads of a key nobody holds make one load: the second waits for the first's and answers what it
+	 * loaded. A stream whose {@code head()} blocks until the test releases it holds the first load in
+	 * flight while the second read arrives.
+	 */
+	@ForEachBackend
+	void aReadOfAKeyBeingLoadedWaitsForThatLoadInsteadOfMakingItsOwn ( ) throws Exception {
+		append(C1, "a");
+		Gate gate = new Gate();
+		CustomerValuesReadModel readModel = gated(gate);
+
+		gate.close();
+		CompletableFuture<List<String>> first = CompletableFuture.supplyAsync(() -> readModel.get(C1));
+		gate.awaitBlocked();
+		CompletableFuture<List<String>> second = CompletableFuture.supplyAsync(() -> readModel.get(C1));
+		waitBecauseOfEventualConsistency(() -> readModel.statistics().sharedLoads() == 1);
+		gate.open();
+
+		assertEquals(List.of("a"), first.get(10, TimeUnit.SECONDS));
+		assertEquals(List.of("a"), second.get(10, TimeUnit.SECONDS));
+		assertEquals(1, readModel.statistics().misses(), "one load");
+		assertEquals(1, gate.heads(), "and one replay of the key's history");
+	}
+
+	/** What the load threw reaches every read that waited for it, and the next read loads afresh. */
+	@Test
+	void aFailedLoadFailsTheReadsThatWaitedForItAndIsNotKept ( ) throws Exception {
+		Gate gate = new Gate();
+		CustomerValuesReadModel readModel = gated(gate);
+		gate.failWith(new IllegalStateException("store unreachable"));
+
+		gate.close();
+		CompletableFuture<List<String>> first = CompletableFuture.supplyAsync(() -> readModel.get(C1));
+		gate.awaitBlocked();
+		CompletableFuture<List<String>> second = CompletableFuture.supplyAsync(() -> readModel.get(C1));
+		waitBecauseOfEventualConsistency(() -> readModel.statistics().sharedLoads() == 1);
+		gate.open();
+
+		assertEquals("store unreachable", rootMessage(assertThrows(Exception.class, () -> first.get(10, TimeUnit.SECONDS))));
+		assertEquals("store unreachable", rootMessage(assertThrows(Exception.class, () -> second.get(10, TimeUnit.SECONDS))));
+
+		gate.failWith(null);
+		assertEquals(List.of(), readModel.get(C1), "nothing of the failed load is left to wait for");
+	}
+
+	/**
+	 * A load already under way may have read the stream before the caller's write, so a read that must
+	 * include the write does not settle for it: it waits for that load, finds the write missing, and loads
+	 * the key itself.
+	 */
+	@ForEachBackend
+	void aReadIncludingAWriteDoesNotSettleForALoadThatStartedBeforeIt ( ) throws Exception {
+		append(C1, "a");
+		Gate gate = new Gate();
+		CustomerValuesReadModel readModel = gated(gate);
+
+		gate.close();
+		CompletableFuture<List<String>> before = CompletableFuture.supplyAsync(() -> readModel.get(C1));
+		gate.awaitBlocked();
+		Event<MockDomainEvent> write = append(C1, "mine");
+		CompletableFuture<List<String>> including = CompletableFuture.supplyAsync(() -> readModel.getIncluding(C1, write.reference()));
+		waitBecauseOfEventualConsistency(() -> readModel.statistics().sharedLoads() == 1);
+		gate.open();
+
+		before.get(10, TimeUnit.SECONDS);
+		assertEquals(List.of("a", "mine"), including.get(10, TimeUnit.SECONDS));
+	}
+
+	/** Every read is observed, on the caller's thread, as a hit, a load or a load shared with another read. */
+	@Test
+	void everyReadIsObservedWithWhatItAnswered ( ) {
+		append(C1, "a");
+		RecordingBoundedContextObserver observer = new RecordingBoundedContextObserver();
+		CustomerValuesReadModel readModel = new CustomerValuesReadModel();
+		readModel.attach(stream, observer, "caching");
+		readModel.resumeFrom();
+
+		readModel.get(C1);
+		readModel.get(C1);
+
+		List<RecordingBoundedContextObserver.Recording> reads = observer.recordings(Observation.CachedRead.class);
+		assertEquals(2, reads.size());
+		Observation.CachedRead read = reads.get(0).observation(Observation.CachedRead.class);
+		assertEquals("caching", read.boundedContext());
+		assertEquals("CustomerValuesReadModel", read.readModel());
+		assertEquals(C1.toString(), read.key());
+		Outcome.CacheLoaded loaded = reads.get(0).outcome(Outcome.CacheLoaded.class);
+		assertEquals(1, loaded.eventsHandled());
+		assertTrue(loaded.held());
+		assertTrue(reads.get(1).outcome().orElseThrow() instanceof Outcome.CacheHit);
+		assertEquals(List.of(), observer.violations());
+	}
+
+	/** The catch-up of an overtaken load is reported: how many events the projector had delivered past the replay. */
+	@ForEachBackend
+	void anOvertakenLoadReportsItsCatchUp ( ) {
+		Event<MockDomainEvent> a = append(C1, "a");
+		AtomicReference<EventReference> staleHead = new AtomicReference<>();
+		RecordingBoundedContextObserver observer = new RecordingBoundedContextObserver();
+		CustomerValuesReadModel readModel = new CustomerValuesReadModel();
+		readModel.attach(withHead(stream, staleHead), observer, "caching");
+		readModel.resumeFrom();
+		readModel.when(append(C1, "b"));
+		staleHead.set(a.reference());
+
+		readModel.get(C1);
+
+		Outcome.CacheLoaded loaded = observer.last(Observation.CachedRead.class).outcome(Outcome.CacheLoaded.class);
+		assertEquals(2, loaded.eventsHandled());
+		assertEquals(1, loaded.caughtUp());
 	}
 
 	@ForEachBackend
@@ -332,6 +451,76 @@ public class CachingReadModelTest extends AbstractMockDomainTest {
 						throw e.getCause();
 					}
 				});
+	}
+
+	private CustomerValuesReadModel gated ( Gate gate ) {
+		CustomerValuesReadModel readModel = new CustomerValuesReadModel();
+		readModel.attach(gate.in(stream));
+		readModel.resumeFrom();
+		return readModel;
+	}
+
+	private static String rootMessage ( Throwable t ) {
+		Throwable root = t;
+		while ( root.getCause() != null ) {
+			root = root.getCause();
+		}
+		return root.getMessage();
+	}
+
+	/**
+	 * A stream whose {@code head()}, while the gate is closed, blocks until it is opened — the first thing
+	 * a load does — and optionally throws once released.
+	 */
+	private static final class Gate {
+
+		private volatile CountDownLatch open = new CountDownLatch(0);
+		private final CountDownLatch blocked = new CountDownLatch(1);
+		private final AtomicInteger heads = new AtomicInteger();
+		private volatile RuntimeException failure;
+
+		void close ( ) {
+			open = new CountDownLatch(1);
+		}
+
+		void open ( ) {
+			open.countDown();
+		}
+
+		void failWith ( RuntimeException failure ) {
+			this.failure = failure;
+		}
+
+		void awaitBlocked ( ) throws InterruptedException {
+			assertTrue(blocked.await(10, TimeUnit.SECONDS), "a load reached the stream");
+		}
+
+		int heads ( ) {
+			return heads.get();
+		}
+
+		@SuppressWarnings("unchecked")
+		EventSource<MockDomainEvent> in ( EventSource<MockDomainEvent> source ) {
+			return (EventSource<MockDomainEvent>) Proxy.newProxyInstance(EventSource.class.getClassLoader(), new Class<?>[] { EventSource.class },
+					( proxy, method, args ) -> {
+						if ( method.getName().equals("head") && method.getParameterCount() == 0 ) {
+							CountDownLatch current = open;
+							if ( current.getCount() > 0 ) {
+								heads.incrementAndGet();
+								blocked.countDown();
+								current.await(10, TimeUnit.SECONDS);
+								if ( failure != null ) {
+									throw failure;
+								}
+							}
+						}
+						try {
+							return method.invoke(source, args);
+						} catch ( InvocationTargetException e ) {
+							throw e.getCause();
+						}
+					});
+		}
 	}
 
 }

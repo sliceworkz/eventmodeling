@@ -196,7 +196,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			// a caching read model loads a key from the stream it is projected from, and asks that stream
 			// for its head when the projector below is built -- so it is attached first
 			if ( rm instanceof CachingReadModel<DOMAIN_EVENT_TYPE, ?, ?> caching ) {
-				caching.attach(domainEventStream);
+				caching.attach(domainEventStream, observer, boundedContext);
 			}
 			ReadModelStorage readModelStorage = rm.storage();
 			Storage storage = Storage.of(readModelStorage);

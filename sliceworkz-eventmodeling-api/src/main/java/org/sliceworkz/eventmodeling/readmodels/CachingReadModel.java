@@ -30,6 +30,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.sliceworkz.eventmodeling.domain.EntityId;
 import org.sliceworkz.eventmodeling.events.TracingScope;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
@@ -345,7 +346,7 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 	public interface ReadListener {
 
 		/**
-		 * @param key the key read, as its {@code toString()}
+		 * @param key the key read: an entity id's value, any other key's {@code toString()}
 		 * @param answer how it was answered
 		 * @param eventsCaughtUp the events a current read read in after the hit or the load
 		 * @param durationMicros how long the read took, on a monotonic clock
@@ -365,12 +366,18 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 		ReadListener listener = readListener;
 		if ( listener != null ) {
 			try {
-				listener.read(String.valueOf(key), answer.outcome(), caughtUp, ( System.nanoTime() - started ) / 1_000);
+				listener.read(keyText(key), answer.outcome(), caughtUp, ( System.nanoTime() - started ) / 1_000);
 			} catch ( RuntimeException e ) {
 				LOGGER.warn("{}: reporting a read of key {} failed: {}", readmodelName(), key, e.toString(), e);
 			}
 		}
 		return result;
+	}
+
+	// how a key is named where a read is reported: an entity id by its value, as its tag carries it, any other
+	// key by its toString()
+	private static String keyText ( Object key ) {
+		return key instanceof EntityId id ? id.value() : String.valueOf(key);
 	}
 
 	private Answer<STATE> observedRead ( KEY key, boolean mayShareALoad ) {
@@ -379,7 +386,7 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 		}
 		EventSource<DOMAIN_EVENT_TYPE> source = attachedSource();
 		try ( Observation.Scope<Outcome.CachedReadResult> scope = observer.start(new Observation.CachedRead(
-				boundedContext, readmodelName(), getClass(), String.valueOf(key), TracingScope.current().orElse(null))) ) {
+				boundedContext, readmodelName(), getClass(), keyText(key), TracingScope.current().orElse(null))) ) {
 			try {
 				Answer<STATE> answer = read(key, source, mayShareALoad);
 				scope.completed(answer.outcome());

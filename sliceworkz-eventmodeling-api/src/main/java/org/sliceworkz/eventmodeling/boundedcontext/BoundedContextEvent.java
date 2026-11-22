@@ -487,7 +487,8 @@ public sealed interface BoundedContextEvent {
 	 *
 	 * @param boundedContext the context the read model belongs to
 	 * @param readModel the read model's name
-	 * @param key the key read, as its {@code toString()}: data, which a metrics binding must not make a tag of
+	 * @param key the key read, an entity id by its value and any other key by its {@code toString()}: data, which a
+	 *        metrics binding must not make a tag of
 	 * @param answer {@code HIT} (answered from memory), {@code LOADED} (the key's events replayed) or
 	 *        {@code SHARED_LOAD} (answered by another read's load of the same key)
 	 * @param durationMicros how long the read took, on a monotonic clock

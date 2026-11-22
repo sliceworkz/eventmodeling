@@ -273,7 +273,7 @@ public class CachingReadModelRulesTest extends AbstractMockDomainTest {
 		Observation.CachedRead read = reads.get(0).observation(Observation.CachedRead.class);
 		assertEquals("caching", read.boundedContext());
 		assertEquals("CustomerValuesReadModel", read.readModel());
-		assertEquals(C1.toString(), read.key());
+		assertEquals(C1.value(), read.key());
 		Outcome.CacheLoaded loaded = reads.get(0).outcome(Outcome.CacheLoaded.class);
 		assertEquals(1, loaded.eventsHandled());
 		assertTrue(loaded.held());

@@ -193,7 +193,7 @@ public class CachingReadModelInABoundedContextTest extends AbstractMockDomainTes
 		assertEquals(List.of("LOADED", "HIT", "HIT"), reads.stream().map(e -> ((BoundedContextEvent.CachedReadModelRead) e.data()).answer()).toList());
 		BoundedContextEvent.CachedReadModelRead loaded = (BoundedContextEvent.CachedReadModelRead) reads.getFirst().data();
 		assertEquals("CustomerValuesReadModel", loaded.readModel());
-		assertEquals(C1.toString(), loaded.key());
+		assertEquals(C1.value(), loaded.key(), "an entity id by its value");
 		assertEquals(2, loaded.eventsHandled());
 		assertTrue(loaded.held());
 		assertTrue(reads.stream().allMatch(e -> "request-flow".equals(Tracing.readFrom(e).correlationId())), "in the reader's flow");

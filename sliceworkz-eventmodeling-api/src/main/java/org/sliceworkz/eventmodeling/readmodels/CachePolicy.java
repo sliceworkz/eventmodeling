@@ -31,15 +31,19 @@ import java.time.InstantSource;
  *
  * <p>{@code reportEvery} is how often a registered read model tells its bounded context's listener what it
  * did — hits, loads, evictions — as a {@code CachedReadModelSummarized}, a minute unless said otherwise; a
- * quiet window reports nothing. {@code clock} is what the expiry is measured on, the system clock unless a
- * test says otherwise.
+ * quiet window reports nothing. {@code reportsEachRead} adds a {@code CachedReadModelRead} per read, on the
+ * reader's thread and in its flow, for a read model read rarely enough that each read is worth a line in the
+ * monitoring record (as a live read model's {@code LiveModelProjected} is); the windows are reported all the
+ * same, and stay what the counts are taken from. {@code clock} is what the expiry is measured on, the system
+ * clock unless a test says otherwise.
  *
  * @param maxEntries        the most entries kept, at least 1
  * @param expireAfterAccess how long an entry is kept without being read, or {@code null} for no expiry
  * @param reportEvery       the length of the windows its activity is reported in, at least a second
  * @param clock             the clock the expiry is measured on
+ * @param reportsEachRead   whether every read is also reported on its own
  */
-public record CachePolicy ( int maxEntries, Duration expireAfterAccess, Duration reportEvery, InstantSource clock ) {
+public record CachePolicy ( int maxEntries, Duration expireAfterAccess, Duration reportEvery, InstantSource clock, boolean reportsEachRead ) {
 
 	/** The windows a caching read model's activity is reported in, unless the policy says otherwise. */
 	public static final Duration DEFAULT_REPORT_EVERY = Duration.ofMinutes(1);
@@ -59,24 +63,37 @@ public record CachePolicy ( int maxEntries, Duration expireAfterAccess, Duration
 		}
 	}
 
+	/** A policy whose reads are reported in windows only. */
+	public CachePolicy ( int maxEntries, Duration expireAfterAccess, Duration reportEvery, InstantSource clock ) {
+		this(maxEntries, expireAfterAccess, reportEvery, clock, false);
+	}
+
 	/** At most {@code maxEntries} entries, least recently read evicted first, and no expiry. */
 	public static CachePolicy maxEntries ( int maxEntries ) {
-		return new CachePolicy(maxEntries, null, DEFAULT_REPORT_EVERY, InstantSource.system());
+		return new CachePolicy(maxEntries, null, DEFAULT_REPORT_EVERY, InstantSource.system(), false);
 	}
 
 	/** This policy, with entries also evicted once they have not been read for {@code idle}. */
 	public CachePolicy expireAfterAccess ( Duration idle ) {
-		return new CachePolicy(maxEntries, idle, reportEvery, clock);
+		return new CachePolicy(maxEntries, idle, reportEvery, clock, reportsEachRead);
 	}
 
 	/** This policy, with its activity reported in windows of {@code window}. */
 	public CachePolicy reportEvery ( Duration window ) {
-		return new CachePolicy(maxEntries, expireAfterAccess, window, clock);
+		return new CachePolicy(maxEntries, expireAfterAccess, window, clock, reportsEachRead);
+	}
+
+	/**
+	 * This policy, with every read also reported on its own, as a {@code CachedReadModelRead}: a write to the
+	 * monitoring store per read, so for a read model read a few times a minute rather than a thousand.
+	 */
+	public CachePolicy reportEachRead ( ) {
+		return new CachePolicy(maxEntries, expireAfterAccess, reportEvery, clock, true);
 	}
 
 	/** This policy, with expiry measured on {@code clock} — for a test that wants to move time itself. */
 	public CachePolicy clock ( InstantSource clock ) {
-		return new CachePolicy(maxEntries, expireAfterAccess, reportEvery, clock);
+		return new CachePolicy(maxEntries, expireAfterAccess, reportEvery, clock, reportsEachRead);
 	}
 
 }

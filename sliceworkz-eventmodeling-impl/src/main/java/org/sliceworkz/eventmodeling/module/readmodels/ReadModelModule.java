@@ -40,6 +40,7 @@ import org.sliceworkz.eventmodeling.boundedcontext.ProcessorStatus;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessorAdmin;
 import org.sliceworkz.eventmodeling.events.Instance;
 import org.sliceworkz.eventmodeling.events.Tracing;
+import org.sliceworkz.eventmodeling.events.TracingScope;
 import org.sliceworkz.eventmodeling.module.boundedcontext.BoundedContextEventEmitter;
 import org.sliceworkz.eventmodeling.module.eventdispatching.ProjectorProcessor;
 import org.sliceworkz.eventmodeling.module.snapshots.ObservedSnapshots;
@@ -204,6 +205,9 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 			// for its head when the projector below is built -- so it is attached first
 			if ( rm instanceof CachingReadModel<DOMAIN_EVENT_TYPE, ?, ?> caching ) {
 				caching.attach(domainEventStream, observer, boundedContext);
+				if ( caching.policy().reportsEachRead() ) {
+					reportEachRead(caching);
+				}
 			}
 			ReadModelStorage readModelStorage = rm.storage();
 			Storage storage = Storage.of(readModelStorage);
@@ -366,7 +370,29 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		var policy = caching.policy();
 		return new BoundedContextEvent.CacheSettings(policy.maxEntries(),
 				policy.expireAfterAccess() == null ? null : policy.expireAfterAccess().toMillis(),
-				policy.reportEvery().toMillis());
+				policy.reportEvery().toMillis(), policy.reportsEachRead());
+	}
+
+	/**
+	 * Reports every read of a caching read model whose policy asks for it, as a {@code CachedReadModelRead}
+	 * emitted on the reader's thread under the tracing it bound, so the read sits in its request's flow.
+	 */
+	private void reportEachRead ( CachingReadModel<?, ?, ?> caching ) {
+		String readModel = caching.readmodelName();
+		BoundedContextEvent.FeatureSlice slice = eventEmitter.sliceFor(caching.getClass());
+		String reportedStream = stream.reported();
+		caching.reportReadsTo(( key, answer, eventsCaughtUp, durationMicros ) -> {
+			BoundedContextEvent.CachedReadModelRead read = switch ( answer ) {
+				case Outcome.CacheHit hit -> new BoundedContextEvent.CachedReadModelRead(boundedContext, readModel, key, "HIT", durationMicros,
+						0, 0, eventsCaughtUp, true, hit.upTo().orElse(null), slice, reportedStream);
+				case Outcome.CacheLoaded loaded -> new BoundedContextEvent.CachedReadModelRead(boundedContext, readModel, key, "LOADED", durationMicros,
+						loaded.eventsStreamed(), loaded.eventsHandled(), loaded.caughtUp() + eventsCaughtUp, loaded.held(), loaded.upTo().orElse(null),
+						slice, reportedStream);
+				case Outcome.CacheLoadShared shared -> new BoundedContextEvent.CachedReadModelRead(boundedContext, readModel, key, "SHARED_LOAD",
+						durationMicros, 0, 0, eventsCaughtUp, !caching.statistics().halted(), shared.upTo().orElse(null), slice, reportedStream);
+			};
+			eventEmitter.emit(read, TracingScope.current().orElse(null));
+		});
 	}
 
 	/**

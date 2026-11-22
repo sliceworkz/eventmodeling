@@ -135,8 +135,8 @@ a reader's state stays put: it moves on as the projector folds, past the referen
 
 Every read is an `Observation.CachedRead` on the caller's thread, answering `CacheHit`, `CacheLoaded`
 (events read, events folded, how many of them the catch-up read, whether the key is held now) or
-`CacheLoadShared`. The event store's queries of a load nest beneath it. The key travels as its
-`toString()`, which is data: a metrics binding must bound it. The alternative — reporting a load as a
+`CacheLoadShared`. The event store's queries of a load nest beneath it. The key travels as an entity id's
+value (any other key as its `toString()`), which is data: a metrics binding must bound it. The alternative — reporting a load as a
 `LiveModelRead` — loses because a hit is an answer worth counting too, and the hit rate is the number
 that says whether the read model is worth having.
 
@@ -152,6 +152,12 @@ statistics at the window's end and at its start. The alternatives lose:
   memory: the reporting would cost more than the read.
 - **An event per load only**, as a live read reports `LiveModelProjected`, would leave out the hits, and
   the hit rate is the number that decides whether the read model is worth having.
+
+A read model read a few times a minute, where each read is worth a line of its own, opts into a
+`CachedReadModelRead` per read with `CachePolicy.reportEachRead()`, on the reader's thread and in its flow,
+the way a port is monitored per call or summarized. It comes beside the windows, not instead of them: the
+windows still carry everything the per-read event cannot (evictions, expirations, the size), and stay the one
+source of the counts, so nothing is counted twice.
 
 Windows are aligned to the wall clock, as the port summaries' are, so the windows of several instances
 cover the same span and add up. The start event carries the cache's size (`CacheSettings`), so a reader

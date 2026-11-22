@@ -32,6 +32,8 @@ import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
 import org.sliceworkz.eventmodeling.boundedcontext.StreamAppendingBoundedContextListener;
+import org.sliceworkz.eventmodeling.events.TracingScope;
+import org.sliceworkz.eventmodeling.events.Tracing;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -163,6 +165,56 @@ public class CachingReadModelInABoundedContextTest extends AbstractMockDomainTes
 		int lastSummary = stored.indexOf(last);
 		int stoppedAt = stored.indexOf(stored.stream().filter(e -> e instanceof BoundedContextEvent.BoundedContextStopped).findFirst().orElseThrow());
 		assertTrue(lastSummary < stoppedAt, "reported before the context reports itself stopped");
+	}
+
+	/**
+	 * A policy that reports each read puts a {@code CachedReadModelRead} on the monitoring stream per read, in the
+	 * flow the reader bound, beside the windows; one that does not puts none there.
+	 */
+	@ForEachBackend
+	void eachReadIsReportedWhenThePolicySaysSo ( ) {
+		EventStream<BoundedContextEvent> monitoring = eventStore().getEventStream(
+				EventStreamId.forContext("monitoring").withPurpose("boundedcontext"), BoundedContextEvent.class);
+		Mock mock = buildBoundedContext(builder()
+				.listener(new StreamAppendingBoundedContextListener(monitoring, Duration.ZERO))
+				.readmodel(new CustomerValuesReadModel(CachePolicy.maxEntries(10).reportEachRead()))
+				.eventuallyConsistent());
+		append(mock, C1, "a");
+		append(mock, C1, "b");
+		CustomerValuesReadModel readModel = mock.read(CustomerValuesReadModel.class);
+		try ( TracingScope scope = TracingScope.bind(Tracing.actorAndChannel("alice", "api").correlationId("request-flow")) ) {
+			readModel.get(C1);
+			readModel.get(C1);
+			readModel.getCurrent(C1);
+		}
+
+		List<Event<BoundedContextEvent>> stored = monitoring.query(EventFilter.matchAll());
+		List<Event<BoundedContextEvent>> reads = stored.stream().filter(e -> e.data() instanceof BoundedContextEvent.CachedReadModelRead).toList();
+		assertEquals(List.of("LOADED", "HIT", "HIT"), reads.stream().map(e -> ((BoundedContextEvent.CachedReadModelRead) e.data()).answer()).toList());
+		BoundedContextEvent.CachedReadModelRead loaded = (BoundedContextEvent.CachedReadModelRead) reads.getFirst().data();
+		assertEquals("CustomerValuesReadModel", loaded.readModel());
+		assertEquals(C1.value(), loaded.key(), "an entity id by its value");
+		assertEquals(2, loaded.eventsHandled());
+		assertTrue(loaded.held());
+		assertTrue(reads.stream().allMatch(e -> "request-flow".equals(Tracing.readFrom(e).correlationId())), "in the reader's flow");
+		BoundedContextEvent.ReadModelProjectorStarted started = stored.stream().map(Event::data)
+				.filter(e -> e instanceof BoundedContextEvent.ReadModelProjectorStarted s && "CustomerValuesReadModel".equals(s.readModel()))
+				.map(e -> (BoundedContextEvent.ReadModelProjectorStarted) e).findFirst().orElseThrow();
+		assertTrue(started.cache().reportsEachRead());
+	}
+
+	@Test
+	void noReadIsReportedOnItsOwnUnlessThePolicySaysSo ( ) {
+		EventStream<BoundedContextEvent> monitoring = eventStore().getEventStream(
+				EventStreamId.forContext("monitoring").withPurpose("boundedcontext"), BoundedContextEvent.class);
+		Mock mock = buildBoundedContext(builder()
+				.listener(new StreamAppendingBoundedContextListener(monitoring, Duration.ZERO))
+				.readmodel(new CustomerValuesReadModel(CachePolicy.maxEntries(10)))
+				.eventuallyConsistent());
+		append(mock, C1, "a");
+		mock.read(CustomerValuesReadModel.class).get(C1);
+
+		assertTrue(monitoring.query(EventFilter.matchAll()).stream().noneMatch(e -> e.data() instanceof BoundedContextEvent.CachedReadModelRead));
 	}
 
 	/** A read model that is no cache says so by saying nothing about a cache. */

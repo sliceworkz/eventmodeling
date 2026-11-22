@@ -1209,7 +1209,13 @@ processor:**
   time, evictions, expirations, failed updates, size — as the difference of the read model's cumulative
   `statistics()`, so the read model knows nothing of windows. The unfinished window is reported on
   `stop()`/`terminate()`, before the caches are let go and before `BoundedContextStopped`. A hit is
-  reported nowhere else, so this is where a dashboard learns the hit rate. `ReadModelProjectorStarted.cache`
+  reported nowhere else, so this is where a dashboard learns the hit rate. **A policy may also report each
+  read** (`CachePolicy.reportEachRead()`): a `CachedReadModelRead` per read (key, `HIT`/`LOADED`/`SHARED_LOAD`,
+  duration, events read, caught up, held), emitted by `ReadModelModule` through the read model's
+  `ReadListener` on the reader's thread under its bound tracing, so the read sits in its request's flow as a
+  live read's `LiveModelProjected` does. Off by default, since a hit is a lookup and this is a write per read;
+  the windows are reported all the same and stay what the counts are taken from, so a reader never sums the
+  per-read events. `CacheSettings.reportsEachRead` says which. `ReadModelProjectorStarted.cache`
   (`CacheSettings`: max entries, idle expiry, report window) says a read model is a cache before it is read
   once, `null` for any other and on an event stored before it existed
 - **A fold that throws in the projector lets that key go** (`failedUpdates`) instead of failing the

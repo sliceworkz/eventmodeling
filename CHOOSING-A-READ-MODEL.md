@@ -97,7 +97,8 @@ stopped or failing nothing is held and every read loads: it degrades into a live
 stale one. Reads that miss the same key at once share one load. Every read is observed
 (`Observation.CachedRead`: hit, loaded or shared), so a metrics binding can chart the hit rate, and
 summed per window onto the monitoring stream (`CachedReadModelSummarized`), which is where the dashboard's
-Read Models screen gets the hit rate, the loads and what they cost.
+Read Models screen gets the hit rate, the loads and what they cost. A read model read rarely enough that each read deserves a line of
+its own adds `CachePolicy.reportEachRead()`: a `CachedReadModelRead` per read, in the reader's flow.
 
 Test it with the published `CachingReadModelTest`, which runs its projector only when the test says so;
 the banking example's `CachedBalanceReadModel` and its test are the shape to copy.

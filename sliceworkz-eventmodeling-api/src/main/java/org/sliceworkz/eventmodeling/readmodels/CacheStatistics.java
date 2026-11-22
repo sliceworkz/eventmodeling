@@ -30,6 +30,9 @@ package org.sliceworkz.eventmodeling.readmodels;
  * @param misses         loads: reads that found the key not held and loaded it from the event store
  * @param sharedLoads    reads that found the key not held while another read was loading it, and waited
  *                       for that load instead of making one of their own
+ * @param eventsLoaded   events the loads folded, their catch-ups included
+ * @param eventsCaughtUp of those, the events a load read again because the projector passed them while it replayed
+ * @param loadMicros     the time the loads took together, in microseconds
  * @param evictions      entries let go because a load needed the room
  * @param expirations    entries let go because they had not been read for the policy's idle time
  * @param failedUpdates  entries let go because folding an event into them threw: the next read of the key
@@ -42,6 +45,9 @@ public record CacheStatistics (
 		int maxEntries,
 		long hits,
 		long misses,
+		long eventsLoaded,
+		long eventsCaughtUp,
+		long loadMicros,
 		long evictions,
 		long expirations,
 		long failedUpdates,

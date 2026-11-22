@@ -24,11 +24,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.sliceworkz.eventmodeling.module.readmodels.CustomerValuesReadModel.CUSTOMER;
 
+import java.time.Duration;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContext;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextBuilder;
+import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextEvent;
+import org.sliceworkz.eventmodeling.boundedcontext.StreamAppendingBoundedContextListener;
 import org.sliceworkz.eventmodeling.boundedcontext.BoundedContextStreams;
 import org.sliceworkz.eventmodeling.boundedcontext.ProcessorKind;
 import org.sliceworkz.eventmodeling.events.InstanceFactory;
@@ -37,7 +40,12 @@ import org.sliceworkz.eventmodeling.mock.boundedcontext.Mock;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent;
 import org.sliceworkz.eventmodeling.mock.boundedcontext.MockDomainEvent.FirstDomainEvent;
 import org.sliceworkz.eventmodeling.module.readmodels.CustomerValuesReadModel.CustomerId;
+import org.sliceworkz.eventmodeling.readmodels.CachePolicy;
 import org.sliceworkz.eventstore.events.Bookmark;
+import org.sliceworkz.eventstore.events.Event;
+import org.sliceworkz.eventstore.query.EventFilter;
+import org.sliceworkz.eventstore.stream.EventStream;
+import org.sliceworkz.eventstore.stream.EventStreamId;
 import org.sliceworkz.eventstore.events.EphemeralEvent;
 import org.sliceworkz.eventstore.events.EventReference;
 import org.sliceworkz.eventstore.events.Tags;
@@ -110,6 +118,68 @@ public class CachingReadModelInABoundedContextTest extends AbstractMockDomainTes
 		EventReference after = append(mock, C1, "after restart");
 		waitBecauseOfEventualConsistency(() -> readModel.result(C1).includes(after));
 		assertEquals(List.of("a", "while stopped", "after restart"), readModel.get(C1));
+	}
+
+	/**
+	 * What a caching read model did reaches the monitoring stream: its size on the start event, and per
+	 * window the hits, the loads and what they cost — the unfinished window when the context stops, before
+	 * it reports itself stopped. Through a real monitoring stream, because a dashboard reads them back typed.
+	 */
+	@ForEachBackend
+	void itsActivityIsReportedOnTheMonitoringStream ( ) {
+		EventStream<BoundedContextEvent> monitoring = eventStore().getEventStream(
+				EventStreamId.forContext("monitoring").withPurpose("boundedcontext"), BoundedContextEvent.class);
+		Mock mock = buildBoundedContext(builder()
+				.listener(new StreamAppendingBoundedContextListener(monitoring, Duration.ZERO))
+				.readmodel(new CustomerValuesReadModel(CachePolicy.maxEntries(10).expireAfterAccess(Duration.ofMinutes(5))))
+				.eventuallyConsistent());
+		append(mock, C1, "a");
+		append(mock, C1, "b");
+		CustomerValuesReadModel readModel = mock.read(CustomerValuesReadModel.class);
+		readModel.get(C1);
+		readModel.get(C1);
+		readModel.get(C1);
+
+		mock.stop();
+
+		List<BoundedContextEvent> stored = monitoring.query(EventFilter.matchAll()).stream().map(Event::data).toList();
+		BoundedContextEvent.ReadModelProjectorStarted started = stored.stream()
+				.filter(e -> e instanceof BoundedContextEvent.ReadModelProjectorStarted s && "CustomerValuesReadModel".equals(s.readModel()))
+				.map(e -> (BoundedContextEvent.ReadModelProjectorStarted) e).findFirst().orElseThrow();
+		assertEquals(new BoundedContextEvent.CacheSettings(10, 300_000L, 60_000L), started.cache());
+
+		List<BoundedContextEvent.CachedReadModelSummarized> summaries = stored.stream()
+				.filter(e -> e instanceof BoundedContextEvent.CachedReadModelSummarized)
+				.map(e -> (BoundedContextEvent.CachedReadModelSummarized) e).toList();
+		assertEquals(2, summaries.stream().mapToLong(BoundedContextEvent.CachedReadModelSummarized::hits).sum());
+		assertEquals(1, summaries.stream().mapToLong(BoundedContextEvent.CachedReadModelSummarized::loads).sum());
+		assertEquals(2, summaries.stream().mapToLong(BoundedContextEvent.CachedReadModelSummarized::eventsLoaded).sum());
+		BoundedContextEvent.CachedReadModelSummarized last = summaries.getLast();
+		assertEquals(1, last.size());
+		assertEquals(10, last.maxEntries());
+		assertEquals("UnitTestBoundedContext", last.boundedContext());
+		assertTrue(last.windowEnd().isAfter(last.windowStart()) || last.windowEnd().equals(last.windowStart()));
+
+		int lastSummary = stored.indexOf(last);
+		int stoppedAt = stored.indexOf(stored.stream().filter(e -> e instanceof BoundedContextEvent.BoundedContextStopped).findFirst().orElseThrow());
+		assertTrue(lastSummary < stoppedAt, "reported before the context reports itself stopped");
+	}
+
+	/** A read model that is no cache says so by saying nothing about a cache. */
+	@Test
+	void anyOtherReadModelStartsWithoutCacheSettings ( ) {
+		EventStream<BoundedContextEvent> monitoring = eventStore().getEventStream(
+				EventStreamId.forContext("monitoring").withPurpose("boundedcontext"), BoundedContextEvent.class);
+		buildBoundedContext(builder()
+				.listener(new StreamAppendingBoundedContextListener(monitoring, Duration.ZERO))
+				.readmodel(new org.sliceworkz.eventmodeling.mock.boundedcontext.MockReadModel("plain",
+						org.sliceworkz.eventmodeling.readmodels.ReadModelStorage.EPHEMERAL))
+				.eventuallyConsistent());
+
+		BoundedContextEvent.ReadModelProjectorStarted started = monitoring.query(EventFilter.matchAll()).stream().map(Event::data)
+				.filter(e -> e instanceof BoundedContextEvent.ReadModelProjectorStarted).map(e -> (BoundedContextEvent.ReadModelProjectorStarted) e)
+				.findFirst().orElseThrow();
+		assertEquals(null, started.cache());
 	}
 
 	@Test

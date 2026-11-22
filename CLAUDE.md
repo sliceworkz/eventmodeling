@@ -751,7 +751,7 @@ opposite responses:**
 
 **Which read model to reach for is written down for users, and it is the same order to advise in.**
 [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md) carries the ladder — decision model, live model,
-bound the replay, eventually consistent in memory, eventually consistent durable, seeded read,
+cached for the keys being read, bound the replay, eventually consistent in memory, eventually consistent durable, seeded read,
 snapshots — with what each step buys and costs, plus the shapes to steer away from. The sections below
 are the *why* of each mechanism; that file is the *which*, and it is the one a user reads first. Keep
 the two in step rather than restating one in the other, and when advising on a read model, say which
@@ -1197,6 +1197,16 @@ processor:**
 - **Every read is observed as `Observation.CachedRead`**, on the caller's thread, answering `CacheHit`,
   `CacheLoaded` (events read and folded, `caughtUp`, `held`) or `CacheLoadShared`; `ReadModelModule`
   hands the read model its observer and context name with `attach(source, observer, boundedContext)`
+- **Its activity reaches the monitoring stream, summed per window**: `CachedReadModelReporter` (impl,
+  one per `ReadModelModule` with a caching read model, a virtual thread from `start()` to `stop()`) emits a
+  `CachedReadModelSummarized` per read model per wall-clock-aligned window of `CachePolicy.reportEvery`
+  (default a minute) that had any activity — hits, loads, shared loads, events loaded and caught up, load
+  time, evictions, expirations, failed updates, size — as the difference of the read model's cumulative
+  `statistics()`, so the read model knows nothing of windows. The unfinished window is reported on
+  `stop()`/`terminate()`, before the caches are let go and before `BoundedContextStopped`. A hit is
+  reported nowhere else, so this is where a dashboard learns the hit rate. `ReadModelProjectorStarted.cache`
+  (`CacheSettings`: max entries, idle expiry, report window) says a read model is a cache before it is read
+  once, `null` for any other and on an event stored before it existed
 - **A fold that throws in the projector lets that key go** (`failedUpdates`) instead of failing the
   run: retrying the event would hold up every key; the key's next read replays it and fails to the caller
 - **`STATE` is immutable**, as for `PublishingReadModel`; one `ReentrantLock` guards the entries and
@@ -1212,7 +1222,8 @@ processor:**
   closing-the-books example) and `CachedBalanceReadModelTest` are the worked example;
   `CachingReadModelInABoundedContextTest` pins it
   per backend through a context: kept current, no replay at start (the bookmark handled nothing), an
-  operator stop degrading it and a restart restoring it, the live registration refused
+  operator stop degrading it and a restart restoring it, the live registration refused, and the
+  summaries and the start event's settings through a real monitoring stream
 
 **A seeded read model — as current as a live model, at the cost of the delta:**
 - **The gap it fills.** A live model is always current and replays the whole history to be; an

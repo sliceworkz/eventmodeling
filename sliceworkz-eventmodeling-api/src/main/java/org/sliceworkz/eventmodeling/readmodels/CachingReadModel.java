@@ -180,6 +180,9 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 	private final AtomicLong expirations = new AtomicLong();
 	private final AtomicLong failedUpdates = new AtomicLong();
 	private final AtomicLong sharedLoads = new AtomicLong();
+	private final AtomicLong eventsLoaded = new AtomicLong();
+	private final AtomicLong eventsCaughtUp = new AtomicLong();
+	private final AtomicLong loadMicros = new AtomicLong();
 
 	private static final class Entry<STATE> {
 		private STATE state;
@@ -314,8 +317,12 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 
 		misses.incrementAndGet();
 		Loaded<STATE> loaded;
+		long started = System.nanoTime();
 		try {
 			loaded = load(key, source);
+			loadMicros.addAndGet((System.nanoTime() - started) / 1_000);
+			eventsLoaded.addAndGet(loaded.handled());
+			eventsCaughtUp.addAndGet(loaded.caughtUp());
 		} catch ( RuntimeException | Error e ) {
 			loadDone(key, ours);
 			if ( ours != null ) {
@@ -396,7 +403,7 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 		} finally {
 			lock.unlock();
 		}
-		return new CacheStatistics(size, policy.maxEntries(), hits.get(), misses.get(), evictions.get(),
+		return new CacheStatistics(size, policy.maxEntries(), hits.get(), misses.get(), eventsLoaded.get(), eventsCaughtUp.get(), loadMicros.get(), evictions.get(),
 				expirations.get(), failedUpdates.get(), sharedLoads.get(), halted());
 	}
 

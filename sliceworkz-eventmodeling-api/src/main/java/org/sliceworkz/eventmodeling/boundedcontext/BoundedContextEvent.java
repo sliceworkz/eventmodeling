@@ -409,13 +409,65 @@ public sealed interface BoundedContextEvent {
 	 * {@code builder.outbound()}, {@code null} for the domain stream — and on an event stored before it existed,
 	 * which meant the domain stream.
 	 */
-	record ReadModelProjectorStarted ( String boundedContext, String readModel, String readModelType, FeatureSlice slice, String stream ) implements BoundedContextEvent {
+	record ReadModelProjectorStarted ( String boundedContext, String readModel, String readModelType, FeatureSlice slice, String stream,
+			CacheSettings cache ) implements BoundedContextEvent {
 
 		/** A read model over the domain stream. */
 		public ReadModelProjectorStarted ( String boundedContext, String readModel, String readModelType, FeatureSlice slice ) {
-			this(boundedContext, readModel, readModelType, slice, null);
+			this(boundedContext, readModel, readModelType, slice, null, null);
+		}
+
+		/** A read model that is no {@code CachingReadModel}. */
+		public ReadModelProjectorStarted ( String boundedContext, String readModel, String readModelType, FeatureSlice slice, String stream ) {
+			this(boundedContext, readModel, readModelType, slice, stream, null);
 		}
 	}
+
+	/**
+	 * How a {@code CachingReadModel} is sized, on {@link ReadModelProjectorStarted#cache()}: what says, before it
+	 * has been read once, that a read model holds only the keys being read, and how many. {@code null} on that
+	 * event for every other read model, and on one stored before it existed.
+	 *
+	 * @param maxEntries the most keys it holds
+	 * @param expireAfterAccessMillis how long a key is held without being read, {@code null} for no expiry
+	 * @param reportEveryMillis the length of the windows its {@link CachedReadModelSummarized} cover
+	 */
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	record CacheSettings ( int maxEntries, Long expireAfterAccessMillis, long reportEveryMillis ) { }
+
+	/**
+	 * What a {@code CachingReadModel} did in one window on one instance: how many reads were answered from
+	 * memory, how many loaded their key and how many waited for another read's load, what the loads read and
+	 * how long they took, and what it let go. Emitted at the end of each window that had any of it, and for the
+	 * partial window when the context stops; a quiet window emits nothing. Windows are aligned to the wall
+	 * clock, as {@link PortCallsSummarized}'s are, so the windows of several instances cover the same span and
+	 * add up.
+	 * <p>
+	 * A read answered from memory is reported nowhere else — it is a lookup in the read model's own heap — so
+	 * this is the one place a reader learns the hit rate, which is what says whether the read model is worth
+	 * having: every load costs what a live read of the key costs.
+	 *
+	 * @param windowStart the start of the window, inclusive
+	 * @param windowEnd the end of the window, exclusive; earlier than a full window for the last one before a stop
+	 * @param hits reads answered from memory
+	 * @param loads reads that loaded their key
+	 * @param sharedLoads reads that waited for another read's load of the same key
+	 * @param eventsLoaded the events the loads folded, their catch-ups included
+	 * @param eventsCaughtUp of those, the events a load read again because the projector had passed them while it replayed
+	 * @param loadMicros the time the loads took together, in microseconds
+	 * @param evictions keys let go because a load needed the room
+	 * @param expirations keys let go because they had not been read for the idle time
+	 * @param failedUpdates keys let go because folding an event into them threw
+	 * @param size the keys held at the end of the window
+	 * @param maxEntries the most keys it holds
+	 * @param halted whether its projector was failing or stopped at the end of the window: nothing is held then
+	 * @param slice the originating feature slice, may be {@code null}
+	 * @param stream the stream it is projected from, {@code null} for the domain stream
+	 */
+	record CachedReadModelSummarized ( String boundedContext, String readModel, Instant windowStart, Instant windowEnd,
+			long hits, long loads, long sharedLoads, long eventsLoaded, long eventsCaughtUp, long loadMicros,
+			long evictions, long expirations, long failedUpdates, int size, int maxEntries, boolean halted,
+			FeatureSlice slice, String stream ) implements BoundedContextEvent { }
 
 	/**
 	 * Emitted when a read model's projector has retired on a <em>permanent</em> failure and will

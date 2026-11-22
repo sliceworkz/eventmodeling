@@ -297,7 +297,7 @@ constructor how events name their key (`CacheKeys.byEntity(CUSTOMER)`) and how m
 (`CachePolicy.maxEntries(5_000)`, optionally `.expireAfterAccess(...)`). A miss replays the key's
 events as a live read does and keeps the result; the projector folds every later event about a held
 key into it; the key read least recently goes when the room is needed. It is worth it only where reads
-repeat the same keys — `statistics()` shows hits against misses. Step 3b of
+repeat the same keys — `statistics()` shows hits against misses. Step 1b of
 [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md) has the trade-offs, and the class javadoc the
 rules.
 

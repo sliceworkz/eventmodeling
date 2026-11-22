@@ -123,6 +123,23 @@ Every read is an `Observation.CachedRead` on the caller's thread, answering `Cac
 `LiveModelRead` — loses because a hit is an answer worth counting too, and the hit rate is the number
 that says whether the read model is worth having.
 
+## Reported on the monitoring stream
+
+The observation is for a tracer or a metrics binding in the process. A reader of the monitoring stream —
+the dashboard, in another process — needs the same numbers there, and a hit has no other trace. So a
+reporter per read model module emits a `CachedReadModelSummarized` per caching read model per window of
+`CachePolicy.reportEvery` that had any activity, the difference between the read model's cumulative
+statistics at the window's end and at its start. The alternatives lose:
+
+- **An event per read** would put a write to the monitoring store on every hit, which is a lookup in
+  memory: the reporting would cost more than the read.
+- **An event per load only**, as a live read reports `LiveModelProjected`, would leave out the hits, and
+  the hit rate is the number that decides whether the read model is worth having.
+
+Windows are aligned to the wall clock, as the port summaries' are, so the windows of several instances
+cover the same span and add up. The start event carries the cache's size (`CacheSettings`), so a reader
+knows the read model is a cache from the moment its context starts.
+
 ## Testing
 
 `CachingReadModelTest` in the testing module, beside the other bases. It does not register the read

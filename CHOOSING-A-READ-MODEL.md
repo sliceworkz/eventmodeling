@@ -100,6 +100,42 @@ and say in its javadoc which slice registers it.
 *Costs:* the answer lags by up to the poll interval; the whole stream is replayed at every process
 start (`start()` waits for it, so it is start-up latency, not background).
 
+## 3b. Eventually consistent, in memory, for the keys being read
+
+```java
+public class CustomerSummaries extends CachingReadModel<ShopEvent, CustomerId, CustomerSummary> {
+    public CustomerSummaries ( ) {
+        super(CacheKeys.byEntity(CUSTOMER), CachePolicy.maxEntries(5_000).expireAfterAccess(Duration.ofMinutes(30)));
+    }
+    public EventFilter eventFilter ( )                                          { return EventFilter.forTypes(CustomerRegistered.class, OrderPlaced.class); }
+    protected CustomerSummary initialState ( CustomerId id )                     { return CustomerSummary.unknown(id); }
+    protected CustomerSummary apply ( CustomerSummary s, Event<ShopEvent> e )    { return SummaryFold.apply(s, e); }
+}
+
+builder.readmodel(new CustomerSummaries()).eventuallyConsistent();
+CustomerSummary summary = shop.read(CustomerSummaries.class).get(customerId);
+```
+
+Step 3 holds every key there is, which is fine for a thousand accounts and not for ten million
+customers. A `CachingReadModel` holds only the keys being read: the first read of a key replays that
+key's events, as a live model would, and keeps the result; the projector folds every later event about
+a held key into it; the least recently read key goes once the policy's `maxEntries` is reached, and an
+idle one after `expireAfterAccess`. Take this when reads are about one entity at a time, the entity's
+replay is too slow to repeat per read, the entities are too many to hold all of them, and the reads
+**repeat** — the customers someone is working with this morning.
+
+A hit is as current as step 3; a miss is as current as a live read. `result(key)` answers the state with
+the last event folded into it, so `result.includes(writeRef)` tells a caller whether its own write is in
+it, and `getIncluding(key, writeRef)` loads the key again when it is not.
+
+*Costs:* a miss costs a live read of the key — an index lookup on PostgreSQL, a scan of the whole log
+in memory. Where reads are spread evenly over far more keys than the cache holds, almost every read
+misses, and this is a live model with a projector beside it: `statistics()` says which, through hits
+against misses. The projector reads every relevant event appended, as step 3 does, but starts at the
+stream head rather than replaying the history, so nothing is warmed by a start. While its projector is
+stopped or failing nothing is held and every read loads: it degrades into a live model, never into a
+stale one.
+
 ## 4. Eventually consistent, durable
 
 ```java
@@ -221,6 +257,7 @@ the two orders genuinely disagree. A position-only comparison silently *discards
 | Live model | per read | nothing, built per read | the stream | current |
 | Live + snapshot | per read | nothing, built per read | a snapshot | current |
 | EC in memory (`PublishingReadModel`) | background | heap, per instance | its bookmark | behind by ≤ a poll interval |
+| EC in memory, per key (`CachingReadModel`) | on a miss, then background | heap, the keys read lately | the key's events, then the stream head | a hit behind by ≤ a poll interval, a miss current |
 | EC durable (`SqlReadModelProjector`) | background | a database | its own bookmark | behind by ≤ a poll interval |
 | Seeded (`SeededReadModel`) | per read | its base's | a maintained base | current |
 

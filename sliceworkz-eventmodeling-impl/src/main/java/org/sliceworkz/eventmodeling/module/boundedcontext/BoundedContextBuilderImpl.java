@@ -101,6 +101,7 @@ import org.sliceworkz.eventmodeling.readmodels.EventuallyConsistentReadModelSpec
 import org.sliceworkz.eventmodeling.readmodels.LiveModelSpecification;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
+import org.sliceworkz.eventmodeling.readmodels.CachingReadModel;
 import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
 import org.sliceworkz.eventmodeling.snapshots.LiveModelSnapshotSpecification;
 import org.sliceworkz.eventmodeling.snapshots.SnapshotStorage;
@@ -477,6 +478,13 @@ public class BoundedContextBuilderImpl<C extends BoundedContext<?,?,?>> implemen
 	}
 
 	private LiveModelSpecification<C> registerLiveModel ( Class<? extends ReadModel<?>> readModelClass, ProjectedStream stream ) {
+		// a caching read model is the instance that holds the entries and the projector that keeps them
+		// current; projected per read, it would be a fresh, empty instance every time, holding nothing
+		if ( readModelClass != null && CachingReadModel.class.isAssignableFrom(readModelClass) ) {
+			throw new IllegalArgumentException(("%s is a CachingReadModel, which holds its entries between reads: register an "
+					+ "instance of it, readmodel(new %s(...)).eventuallyConsistent(), and read it with read(%s.class)")
+					.formatted(readModelClass.getSimpleName(), readModelClass.getSimpleName(), readModelClass.getSimpleName()));
+		}
 		var m = new LiveModelSpecificationImpl(this, readModelClass, stream);
 		liveModelSpecs.add(m);
 		// A live model is instantiated per projection, so only its class is known here. That matches

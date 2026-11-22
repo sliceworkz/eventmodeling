@@ -1160,6 +1160,45 @@ processor:**
   commit fails takes the projector's cursor back with it instead of skipping those events. See the
   eventstore's `BatchAwareProjection` notes
 
+**A caching read model — in memory, for the keys being read (`CachingReadModel`):**
+- **The gap it fills.** An eventually consistent in-memory read model holds every key there is, which
+  does not fit ten million customers; a live model holds nothing and replays a key per read. A
+  `CachingReadModel<D, KEY, STATE>` (api, `readmodels`) is the live read of a key, kept: a miss replays
+  the key's events (`CacheKeys.narrow`), the projector folds every later event into the entries of the
+  keys it is about (`CacheKeys.keysOf`), and the `CachePolicy` (`maxEntries`, optional
+  `expireAfterAccess`, a `clock` for tests) lets the key read least recently go. `CacheKeys.byEntity(E)`
+  is the keying to use: the entity's tag on both sides, so the two agree by construction. Registered as
+  an instance, `.eventuallyConsistent()`, read by its class (`read(X.class).get(key)`); a live
+  registration is refused at `build()` (`registerLiveModel`). Read `docs/design/caching-read-model.md`
+  before changing the load or the routing; it holds the reasoning and the rejected alternatives
+- **The one rule that makes it correct: a load the projector overtook reads the difference before it
+  inserts.** The read model tracks `delivered`, the newest event `when` was handed (every relevant event
+  at or before it has been delivered or never will be). A miss replays the key up to `head()` without
+  the lock, then under it: when `delivered` is past that head, it replays the key after the head up to
+  `delivered` — holding the projector at the lock, so nothing is delivered before the entry exists —
+  and only then inserts. Every entry records the last event folded into it and folds nothing at or
+  before it (`happenedAfter`, the total order), which makes the replay and a later delivery of the same
+  event, and a batch re-offered after a failure, count once
+- **The projector starts at the stream head**: it implements `SelfBookmarkingProjection`, and
+  `resumeFrom()` answers the head and lets every entry go, which is right whenever the projector is
+  rebuilt (construction, a restart). So a start replays nothing and warms nothing. `ReadModelModule`
+  attaches the stream (`attach`) before the processor is built, since `resumeFrom()` asks it for the head
+- **It degrades into a live model, never into a stale one.** `ReadModelModule`'s projector listener
+  tells it `projectionFailing()` (`onFailed`, cleared by the next `projectionRunning()` from `onRun`)
+  and `projectionStopped()` (`onStopped`, `onStoppedByOperator`, the module's `stop()`; cleared only by
+  `projectionStarted()` from `onStarted`, since a run under way when the stop came completes after it).
+  While either holds, nothing is held and every read loads without keeping what it loaded
+- **A fold that throws in the projector lets that key go** (`failedUpdates`) instead of failing the
+  run: retrying the event would hold up every key; the key's next read replays it and fails to the caller
+- **`STATE` is immutable**, as for `PublishingReadModel`; one `ReentrantLock` guards the entries and
+  `delivered`, held per delivered event, per hit, and around a load's insert (with its catch-up) — a
+  lock, not a monitor, because the catch-up reads from the store while holding it
+- `CachingReadModelTest` pins each rule by driving the read model by hand — the overtaken load through
+  a stream whose `head()` answers an older reference, the double delivery, two keys in one event, LRU
+  and expiry, a failing fold, failing against stopped; `CachingReadModelInABoundedContextTest` pins it
+  per backend through a context: kept current, no replay at start (the bookmark handled nothing), an
+  operator stop degrading it and a restart restoring it, the live registration refused
+
 **A seeded read model — as current as a live model, at the cost of the delta:**
 - **The gap it fills.** A live model is always current and replays the whole history to be; an
   eventually consistent read model is already materialised and lags whatever its projector has not

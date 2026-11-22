@@ -107,6 +107,43 @@ public class CachingReadModelRulesTest extends AbstractMockDomainTest {
 	}
 
 	/**
+	 * A current read is as current as a live one: what is stored when it starts and the projector has not
+	 * delivered yet is read into the held entry, once — the projector delivering it afterwards adds nothing.
+	 */
+	@ForEachBackend
+	void aCurrentReadCatchesTheHeldKeyUpWithWhatTheProjectorHasNotDeliveredYet ( ) {
+		append(C1, "a");
+		CustomerValuesReadModel readModel = attached(new CustomerValuesReadModel());
+		readModel.get(C1);
+		Event<MockDomainEvent> b = append(C1, "b");
+		Event<MockDomainEvent> x = append(C2, "x");
+
+		assertEquals(List.of("a"), readModel.get(C1), "a plain read is as current as the projector");
+		assertEquals(List.of("a", "b"), readModel.getCurrent(C1));
+		assertEquals(1, readModel.statistics().eventsCaughtUp());
+		assertEquals(List.of("a", "b"), readModel.get(C1), "the catch-up is kept");
+
+		readModel.when(b);
+		readModel.when(x);
+		assertEquals(List.of("a", "b"), readModel.getCurrent(C1), "the projector delivering it again counts for nothing");
+		assertEquals(b.reference(), readModel.current(C1).upTo());
+		assertEquals(1, readModel.statistics().misses());
+		assertFalse(readModel.holds(C2));
+	}
+
+	@ForEachBackend
+	void aCurrentReadOfAKeyNotHeldLoadsIt ( ) {
+		append(C1, "a");
+		CustomerValuesReadModel readModel = attached(new CustomerValuesReadModel());
+		append(C1, "b");
+
+		assertEquals(List.of("a", "b"), readModel.getCurrent(C1));
+		assertTrue(readModel.holds(C1));
+		assertEquals(1, readModel.statistics().misses());
+		assertEquals(0, readModel.statistics().eventsCaughtUp());
+	}
+
+	/**
 	 * The projector delivers the events the load already read when it was behind the load's head — and
 	 * again after a failed batch. Neither is counted twice.
 	 */

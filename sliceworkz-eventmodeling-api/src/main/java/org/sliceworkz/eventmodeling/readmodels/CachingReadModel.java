@@ -113,7 +113,11 @@ import org.sliceworkz.eventstore.stream.EventSource;
  * <ul>
  *   <li>{@code STATE} is immutable, and {@link #apply} a pure function of {@code (state, event)} that
  *       returns the next state, as for {@link PublishingReadModel}: a reader holds the state it was given
- *       while the projector folds the next event, on another thread.</li>
+ *       while the projector folds the next event, on another thread. Where a copy per event costs too
+ *       much — a state of thousands of entries, folded from thousands of events on a load — the state may
+ *       instead guard its own reads and writes, and {@link #apply} change it in place and return it. Its
+ *       readers then see it move on after they were given it, past the reference
+ *       {@link #result(Object)} answered with.</li>
  *   <li>The key's events must carry what {@link CacheKeys} reads — with {@link CacheKeys#byEntity}, the
  *       entity's tag. An event that is about a key without saying so is never folded into it.</li>
  *   <li>Registered as an instance, {@code eventuallyConsistent()}: a live registration is refused at
@@ -123,7 +127,9 @@ import org.sliceworkz.eventstore.stream.EventSource;
  *
  * <p><b>Read your own write.</b> {@link #result(Object)} answers the state with the last event folded into
  * it, so a caller that executed a command checks {@code result.includes(write)}; {@link #getIncluding}
- * loads the key again when a held entry does not include the write yet.
+ * loads the key again when a held entry does not include the write yet. A caller that has no reference
+ * — a request that may follow its own write — reads with {@link #getCurrent}, which is as current as a
+ * live read at the cost of a head lookup.
  *
  * <p><b>When the projector stops</b> — a failure it retries, one that retired it, an operator stop, the
  * context stopping — nothing it would have kept current can be trusted to be, so every entry is dropped
@@ -136,7 +142,7 @@ import org.sliceworkz.eventstore.stream.EventSource;
  *
  * @param <DOMAIN_EVENT_TYPE> the events of the stream it is projected from
  * @param <KEY>               what an entry is kept by
- * @param <STATE>             the immutable state of one entry
+ * @param <STATE>             the state of one entry: immutable, or guarding its own reads and writes
  */
 public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 		implements ReadModel<DOMAIN_EVENT_TYPE>, SelfBookmarkingProjection {
@@ -222,7 +228,8 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 	protected abstract STATE initialState ( KEY key );
 
 	/**
-	 * Folds one event into a key's state and returns the next state, leaving the argument untouched. The
+	 * Folds one event into a key's state and returns the next state, leaving the argument untouched (or,
+	 * for a state that guards itself, changing it and returning it). The
 	 * event is about the key ({@link CacheKeys#keysOf} answered it), and is handed over once per key it is
 	 * about. Must not return null.
 	 */
@@ -260,6 +267,62 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 		}
 		invalidate(key);
 		return observedRead(key, false).data();
+	}
+
+	/**
+	 * The state of {@code key}, as current as a live read: everything about the key stored when the call
+	 * starts is in it. It costs a head lookup, and when the projector has not reached that head yet — it
+	 * lags an append by the time a notification takes — it reads the key's events the projector has not
+	 * delivered yet into the held entry, holding the projector for that moment. What a caller reaches for
+	 * when it may just have written and does not have the reference of its write; with the reference,
+	 * {@link #getIncluding} does less.
+	 */
+	public final STATE getCurrent ( KEY key ) {
+		return current(key).data();
+	}
+
+	/** {@link #getCurrent}, with the last event folded into the answer. */
+	public final ReadModelResult<STATE> current ( KEY key ) {
+		EventSource<DOMAIN_EVENT_TYPE> source = attachedSource();
+		EventReference head = source.head().orElse(null);
+		ReadModelResult<STATE> read = result(key);
+		if ( head == null ) {
+			return read;
+		}
+		lock.lock();
+		try {
+			if ( halted() ) {
+				// nothing is held: the read loaded the key, from a head taken after this one
+				return read;
+			}
+			Entry<STATE> entry = entries.get(key);
+			if ( entry != null ) {
+				if ( delivered == null || head.storedEventHappenedAfter(delivered) ) {
+					// the projector is behind the head: read what it has not delivered of this key yet. The
+					// entry holds every event of the key up to what the projector delivered, and folds
+					// nothing at or before the last event in it, so the projector delivering these again
+					// later counts for nothing
+					CatchUp catchUp = new CatchUp(key, entry);
+					Projector.Builder<DOMAIN_EVENT_TYPE> projector = Projector.from(source).into(catchUp);
+					if ( delivered != null ) {
+						projector = projector.startingAfter(delivered);
+					}
+					try {
+						projector.build().runUntil(head);
+					} catch ( RuntimeException e ) {
+						entries.remove(key);
+						throw e;
+					}
+					eventsCaughtUp.addAndGet(catchUp.handled);
+				}
+				return new ReadModelResult<>(entry.state, entry.upTo);
+			}
+		} finally {
+			lock.unlock();
+		}
+		// let go since it was read, or a read that waited for a load another read started earlier: a load
+		// of this read's own reads a head taken after this one
+		return observedRead(key, false);
 	}
 
 	private ReadModelResult<STATE> observedRead ( KEY key, boolean mayShareALoad ) {
@@ -571,6 +634,34 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 
 		private ReadModelResult<STATE> result ( ) {
 			return new ReadModelResult<>(state, upTo);
+		}
+	}
+
+	/** A held entry caught up from the stream, under the lock. */
+	private final class CatchUp implements Projection<DOMAIN_EVENT_TYPE> {
+
+		private final EventFilter filter;
+		private final Entry<STATE> entry;
+		private long handled;
+
+		private CatchUp ( KEY key, Entry<STATE> entry ) {
+			this.filter = keys.narrow(CachingReadModel.this.eventFilter(), key);
+			this.entry = entry;
+		}
+
+		@Override
+		public EventFilter eventFilter ( ) {
+			return filter;
+		}
+
+		@Override
+		public void when ( Event<DOMAIN_EVENT_TYPE> event ) {
+			if ( entry.upTo != null && !event.reference().happenedAfter(entry.upTo) ) {
+				return;
+			}
+			entry.state = applied(entry.state, event);
+			entry.upTo = event.reference();
+			handled++;
 		}
 	}
 

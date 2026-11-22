@@ -1194,6 +1194,11 @@ processor:**
   key however many reads miss it at once; what the load threw reaches every waiter, and the next read
   loads afresh. `getIncluding` loads the key itself when the answer misses the write, never joining a
   load that may have read the stream before it
+- **`getCurrent` is as current as a live read**, for a caller that may follow its own write without its
+  reference: it takes `head()` first, and when `delivered` is behind it, reads the key's events after
+  `delivered` up to the head into the held entry under the lock (`CatchUp`, skipping what the entry
+  already folded). Usually nothing to read, since the projector lags by a notification. A key not held
+  or let go meanwhile is loaded by a load of its own, never one started before the head
 - **Every read is observed as `Observation.CachedRead`**, on the caller's thread, answering `CacheHit`,
   `CacheLoaded` (events read and folded, `caughtUp`, `held`) or `CacheLoadShared`; `ReadModelModule`
   hands the read model its observer and context name with `attach(source, observer, boundedContext)`
@@ -1209,7 +1214,8 @@ processor:**
   once, `null` for any other and on an event stored before it existed
 - **A fold that throws in the projector lets that key go** (`failedUpdates`) instead of failing the
   run: retrying the event would hold up every key; the key's next read replays it and fails to the caller
-- **`STATE` is immutable**, as for `PublishingReadModel`; one `ReentrantLock` guards the entries and
+- **`STATE` is immutable**, as for `PublishingReadModel` — or, where a copy per event costs too much, a
+  state that guards its own reads and writes, which `apply` changes in place; one `ReentrantLock` guards the entries and
   `delivered`, held per delivered event, per hit, and around a load's insert (with its catch-up) — a
   lock, not a monitor, because the catch-up reads from the store while holding it
 - `CachingReadModelRulesTest` pins each rule by driving the read model by hand — the overtaken load

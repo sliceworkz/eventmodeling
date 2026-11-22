@@ -114,6 +114,23 @@ every read that waited for it, and the future is gone once the load ends, so the
 loads the key itself rather than joining a load under way, which may have read the stream before the
 write.
 
+`getCurrent` serves the caller who may have written but holds no reference: it takes the stream head
+first and, when the projector has not delivered up to it, reads the key's events between the projector's
+position and that head into the held entry, under the lock. Everything of the key up to the projector's
+position is in the entry already, and the entry folds nothing at or before its last event, so the
+projector delivering the same events later counts for nothing. The alternative — `getIncluding` with the
+head as the write — loses because an entry's reference is the key's own last event, which is behind the
+head whenever other keys were written since, so every read would load again.
+
+## A state that guards itself
+
+An immutable state means a copy per event. For a small state that is nothing; for a state of thousands of
+entries folded from thousands of events, the load becomes quadratic. Such a state may guard its own reads
+and writes (a lock of its own around its fold and its getters) and `apply` change it in place: the
+framework calls `apply` only with its own lock held, or on a load's private state before it is held, so
+the state's lock is all that keeps a reader from seeing an event half folded. What it gives up is that
+a reader's state stays put: it moves on as the projector folds, past the reference the read answered.
+
 ## Observed like a live read
 
 Every read is an `Observation.CachedRead` on the caller's thread, answering `CacheHit`, `CacheLoaded`

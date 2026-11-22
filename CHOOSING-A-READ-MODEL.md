@@ -80,7 +80,9 @@ replay is too slow to repeat per read, the entities are too many to hold all of 
 
 A hit is as current as step 3; a miss is as current as a live read. `result(key)` answers the state with
 the last event folded into it, so `result.includes(writeRef)` tells a caller whether its own write is in
-it, and `getIncluding(key, writeRef)` loads the key again when it is not.
+it, and `getIncluding(key, writeRef)` loads the key again when it is not. A request that may follow its
+own write without its reference — an agent writing and then reading — reads `getCurrent(key)`, as
+current as a live read for a head lookup: it reads what the projector has not delivered yet of that key.
 
 A miss is a live read of the key, so a key whose own history is long wants step 2 first: bound the
 replay, and the miss is cheap again.

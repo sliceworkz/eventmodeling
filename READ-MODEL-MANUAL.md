@@ -288,6 +288,19 @@ Operational facts to teach alongside:
   event, a closed storage — retires the processor, which `ReadModelProjectorStopped` announces and
   `ProcessorAdminCapability.restartProcessor` puts back without a context restart (see chapter 9).
 
+### When there are too many keys to hold: `CachingReadModel`
+
+A `PublishingReadModel` holds every key — fine for a thousand accounts, not for ten million
+customers. A `CachingReadModel` holds only the keys being read: you write a per-key state type,
+`initialState(key)`, `apply(state, event)` and an `eventFilter()` of the relevant types, and hand the
+constructor how events name their key (`CacheKeys.byEntity(CUSTOMER)`) and how much to hold
+(`CachePolicy.maxEntries(5_000)`, optionally `.expireAfterAccess(...)`). A miss replays the key's
+events as a live read does and keeps the result; the projector folds every later event about a held
+key into it; the key read least recently goes when the room is needed. It is worth it only where reads
+repeat the same keys — `statistics()` shows hits against misses. Step 1b of
+[CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md) has the trade-offs, and the class javadoc the
+rules.
+
 ## 6. Durable, shared, and elected: the SQL read model
 
 Take this step when the startup rebuild is too slow, the state outgrows heap, or the deployment

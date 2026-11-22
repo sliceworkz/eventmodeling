@@ -225,6 +225,22 @@ public sealed interface Observation<O extends Outcome> {
 	record LiveModelRead ( String boundedContext, String readModel, Class<?> readModelClass, boolean unbounded, EventReference until, Tracing tracing ) implements Observation<Outcome.LiveModelProjected> { }
 
 	/**
+	 * A read of one key of a {@code CachingReadModel}, on the caller's thread: answered from memory, or
+	 * loaded from the event store and kept. The event store's own observations of a load — its queries —
+	 * are nested in this scope.
+	 *
+	 * <p>{@code key} is the key as its {@code toString()} renders it: data, so an observer turning it into
+	 * a metrics tag must bound what it admits, as for {@code Tracing} and aggregate identities.
+	 *
+	 * @param boundedContext the bounded context
+	 * @param readModel the read model's name
+	 * @param readModelClass the read model's class
+	 * @param key the key read
+	 * @param tracing the caller's tracing, {@code null} when none is bound to the thread
+	 */
+	record CachedRead ( String boundedContext, String readModel, Class<?> readModelClass, String key, Tracing tracing ) implements Observation<Outcome.CachedReadResult> { }
+
+	/**
 	 * A load of an aggregate: constructed, restored from a snapshot if it has one, and brought up to date
 	 * from the stream. A snapshot load or save is nested in this scope.
 	 *

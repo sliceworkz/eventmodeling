@@ -51,6 +51,7 @@ import org.sliceworkz.eventmodeling.module.threading.ProcessorThreadManager;
 import org.sliceworkz.eventmodeling.observability.BoundedContextObserver;
 import org.sliceworkz.eventmodeling.observability.Observation;
 import org.sliceworkz.eventmodeling.observability.Outcome;
+import org.sliceworkz.eventmodeling.readmodels.CachingReadModel;
 import org.sliceworkz.eventmodeling.readmodels.ReadModelStorage;
 import org.sliceworkz.eventmodeling.readmodels.ReadModel;
 import org.sliceworkz.eventmodeling.readmodels.SeededReadModel;
@@ -89,6 +90,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	private BoundedContextObserver observer;
 	private BoundedContextEventEmitter eventEmitter;
 	private ProjectorProcessorAdmin admin;
+	private CachedReadModelReporter cacheReporter;
 
 	public record LiveModelInfo<DOMAIN_EVENT_TYPE> (
 			Class<? extends ReadModel<DOMAIN_EVENT_TYPE>> readModelClass,
@@ -178,6 +180,12 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		this.admin = new ProjectorProcessorAdmin(stream.processorKind(), boundedContext);
 
 		this.projectorProcessors = createProjectorProcessors(this.eventuallyConsistentReadModels);
+		this.cacheReporter = new CachedReadModelReporter(
+				this.eventuallyConsistentReadModels.stream()
+						.filter(rm -> rm instanceof CachingReadModel<?, ?, ?>)
+						.<CachingReadModel<?, ?, ?>>map(rm -> (CachingReadModel<?, ?, ?>) rm)
+						.toList(),
+				boundedContext, stream.reported(), eventEmitter, eventEmitter::sliceFor, java.time.Clock.systemUTC());
 		this.processorThreadManager = new ProcessorThreadManager<DOMAIN_EVENT_TYPE>(stream.processorType(), this.projectorProcessors);
 
 		LOGGER.info("live readmodels over the %s stream: %s".formatted(stream.purpose(), liveModels.keySet()));
@@ -192,6 +200,11 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 		Collection<ProjectorProcessor<DOMAIN_EVENT_TYPE>> result = new ArrayList<>();
 
 		readModels.forEach(rm -> {
+			// a caching read model loads a key from the stream it is projected from, and asks that stream
+			// for its head when the projector below is built -- so it is attached first
+			if ( rm instanceof CachingReadModel<DOMAIN_EVENT_TYPE, ?, ?> caching ) {
+				caching.attach(domainEventStream, observer, boundedContext);
+			}
 			ReadModelStorage readModelStorage = rm.storage();
 			Storage storage = Storage.of(readModelStorage);
 			ProjectorProcessor<DOMAIN_EVENT_TYPE> processor = new ProjectorProcessor<>(
@@ -276,14 +289,21 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 			@Override
 			public void onStarted ( ) {
+				if ( rm instanceof CachingReadModel<?, ?, ?> caching ) {
+					caching.projectionStarted();
+				}
 				if ( eventEmitter.enabled() ) {
 					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorStarted(
-							boundedContext, rm.readmodelName(), storage.label(), eventEmitter.sliceFor(rm.getClass()), stream.reported()));
+							boundedContext, rm.readmodelName(), storage.label(), eventEmitter.sliceFor(rm.getClass()), stream.reported(),
+							cacheSettings(rm)));
 				}
 			}
 
 			@Override
 			public void onRun ( ProjectorMetrics metrics, long durationMicros ) {
+				if ( rm instanceof CachingReadModel<?, ?, ?> caching ) {
+					caching.projectionRunning();
+				}
 				if ( eventEmitter.enabled() && metrics.eventsHandled() > 0 ) {
 					BoundedContextEvent.Metrics m = new BoundedContextEvent.Metrics(durationMicros, metrics.queriesDone(), metrics.eventsStreamed(), metrics.eventsHandled(), metrics.lastEventReference());
 					eventEmitter.emit(new BoundedContextEvent.EventuallyConsistentReadModelUpdated(
@@ -293,6 +313,9 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 			@Override
 			public void onFailed ( ProjectorException failure, int consecutiveFailedRuns ) {
+				if ( rm instanceof CachingReadModel<?, ?, ?> caching ) {
+					caching.projectionFailing();
+				}
 				if ( eventEmitter.enabled() ) {
 					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorFailed(
 							boundedContext, rm.readmodelName(), storage.label(),
@@ -307,6 +330,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 			@Override
 			public void onStopped ( ProjectorException failure ) {
+				haltCaching(rm);
 				if ( eventEmitter.enabled() ) {
 					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorStopped(
 							boundedContext, rm.readmodelName(), storage.label(),
@@ -323,6 +347,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 
 			@Override
 			public void onStoppedByOperator ( ) {
+				haltCaching(rm);
 				if ( eventEmitter.enabled() ) {
 					eventEmitter.emit(new BoundedContextEvent.ReadModelProjectorStopped(
 							boundedContext, rm.readmodelName(), storage.label(), null, null, eventEmitter.sliceFor(rm.getClass()),
@@ -331,6 +356,28 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 				}
 			}
 		};
+	}
+
+	/** What a {@link CachingReadModel} is sized at, for its start event; {@code null} for any other read model. */
+	private static BoundedContextEvent.CacheSettings cacheSettings ( ReadModel<?> readModel ) {
+		if ( !(readModel instanceof CachingReadModel<?, ?, ?> caching) ) {
+			return null;
+		}
+		var policy = caching.policy();
+		return new BoundedContextEvent.CacheSettings(policy.maxEntries(),
+				policy.expireAfterAccess() == null ? null : policy.expireAfterAccess().toMillis(),
+				policy.reportEvery().toMillis());
+	}
+
+	/**
+	 * A stopped projector keeps no entry of a {@link CachingReadModel} current, so the read model lets
+	 * them go and loads every read until the projector is started again: degraded into a live model,
+	 * never into a stale one.
+	 */
+	private static void haltCaching ( ReadModel<?> readModel ) {
+		if ( readModel instanceof CachingReadModel<?, ?, ?> caching ) {
+			caching.projectionStopped();
+		}
 	}
 
 	/**
@@ -540,6 +587,7 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	/** Starts the processors and returns: the first half of {@link #start()}, for a start that waits elsewhere. */
 	public void startProcessors ( ) {
 		this.processorThreadManager.start();
+		this.cacheReporter.start();
 	}
 
 	/**
@@ -624,11 +672,17 @@ public class ReadModelModule<DOMAIN_EVENT_TYPE> implements LifecycleCapability {
 	@Override
 	public void stop ( ) {
 		this.processorThreadManager.stop();
+		// the unfinished window, before the context reports itself stopped -- and before the caches are let
+		// go below, so it reports what they held
+		this.cacheReporter.stop();
+		// a stop is not reported to the projector listener, and a stopped projector keeps nothing current
+		eventuallyConsistentReadModels.forEach(ReadModelModule::haltCaching);
 	}
 
 	@Override
 	public void terminate ( ) {
 		this.processorThreadManager.terminate();
+		this.cacheReporter.stop();
 	}
 
 }

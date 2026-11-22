@@ -87,7 +87,9 @@ Two ways of keeping a read cheap on a long history, side by side. The domain one
 replays one month rather than one account's lifetime. The framework one is step 3b — `CurrentBalanceReadModel`,
 the file to read when a live model is impractical but an eventually consistent read is not current enough to
 decide on. It seeds from `AccountBalancesReadModel` (a `PublishingReadModel` projected in the background) and
-projects only what has not reached it, usually nothing. Note that both share one `BalanceFold`: the base and
+projects only what has not reached it, usually nothing. Step 11 adds the third reader,
+`CachedBalanceReadModel` — a `CachingReadModel` holding only the accounts being read, tested with the
+published `CachingReadModelTest` in `CachedBalanceReadModelTest`. Note that all of them share one `BalanceFold`: the base and
 the delta are folded by different code paths, and the moment they disagree the answer starts depending on how
 far the projector got.
 
@@ -749,7 +751,7 @@ opposite responses:**
 
 **Which read model to reach for is written down for users, and it is the same order to advise in.**
 [CHOOSING-A-READ-MODEL.md](CHOOSING-A-READ-MODEL.md) carries the ladder — decision model, live model,
-bound the replay, eventually consistent in memory, eventually consistent durable, seeded read,
+cached for the keys being read, bound the replay, eventually consistent in memory, eventually consistent durable, seeded read,
 snapshots — with what each step buys and costs, plus the shapes to steer away from. The sections below
 are the *why* of each mechanism; that file is the *which*, and it is the one a user reads first. Keep
 the two in step rather than restating one in the other, and when advising on a read model, say which
@@ -1159,6 +1161,75 @@ processor:**
 - Needs the matching eventstore fixes to be complete: the bookmark is placed per batch, and a batch whose
   commit fails takes the projector's cursor back with it instead of skipping those events. See the
   eventstore's `BatchAwareProjection` notes
+
+**A caching read model — in memory, for the keys being read (`CachingReadModel`):**
+- **The gap it fills.** An eventually consistent in-memory read model holds every key there is, which
+  does not fit ten million customers; a live model holds nothing and replays a key per read. A
+  `CachingReadModel<D, KEY, STATE>` (api, `readmodels`) is the live read of a key, kept: a miss replays
+  the key's events (`CacheKeys.narrow`), the projector folds every later event into the entries of the
+  keys it is about (`CacheKeys.keysOf`), and the `CachePolicy` (`maxEntries`, optional
+  `expireAfterAccess`, a `clock` for tests) lets the key read least recently go. `CacheKeys.byEntity(E)`
+  is the keying to use: the entity's tag on both sides, so the two agree by construction. Registered as
+  an instance, `.eventuallyConsistent()`, read by its class (`read(X.class).get(key)`); a live
+  registration is refused at `build()` (`registerLiveModel`). Read `docs/design/caching-read-model.md`
+  before changing the load or the routing; it holds the reasoning and the rejected alternatives
+- **The one rule that makes it correct: a load the projector overtook reads the difference before it
+  inserts.** The read model tracks `delivered`, the newest event `when` was handed (every relevant event
+  at or before it has been delivered or never will be). A miss replays the key up to `head()` without
+  the lock, then under it: when `delivered` is past that head, it replays the key after the head up to
+  `delivered` — holding the projector at the lock, so nothing is delivered before the entry exists —
+  and only then inserts. Every entry records the last event folded into it and folds nothing at or
+  before it (`happenedAfter`, the total order), which makes the replay and a later delivery of the same
+  event, and a batch re-offered after a failure, count once
+- **The projector starts at the stream head**: it implements `SelfBookmarkingProjection`, and
+  `resumeFrom()` answers the head and lets every entry go, which is right whenever the projector is
+  rebuilt (construction, a restart). So a start replays nothing and warms nothing. `ReadModelModule`
+  attaches the stream (`attach`) before the processor is built, since `resumeFrom()` asks it for the head
+- **It degrades into a live model, never into a stale one.** `ReadModelModule`'s projector listener
+  tells it `projectionFailing()` (`onFailed`, cleared by the next `projectionRunning()` from `onRun`)
+  and `projectionStopped()` (`onStopped`, `onStoppedByOperator`, the module's `stop()`; cleared only by
+  `projectionStarted()` from `onStarted`, since a run under way when the stop came completes after it).
+  While either holds, nothing is held and every read loads without keeping what it loaded
+- **A read of a key being loaded waits for that load** (`loading`, a future per key): one replay per
+  key however many reads miss it at once; what the load threw reaches every waiter, and the next read
+  loads afresh. `getIncluding` loads the key itself when the answer misses the write, never joining a
+  load that may have read the stream before it
+- **`getCurrent` is as current as a live read**, for a caller that may follow its own write without its
+  reference: it takes `head()` first, and when `delivered` is behind it, reads the key's events after
+  `delivered` up to the head into the held entry under the lock (`CatchUp`, skipping what the entry
+  already folded). Usually nothing to read, since the projector lags by a notification. A key not held
+  or let go meanwhile is loaded by a load of its own, never one started before the head
+- **Every read is observed as `Observation.CachedRead`**, on the caller's thread, answering `CacheHit`,
+  `CacheLoaded` (events read and folded, `caughtUp`, `held`) or `CacheLoadShared`; `ReadModelModule`
+  hands the read model its observer and context name with `attach(source, observer, boundedContext)`
+- **Its activity reaches the monitoring stream, summed per window**: `CachedReadModelReporter` (impl,
+  one per `ReadModelModule` with a caching read model, a virtual thread from `start()` to `stop()`) emits a
+  `CachedReadModelSummarized` per read model per wall-clock-aligned window of `CachePolicy.reportEvery`
+  (default a minute) that had any activity — hits, loads, shared loads, events loaded and caught up, load
+  time, evictions, expirations, failed updates, size — as the difference of the read model's cumulative
+  `statistics()`, so the read model knows nothing of windows. The unfinished window is reported on
+  `stop()`/`terminate()`, before the caches are let go and before `BoundedContextStopped`. A hit is
+  reported nowhere else, so this is where a dashboard learns the hit rate. `ReadModelProjectorStarted.cache`
+  (`CacheSettings`: max entries, idle expiry, report window) says a read model is a cache before it is read
+  once, `null` for any other and on an event stored before it existed
+- **A fold that throws in the projector lets that key go** (`failedUpdates`) instead of failing the
+  run: retrying the event would hold up every key; the key's next read replays it and fails to the caller
+- **`STATE` is immutable**, as for `PublishingReadModel` — or, where a copy per event costs too much, a
+  state that guards its own reads and writes, which `apply` changes in place; one `ReentrantLock` guards the entries and
+  `delivered`, held per delivered event, per hit, and around a load's insert (with its catch-up) — a
+  lock, not a monitor, because the catch-up reads from the store while holding it
+- `CachingReadModelRulesTest` pins each rule by driving the read model by hand — the overtaken load
+  through a stream whose `head()` answers an older reference, the double delivery, two keys in one event,
+  LRU and expiry, a failing fold, failing against stopped, a shared load (and a failed one) through a
+  stream whose `head()` blocks until released, `getIncluding` not settling for a load that started before
+  the write, the observation; the published `CachingReadModelTest` base (testing module) drives it with a
+  `Projector` the test runs, and `CachingReadModelTestRunsOnEveryBackendTest` is this repository's copy of
+  what its user gets; the examples' `CachedBalanceReadModel` (on `BalanceFold`, step 11 of the
+  closing-the-books example) and `CachedBalanceReadModelTest` are the worked example;
+  `CachingReadModelInABoundedContextTest` pins it
+  per backend through a context: kept current, no replay at start (the bookmark handled nothing), an
+  operator stop degrading it and a restart restoring it, the live registration refused, and the
+  summaries and the start event's settings through a real monitoring stream
 
 **A seeded read model — as current as a live model, at the cost of the delta:**
 - **The gap it fills.** A live model is always current and replays the whole history to be; an
@@ -2571,7 +2642,7 @@ The suite builds on `sliceworkz-eventstore-testing`, the eventstore's published 
 
 **Base Classes:**
 - `org.sliceworkz.eventmodeling.mock.boundedcontext.AbstractBoundedContextTest` extends the eventstore's `AbstractEventStoreTest`, so it owns the storage lifecycle (fresh empty store per test) and the bounded-context release. Subclasses reach the store through `eventStorage()` and must not build one themselves. The release *terminates* the context rather than stopping it, because terminating is what closes the `EventStore` the context built and drains its processor threads — see "Shutdown — who closes what" below
-- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest` — with `InboundLiveModelTest` and `OutboundLiveModelTest` for a read model over the inbound or outbound stream — `AutomationTest`, `PolicyTest`, `TranslatorTest`, `PublisherTest`, `DispatcherTest`, `SqlReadModelTest`)
+- Framework users extend the base test classes published in `sliceworkz-eventmodeling-testing` (`CommandTest`, `AggregateTest`, `LiveModelTest` — with `InboundLiveModelTest` and `OutboundLiveModelTest` for a read model over the inbound or outbound stream — `CachingReadModelTest`, `AutomationTest`, `PolicyTest`, `TranslatorTest`, `PublisherTest`, `DispatcherTest`, `SqlReadModelTest`)
 - `CommandTest` tests business rules with `as(actor)` (seeded events and the execution carry the actor),
   `whenEvaluated(command).thenEvaluation()` (fails if anything was appended) and
   `then().rulesViolated()`, both handing out `EvaluationAssertions`

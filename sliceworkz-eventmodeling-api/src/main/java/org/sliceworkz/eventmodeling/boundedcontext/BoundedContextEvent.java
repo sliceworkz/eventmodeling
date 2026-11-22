@@ -431,9 +431,18 @@ public sealed interface BoundedContextEvent {
 	 * @param maxEntries the most keys it holds
 	 * @param expireAfterAccessMillis how long a key is held without being read, {@code null} for no expiry
 	 * @param reportEveryMillis the length of the windows its {@link CachedReadModelSummarized} cover
+	 * @param reportsEachRead whether every read is also reported as a {@link CachedReadModelRead}; {@code false}
+	 *        on an event stored before it existed
 	 */
 	@JsonIgnoreProperties(ignoreUnknown = true)
-	record CacheSettings ( int maxEntries, Long expireAfterAccessMillis, long reportEveryMillis ) { }
+	record CacheSettings ( int maxEntries, Long expireAfterAccessMillis, long reportEveryMillis,
+			@JsonSetter(nulls = Nulls.AS_EMPTY) boolean reportsEachRead ) {
+
+		/** A cache whose reads are reported in windows only. */
+		public CacheSettings ( int maxEntries, Long expireAfterAccessMillis, long reportEveryMillis ) {
+			this(maxEntries, expireAfterAccessMillis, reportEveryMillis, false);
+		}
+	}
 
 	/**
 	 * What a {@code CachingReadModel} did in one window on one instance: how many reads were answered from
@@ -467,6 +476,32 @@ public sealed interface BoundedContextEvent {
 	record CachedReadModelSummarized ( String boundedContext, String readModel, Instant windowStart, Instant windowEnd,
 			long hits, long loads, long sharedLoads, long eventsLoaded, long eventsCaughtUp, long loadMicros,
 			long evictions, long expirations, long failedUpdates, int size, int maxEntries, boolean halted,
+			FeatureSlice slice, String stream ) implements BoundedContextEvent { }
+
+	/**
+	 * One read of a {@code CachingReadModel} whose policy reports each read ({@code CachePolicy.reportEachRead()}),
+	 * emitted on the reader's thread under its tracing, so it sits in the flow of the request that read it, as a
+	 * live read model's {@link LiveModelProjected} does. The windows ({@link CachedReadModelSummarized}) are
+	 * reported all the same and count these reads too: a reader summing reads takes them from the windows, and
+	 * this event says what each one was.
+	 *
+	 * @param boundedContext the context the read model belongs to
+	 * @param readModel the read model's name
+	 * @param key the key read, as its {@code toString()}: data, which a metrics binding must not make a tag of
+	 * @param answer {@code HIT} (answered from memory), {@code LOADED} (the key's events replayed) or
+	 *        {@code SHARED_LOAD} (answered by another read's load of the same key)
+	 * @param durationMicros how long the read took, on a monotonic clock
+	 * @param eventsStreamed the events a load read, 0 for a hit and a shared load
+	 * @param eventsHandled the events a load folded, 0 for a hit and a shared load
+	 * @param eventsCaughtUp the events read in after the load or the hit: what the projector had not delivered
+	 *        yet, for a load it overtook or a current read
+	 * @param held whether the key is held after the read; {@code false} while the projector is not running
+	 * @param upTo the last event the answer reflects, {@code null} when no event is about the key
+	 * @param slice the read model's feature slice, may be {@code null}
+	 * @param stream the stream it is projected from, {@code null} for the domain stream
+	 */
+	record CachedReadModelRead ( String boundedContext, String readModel, String key, String answer, long durationMicros,
+			long eventsStreamed, long eventsHandled, long eventsCaughtUp, boolean held, EventReference upTo,
 			FeatureSlice slice, String stream ) implements BoundedContextEvent { }
 
 	/**

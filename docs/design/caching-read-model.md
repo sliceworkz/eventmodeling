@@ -153,6 +153,12 @@ statistics at the window's end and at its start. The alternatives lose:
 - **An event per load only**, as a live read reports `LiveModelProjected`, would leave out the hits, and
   the hit rate is the number that decides whether the read model is worth having.
 
+A read model read a few times a minute, where each read is worth a line of its own, opts into a
+`CachedReadModelRead` per read with `CachePolicy.reportEachRead()`, on the reader's thread and in its flow,
+the way a port is monitored per call or summarized. It comes beside the windows, not instead of them: the
+windows still carry everything the per-read event cannot (evictions, expirations, the size), and stay the one
+source of the counts, so nothing is counted twice.
+
 Windows are aligned to the wall clock, as the port summaries' are, so the windows of several instances
 cover the same span and add up. The start event carries the cache's size (`CacheSettings`), so a reader
 knows the read model is a cache from the moment its context starts.

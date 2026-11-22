@@ -249,7 +249,9 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 	 * write about this key is in it.
 	 */
 	public final ReadModelResult<STATE> result ( KEY key ) {
-		return observedRead(key, true);
+		long started = System.nanoTime();
+		Answer<STATE> answer = observedRead(key, true);
+		return reported(key, started, answer, answer.result(), 0);
 	}
 
 	/**
@@ -261,12 +263,14 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 	 * this answers.
 	 */
 	public final STATE getIncluding ( KEY key, EventReference write ) {
-		ReadModelResult<STATE> held = result(key);
-		if ( write == null || held.includes(write) ) {
-			return held.data();
+		long started = System.nanoTime();
+		Answer<STATE> held = observedRead(key, true);
+		if ( write == null || held.result().includes(write) ) {
+			return reported(key, started, held, held.result(), 0).data();
 		}
 		invalidate(key);
-		return observedRead(key, false).data();
+		Answer<STATE> loaded = observedRead(key, false);
+		return reported(key, started, loaded, loaded.result(), 0).data();
 	}
 
 	/**
@@ -283,20 +287,23 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 
 	/** {@link #getCurrent}, with the last event folded into the answer. */
 	public final ReadModelResult<STATE> current ( KEY key ) {
+		long started = System.nanoTime();
 		EventSource<DOMAIN_EVENT_TYPE> source = attachedSource();
 		EventReference head = source.head().orElse(null);
-		ReadModelResult<STATE> read = result(key);
+		Answer<STATE> read = observedRead(key, true);
 		if ( head == null ) {
-			return read;
+			return reported(key, started, read, read.result(), 0);
 		}
+		long caughtUp = 0;
+		ReadModelResult<STATE> current = null;
 		lock.lock();
 		try {
-			if ( halted() ) {
+			boolean halted = halted();
+			Entry<STATE> entry = halted ? null : entries.get(key);
+			if ( halted ) {
 				// nothing is held: the read loaded the key, from a head taken after this one
-				return read;
-			}
-			Entry<STATE> entry = entries.get(key);
-			if ( entry != null ) {
+				current = read.result();
+			} else if ( entry != null ) {
 				if ( delivered == null || head.storedEventHappenedAfter(delivered) ) {
 					// the projector is behind the head: read what it has not delivered of this key yet. The
 					// entry holds every event of the key up to what the projector delivered, and folds
@@ -314,18 +321,59 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 						throw e;
 					}
 					eventsCaughtUp.addAndGet(catchUp.handled);
+					caughtUp = catchUp.handled;
 				}
-				return new ReadModelResult<>(entry.state, entry.upTo);
+				current = new ReadModelResult<>(entry.state, entry.upTo);
 			}
 		} finally {
 			lock.unlock();
 		}
+		if ( current != null ) {
+			return reported(key, started, read, current, caughtUp);
+		}
 		// let go since it was read, or a read that waited for a load another read started earlier: a load
 		// of this read's own reads a head taken after this one
-		return observedRead(key, false);
+		Answer<STATE> loaded = observedRead(key, false);
+		return reported(key, started, loaded, loaded.result(), 0);
 	}
 
-	private ReadModelResult<STATE> observedRead ( KEY key, boolean mayShareALoad ) {
+	/**
+	 * Told of every read, on the reader's thread once the read is answered: what the bounded context
+	 * registering a read model sets when its policy reports each read ({@link CachePolicy#reportEachRead()}).
+	 */
+	@FunctionalInterface
+	public interface ReadListener {
+
+		/**
+		 * @param key the key read, as its {@code toString()}
+		 * @param answer how it was answered
+		 * @param eventsCaughtUp the events a current read read in after the hit or the load
+		 * @param durationMicros how long the read took, on a monotonic clock
+		 */
+		void read ( String key, Outcome.CachedReadResult answer, long eventsCaughtUp, long durationMicros );
+	}
+
+	private volatile ReadListener readListener;
+
+	/** What the framework calls to be told of every read; {@code null} to be told of none. */
+	public final void reportReadsTo ( ReadListener listener ) {
+		this.readListener = listener;
+	}
+
+	// a read is reported once, whatever path answered it, and a listener that throws never fails the read
+	private ReadModelResult<STATE> reported ( KEY key, long started, Answer<STATE> answer, ReadModelResult<STATE> result, long caughtUp ) {
+		ReadListener listener = readListener;
+		if ( listener != null ) {
+			try {
+				listener.read(String.valueOf(key), answer.outcome(), caughtUp, ( System.nanoTime() - started ) / 1_000);
+			} catch ( RuntimeException e ) {
+				LOGGER.warn("{}: reporting a read of key {} failed: {}", readmodelName(), key, e.toString(), e);
+			}
+		}
+		return result;
+	}
+
+	private Answer<STATE> observedRead ( KEY key, boolean mayShareALoad ) {
 		if ( key == null ) {
 			throw new IllegalArgumentException("key must not be null");
 		}
@@ -335,7 +383,7 @@ public abstract class CachingReadModel<DOMAIN_EVENT_TYPE, KEY, STATE>
 			try {
 				Answer<STATE> answer = read(key, source, mayShareALoad);
 				scope.completed(answer.outcome());
-				return answer.result();
+				return answer;
 			} catch ( RuntimeException e ) {
 				scope.failed(e);
 				throw e;

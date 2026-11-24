@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-23T09:55:31+01:00",
+  "runAt": "2026-11-24T11:50:04+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.9",
   "commit": "7f8ab059c77c1ed364d600e35d57e8f5ac491b66",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45142497741",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45378454688",
   "dryRun": false,
   "projectVersion": "0.9.1-SNAPSHOT",
   "policy": {
@@ -32,6 +32,10 @@
     "own": {
       "action": "merge",
       "cooldownDays": 0
+    },
+    "release": {
+      "automatic": "never",
+      "minimumIntervalDays": 0
     },
     "filter": "default+0",
     "ecosystems": [
@@ -65,7 +69,38 @@
         "subject": "Dependency updates (#258)"
       }
     ],
-    "otherChanges": 0
+    "otherChanges": 0,
+    "ci": {
+      "commit": "7f8ab059c77c1ed364d600e35d57e8f5ac491b66",
+      "state": "green"
+    },
+    "readiness": {
+      "verdict": "ready",
+      "lastTag": "v0.9.0",
+      "commit": "7f8ab059c77c1ed364d600e35d57e8f5ac491b66",
+      "headMoved": false,
+      "ci": "green",
+      "dependencyUpdates": 2,
+      "otherChanges": 0,
+      "fixes": [],
+      "reasons": [],
+      "notes": [
+        "pipeline PR #279 waits for review: its updates are not in this release"
+      ],
+      "workflow": {
+        "name": "Release 2 \u00b7 Tag",
+        "file": "create-release-tag-and-bump.yaml",
+        "url": "https://github.com/sliceworkz/eventmodeling/actions/workflows/create-release-tag-and-bump.yaml",
+        "command": "gh workflow run create-release-tag-and-bump.yaml --ref release/0.9 -R sliceworkz/eventmodeling"
+      }
+    },
+    "automatic": {
+      "setting": "never",
+      "minimumIntervalDays": 0,
+      "decision": "off",
+      "reason": null,
+      "at": "2026-11-24T10:56:18+00:00"
+    }
   },
   "releaseScan": {
     "tag": "v0.9.0",
@@ -261,7 +296,7 @@
       ],
       "own": false,
       "group": null,
-      "newest": "42.7.14"
+      "newest": "42.7.15"
     },
     {
       "ecosystem": "maven",
@@ -461,9 +496,10 @@
       "group": null,
       "level": "patch",
       "target": "2.25.3",
-      "outcome": "held-back",
-      "eligibleFrom": "2026-11-23T23:55:20+00:00",
-      "reason": "cooldown"
+      "action": "merge",
+      "batch": "auto",
+      "published": "2026-11-22",
+      "outcome": "planned"
     },
     {
       "ecosystem": "maven",
@@ -478,9 +514,10 @@
       "group": null,
       "level": "minor",
       "target": "1.10.0",
-      "outcome": "held-back",
-      "eligibleFrom": "2026-11-23T23:55:20+00:00",
-      "reason": "cooldown"
+      "action": "pr",
+      "batch": "minor",
+      "published": "2026-11-22",
+      "outcome": "planned"
     },
     {
       "ecosystem": "maven",
@@ -499,11 +536,92 @@
       "batch": null,
       "published": null,
       "outcome": "mentioned"
+    },
+    {
+      "ecosystem": "maven",
+      "name": "postgresql.jdbc.version",
+      "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
+      "current": "42.7.14",
+      "kind": "property",
+      "artifacts": [
+        "org.postgresql:postgresql"
+      ],
+      "own": false,
+      "group": null,
+      "level": "patch",
+      "target": "42.7.15",
+      "outcome": "held-back",
+      "eligibleFrom": "2026-11-24T14:11:07+00:00",
+      "reason": "cooldown"
     }
   ],
-  "batches": [],
-  "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-23T08:57:27+00:00",
+  "batches": [
+    {
+      "key": "auto",
+      "branch": "deps/release/0.9/auto",
+      "action": "merge",
+      "level": "merge",
+      "transitive": false,
+      "commit": "a140d050ea5bb0d593d96e1cd6d44e444695f58b",
+      "error": null,
+      "outcome": "pr-opened",
+      "pr": 277,
+      "changes": [
+        {
+          "ecosystem": "maven",
+          "name": "maven.maven-versions-plugin.version",
+          "where": "pom.xml",
+          "level": "patch",
+          "from": "2.25.2",
+          "to": "2.25.3",
+          "applied": true,
+          "error": null,
+          "follows": null
+        }
+      ],
+      "lockfileChanges": [],
+      "mergedAt": "2026-11-24T10:55:53Z"
+    },
+    {
+      "key": "minor",
+      "branch": "deps/release/0.9/minor",
+      "action": "pr",
+      "level": "minor",
+      "transitive": false,
+      "commit": "c520f5a82b80ea3587b5877b3e6d4445ade90740",
+      "error": null,
+      "outcome": "pr-opened",
+      "pr": 279,
+      "changes": [
+        {
+          "ecosystem": "maven",
+          "name": "maven.flatten-plugin.version",
+          "where": "pom.xml",
+          "level": "minor",
+          "from": "1.9.0",
+          "to": "1.10.0",
+          "applied": true,
+          "error": null,
+          "follows": null
+        }
+      ],
+      "lockfileChanges": [],
+      "assignees": [
+        "vanrogu"
+      ]
+    }
+  ],
+  "pullRequests": [
+    {
+      "number": 279,
+      "url": "https://github.com/sliceworkz/eventmodeling/pull/279",
+      "head": "deps/release/0.9/minor",
+      "title": "Minor dependency updates on release/0.9",
+      "ci": "green",
+      "autoMerge": false
+    }
+  ],
+  "pullRequestsReadAt": "2026-11-24T10:56:17+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -511,7 +629,7 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-23T06:28:32Z",
+    "dbBuilt": "2026-11-24T06:22:05Z",
     "sbomOrigin": "ci-artifact (run 44785573953)",
     "sboms": [
       "library",

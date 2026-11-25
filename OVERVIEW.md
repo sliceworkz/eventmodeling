@@ -4,7 +4,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 
 | Branch | Last run | Head | Critical | High | Medium | Low | Blocking | Released version | Open PRs | Unreleased updates | SBOMs |
 |---|---|---|---:|---:|---:|---:|---:|---|---:|---|---|
-| [`develop`](#develop) | 2026-11-24T12:36:49+01:00 | `d99e4b50fe` | 0 | 0 | 0 | 0 | 0 | - | 1 | - | ci-artifact (run 45212287843) |
+| [`develop`](#develop) | 2026-11-25T11:28:59+01:00 | `8eb6fb9d25` | 0 | 0 | 0 | 0 | 0 | - | 1 | - | ci-artifact (run 45386732000) |
 | [`release/0.10`](#release010) | 2026-11-25T10:45:45+01:00 | `37062785a8` | 0 | 0 | 0 | 0 | 0 | v0.10.0: none critical/high | 1 | **1 since v0.10.0**, can be released | ci-artifact (run 45379474367) |
 | [`release/0.9`](#release09) | 2026-11-25T10:45:43+01:00 | `aad50ae258` | 0 | 0 | 0 | 0 | 0 | v0.9.0: none critical/high | 1 | **3 since v0.9.0**, can be released | ci-artifact (run 45379417774) |
 
@@ -12,7 +12,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 
 No critical or high findings on the branch head.
 
-Pipeline PRs open: [#280](https://github.com/sliceworkz/eventmodeling/pull/280) (auto-merge, CI green)
+Pipeline PRs open: [#283](https://github.com/sliceworkz/eventmodeling/pull/283) (auto-merge, CI green)
 
 ## release/0.10
 

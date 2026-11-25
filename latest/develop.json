@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-24T12:36:49+01:00",
+  "runAt": "2026-11-25T11:28:59+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "develop",
-  "commit": "d99e4b50fe2a6937b6267f45212f5d0e054127f2",
+  "commit": "8eb6fb9d25c198ee3e905889019fa4ec54c32b33",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45385722207",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45595342320",
   "dryRun": false,
   "projectVersion": "0.11.0-SNAPSHOT",
   "policy": {
@@ -63,7 +63,7 @@
       "ecosystem": "maven",
       "name": "maven.maven-versions-plugin.version",
       "where": "pom.xml",
-      "current": "2.25.2",
+      "current": "2.25.3",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:versions-maven-plugin"
@@ -128,7 +128,7 @@
       "ecosystem": "maven",
       "name": "maven.flatten-plugin.version",
       "where": "pom.xml",
-      "current": "1.9.0",
+      "current": "1.10.0",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:flatten-maven-plugin"
@@ -416,42 +416,6 @@
   "updates": [
     {
       "ecosystem": "maven",
-      "name": "maven.maven-versions-plugin.version",
-      "where": "pom.xml",
-      "current": "2.25.2",
-      "kind": "property",
-      "artifacts": [
-        "org.codehaus.mojo:versions-maven-plugin"
-      ],
-      "own": false,
-      "group": null,
-      "level": "patch",
-      "target": "2.25.3",
-      "action": "merge",
-      "batch": "auto",
-      "published": "2026-11-22",
-      "outcome": "planned"
-    },
-    {
-      "ecosystem": "maven",
-      "name": "maven.flatten-plugin.version",
-      "where": "pom.xml",
-      "current": "1.9.0",
-      "kind": "property",
-      "artifacts": [
-        "org.codehaus.mojo:flatten-maven-plugin"
-      ],
-      "own": false,
-      "group": null,
-      "level": "minor",
-      "target": "1.10.0",
-      "action": "merge",
-      "batch": "auto",
-      "published": "2026-11-22",
-      "outcome": "planned"
-    },
-    {
-      "ecosystem": "maven",
       "name": "postgresql.jdbc.version",
       "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
       "current": "42.7.14",
@@ -463,9 +427,10 @@
       "group": null,
       "level": "patch",
       "target": "42.7.15",
-      "outcome": "held-back",
-      "eligibleFrom": "2026-11-24T14:11:07+00:00",
-      "reason": "cooldown"
+      "action": "merge",
+      "batch": "auto",
+      "published": "2026-11-23",
+      "outcome": "planned"
     }
   ],
   "batches": [
@@ -475,29 +440,18 @@
       "action": "merge",
       "level": "merge",
       "transitive": false,
-      "commit": "f4e70b68e6094186e96473c897c35f6b37122209",
+      "commit": "1e312d478a6a259f618a39e220db1be02c188c35",
       "error": null,
       "outcome": "pr-opened",
-      "pr": 280,
+      "pr": 283,
       "changes": [
         {
           "ecosystem": "maven",
-          "name": "maven.maven-versions-plugin.version",
-          "where": "pom.xml",
+          "name": "postgresql.jdbc.version",
+          "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
           "level": "patch",
-          "from": "2.25.2",
-          "to": "2.25.3",
-          "applied": true,
-          "error": null,
-          "follows": null
-        },
-        {
-          "ecosystem": "maven",
-          "name": "maven.flatten-plugin.version",
-          "where": "pom.xml",
-          "level": "minor",
-          "from": "1.9.0",
-          "to": "1.10.0",
+          "from": "42.7.14",
+          "to": "42.7.15",
           "applied": true,
           "error": null,
           "follows": null
@@ -508,15 +462,15 @@
   ],
   "pullRequests": [
     {
-      "number": 280,
-      "url": "https://github.com/sliceworkz/eventmodeling/pull/280",
+      "number": 283,
+      "url": "https://github.com/sliceworkz/eventmodeling/pull/283",
       "head": "deps/develop/auto",
       "title": "Dependency updates on develop",
       "ci": "green",
       "autoMerge": true
     }
   ],
-  "pullRequestsReadAt": "2026-11-24T11:43:00+00:00",
+  "pullRequestsReadAt": "2026-11-25T10:35:05+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -524,8 +478,8 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-24T06:22:05Z",
-    "sbomOrigin": "ci-artifact (run 45212287843)",
+    "dbBuilt": "2026-11-25T06:22:21Z",
+    "sbomOrigin": "ci-artifact (run 45386732000)",
     "sboms": [
       "library",
       "test-kit"

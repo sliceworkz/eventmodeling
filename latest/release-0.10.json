@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-24T11:50:04+01:00",
+  "runAt": "2026-11-25T10:45:45+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.10",
-  "commit": "b44b34a02cccc248c57acd3e7f62171ba88bdaa9",
+  "commit": "37062785a859bbbeb7d171926cf936a43752c2f1",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45378454688",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45588404437",
   "dryRun": false,
   "projectVersion": "0.10.1-SNAPSHOT",
   "policy": {
@@ -59,24 +59,27 @@
   "release": {
     "lastTag": "v0.10.0",
     "tagDate": "2026-11-20T19:57:14Z",
-    "dependencyUpdates": [],
+    "dependencyUpdates": [
+      {
+        "commit": "37062785a859bbbeb7d171926cf936a43752c2f1",
+        "subject": "Dependency updates (#276)"
+      }
+    ],
     "otherChanges": 0,
     "ci": {
-      "commit": "b44b34a02cccc248c57acd3e7f62171ba88bdaa9",
+      "commit": "37062785a859bbbeb7d171926cf936a43752c2f1",
       "state": "green"
     },
     "readiness": {
-      "verdict": "nothing",
+      "verdict": "ready",
       "lastTag": "v0.10.0",
-      "commit": "b44b34a02cccc248c57acd3e7f62171ba88bdaa9",
+      "commit": "37062785a859bbbeb7d171926cf936a43752c2f1",
       "headMoved": false,
       "ci": "green",
-      "dependencyUpdates": 0,
+      "dependencyUpdates": 1,
       "otherChanges": 0,
       "fixes": [],
-      "reasons": [
-        "pipeline PR #276 is about to merge: release after it, so its updates are in"
-      ],
+      "reasons": [],
       "notes": [
         "pipeline PR #278 waits for review: its updates are not in this release"
       ],
@@ -92,7 +95,7 @@
       "minimumIntervalDays": 0,
       "decision": "off",
       "reason": null,
-      "at": "2026-11-24T10:56:19+00:00"
+      "at": "2026-11-25T09:53:59+00:00"
     }
   },
   "releaseScan": {
@@ -125,7 +128,7 @@
       "ecosystem": "maven",
       "name": "maven.maven-versions-plugin.version",
       "where": "pom.xml",
-      "current": "2.25.2",
+      "current": "2.25.3",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:versions-maven-plugin"
@@ -478,24 +481,6 @@
   "updates": [
     {
       "ecosystem": "maven",
-      "name": "maven.maven-versions-plugin.version",
-      "where": "pom.xml",
-      "current": "2.25.2",
-      "kind": "property",
-      "artifacts": [
-        "org.codehaus.mojo:versions-maven-plugin"
-      ],
-      "own": false,
-      "group": null,
-      "level": "patch",
-      "target": "2.25.3",
-      "action": "merge",
-      "batch": "auto",
-      "published": "2026-11-22",
-      "outcome": "planned"
-    },
-    {
-      "ecosystem": "maven",
       "name": "maven.flatten-plugin.version",
       "where": "pom.xml",
       "current": "1.9.0",
@@ -525,46 +510,22 @@
       "group": null,
       "level": "patch",
       "target": "42.7.15",
-      "outcome": "held-back",
-      "eligibleFrom": "2026-11-24T14:11:07+00:00",
-      "reason": "cooldown"
+      "action": "merge",
+      "batch": "auto",
+      "published": "2026-11-23",
+      "outcome": "planned"
     }
   ],
   "batches": [
-    {
-      "key": "auto",
-      "branch": "deps/release/0.10/auto",
-      "action": "merge",
-      "level": "merge",
-      "transitive": false,
-      "commit": "e282b2282d69e6c8363d4978bce9c4ff25cfdd0e",
-      "error": null,
-      "outcome": "pr-opened",
-      "pr": 276,
-      "changes": [
-        {
-          "ecosystem": "maven",
-          "name": "maven.maven-versions-plugin.version",
-          "where": "pom.xml",
-          "level": "patch",
-          "from": "2.25.2",
-          "to": "2.25.3",
-          "applied": true,
-          "error": null,
-          "follows": null
-        }
-      ],
-      "lockfileChanges": []
-    },
     {
       "key": "minor",
       "branch": "deps/release/0.10/minor",
       "action": "pr",
       "level": "minor",
       "transitive": false,
-      "commit": "1eca25bf678c1c5f58b40d72ab9386b494dbb025",
+      "commit": "4064ba555d73ec4ea3d99ec61b878a0c0d44ee2d",
       "error": null,
-      "outcome": "pr-opened",
+      "outcome": "pr-updated",
       "pr": 278,
       "changes": [
         {
@@ -583,17 +544,35 @@
       "assignees": [
         "vanrogu"
       ]
+    },
+    {
+      "key": "auto",
+      "branch": "deps/release/0.10/auto",
+      "action": "merge",
+      "level": "merge",
+      "transitive": false,
+      "commit": "17e2bc2fbebec3f73392ff4605eac9cf1d5cc33b",
+      "error": null,
+      "outcome": "pr-opened",
+      "pr": 281,
+      "changes": [
+        {
+          "ecosystem": "maven",
+          "name": "postgresql.jdbc.version",
+          "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
+          "level": "patch",
+          "from": "42.7.14",
+          "to": "42.7.15",
+          "applied": true,
+          "error": null,
+          "follows": null
+        }
+      ],
+      "lockfileChanges": [],
+      "mergedAt": "2026-11-25T09:53:49Z"
     }
   ],
   "pullRequests": [
-    {
-      "number": 276,
-      "url": "https://github.com/sliceworkz/eventmodeling/pull/276",
-      "head": "deps/release/0.10/auto",
-      "title": "Dependency updates on release/0.10",
-      "ci": "green",
-      "autoMerge": true
-    },
     {
       "number": 278,
       "url": "https://github.com/sliceworkz/eventmodeling/pull/278",
@@ -603,7 +582,7 @@
       "autoMerge": false
     }
   ],
-  "pullRequestsReadAt": "2026-11-24T10:56:18+00:00",
+  "pullRequestsReadAt": "2026-11-25T09:53:58+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -611,8 +590,8 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-24T06:22:05Z",
-    "sbomOrigin": "ci-artifact (run 44806918038)",
+    "dbBuilt": "2026-11-25T06:22:21Z",
+    "sbomOrigin": "ci-artifact (run 45379474367)",
     "sboms": [
       "library",
       "test-kit"

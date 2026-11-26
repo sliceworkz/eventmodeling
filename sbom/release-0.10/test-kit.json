@@ -4,7 +4,7 @@
   "serialNumber" : "urn:uuid:0dd095f4-11ae-3005-b964-fd723a79e029",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-11-24T10:57:27Z",
+    "timestamp" : "2026-11-25T09:55:01Z",
     "lifecycles" : [
       {
         "phase" : "build"
@@ -106,35 +106,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "d521e8aec192e9b406e40ad6f751f08f"
+          "content" : "f5d573154b625d657fb07cd600ddede2"
         },
         {
           "alg" : "SHA-1",
-          "content" : "dd5dddce219d2cb32337bdbf05686228b8182cee"
+          "content" : "e668ae7494aecda8104e5a08e632e01fa414eac8"
         },
         {
           "alg" : "SHA-256",
-          "content" : "f905d731c3f6c3422d67b89d69fe9fac0664fa94e0237f898ba1adc24f06ac4e"
+          "content" : "ae460b71bf76176d4a7c63529e0787ae764e7f482cc9fea62e4863027edc5ef0"
         },
         {
           "alg" : "SHA-512",
-          "content" : "51bde9679047c3efa47952c0c5a888be3ee2ab515205f002533287cb19c12b0b6b9d1e32a7f6bfbda129abb3b83a253f50cf649965ff502a9a9b5405669d8ed5"
+          "content" : "c68582e986d5de8cf2d87c5a2c3dbf50a2a1ac0f93fb20432b2e2277691e2fb8358ec7943c49042741fcba0f71603645dbd48451d383145fee6a043d12b4a0e7"
         },
         {
           "alg" : "SHA-384",
-          "content" : "e3d13f4a068bbee8b14bb097bb0dafa04bf75efd026243596d1644a7ecacb2e5cbe9dae9202ae1539eadad11600f0313"
+          "content" : "abfd83abef87e2eeddc22947b24f79172a9e5732e7ba94536ea068b366731c8562282d065eef412967462ca0a3260a49"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "dcf464d179f3b9884d1900b270735e53747db1a7162e0e91376bc1a52399d0be4d7f0c319668f4aec4b8c47f140f7b4e"
+          "content" : "505ff249db6ee078a876c998a8f83df6c7be015c66ed48a431a21b97dff6b4ad2f731809b02bff247bcd2bede916465e"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "a1f463c9204668ea9095aa617365a283940cd379c0d1103e909aa266cb7d46df"
+          "content" : "388589b1a578b430d28318c89843a4994f5358667a52bcf0685d3b195dd4915e"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "1bb3f3f5e6a14481fc354eb9aae617f5c3b24659f1f1293857c1e92a5478a976905ebe989d9f52537038beed5ced15959edb18c4d5f899919e7d770adec613a7"
+          "content" : "9564ca7787f89a75ac6981582ba37de770ac7f6a8b0e4d6325900f0182fe0b0b3001df4f508543e3225aee53d22d49c8ef6308451f6f7e0855d491e917f49dce"
         }
       ],
       "licenses" : [
@@ -297,35 +297,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "9998b03eac1a62a3f80bf7f7b4c0314a"
+          "content" : "396280ebec6e64415a889b1e9831d4e1"
         },
         {
           "alg" : "SHA-1",
-          "content" : "96a15b796a5ddc61358548a590a535209b4fa819"
+          "content" : "03a96721e35af61e6106e524899405cdecfb17f8"
         },
         {
           "alg" : "SHA-256",
-          "content" : "4db4a71aadc96dcfde11151d9679de215be5dfa1779ac8869c1f4b24b4a776ea"
+          "content" : "4a695557582e013957bc66155113e7683308f4727e8e0e3bac41c74e5243b55b"
         },
         {
           "alg" : "SHA-512",
-          "content" : "64673b8f41e34e79ede3fb1c51e8537804db94682d6fb7aa2bf75066e6eab436e0ee2204ace8a76f6524e467dff8508c60d6658e912190819e6966c961af2a3f"
+          "content" : "123623fac8cd22eadd0ec2fe89e535c992d02ccb964779c242099dd468b70faba19b55d5f491e3e020a1ef0786875d1ff1cb3b4c3bf18b10e2ed85b2885a9a94"
         },
         {
           "alg" : "SHA-384",
-          "content" : "3d10a1e0ffb012eab82865f82d3f507a82360c18667ad338c94cfa169aa7f90a96384a80234e9c85548dd5fa6eb43ec6"
+          "content" : "97c2edf87b890f1ca82452be73fa0f973bd1ad9cd2d8aa4bca23abc934a046c8b4e6cd26ed59fcf4e1152681ed3e3cc2"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "feb7019dcc9ef46cce70d7488fb81511086fafdc7070ea23e1985eb30ee764ae0f6150851bc6cb1e61e2526132ca27a6"
+          "content" : "25d8780d80e14944532fc66e6310dbca10acc55ec4a6329e34d4c6cbf0156448096b373b3f1535fbd7db73b8400b3eac"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "d0e7f59e2c11261b551bb8c0d5b885f5397083cad190d4cb5652404fc275a0d5"
+          "content" : "f062d6ef9f2ce80f3e7d6916fbf441c5c5b1827397f36c6296f173f163dff019"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "76aa2fe21b60901f015afeff80ff2e9e1250004008d7b5939a47c287ebaa0a04deb5b2433bdd9c4566c34db248b34621a33b95f6fd0a16d9378dcf54e008aa65"
+          "content" : "e9a5bdfd72fda5c181b17a53cdeba6a1c15040abc706225f97cad82559b9229690cfb9d8cf9ab45ba69d6fae038b638796950cb9b66ae0f72df8cf94a90c1b83"
         }
       ],
       "licenses" : [
@@ -1677,45 +1677,45 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.postgresql/postgresql@42.7.14?type=jar",
+      "bom-ref" : "pkg:maven/org.postgresql/postgresql@42.7.15?type=jar",
       "publisher" : "PostgreSQL Global Development Group",
       "group" : "org.postgresql",
       "name" : "postgresql",
-      "version" : "42.7.14",
+      "version" : "42.7.15",
       "description" : "PostgreSQL JDBC Driver Postgresql",
       "scope" : "required",
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "16f26b00415e27db94b3da7ff77c045d"
+          "content" : "40301247bcff3e4f0ed3e6002bfbb0aa"
         },
         {
           "alg" : "SHA-1",
-          "content" : "0e7c94ce80cb1dd9875ff44ffe6a40a8aaa3eefd"
+          "content" : "b914f940d45e3a661e9faab38b0091f432b65c27"
         },
         {
           "alg" : "SHA-256",
-          "content" : "73914527305a40cce504b0d3d90b23caf565136912d607ae8ae7c5895512332c"
+          "content" : "9776fca62dfc84f312d5c1aff9791f6f3cf56d518a8eca4a3a8dca7a95ef8881"
         },
         {
           "alg" : "SHA-512",
-          "content" : "2a7c94c3f86f7ad6cfa16a964fe79dec8b122449679c8bbdb18f7052593349c2d11dd07992034de88d6effd840e2edf5ea8542e947de19905c75677d0dd44abc"
+          "content" : "c8de745e92c29cb14fadfa60cf783ecb64d7a36cb2c3eb4adaa8a69edf2ad35a49bf4ec94d522d55a5fa20dc07a92f58a77dc33c453e8c722631245cbfa6d429"
         },
         {
           "alg" : "SHA-384",
-          "content" : "cf06ef6c1c3ef7e7b2d44e8bbbc8285443f72af505ca4a5622a149e012eaefdad781feacd15ab06a97cfe7e0314d353f"
+          "content" : "125e9e5ff7b48d550be939b51acc88d26d6bc24d36961df7ec2822a6c698277425c703227986b2c4648eea2291523c6f"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "1fe621a928c0825b2d5934329e868a9b067f505395494c11c626882ae904a0b168bba8a159e8f6256173362798e3facf"
+          "content" : "c925428af654bcf80a266c0a00cb10a062b318c1b204684f3ea0a84f17e0b8744509d19067c0f18a0310f8fa78274949"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "03e9c42ea0edd507ed196aacf07f37a12234d6cad370c32aca8dc575d85f9e72"
+          "content" : "f20403813b0559efed41636dbaf91c2f356f01bbac474cc42b3377d53ba19e07"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "3f816b473762f284863fdd4a9d255ade2e3e9e938c40d737d0819026c064d2b2ebe5a80c0cd24485f0e507b2dba12aa2ade1ccffdc339f6415a3b2986b4d9424"
+          "content" : "d6925ee078200e758298137c9a73695f90bdd9cc8a1c4cfb02e58d4a2d2ef3abffe79940ecd6e99646bf7fc0ab4d2df16be77895ade6fbc61d76e72df7eb72a7"
         }
       ],
       "licenses" : [
@@ -1726,7 +1726,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.postgresql/postgresql@42.7.14?type=jar",
+      "purl" : "pkg:maven/org.postgresql/postgresql@42.7.15?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -2831,7 +2831,7 @@
         "pkg:maven/tools.jackson.core/jackson-databind@3.3.0?type=jar",
         "pkg:maven/com.tngtech.archunit/archunit-junit5@1.5.1?type=jar",
         "pkg:maven/com.h2database/h2@2.5.252?type=jar",
-        "pkg:maven/org.postgresql/postgresql@42.7.14?type=jar",
+        "pkg:maven/org.postgresql/postgresql@42.7.15?type=jar",
         "pkg:maven/org.testcontainers/testcontainers-postgresql@2.0.5?type=jar",
         "pkg:maven/com.zaxxer/HikariCP@7.1.0?type=jar"
       ]
@@ -2999,7 +2999,7 @@
       "dependsOn" : [ ]
     },
     {
-      "ref" : "pkg:maven/org.postgresql/postgresql@42.7.14?type=jar",
+      "ref" : "pkg:maven/org.postgresql/postgresql@42.7.15?type=jar",
       "dependsOn" : [
         "pkg:maven/org.checkerframework/checker-qual@3.55.1?type=jar"
       ]

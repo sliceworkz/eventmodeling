@@ -6,7 +6,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 |---|---|---|---:|---:|---:|---:|---:|---|---:|---|---|
 | [`develop`](#develop) | 2026-11-25T11:28:59+01:00 | `8eb6fb9d25` | 0 | 0 | 0 | 0 | 0 | - | 1 | - | ci-artifact (run 45386732000) |
 | [`release/0.10`](#release010) | 2026-11-25T10:45:45+01:00 | `37062785a8` | 0 | 0 | 0 | 0 | 0 | v0.10.0: none critical/high | 1 | **1 since v0.10.0**, can be released | ci-artifact (run 45379474367) |
-| [`release/0.9`](#release09) | 2026-11-25T10:45:43+01:00 | `aad50ae258` | 0 | 0 | 0 | 0 | 0 | v0.9.0: none critical/high | 1 | **3 since v0.9.0**, can be released | ci-artifact (run 45379417774) |
+| [`release/0.9`](#release09) | 2026-11-26T10:24:28+01:00 | `d7998fd44e` | 0 | 0 | 0 | 0 | 0 | v0.9.0: none critical/high | 1 | **4 since v0.9.0**, can be released | ci-artifact (run 45589425413) |
 
 ## develop
 
@@ -38,9 +38,9 @@ Pipeline PRs open: [#278](https://github.com/sliceworkz/eventmodeling/pull/278) 
 
 ## release/0.9
 
-**3 dependency update(s) merged since v0.9.0 (2026-11-12), not released yet**: a patch release (*Release 2 · Tag* on this line) ships them.
+**4 dependency update(s) merged since v0.9.0 (2026-11-12), not released yet**: a patch release (*Release 2 · Tag* on this line) ships them.
 
-**Can be released: 3 dependency updates since v0.9.0.**
+**Can be released: 4 dependency updates since v0.9.0.**
 
 - pipeline PR #279 waits for review: its updates are not in this release
 

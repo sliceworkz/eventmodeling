@@ -4,7 +4,7 @@
   "serialNumber" : "urn:uuid:cbc04519-2a8b-3b3a-91c5-241b83eee8fb",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-11-24T11:43:38Z",
+    "timestamp" : "2026-11-25T10:35:43Z",
     "lifecycles" : [
       {
         "phase" : "build"
@@ -270,35 +270,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "69cf0b1257619b5f2f5ec356f28e2cf6"
+          "content" : "03bc6d94c18de2344e555cd2e5f35992"
         },
         {
           "alg" : "SHA-1",
-          "content" : "b3dd3fc7b19d3adb897e1456780e24c6127262a2"
+          "content" : "3169103efe3f23937821cf330b4ae85effcd92f6"
         },
         {
           "alg" : "SHA-256",
-          "content" : "8b0c911d477de07f953abba369448a4e705b0ce2bdd2164f1e38fd3b565f835c"
+          "content" : "14ba14b336f8b403fa69ddc46c63e9359bb8fe60cc944a753569bd38f6847543"
         },
         {
           "alg" : "SHA-512",
-          "content" : "254581a791019d1afe1072d5de70a3ff8ccbd0d60db170422a647e24285b0e20f55792239f7d065e90f90c9fde7214b7542f586a41746118fcb7ae88c647846c"
+          "content" : "9e9ac3a94b6bcf706a75231a31cb7562e3d4cc28ddbee48d1306c9dc5216b361c390642870c8e0dc32ffb1a065372ae9ee123273155133c44275469058c88754"
         },
         {
           "alg" : "SHA-384",
-          "content" : "7f1e648c176a9ef03fddcb76e934f8f577989cead36425677b505b341f9a42b68dca091a7201d32482f36b105e1814d2"
+          "content" : "9ce754e8dd61ce0ec504cd3c9c145c19eecc15934adc3f918487fada67c94512184e2f0a9b4c3b6d69003f52ae6185cd"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "f892bfccb37794ae6f946c7c6e242e1bf22e153405d30badcd737cd0129471cd005fdd6afb33c4bf4d4a9e2741f691b9"
+          "content" : "34a8f92ebbddb293393fc610e3bdd133c1e161317456686f72e5acda9a9b484b57fb9c12abd9dba7c81ed0fb9229ea9b"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "c172a9439182ba7db25ee0fe474408bc888c5a750d2b526a023491e16322b894"
+          "content" : "739317feec5689606c5ad5e2b065db8fe9b6a39997a0c2edafe1911b4cfa7f32"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "a33ce752dd262d82dec90dfba09a6960e9d4a3501a5c769c271cfba95283dd3da2befd869d7e620dd1c81964c155b63a38162a3a02fedd9b6f40270d039c6af0"
+          "content" : "8a7c733e660b14dee7a759af541b387d3139a18b668e368b23d60d825825e7b7dc033816e548a579fb00fff59e5b778eda2cf72e56e195f4b88078b0fac75d10"
         }
       ],
       "licenses" : [

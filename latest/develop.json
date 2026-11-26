@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-25T11:28:59+01:00",
+  "runAt": "2026-11-26T11:02:19+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "develop",
-  "commit": "8eb6fb9d25c198ee3e905889019fa4ec54c32b33",
+  "commit": "63a8c432a2e1c2945bd185805c60b199b7c9d3ba",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45595342320",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45797475556",
   "dryRun": false,
   "projectVersion": "0.11.0-SNAPSHOT",
   "policy": {
@@ -220,7 +220,7 @@
       "ecosystem": "maven",
       "name": "postgresql.jdbc.version",
       "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-      "current": "42.7.14",
+      "current": "42.7.15",
       "kind": "property",
       "artifacts": [
         "org.postgresql:postgresql"
@@ -413,64 +413,10 @@
       "newest": "3.6.2"
     }
   ],
-  "updates": [
-    {
-      "ecosystem": "maven",
-      "name": "postgresql.jdbc.version",
-      "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-      "current": "42.7.14",
-      "kind": "property",
-      "artifacts": [
-        "org.postgresql:postgresql"
-      ],
-      "own": false,
-      "group": null,
-      "level": "patch",
-      "target": "42.7.15",
-      "action": "merge",
-      "batch": "auto",
-      "published": "2026-11-23",
-      "outcome": "planned"
-    }
-  ],
-  "batches": [
-    {
-      "key": "auto",
-      "branch": "deps/develop/auto",
-      "action": "merge",
-      "level": "merge",
-      "transitive": false,
-      "commit": "1e312d478a6a259f618a39e220db1be02c188c35",
-      "error": null,
-      "outcome": "pr-opened",
-      "pr": 283,
-      "changes": [
-        {
-          "ecosystem": "maven",
-          "name": "postgresql.jdbc.version",
-          "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-          "level": "patch",
-          "from": "42.7.14",
-          "to": "42.7.15",
-          "applied": true,
-          "error": null,
-          "follows": null
-        }
-      ],
-      "lockfileChanges": []
-    }
-  ],
-  "pullRequests": [
-    {
-      "number": 283,
-      "url": "https://github.com/sliceworkz/eventmodeling/pull/283",
-      "head": "deps/develop/auto",
-      "title": "Dependency updates on develop",
-      "ci": "green",
-      "autoMerge": true
-    }
-  ],
-  "pullRequestsReadAt": "2026-11-25T10:35:05+00:00",
+  "updates": [],
+  "batches": [],
+  "pullRequests": [],
+  "pullRequestsReadAt": "2026-11-26T10:03:56+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -478,8 +424,8 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-25T06:22:21Z",
-    "sbomOrigin": "ci-artifact (run 45386732000)",
+    "dbBuilt": "2026-11-26T06:22:34Z",
+    "sbomOrigin": "ci-artifact (run 45596391267)",
     "sboms": [
       "library",
       "test-kit"

@@ -5,9 +5,22 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 | Branch | Last run | Head | Critical | High | Medium | Low | Blocking | Released version | Open PRs | Unreleased updates | SBOMs |
 |---|---|---|---:|---:|---:|---:|---:|---|---:|---|---|
 | [`develop`](#develop) | 2026-11-26T11:02:19+01:00 | `63a8c432a2` | 0 | 0 | 0 | 0 | 0 | - | 0 | - | ci-artifact (run 45596391267) |
+| [`release/0.11`](#release011) | 2026-11-27T10:37:26+01:00 | `4ef13ff8f1` | 0 | 0 | 0 | 0 | 0 | v0.11.0: none critical/high | 0 | none since v0.11.0 | ci-artifact (run 45896947237) |
 | [`release/0.10`](#release010) | 2026-11-27T10:37:23+01:00 | `376c0c6cb8` | 0 | 0 | 0 | 0 | 0 | v0.10.0: none critical/high | 0 | **3 since v0.10.0**, can be released | ci-artifact (run 45879535593) |
 
 ## develop
+
+No critical or high findings on the branch head.
+
+## release/0.11
+
+No dependency updates since v0.11.0 (2026-11-26).
+
+**Nothing to release: no changes since v0.11.0.**
+
+Automatic release: off (`release.automatic: never` in the policy).
+
+No critical or high findings in the released v0.11.0 (scanned from the SBOMs attached to it).
 
 No critical or high findings on the branch head.
 

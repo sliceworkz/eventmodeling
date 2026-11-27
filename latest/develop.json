@@ -1,14 +1,14 @@
 {
   "schema": 1,
-  "runAt": "2026-11-26T11:02:19+01:00",
+  "runAt": "2026-11-27T11:08:00+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "develop",
-  "commit": "63a8c432a2e1c2945bd185805c60b199b7c9d3ba",
+  "commit": "0533e8365e454e184132213e37dc605fb6d885c3",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45797475556",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45979453347",
   "dryRun": false,
-  "projectVersion": "0.11.0-SNAPSHOT",
+  "projectVersion": "0.12.0-SNAPSHOT",
   "policy": {
     "pattern": "develop",
     "schedule": "40 1 * * *",
@@ -161,7 +161,7 @@
       ],
       "own": true,
       "group": null,
-      "newest": "0.15.0-SNAPSHOT"
+      "newest": "0.16.0-SNAPSHOT"
     },
     {
       "ecosystem": "maven",
@@ -413,10 +413,56 @@
       "newest": "3.6.2"
     }
   ],
-  "updates": [],
-  "batches": [],
+  "updates": [
+    {
+      "ecosystem": "maven",
+      "name": "sliceworkz.eventstore.version",
+      "where": "pom.xml",
+      "current": "0.15.0-SNAPSHOT",
+      "kind": "property",
+      "artifacts": [
+        "org.sliceworkz:sliceworkz-eventstore-bom"
+      ],
+      "own": true,
+      "group": null,
+      "level": "own",
+      "target": "0.16.0-SNAPSHOT",
+      "action": "merge",
+      "batch": "own",
+      "published": null,
+      "outcome": "planned"
+    }
+  ],
+  "batches": [
+    {
+      "key": "own",
+      "branch": "deps/develop/own",
+      "action": "merge",
+      "level": "own",
+      "transitive": false,
+      "commit": "a649cf8467fcd771fa80bb16f244a097730dad48",
+      "error": null,
+      "outcome": "pr-opened",
+      "pr": 285,
+      "changes": [
+        {
+          "ecosystem": "maven",
+          "name": "sliceworkz.eventstore.version",
+          "where": "pom.xml",
+          "level": "own",
+          "from": "0.15.0-SNAPSHOT",
+          "to": "0.16.0-SNAPSHOT",
+          "applied": true,
+          "error": null,
+          "follows": null
+        }
+      ],
+      "lockfileChanges": [],
+      "mergedAt": "2026-11-27T10:14:18Z"
+    }
+  ],
   "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-26T10:03:56+00:00",
+  "pullRequestsReadAt": "2026-11-27T10:14:37+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -424,8 +470,8 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-26T06:22:34Z",
-    "sbomOrigin": "ci-artifact (run 45596391267)",
+    "dbBuilt": "2026-11-27T06:22:11Z",
+    "sbomOrigin": "ci-artifact (run 45893011719)",
     "sboms": [
       "library",
       "test-kit"

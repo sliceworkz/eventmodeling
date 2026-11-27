@@ -1,10 +1,10 @@
 {
   "bomFormat" : "CycloneDX",
   "specVersion" : "1.6",
-  "serialNumber" : "urn:uuid:cbc04519-2a8b-3b3a-91c5-241b83eee8fb",
+  "serialNumber" : "urn:uuid:2fd76e2a-7bc9-32d9-8416-358c757ca89b",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-11-25T10:35:43Z",
+    "timestamp" : "2026-11-26T20:43:16Z",
     "lifecycles" : [
       {
         "phase" : "build"
@@ -58,10 +58,10 @@
     },
     "component" : {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling@0.11.0-SNAPSHOT?type=pom",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling@0.12.0-SNAPSHOT?type=pom",
       "group" : "org.sliceworkz",
       "name" : "sliceworkz-eventmodeling",
-      "version" : "0.11.0-SNAPSHOT",
+      "version" : "0.12.0-SNAPSHOT",
       "description" : "An opinionated Event Modeling framework in Java",
       "licenses" : [
         {
@@ -71,7 +71,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling@0.11.0-SNAPSHOT?type=pom",
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling@0.12.0-SNAPSHOT?type=pom",
       "externalReferences" : [
         {
           "type" : "website",
@@ -101,10 +101,10 @@
   "components" : [
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.11.0-SNAPSHOT?type=pom",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.12.0-SNAPSHOT?type=pom",
       "group" : "org.sliceworkz",
       "name" : "sliceworkz-eventmodeling-bom",
-      "version" : "0.11.0-SNAPSHOT",
+      "version" : "0.12.0-SNAPSHOT",
       "description" : "An opinionated Event Modeling framework in Java",
       "licenses" : [
         {
@@ -114,7 +114,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.11.0-SNAPSHOT?type=pom",
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.12.0-SNAPSHOT?type=pom",
       "externalReferences" : [
         {
           "type" : "website",
@@ -132,10 +132,10 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.11.0-SNAPSHOT?type=pom",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.12.0-SNAPSHOT?type=pom",
       "group" : "org.sliceworkz",
       "name" : "sliceworkz-eventmodeling-parent-pom",
-      "version" : "0.11.0-SNAPSHOT",
+      "version" : "0.12.0-SNAPSHOT",
       "description" : "An opinionated Event Modeling framework in Java",
       "licenses" : [
         {
@@ -145,7 +145,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.11.0-SNAPSHOT?type=pom",
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.12.0-SNAPSHOT?type=pom",
       "externalReferences" : [
         {
           "type" : "website",
@@ -230,10 +230,10 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.11.0-SNAPSHOT?type=jar",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar",
       "group" : "org.sliceworkz",
       "name" : "sliceworkz-eventmodeling-api",
-      "version" : "0.11.0-SNAPSHOT",
+      "version" : "0.12.0-SNAPSHOT",
       "description" : "An opinionated Event Modeling framework in Java",
       "licenses" : [
         {
@@ -243,7 +243,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.11.0-SNAPSHOT?type=jar",
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -270,35 +270,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "03bc6d94c18de2344e555cd2e5f35992"
+          "content" : "f3a0020f6e72dcafdbefafd6429795de"
         },
         {
           "alg" : "SHA-1",
-          "content" : "3169103efe3f23937821cf330b4ae85effcd92f6"
+          "content" : "857a13763298254a9e86076e7469c7af7793e139"
         },
         {
           "alg" : "SHA-256",
-          "content" : "14ba14b336f8b403fa69ddc46c63e9359bb8fe60cc944a753569bd38f6847543"
+          "content" : "3577c6f18dc468e5dcfb27b4d94079c92ea95e69b808afd6a776e4e225256990"
         },
         {
           "alg" : "SHA-512",
-          "content" : "9e9ac3a94b6bcf706a75231a31cb7562e3d4cc28ddbee48d1306c9dc5216b361c390642870c8e0dc32ffb1a065372ae9ee123273155133c44275469058c88754"
+          "content" : "db9aec5e04d4d645260eb1b73b060e9c0df9b38ed34d382d7fe7f34474e8c06ec1ac8bf492e960b0ac76c2a96395e8718e7f087ad7d1605e859b537b3306176f"
         },
         {
           "alg" : "SHA-384",
-          "content" : "9ce754e8dd61ce0ec504cd3c9c145c19eecc15934adc3f918487fada67c94512184e2f0a9b4c3b6d69003f52ae6185cd"
+          "content" : "413a4cd721ec131fc7555190d313f6162e9181f1d3af32db48d06fbc3924b865ff9498d4ca90cfca7553412274b87b16"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "34a8f92ebbddb293393fc610e3bdd133c1e161317456686f72e5acda9a9b484b57fb9c12abd9dba7c81ed0fb9229ea9b"
+          "content" : "3c4b38a9fbd078d215574938efac1abd850d875ea799f82c864b18ec40bd87578029c1d80d6d9356d38e2077928d1c6d"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "739317feec5689606c5ad5e2b065db8fe9b6a39997a0c2edafe1911b4cfa7f32"
+          "content" : "966e563bb237c68dfd6ea959b4f02fa04aab7fbab155d4a6e89210eaa9fbfcde"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "8a7c733e660b14dee7a759af541b387d3139a18b668e368b23d60d825825e7b7dc033816e548a579fb00fff59e5b778eda2cf72e56e195f4b88078b0fac75d10"
+          "content" : "d87796f4497614b99423a854a4ea76e531de0c2483353fefe12745f9def1e58cc97e21f9fa91c3f7cd8dbb24f1eac8120c67bcd17b2eaf3090763829fdc411b9"
         }
       ],
       "licenses" : [
@@ -393,10 +393,10 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.11.0-SNAPSHOT?type=jar",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.12.0-SNAPSHOT?type=jar",
       "group" : "org.sliceworkz",
       "name" : "sliceworkz-eventmodeling-impl",
-      "version" : "0.11.0-SNAPSHOT",
+      "version" : "0.12.0-SNAPSHOT",
       "description" : "An opinionated Event Modeling framework in Java",
       "licenses" : [
         {
@@ -406,7 +406,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.11.0-SNAPSHOT?type=jar",
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.12.0-SNAPSHOT?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -425,25 +425,25 @@
   ],
   "dependencies" : [
     {
-      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling@0.11.0-SNAPSHOT?type=pom",
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling@0.12.0-SNAPSHOT?type=pom",
       "dependsOn" : [
-        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.11.0-SNAPSHOT?type=pom",
-        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.11.0-SNAPSHOT?type=pom"
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.12.0-SNAPSHOT?type=pom",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.12.0-SNAPSHOT?type=pom"
       ]
     },
     {
-      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.11.0-SNAPSHOT?type=pom",
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-bom@0.12.0-SNAPSHOT?type=pom",
       "dependsOn" : [ ]
     },
     {
-      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.11.0-SNAPSHOT?type=pom",
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-parent-pom@0.12.0-SNAPSHOT?type=pom",
       "dependsOn" : [
-        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.11.0-SNAPSHOT?type=jar",
-        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.11.0-SNAPSHOT?type=jar"
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.12.0-SNAPSHOT?type=jar"
       ]
     },
     {
-      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.11.0-SNAPSHOT?type=jar",
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar",
       "dependsOn" : [
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.15.0-SNAPSHOT?type=jar",
@@ -465,11 +465,11 @@
       "dependsOn" : [ ]
     },
     {
-      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.11.0-SNAPSHOT?type=jar",
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.12.0-SNAPSHOT?type=jar",
       "dependsOn" : [
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.15.0-SNAPSHOT?type=jar",
-        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.11.0-SNAPSHOT?type=jar"
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar"
       ]
     }
   ]

@@ -1,10 +1,10 @@
 {
   "bomFormat" : "CycloneDX",
   "specVersion" : "1.6",
-  "serialNumber" : "urn:uuid:b83b64be-bb02-3b81-b29d-32f6a07741f3",
+  "serialNumber" : "urn:uuid:871edda1-f39a-37d9-a7ba-a98b52273ecb",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-11-25T10:36:23Z",
+    "timestamp" : "2026-11-26T20:44:06Z",
     "lifecycles" : [
       {
         "phase" : "build"
@@ -58,10 +58,10 @@
     },
     "component" : {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-testing@0.11.0-SNAPSHOT?type=jar",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-testing@0.12.0-SNAPSHOT?type=jar",
       "group" : "org.sliceworkz",
       "name" : "sliceworkz-eventmodeling-testing",
-      "version" : "0.11.0-SNAPSHOT",
+      "version" : "0.12.0-SNAPSHOT",
       "description" : "An opinionated Event Modeling framework in Java",
       "licenses" : [
         {
@@ -71,7 +71,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-testing@0.11.0-SNAPSHOT?type=jar",
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-testing@0.12.0-SNAPSHOT?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -101,44 +101,44 @@
   "components" : [
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.11.0-SNAPSHOT?type=jar",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.12.0-SNAPSHOT?type=jar",
       "group" : "org.sliceworkz",
       "name" : "sliceworkz-eventmodeling-impl",
-      "version" : "0.11.0-SNAPSHOT",
+      "version" : "0.12.0-SNAPSHOT",
       "description" : "An opinionated Event Modeling framework in Java",
       "scope" : "required",
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "421e74870c3b30f78895e27674882c0f"
+          "content" : "c9e721740c1779d435b3986b6e196cb8"
         },
         {
           "alg" : "SHA-1",
-          "content" : "121800e3a62b866e7c34b02a003b6ed9bd39d477"
+          "content" : "db9fac3902de74def04b185cb8dc8b24b55be39a"
         },
         {
           "alg" : "SHA-256",
-          "content" : "d5707a0234a9c0cdd39d2c86ae966c2ed79d6f8e7b10e49c818d4bcf11b99128"
+          "content" : "27f0f1fdd4200aa4b139e16c6f5c998dd945bd983fa076fbf3fefd299a68cd15"
         },
         {
           "alg" : "SHA-512",
-          "content" : "f8fed05b504d158cba61a97836a7e7e6a717c59e5484dbd2db8e81abcaeee6c09836dfcfdc7973c3782978383b8a128a5002e62b096012923202e049fdc4d84e"
+          "content" : "f307996e9372a1324fb2c20c9cd75c21b76ad5b858bcc3e61473825513e0bf51da09b02cb36eed518474abfe34f9cacc60b39579f3c171079b6def556ede3d0c"
         },
         {
           "alg" : "SHA-384",
-          "content" : "bc535c436ac5661639dbacf76eeacb13d19a21362d0eb8ed325581533e694467643cf3370256f25d85cae54546359275"
+          "content" : "8ec62bfee9c6c1ec12adffe0b0d6b80933b71478c3b59a0c771ecf00909e960a86d8c9e0eb2ef6bd252fd4b79c6ec860"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "73b1c8496792d293d87a0506ca130f90622d55e387dbcc4107d48594a870e1cf5bdd257f562287de513858d6b7025194"
+          "content" : "0d3fe35f6bbc58b5cb1460021243f2964761eb9bcf7f4a077d85b0d9ef95467eef25af54e101d815ec613689fb8ce847"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "587c35eb11b161308396a7efc40434b6912309b98fb14d4f173eab500a9de5e7"
+          "content" : "4fa06421db5c9efeadd04278c10125432997a9df6993282be99ce5246cdb4a3a"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "7fb8bd86bc06b934759e4a43c7729fc0b54b5f59dc6ccbb35be153a99831a43da330f11c61d0c2e1931b72fb4fd44774cfe69bc2e59d74b99fced099bee0cd86"
+          "content" : "969bef0f3e09cf12c3d530bd0132aa3659290ff8b282902bbe07b5f198daba4eaebdaf587c870a470707c6af93df6ca86dd8771376bacc304f4dd5a7ec0d331f"
         }
       ],
       "licenses" : [
@@ -149,7 +149,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.11.0-SNAPSHOT?type=jar",
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.12.0-SNAPSHOT?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -239,35 +239,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "03bc6d94c18de2344e555cd2e5f35992"
+          "content" : "f3a0020f6e72dcafdbefafd6429795de"
         },
         {
           "alg" : "SHA-1",
-          "content" : "3169103efe3f23937821cf330b4ae85effcd92f6"
+          "content" : "857a13763298254a9e86076e7469c7af7793e139"
         },
         {
           "alg" : "SHA-256",
-          "content" : "14ba14b336f8b403fa69ddc46c63e9359bb8fe60cc944a753569bd38f6847543"
+          "content" : "3577c6f18dc468e5dcfb27b4d94079c92ea95e69b808afd6a776e4e225256990"
         },
         {
           "alg" : "SHA-512",
-          "content" : "9e9ac3a94b6bcf706a75231a31cb7562e3d4cc28ddbee48d1306c9dc5216b361c390642870c8e0dc32ffb1a065372ae9ee123273155133c44275469058c88754"
+          "content" : "db9aec5e04d4d645260eb1b73b060e9c0df9b38ed34d382d7fe7f34474e8c06ec1ac8bf492e960b0ac76c2a96395e8718e7f087ad7d1605e859b537b3306176f"
         },
         {
           "alg" : "SHA-384",
-          "content" : "9ce754e8dd61ce0ec504cd3c9c145c19eecc15934adc3f918487fada67c94512184e2f0a9b4c3b6d69003f52ae6185cd"
+          "content" : "413a4cd721ec131fc7555190d313f6162e9181f1d3af32db48d06fbc3924b865ff9498d4ca90cfca7553412274b87b16"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "34a8f92ebbddb293393fc610e3bdd133c1e161317456686f72e5acda9a9b484b57fb9c12abd9dba7c81ed0fb9229ea9b"
+          "content" : "3c4b38a9fbd078d215574938efac1abd850d875ea799f82c864b18ec40bd87578029c1d80d6d9356d38e2077928d1c6d"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "739317feec5689606c5ad5e2b065db8fe9b6a39997a0c2edafe1911b4cfa7f32"
+          "content" : "966e563bb237c68dfd6ea959b4f02fa04aab7fbab155d4a6e89210eaa9fbfcde"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "8a7c733e660b14dee7a759af541b387d3139a18b668e368b23d60d825825e7b7dc033816e548a579fb00fff59e5b778eda2cf72e56e195f4b88078b0fac75d10"
+          "content" : "d87796f4497614b99423a854a4ea76e531de0c2483353fefe12745f9def1e58cc97e21f9fa91c3f7cd8dbb24f1eac8120c67bcd17b2eaf3090763829fdc411b9"
         }
       ],
       "licenses" : [
@@ -292,44 +292,44 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.11.0-SNAPSHOT?type=jar",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar",
       "group" : "org.sliceworkz",
       "name" : "sliceworkz-eventmodeling-api",
-      "version" : "0.11.0-SNAPSHOT",
+      "version" : "0.12.0-SNAPSHOT",
       "description" : "An opinionated Event Modeling framework in Java",
       "scope" : "required",
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "8190a2a443889ceb6d110a47c5d377a1"
+          "content" : "8e55cb164e23004577e2f72c7594b85e"
         },
         {
           "alg" : "SHA-1",
-          "content" : "0f045a0beae4d448b7d29fe09930e7a02b0bf2c9"
+          "content" : "3b1ba82c59d5e17b583c9d6c09bb9ee4e57befff"
         },
         {
           "alg" : "SHA-256",
-          "content" : "bae2855717e7b217b8c875fac98e4a521eabb7f9bb0681522fa9d7b617611653"
+          "content" : "33f1761e343241d765707b2b002dde09b6ba1eed28f551b248a59d8c617dc5ef"
         },
         {
           "alg" : "SHA-512",
-          "content" : "94530c41f1264f1f1f7a866cfa04af5283b9fb71da44c90002956311780cecfb80b9239077e2b8499059204a074e42eba573b7769f6fe4ce07833acfcc0820eb"
+          "content" : "e6a15e75b22b1ed4dd92809e0daa0f103ca9cff2ba0c0e0ea9980fa597f21b0d7ee5a3bdd255e2daa5253362edf102b77b81455b4eaec24d36e797153579bc2d"
         },
         {
           "alg" : "SHA-384",
-          "content" : "5eb85710068e4f244d180d11b05c4ef6d6475197d8b75db2764336fe96abfdad583971949beefa222fd8cb7ccdb691a7"
+          "content" : "57a481454a703b7a196e7cec75e60a18167a52b79acdcc4e4cd5a5cd9307b1f7cb58c42863ecfc7359c930ec262481f4"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "ab2bba36f7f37a0cc2d647f73c1fc791b7c70f668e5a800bd99a7e5b3c3239a24206d84a14b4713a9acb465fdf6de279"
+          "content" : "31215c2300245d621e95341434fe715a1340f8743f70b62e4af89facdbe794838cba20ae2d0f04cef3a811296ae85399"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "c93afbc8241dd5533e31fff766c18aee5d6bf6a2dc031a4b38ad69c20d9c429b"
+          "content" : "6546eb0b2c6b3a17690dba23f897365640db00446f3960e7c13db53fbcc69cab"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "a4c873629c9a2b868d042889e051997cde5077785c5c691fa5b8bb6938e73b5c1f15de93156479e69e92d626f4a39a4edd68f2a78a7e0d0afda1196868524dde"
+          "content" : "89affae9b730849990d8de34c6e9e7dd24531d7271ff3be8992d11ae1fa90abdd7b3285fd32d45f103653382978fbe2c6128fe93c18531ba88c991ce60018992"
         }
       ],
       "licenses" : [
@@ -340,7 +340,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.11.0-SNAPSHOT?type=jar",
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -363,35 +363,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "9efdcd01748f83734c9e3becbf289353"
+          "content" : "903a1694f4098de08fef869b248d57a6"
         },
         {
           "alg" : "SHA-1",
-          "content" : "cf13d7f0d577593585820d374659807f25aafff7"
+          "content" : "f94977da05bb3829570fed9d31844da9a0929960"
         },
         {
           "alg" : "SHA-256",
-          "content" : "1833a19dfcc720b5b3539f8f65d56dd63d2aac7fd07c1d46cf732bec0f673262"
+          "content" : "750a36498aef25e99cc06ce3847bc357e2313463364e73535f63675543f2d7aa"
         },
         {
           "alg" : "SHA-512",
-          "content" : "edc0b21de14a3c2a2f94dfd608e59bc6bf83173d5aec550cf0267795d6069935d9dd0ff9dd984e6c3ec5760472ca75b4cce0cea00e0ae978df0a5818b59643fd"
+          "content" : "ba2ee2f4168033e2a24aab15d49e0fe93cc2aaf209ce1289932aab66316fb8ad7fbef4249fa0a751360396b16edbc0d480926eb92b437a250281bb3209148cd6"
         },
         {
           "alg" : "SHA-384",
-          "content" : "1566482d65d4f990bbc30f1e1007b57196983867bafaeb0811d7e714f3553902c70684e4d2a7eef6c16b994b91140fc6"
+          "content" : "c70658e5784080d7cbbddbb218e7bb19c984b2af3876c182034c8671f59e4958727f419b6381b05fe234f99e53751334"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "1590c34601c5bd8efbd922faa271a61ea9944f6c6d264c7a09e576e54a81fe838edaf2a217d7e1b0dd24dd40846b9b13"
+          "content" : "7febe2707e902e5bf615677057754b5bd4f0c0e997b369d247ff4bfe7178416a4a785b44367533b49b70c16e15b35f68"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "cc49838944ffc477f2ad673bad6ec0850d17ed3a160cda97607e3f92b0196ddd"
+          "content" : "934b7b82afaf97a90b401706f4ddc6875ec28294444803aa3e753c7783e72b1d"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "4d269301ecf4464770da6b876f36dee6a68520cb2100acd3d346fabaca47f8e0211b7b57f0e922eff47b874206ffbb200b227a399934720d40f8b5a74dafc8cc"
+          "content" : "228799aa4d99acba98496d5cac27f8f817c884ad41a8fd16a1aac22901a18c989f8f8f6c9ba319f86fae3e36b61c22d506f97ccf2cab22f442608f3b21804851"
         }
       ],
       "licenses" : [
@@ -425,35 +425,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "37d8cb69b0d0d93ee43fe30dba08c247"
+          "content" : "ed9fe9d3a1986170350f2ef8dd542c53"
         },
         {
           "alg" : "SHA-1",
-          "content" : "2d9dce272bb828f3e0eea0ea09daeddaac927fcd"
+          "content" : "f3773b62085119d61180d35009b9bc6cae948022"
         },
         {
           "alg" : "SHA-256",
-          "content" : "d13c6f8b3260cf60317ce8c37f5962506c34cc3dfa9f8b06fddbff1c2d126246"
+          "content" : "e16347b37fe8bfcbbf39be16b625a027eecb3ce651ddcda5fe9c319c7b77a4ed"
         },
         {
           "alg" : "SHA-512",
-          "content" : "dfa0594efbf5904f74564700373fa8f5b133564f5a61dde6006f2ab29cf42706fcca1c36fb86e410f5f8954f9e68493234cc5e221e95a789a704c320ca9c8b99"
+          "content" : "4d141415f151ef3b57a6fafcfec19e51f2d2c22ba81797f8ba594647c87293bdb9e41c699f720b3bdeccae78445abd3614735811f835888911cbf63f6a9b89c1"
         },
         {
           "alg" : "SHA-384",
-          "content" : "b94d6b1f9a5b53982029c6912cbee40dcdb422b460418a50c75c27733d9582fa914fabc65f7b002e14ebf574c63b76f4"
+          "content" : "ef63d9a009bb4f890923a7fcdc8c217f5e34bc7c4b2b505f6da91fcc95d389168e97f1b6c0e969e698574d4a01be373d"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "bd86ac0cac7a8e231b75e2dae0fbaa2bf209787689bc6075065d14e96fb55c601948044676e2f90e9627efd18f440672"
+          "content" : "93bcdd4b491e060f7e2a77e9d3ffa068be5a0ed1a213c635d449d904c089731ea5fefc935ff71f42388908845fc271d0"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "ef97036e800ddbcc17fc136728c1e0e414706928408b6af68ae52740f01bb307"
+          "content" : "b09821eb9273e8df8e102146906501cba708225e03db5140d977ad761de69990"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "2418a51dbf6c239fdb4b82cb1e122b835c771f5bb48a036f884ed518a6400c9fc31dee790bf8196ac3484ecd62239a4e16534653b5462f9c414b0f28b78cec3d"
+          "content" : "5591db8feeebde384a7654f25be5da4dd79d168233e0ff8416f7e37003728e16129a5e8d2ce40cd9ca695f50afe25d21c972408f45db1290a1df7428b2a1da0b"
         }
       ],
       "licenses" : [
@@ -487,35 +487,35 @@
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "859ae17b619e327b44ad76561612e0b6"
+          "content" : "45d34d3ee9fb5d87c6dc2a678305a02c"
         },
         {
           "alg" : "SHA-1",
-          "content" : "c206cee896171d59434d674bdef7f2b69e123003"
+          "content" : "e7578a34369c36945ba98c35dd0284214b8700b5"
         },
         {
           "alg" : "SHA-256",
-          "content" : "26ae5adaab97f210c690d324bfa688d3ef3685f58292b8541f059d0b40aebf4f"
+          "content" : "07158359bc6c89fc5ed579358d49c21e7890839ce95e3cb482b551153ccb5c81"
         },
         {
           "alg" : "SHA-512",
-          "content" : "07715e01b6fff607854b5304dfa0eef48509752b56a3a30939c2b918882e9b85e67572cc1489bc604cb82fe1a9b7e0b17a650c730932729c4b3638230e138666"
+          "content" : "bfe984db9b74464f93b561d65dd6dfeb847264d80a2be4051ad08c282cc033c58d53cf623440f5694afcdd99e6ced50a4005ea3549104ac02cc23aed513d3729"
         },
         {
           "alg" : "SHA-384",
-          "content" : "868068d18edc7d67d921123060eb0bc5a27b8b344878a199b38644f7fad1f934f972c834cbe87957ded266eff291159c"
+          "content" : "75217bb5cbb10bdd4ca1dfdcf7869e13f1dd6f06fdbb0fa6f9e4e84fac8f7cf5fca3d5b42a89c578f747ea3b8f423dee"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "67447972d8dfdf3ec45e0508464161e221ed296f315e162eb33488b7c20409428d6e273ab8fd58afad2ce991a8fa98b0"
+          "content" : "97727c2ab5285b16e2169812a81daefcc59b8485c9607d864170c8db40219cafe30b5ee6f7a1bd3be6a2e4ec4011ec34"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "1ffa5fed81c0b2cdf9dc8b5a68aa97a5a12759d6daef2a789dc5fe6b29561fb1"
+          "content" : "6705e7918514f56333463743b7b33fcae5c455d01dd5728c05a33eeb8999e2b4"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "9a012df84c24e2ce0914e02a841c5818f7ab9666128574695b0acd0dd71763778c6b1d14b55c35501b094b170c1df31895edd899eac365759215848586df94de"
+          "content" : "68b1febca66519eb7fda19146172f9c4da9287d5247a46bf040f3e186b3560398c97f4885e39e26ba473342cf71a3b519e95fc66da521b25b18b1ef90518f2d3"
         }
       ],
       "licenses" : [
@@ -2826,9 +2826,9 @@
   ],
   "dependencies" : [
     {
-      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-testing@0.11.0-SNAPSHOT?type=jar",
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-testing@0.12.0-SNAPSHOT?type=jar",
       "dependsOn" : [
-        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.11.0-SNAPSHOT?type=jar",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.12.0-SNAPSHOT?type=jar",
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-infra-inmem@0.15.0-SNAPSHOT?type=jar",
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-testing@0.15.0-SNAPSHOT?type=jar",
         "pkg:maven/org.junit.jupiter/junit-jupiter-api@6.1.3?type=jar",
@@ -2841,11 +2841,11 @@
       ]
     },
     {
-      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.11.0-SNAPSHOT?type=jar",
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.12.0-SNAPSHOT?type=jar",
       "dependsOn" : [
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.15.0-SNAPSHOT?type=jar",
-        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.11.0-SNAPSHOT?type=jar"
+        "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar"
       ]
     },
     {
@@ -2859,7 +2859,7 @@
       ]
     },
     {
-      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.11.0-SNAPSHOT?type=jar",
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar",
       "dependsOn" : [
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
         "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.15.0-SNAPSHOT?type=jar"

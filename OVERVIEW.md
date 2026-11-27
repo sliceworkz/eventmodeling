@@ -5,8 +5,7 @@ Written by the nightly dependency pipeline after every run (sliceworkz/software-
 | Branch | Last run | Head | Critical | High | Medium | Low | Blocking | Released version | Open PRs | Unreleased updates | SBOMs |
 |---|---|---|---:|---:|---:|---:|---:|---|---:|---|---|
 | [`develop`](#develop) | 2026-11-26T11:02:19+01:00 | `63a8c432a2` | 0 | 0 | 0 | 0 | 0 | - | 0 | - | ci-artifact (run 45596391267) |
-| [`release/0.10`](#release010) | 2026-11-26T10:24:29+01:00 | `d0501b422a` | 0 | 0 | 0 | 0 | 0 | v0.10.0: none critical/high | 1 | **2 since v0.10.0**, can be released | ci-artifact (run 45589759275) |
-| [`release/0.9`](#release09) | 2026-11-26T10:24:28+01:00 | `d7998fd44e` | 0 | 0 | 0 | 0 | 0 | v0.9.0: none critical/high | 1 | **4 since v0.9.0**, can be released | ci-artifact (run 45589425413) |
+| [`release/0.10`](#release010) | 2026-11-27T10:37:23+01:00 | `376c0c6cb8` | 0 | 0 | 0 | 0 | 0 | v0.10.0: none critical/high | 0 | **3 since v0.10.0**, can be released | ci-artifact (run 45879535593) |
 
 ## develop
 
@@ -14,11 +13,9 @@ No critical or high findings on the branch head.
 
 ## release/0.10
 
-**2 dependency update(s) merged since v0.10.0 (2026-11-20), not released yet**: a patch release (*Release 2 · Tag* on this line) ships them.
+**3 dependency update(s) merged since v0.10.0 (2026-11-20), not released yet**: a patch release (*Release 2 · Tag* on this line) ships them.
 
-**Can be released: 2 dependency updates since v0.10.0.**
-
-- pipeline PR #278 waits for review: its updates are not in this release
+**Can be released: 3 dependency updates since v0.10.0.**
 
 Release it with [Release 2 · Tag](https://github.com/sliceworkz/eventmodeling/actions/workflows/create-release-tag-and-bump.yaml) (*Run workflow*, branch `release/0.10`), or:
 
@@ -31,27 +28,3 @@ Automatic release: off (`release.automatic: never` in the policy).
 No critical or high findings in the released v0.10.0 (scanned from the SBOMs attached to it).
 
 No critical or high findings on the branch head.
-
-Pipeline PRs open: [#278](https://github.com/sliceworkz/eventmodeling/pull/278) (review, CI green)
-
-## release/0.9
-
-**4 dependency update(s) merged since v0.9.0 (2026-11-12), not released yet**: a patch release (*Release 2 · Tag* on this line) ships them.
-
-**Can be released: 4 dependency updates since v0.9.0.**
-
-- pipeline PR #279 waits for review: its updates are not in this release
-
-Release it with [Release 2 · Tag](https://github.com/sliceworkz/eventmodeling/actions/workflows/create-release-tag-and-bump.yaml) (*Run workflow*, branch `release/0.9`), or:
-
-```bash
-gh workflow run create-release-tag-and-bump.yaml --ref release/0.9 -R sliceworkz/eventmodeling
-```
-
-Automatic release: off (`release.automatic: never` in the policy).
-
-No critical or high findings in the released v0.9.0 (scanned from the SBOMs attached to it).
-
-No critical or high findings on the branch head.
-
-Pipeline PRs open: [#279](https://github.com/sliceworkz/eventmodeling/pull/279) (review, CI green)

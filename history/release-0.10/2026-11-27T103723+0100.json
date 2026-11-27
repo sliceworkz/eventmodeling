@@ -1,14 +1,14 @@
 {
   "schema": 1,
-  "runAt": "2026-11-20T09:25:16+01:00",
+  "runAt": "2026-11-27T10:37:23+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
-  "branch": "release/0.9",
-  "commit": "af6b9361417b39ccbb512f19f8a7b66a1f4e77a7",
+  "branch": "release/0.10",
+  "commit": "376c0c6cb82e6affccb8a3eb9c4b487c37cfdab6",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/44702336085",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/45975185800",
   "dryRun": false,
-  "projectVersion": "0.9.1-SNAPSHOT",
+  "projectVersion": "0.10.1-SNAPSHOT",
   "policy": {
     "pattern": "release/*",
     "schedule": "10 1 * * *",
@@ -26,12 +26,16 @@
       "cooldownDays": 1
     },
     "transitive": {
-      "action": "pr",
+      "action": "merge",
       "cooldownDays": 1
     },
     "own": {
       "action": "merge",
       "cooldownDays": 0
+    },
+    "release": {
+      "automatic": "never",
+      "minimumIntervalDays": 0
     },
     "filter": "default+0",
     "ecosystems": [
@@ -47,31 +51,71 @@
       "images": []
     },
     "hold": [],
-    "groups": []
+    "groups": [],
+    "assignees": [
+      "vanrogu"
+    ]
   },
   "release": {
-    "lastTag": "v0.9.0",
-    "tagDate": "2026-11-12T12:17:43Z",
+    "lastTag": "v0.10.0",
+    "tagDate": "2026-11-20T19:57:14Z",
     "dependencyUpdates": [
       {
-        "commit": "af6b9361417b39ccbb512f19f8a7b66a1f4e77a7",
-        "subject": "Dependency updates (#258)"
+        "commit": "376c0c6cb82e6affccb8a3eb9c4b487c37cfdab6",
+        "subject": "Minor dependency updates (#278)"
+      },
+      {
+        "commit": "d0501b422a7b76cceb43bf2c1a1b9ca3494e6146",
+        "subject": "Dependency updates (#281)"
+      },
+      {
+        "commit": "37062785a859bbbeb7d171926cf936a43752c2f1",
+        "subject": "Dependency updates (#276)"
       }
     ],
-    "otherChanges": 0
+    "otherChanges": 0,
+    "ci": {
+      "commit": "376c0c6cb82e6affccb8a3eb9c4b487c37cfdab6",
+      "state": "green"
+    },
+    "readiness": {
+      "verdict": "ready",
+      "lastTag": "v0.10.0",
+      "commit": "376c0c6cb82e6affccb8a3eb9c4b487c37cfdab6",
+      "headMoved": false,
+      "ci": "green",
+      "dependencyUpdates": 3,
+      "otherChanges": 0,
+      "fixes": [],
+      "reasons": [],
+      "notes": [],
+      "workflow": {
+        "name": "Release 2 \u00b7 Tag",
+        "file": "create-release-tag-and-bump.yaml",
+        "url": "https://github.com/sliceworkz/eventmodeling/actions/workflows/create-release-tag-and-bump.yaml",
+        "command": "gh workflow run create-release-tag-and-bump.yaml --ref release/0.10 -R sliceworkz/eventmodeling"
+      }
+    },
+    "automatic": {
+      "setting": "never",
+      "minimumIntervalDays": 0,
+      "decision": "off",
+      "reason": null,
+      "at": "2026-11-27T09:38:43+00:00"
+    }
   },
   "releaseScan": {
-    "tag": "v0.9.0",
-    "tagDate": "2026-11-12T12:17:43Z",
+    "tag": "v0.10.0",
+    "tagDate": "2026-11-20T19:57:14Z",
     "origin": "attached to the release",
     "assets": [
-      "sliceworkz-eventmodeling-0.9.0.cdx.json",
-      "sliceworkz-eventmodeling-testing-0.9.0.cdx.json"
+      "sliceworkz-eventmodeling-0.10.0.cdx.json",
+      "sliceworkz-eventmodeling-testing-0.10.0.cdx.json"
     ],
     "reason": null,
     "sboms": [
-      "sliceworkz-eventmodeling-0.9.0",
-      "sliceworkz-eventmodeling-testing-0.9.0"
+      "sliceworkz-eventmodeling-0.10.0",
+      "sliceworkz-eventmodeling-testing-0.10.0"
     ],
     "notScanned": [],
     "findings": [],
@@ -90,14 +134,14 @@
       "ecosystem": "maven",
       "name": "maven.maven-versions-plugin.version",
       "where": "pom.xml",
-      "current": "2.25.2",
+      "current": "2.25.3",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:versions-maven-plugin"
       ],
       "own": false,
       "group": null,
-      "newest": "2.25.2"
+      "newest": "2.25.3"
     },
     {
       "ecosystem": "maven",
@@ -155,14 +199,14 @@
       "ecosystem": "maven",
       "name": "maven.flatten-plugin.version",
       "where": "pom.xml",
-      "current": "1.9.0",
+      "current": "1.10.0",
       "kind": "property",
       "artifacts": [
         "org.codehaus.mojo:flatten-maven-plugin"
       ],
       "own": false,
       "group": null,
-      "newest": "1.9.0"
+      "newest": "1.10.0"
     },
     {
       "ecosystem": "maven",
@@ -181,14 +225,14 @@
       "ecosystem": "maven",
       "name": "sliceworkz.eventstore.version",
       "where": "pom.xml",
-      "current": "0.13.0",
+      "current": "0.14.0",
       "kind": "property",
       "artifacts": [
         "org.sliceworkz:sliceworkz-eventstore-bom"
       ],
       "own": true,
       "group": null,
-      "newest": "0.13.0"
+      "newest": "0.15.0"
     },
     {
       "ecosystem": "maven",
@@ -247,14 +291,14 @@
       "ecosystem": "maven",
       "name": "postgresql.jdbc.version",
       "where": "sliceworkz-eventmodeling-parent-pom/pom.xml",
-      "current": "42.7.14",
+      "current": "42.7.15",
       "kind": "property",
       "artifacts": [
         "org.postgresql:postgresql"
       ],
       "own": false,
       "group": null,
-      "newest": "42.7.14"
+      "newest": "42.7.15"
     },
     {
       "ecosystem": "maven",
@@ -417,7 +461,7 @@
       "ecosystem": "maven",
       "name": "logback.version",
       "where": "sliceworkz-eventmodeling-benchmark/pom.xml",
-      "current": "1.6.7",
+      "current": "1.6.8",
       "kind": "property",
       "artifacts": [
         "ch.qos.logback:logback-classic"
@@ -443,25 +487,26 @@
   "updates": [
     {
       "ecosystem": "maven",
-      "name": "logback.version",
-      "where": "sliceworkz-eventmodeling-benchmark/pom.xml",
-      "current": "1.6.7",
+      "name": "sliceworkz.eventstore.version",
+      "where": "pom.xml",
+      "current": "0.14.0",
       "kind": "property",
       "artifacts": [
-        "ch.qos.logback:logback-classic"
+        "org.sliceworkz:sliceworkz-eventstore-bom"
       ],
-      "own": false,
+      "own": true,
       "group": null,
-      "level": "patch",
-      "target": "1.6.8",
-      "outcome": "held-back",
-      "eligibleFrom": "2026-11-20T11:14:55+00:00",
-      "reason": "cooldown"
+      "level": "major",
+      "target": "0.15.0",
+      "action": "mention",
+      "batch": null,
+      "published": null,
+      "outcome": "mentioned"
     }
   ],
   "batches": [],
   "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-20T08:27:05+00:00",
+  "pullRequestsReadAt": "2026-11-27T09:38:42+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],
@@ -469,8 +514,8 @@
   "notes": [],
   "vulnerabilities": {
     "grype": "v0.121.0",
-    "dbBuilt": "2026-11-20T06:21:00Z",
-    "sbomOrigin": "ci-artifact (run 43827739319)",
+    "dbBuilt": "2026-11-27T06:22:11Z",
+    "sbomOrigin": "ci-artifact (run 45879535593)",
     "sboms": [
       "library",
       "test-kit"

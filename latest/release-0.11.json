@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "runAt": "2026-11-28T09:51:28+01:00",
+  "runAt": "2026-11-28T10:36:31+01:00",
   "timezone": "Europe/Brussels",
   "repository": "sliceworkz/eventmodeling",
   "branch": "release/0.11",
   "commit": "4ef13ff8f196aaa39c022b840ce81e538116b0f1",
   "tooling": "v1",
-  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/46127727823",
+  "workflowRun": "https://github.com/sliceworkz/software-factory/actions/runs/46131238296",
   "dryRun": false,
   "projectVersion": "0.11.1-SNAPSHOT",
   "policy": {
@@ -88,7 +88,7 @@
       "minimumIntervalDays": 0,
       "decision": "off",
       "reason": null,
-      "at": "2026-11-28T08:53:08+00:00"
+      "at": "2026-11-28T09:38:23+00:00"
     }
   },
   "releaseScan": {
@@ -492,7 +492,7 @@
   ],
   "batches": [],
   "pullRequests": [],
-  "pullRequestsReadAt": "2026-11-28T08:53:07+00:00",
+  "pullRequestsReadAt": "2026-11-28T09:38:22+00:00",
   "images": [],
   "closedPullRequests": [],
   "deletedBranches": [],

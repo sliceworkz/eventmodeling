@@ -4,7 +4,7 @@
   "serialNumber" : "urn:uuid:2fd76e2a-7bc9-32d9-8416-358c757ca89b",
   "version" : 1,
   "metadata" : {
-    "timestamp" : "2026-11-26T20:43:16Z",
+    "timestamp" : "2026-11-27T10:14:56Z",
     "lifecycles" : [
       {
         "phase" : "build"
@@ -261,44 +261,44 @@
     },
     {
       "type" : "library",
-      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.15.0-SNAPSHOT?type=jar",
+      "bom-ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.16.0-SNAPSHOT?type=jar",
       "group" : "org.sliceworkz",
       "name" : "sliceworkz-eventstore-api",
-      "version" : "0.15.0-SNAPSHOT",
+      "version" : "0.16.0-SNAPSHOT",
       "description" : "DCB (Dynamic Consistency Boundary) compliant EventStore (Java/Postgres)",
       "scope" : "required",
       "hashes" : [
         {
           "alg" : "MD5",
-          "content" : "f3a0020f6e72dcafdbefafd6429795de"
+          "content" : "b61b50101e896be9792eb4551919365b"
         },
         {
           "alg" : "SHA-1",
-          "content" : "857a13763298254a9e86076e7469c7af7793e139"
+          "content" : "1570675f441f30719355a70ec686e60bc88bc4f0"
         },
         {
           "alg" : "SHA-256",
-          "content" : "3577c6f18dc468e5dcfb27b4d94079c92ea95e69b808afd6a776e4e225256990"
+          "content" : "228ea26b276a64808cf15c21bd8d27e487643cddcf410c1ea0a2ceec33342bf8"
         },
         {
           "alg" : "SHA-512",
-          "content" : "db9aec5e04d4d645260eb1b73b060e9c0df9b38ed34d382d7fe7f34474e8c06ec1ac8bf492e960b0ac76c2a96395e8718e7f087ad7d1605e859b537b3306176f"
+          "content" : "10e223564311b8e341802cfceb446e878a1a77ca3a33145761f424a2efff8458d674ebc5d55e94b58cfd0be987da13099bfaaf288442ac4f049a8b5fb540f1c4"
         },
         {
           "alg" : "SHA-384",
-          "content" : "413a4cd721ec131fc7555190d313f6162e9181f1d3af32db48d06fbc3924b865ff9498d4ca90cfca7553412274b87b16"
+          "content" : "1c1f70875a06fb330d02655cba510d1c401b11423a29bbfa1faa8f303284758655c7822a98119a975d6deb48e6149b63"
         },
         {
           "alg" : "SHA3-384",
-          "content" : "3c4b38a9fbd078d215574938efac1abd850d875ea799f82c864b18ec40bd87578029c1d80d6d9356d38e2077928d1c6d"
+          "content" : "04388ef3118bfbc71184b10a14208175f11e560986d7e6e744fa68f352a6da9c64dd4beb458748cae9f58bc9cd3360e1"
         },
         {
           "alg" : "SHA3-256",
-          "content" : "966e563bb237c68dfd6ea959b4f02fa04aab7fbab155d4a6e89210eaa9fbfcde"
+          "content" : "1161081fe23c6cf41a6d4357de75f1e7b3792589a406e882700f62fea5fa0770"
         },
         {
           "alg" : "SHA3-512",
-          "content" : "d87796f4497614b99423a854a4ea76e531de0c2483353fefe12745f9def1e58cc97e21f9fa91c3f7cd8dbb24f1eac8120c67bcd17b2eaf3090763829fdc411b9"
+          "content" : "ee95bda712d73eadc94665ac2723b6c3010e0d92bd1f1f579e276c185e7e9b65c8fd538e348e3f145e01e4ca08bfc34a9f7596c7397cffddd027a37ad68f1115"
         }
       ],
       "licenses" : [
@@ -309,7 +309,7 @@
           }
         }
       ],
-      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.15.0-SNAPSHOT?type=jar",
+      "purl" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.16.0-SNAPSHOT?type=jar",
       "externalReferences" : [
         {
           "type" : "website",
@@ -446,7 +446,7 @@
       "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar",
       "dependsOn" : [
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
-        "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.15.0-SNAPSHOT?type=jar",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.16.0-SNAPSHOT?type=jar",
         "pkg:maven/com.fasterxml.jackson.core/jackson-annotations@2.23?type=jar"
       ]
     },
@@ -455,7 +455,7 @@
       "dependsOn" : [ ]
     },
     {
-      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.15.0-SNAPSHOT?type=jar",
+      "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.16.0-SNAPSHOT?type=jar",
       "dependsOn" : [
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar"
       ]
@@ -468,7 +468,7 @@
       "ref" : "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-impl@0.12.0-SNAPSHOT?type=jar",
       "dependsOn" : [
         "pkg:maven/org.slf4j/slf4j-api@2.0.20?type=jar",
-        "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.15.0-SNAPSHOT?type=jar",
+        "pkg:maven/org.sliceworkz/sliceworkz-eventstore-api@0.16.0-SNAPSHOT?type=jar",
         "pkg:maven/org.sliceworkz/sliceworkz-eventmodeling-api@0.12.0-SNAPSHOT?type=jar"
       ]
     }
